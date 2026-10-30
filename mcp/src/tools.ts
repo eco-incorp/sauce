@@ -46,12 +46,14 @@ import {
   connectAt,
   type CookInput,
   definesReach,
+  type EvmPotBindingInput,
   expectingRevert,
   forkSnapshot,
   type ForkSnapshot,
   fundingFor,
   fundTransfers,
   globalsCommand,
+  getVerifiedPotBinding,
   handoff,
   inspectCommand,
   inspectFile,
@@ -116,6 +118,7 @@ import {
   UsageError,
   verifyCommand,
   withoutShebang,
+  withPotBinding,
 } from "./sdk.js";
 
 /** Input bounds, so one call cannot hand the server unbounded work. */
@@ -254,8 +257,8 @@ export const POT = {
     .describe(
       "The Pot's owner: a 0x address on an EVM chain; on Solana a public key, in base58 or as its " +
         "32 bytes of 0x hex. With the " +
-        "salt it derives the Pot; only the owner may cook on it. To simulate (sauce_simulate) any " +
-        "address will do: nothing is signed, and a missing Pot or balance is supplied.",
+        "salt it selects the Pot; only the owner may cook on it. EVM execution requires an " +
+        "already-deployed, authenticated Pot. Solana simulation can supply a missing Pot.",
     ),
   salt: z
     .string()
@@ -280,8 +283,97 @@ const ARGS = z
       "sauce_compile's entryParams lists what main takes.",
   );
 
+const bindingAddress = z
+  .templateLiteral(["0x", z.string()])
+  .refine((value) => /^0x[0-9a-fA-F]{40}$/.test(value), "Expected a 20-byte EVM address");
+const bindingHash = z
+  .templateLiteral(["0x", z.string()])
+  .refine((value) => /^0x[0-9a-fA-F]{64}$/.test(value), "Expected 32 bytes of hex");
+const bindingText = z.string().min(1).max(256);
+const immutableReferences = z
+  .array(
+    z.strictObject({
+      start: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(LIMITS.hex / 2),
+      length: z.literal(32),
+    }),
+  )
+  .min(1)
+  .max(LIMITS.entries);
+
+/** Shape validation only: the SDK authenticates every binding against actual chain code. */
+export const POT_BINDING = z.strictObject({
+  pot: bindingAddress,
+  kitchen: bindingAddress,
+  owner: bindingAddress,
+  userSalt: bindingHash,
+  kind: z.enum(["private", "private-fixed-router", "shared"]),
+  chainId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  router: bindingAddress,
+  originalChainId: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .max(78)
+    .optional(),
+  compiler: bindingText,
+  engine: bindingAddress,
+  engineCodeHash: bindingHash,
+  release: z
+    .record(bindingText, bindingText)
+    .refine((release) => Object.keys(release).length <= LIMITS.entries),
+  wireProfile: bindingText,
+  storageProfile: bindingText,
+  routerCodeHash: bindingHash,
+  codeHash: bindingHash.optional(),
+  scheme: z.enum(["create2", "create3"]).optional(),
+  routerPolicy: z.enum(["owner-controlled", "fixed"]).optional(),
+  profileHash: bindingHash.optional(),
+  compatibilityProbe: z
+    .strictObject({
+      compiler: bindingText,
+      compilerWasmSha256: z.string().regex(/^[0-9a-f]{64}$/),
+      program: z
+        .templateLiteral(["0x", z.string()])
+        .refine((value) => value.length <= 2050 && /^0x(?:[0-9a-fA-F]{2})+$/.test(value)),
+    })
+    .optional(),
+  profile: z
+    .strictObject({
+      scheme: z.literal("create3"),
+      helperInitCodeHash: bindingHash,
+      runtimeSize: z
+        .number()
+        .int()
+        .positive()
+        .max(LIMITS.hex / 2),
+      runtimeTemplateHash: bindingHash,
+      immutableReferences: z.strictObject({
+        owner: immutableReferences,
+        userSalt: immutableReferences,
+        gateSalt: immutableReferences,
+        kitchen: immutableReferences,
+        fixedRouter: immutableReferences,
+        domainSeparator: immutableReferences,
+        domainChainId: immutableReferences,
+      }),
+    })
+    .optional(),
+}) satisfies z.ZodType<EvmPotBindingInput>;
+
+const REQUEST_BINDING = POT_BINDING.optional().describe(
+  "EVM only: the caller's explicit trusted release/profile binding for an already-deployed Pot. " +
+    "Required when no stdio Pot store is configured. Verified against this call's chain and " +
+    "deployed code before any cook, signature or funding is built; never inferred from defaults " +
+    "or getters alone. The result's potBinding is the actual verified binding for you to persist. " +
+    "HTTP keeps nothing; supply it again on every call. Compile/source-only tools need none.",
+);
+
 const COOK = {
   ...POT,
+  potBinding: REQUEST_BINDING,
   pot: z
     .string()
     .max(64)
@@ -440,6 +532,7 @@ export function signedCookInputs(local: boolean) {
       path: z.ZodOptional<typeof PATH>;
     }),
     ...POT,
+    potBinding: REQUEST_BINDING,
     pot: z.string().max(64).optional().describe("Or the Pot itself, by its 0x address."),
     args: ARGS,
     ...SIGNED_COOK,
@@ -742,6 +835,11 @@ function evmCook(args: CookArgs, program: Program): CookInput {
 
 /** A Solana cook: the program on the Kitchen Pot of `owner` and `salt`, with its accounts. */
 function svmCook(args: CookArgs, program: Program, rpcUrl: string): SvmCookInput {
+  if (args.potBinding !== undefined) {
+    throw new UsageError(
+      "potBinding is for EVM; Solana keeps its existing owner, salt and account inputs",
+    );
+  }
   if (args.pot !== undefined) {
     throw new UsageError(
       "on Solana a cook names its Pot by owner and salt, which the Kitchen derives it from: give " +
@@ -838,6 +936,7 @@ export interface SignedCookArgs extends Omit<ProgramArgs, "source"> {
   readonly salt?: string | undefined;
   readonly saltHex?: string | undefined;
   readonly pot?: string | undefined;
+  readonly potBinding?: EvmPotBindingInput | undefined;
   readonly args?: readonly unknown[] | undefined;
   readonly value?: string | number | undefined;
   readonly maxExecutionFee?: string | number | undefined;
@@ -1252,7 +1351,11 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
         // still a call; every other refuses a field it does not know.
         inputSchema:
           Object.keys(config.input).length === 0 ? undefined : z.object(config.input).strict(),
-        outputSchema: z.looseObject({ ...config.output, notes: notesSchema }),
+        outputSchema: z.looseObject({
+          ...config.output,
+          ...("potBinding" in config.input ? { potBinding: POT_BINDING.optional() } : {}),
+          notes: notesSchema,
+        }),
         annotations: { title: config.title, ...config.annotations },
       },
       async (args: unknown) => {
@@ -1260,7 +1363,21 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
         // What the call's transactions did that the server keeps, as each landed: said in its
         // result whether it succeeded or not, as the command says it whatever its exit.
         const kept: string[] = [];
-        const call = async () => run(args as never, reach);
+        const call = () =>
+          withPotBinding(
+            typeof args === "object" && args !== null && "potBinding" in args
+              ? REQUEST_BINDING.parse(args.potBinding)
+              : undefined,
+            async () => {
+              const output = await run(args as never, reach);
+              // Only the SDK's actual verification may produce caller-persistable provenance.
+              const potBinding = getVerifiedPotBinding();
+
+              return potBinding === undefined
+                ? output
+                : { ...output, json: { ...output.json, potBinding } };
+            },
+          );
         try {
           const output = withPublicNotes(
             await (stores === undefined || !keepsAny(stores)
@@ -2029,16 +2146,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "sign — the last step, once sauce_compile succeeds (and, ideally, sauce_simulate). On " +
         "an EVM chain it returns { chainId, to: the Pot, data: Pot.cook(engine, program ++ " +
         "arguments), value }; only the owner may send it, and value (wei, hex) is the Kitchen's fee " +
-        "plus any native the program spends — give it, or an endpoint to read the fee from, " +
-        "which also says whether the Pot is deployed. When the endpoint shows the Pot has no " +
-        "code yet, it returns { chainId, pot, transactions } instead: first Kitchen.deployPot " +
-        "(marked deploysPot; any account may send it), then the cook — sign them in order and " +
-        "send them with sauce_send, or pass the whole result to a wallet that sends a plan. " +
-        "Each comes with `gas`, the limit to sign it with: the cook's estimated as if the " +
-        "deployment had landed, with 30% room (a signer's own estimate, taken while the Pot " +
-        "has no code, is far too low), the deployment's unless the endpoint does not report " +
-        "it apart; a cook that would revert after the deployment, on a Pot not funded yet, has " +
-        "none, and a note says why. On Solana, which needs an endpoint (the blockhash and the " +
+        "plus any native the program spends. EVM needs an endpoint and an already-deployed Pot " +
+        "with authenticated provenance: pass potBinding, or use a configured stdio Pot store. " +
+        "Missing code or unknown/mismatched provenance refuses before any funding or cook is " +
+        "built; this tool never deploys or repairs an EVM Pot. potBinding in the result is the " +
+        "actual verified binding, for the caller to persist. Each transaction comes with `gas` " +
+        "when estimation succeeds. On Solana, which needs an endpoint (the blockhash and the " +
         "fee), it returns { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, " +
         "transaction, cursor }: the Kitchen cook (or, via engine, the engine's own paid cook, " +
         "with no Pot) as a base64 transaction for the owner to sign; a Pot not created yet is " +
@@ -2070,10 +2183,9 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         ...COOK,
         fund: TOKEN_AMOUNTS.describe(
           "EVM only: tokens the owner transfers into the Pot before the cook, as transactions of " +
-            "the plan after the Pot's deployment; each <TOKEN|address>:<amount>, as " +
-            "assumeBalance; ETH:<amount> rides as the cook's value instead. Sent as one batch " +
-            "(sendCalls), a smart wallet deploys, funds and cooks with one approval, or nothing " +
-            "happens.",
+            "the plan; each <TOKEN|address>:<amount>, as assumeBalance. The EVM Pot must already " +
+            "be deployed and verified. ETH:<amount> rides as the cook's value instead. " +
+            "sendCalls batches the funding and cook for a smart wallet.",
         ),
       },
       output: refusable({
@@ -2156,10 +2268,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "which the submitter sends with exactly `value` (wei, hex) and pays gas for, nothing " +
         "else: the Pot pays the Kitchen's fee itself, from its balance. value defaults to 0, " +
         "maxExecutionFee to the fee read now, nonce to a random one, the deadline to now plus " +
-        "within (3600 seconds), submitter to anyone. With an endpoint it reads the Pot: one with " +
-        "no code that owner (and salt) name still signs, and `deployPot`, Kitchen.deployPot, " +
-        "comes with it for any account to send first; a Pot minted before signed cooks, a " +
-        "Shared Pot or a contract that is not a Pot is refused. `notes` say who may submit it " +
+        "within (3600 seconds), submitter to anyone. EVM requires an already-deployed Pot and " +
+        "explicit potBinding, or a configured stdio Pot store; actual code, chain and " +
+        "compiler/profile checks run before signing. Missing code never produces a deployment " +
+        "or a signature. A Shared Pot or a contract that is not a Pot is refused. `notes` say who may submit it " +
         "and until when, the fee, and how to cancel it. With `cancel` (nonces) instead of a " +
         "program it returns the owner's invalidateNonces, one per nonce word, so those " +
         "signatures never run. EVM chains only. " +
@@ -2192,6 +2304,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       input: {
         chain: chainRef,
         ...POT,
+        potBinding: REQUEST_BINDING,
         balances: z
           .boolean()
           .optional()
@@ -2218,6 +2331,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const unchecked = `There is no endpoint for ${chain.slug}, so whether the Pot exists was not checked: pass rpcUrl to check.`;
       const deployedNote = "The Pot is deployed already: do not send the deployment.";
       if (chain.kind === "svm") {
+        if (args.potBinding !== undefined) throw new UsageError("potBinding is for EVM Pots only");
         const target = { chain, owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
         const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
@@ -2242,8 +2356,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const state = client === undefined ? undefined : await potState(client, pot);
       const deployed = state === undefined ? null : state.deployed;
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
-      // The deployment returned is refused where the Kitchen would put the Pot elsewhere.
-      if (client !== undefined && state !== undefined) {
+      // A prediction is not execution authorization; only an explicit binding requests verification.
+      if (client !== undefined && state !== undefined && args.potBinding !== undefined) {
         await requirePot(client, chain, { owner, ...salt, pot, deployed: state.deployed });
       }
       const held =
@@ -2393,8 +2507,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "and Kitchen are deployed on the chain, preview chain or not, and where they are not it " +
         "stops, naming the missing contract. Needs an endpoint (rpcUrl, or the " +
         "server's). EVM: through eth_simulateV1 (else eth_call with state overrides; `path` " +
-        "says which), on a Pot that need not be deployed yet — the simulation deploys it first, " +
-        "and `transactions` gives each transaction's gas (Kitchen.deployPot, then the cook). " +
+        "says which), on an already-deployed Pot authenticated with potBinding or a configured " +
+        "stdio Pot store. Missing code or provenance refuses; simulation never deploys an EVM Pot. " +
         "Returns ok, gas, what main returns, the ERC-20 transfers and approvals, native " +
         "transfers and each address's net balance change, and first `leftInPot`: what the Pot " +
         "holds after the cook of the tokens it moved, which stays in the Pot, not the owner's " +

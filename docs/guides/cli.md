@@ -141,16 +141,16 @@ identity and mainnet token symbols. Local simulation selects the released engine
 endpoint's actual cluster.
 
 On a preview chain a program still compiles and every read works, but the command builds and
-sends no transaction. `simulate` does not depend on the label: it runs wherever the release is
-deployed on the chain, and stops with `the released engine … is not deployed on <chain>` where it
-is not.
+sends no transaction. `simulate` does not depend on the label, but EVM simulation still requires
+an already-deployed, authenticated Pot binding and its exact engine/compiler pair. A chain label
+or a predicted Pot address never supplies that binding.
 
-| On a preview chain                                                     | Does                                                                           |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `compile`, `actions`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                        |
-| `pot`                                                                  | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out |
-| `simulate`                                                             | Runs where the release is deployed on the chain; else stops with exit 1        |
-| `tx`, `run`, `sign`, `pot --deploy`, `pot --format cast`               | Refused                                                                        |
+| On a preview chain                                                     | Does                                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `compile`, `actions`, `globals`, `price`, `pools`, `inspect`, `verify` | What it does everywhere                                                                                |
+| `pot`                                                                  | Predicts the Pot, and with an endpoint reads it, but leaves the deployment out                         |
+| `simulate`                                                             | Runs with the required deployed contracts and, on EVM, an authenticated Pot binding; otherwise refuses |
+| `tx`, `run`, `sign`, `pot --deploy`, `pot --format cast`               | Refused                                                                                                |
 
 A refusal comes before the command reaches an endpoint or reads a key. The command exits 1 and
 says why, which chains are supported, and how to ask for the one it refused:

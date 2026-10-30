@@ -105,23 +105,24 @@ reverse. Pass `args` in the options instead to fix the values when the program i
 A cook is `Pot.cook(engine, program)`, so building one needs a Pot, an engine and the program's
 bytes.
 
-`routes.buildSauceEvmCall({ pot, engine, program, value? })` builds one Pot `cook` call; `program` is
-a hex string. `value` defaults to zero and must include the Kitchen fee. `routes.buildSauceEvmCalls({
-pot, engine, cooks, value? })` returns one call per hex program in `cooks`, in order, applying that
-value to **each**. Multiple statements within one program need only one cook and one fee.
+`routes.buildSauceEvmCall({ pot, engine, program, value?, compiler? })` builds one Pot `cook`
+call; `program` is a hex string. Use the verified persisted Pot, engine and compiler binding.
+`value` defaults to zero and must include the Kitchen fee. `routes.buildSauceEvmCalls` applies
+the same selection and value to each program; one program's statements need only one cook fee.
 
 ```ts
-import { routes, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
-import { toHex, type Hex } from "viem";
+import { routes } from "@eco-incorp/sauce";
+import { verifyPotBinding } from "@eco-incorp/sauce/evm/engine";
+import { toHex } from "viem";
 
-const owner = "0x4444444444444444444444444444444444444444";
-
+// input is the service's trusted persisted EvmPotBindingInput.
+const binding = await verifyPotBinding(client, input);
 const call = routes.buildSauceEvmCall({
-  pot: v12PredictPot(owner),
-  engine: v12EngineAddress() as Hex,
-  program: toHex(payload),
-  value: 1_000n, // the Kitchen fee, read just before building
+  pot: binding.pot,
+  engine: binding.engine,
+  compiler: binding.compiler,
+  program: toHex(payload), // compiled with binding.compiler
+  value: executionFee, // read from binding.kitchen just before building
 });
 // { to, target, data, value }
 ```
@@ -133,9 +134,9 @@ same contract as a call record does: from the cook builders, the Pot as a 32-byt
 left-padded address; from `sauceEvmDeployPotCall`, the Kitchen as you gave it (the released one's
 address when you gave none). `value` is a `bigint`.
 
-`v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine` is the calldata encoder
-underneath: it returns the `cook(engine, program)` calldata as hex. It throws for an engine that the
-pinned release sets pair with another compiler than the SDK's.
+`v12Pot.encodeCook(engine, program, compiler?)` from `@eco-incorp/sauce/evm/engine` returns
+the `cook(engine, program)` calldata as hex. Pass the verified binding's explicit compiler;
+the encoder rejects a known engine paired with a different compiler.
 
 `routes.compileSauceRoute(chain, source, execution, options?)` compiles a source and builds that one
 call in a single step. `execution` is `{ pot, engine, value? }` on an EVM chain. It returns
@@ -153,19 +154,21 @@ Kitchen call the engine requires. Build Solana execution with the Kitchen client
 
 ## Find and deploy a Pot
 
-For an EVM Kitchen release, a Pot is fixed by its Kitchen, Pot init-code hash, owner and salt.
-Its address is arithmetic you can do without a chain; a release with different Pot code derives
-a different address for the same owner and salt.
+New EVM Pot predictions use CREATE3 under Kitchen, from owner, salt and Pot kind.
+Prediction is offline arithmetic, not code authentication; changing Pot bytecode does not change
+the numerical target or replace an occupant. Existing deployed Pots use their saved bindings.
 
-| Export                                                    | From           | Does                                                                                                |
-| --------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
-| `v12PredictPot(owner, salt?, kitchen?)`                   | `.`            | The Pot's CREATE2 address. `salt` defaults to `DEFAULT_POT_SALT`, `kitchen` to the released Kitchen |
-| `DEFAULT_POT_SALT`                                        | `.`            | Every owner's default Pot salt: zero bytes32, `0x00…00`                                             |
-| `potSalt(label)`                                          | `.`            | The salt of the Pot an owner names `label`: `keccak256` of its UTF-8 bytes. An empty label throws   |
-| `routes.sauceEvmDeployPotCall({ owner, salt, kitchen? })` | `.`            | The Kitchen's `deployPot(owner, salt)` call, by default through the released Kitchen                |
-| `v12EngineAddress()`                                      | `/deployments` | The released engine's address                                                                       |
-| `v12KitchenAddress()`                                     | `/deployments` | The released Kitchen's address                                                                      |
-| `kitchenExecutionFee(kitchen?)`                           | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                         |
+| Export                                                    | From           | Does                                                                                                     |
+| --------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| `v12PredictPot(owner, salt?, kitchen?, routerFixed?)`     | `.`            | The Private Pot's CREATE3 address. Defaults: zero salt, released Kitchen, dynamic Router                 |
+| `v12PredictSharedPot(salt?, kitchen?)`                    | `/deployments` | The ownerless Shared Pot's CREATE3 address; its Router is fixed                                          |
+| `verifyPotBinding(client, input)`                         | `/evm/engine`  | Verifies deployed identity against an explicit trusted release binding; prediction alone is insufficient |
+| `DEFAULT_POT_SALT`                                        | `.`            | Every owner's default Pot salt: zero bytes32, `0x00…00`                                                  |
+| `potSalt(label)`                                          | `.`            | The salt of the Pot an owner names `label`: `keccak256` of its UTF-8 bytes. An empty label throws        |
+| `routes.sauceEvmDeployPotCall({ owner, salt, kitchen? })` | `.`            | The Kitchen's `deployPot(owner, salt)` call, by default through the released Kitchen                     |
+| `v12EngineAddress()`                                      | `/deployments` | The released engine's address                                                                            |
+| `v12KitchenAddress()`                                     | `/deployments` | The released Kitchen's address                                                                           |
+| `kitchenExecutionFee(kitchen?)`                           | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                              |
 
 An owner has one Pot per salt. The zero salt is the convention for the Pot an owner has by default,
 and a label names any other: `v12PredictPot(owner, potSalt("treasury"))`. To use an exact salt,
@@ -181,17 +184,19 @@ const pot = v12PredictPot(owner, salt);
 const deploy = routes.sauceEvmDeployPotCall({ owner, salt });
 ```
 
-Deriving is not deploying. The address exists as soon as you know the owner; the contract exists once
-somebody has called the Kitchen's `deployPot`, a call anyone can make once for each owner and salt.
-Send `deploy` before the first cook on a Pot that may not exist yet.
+Deriving is not deploying. For an explicit new Pot, send `deploy`, verify the actual deployed
+code/profile, owner, salt, kind, Kitchen, Router policy and engine/compiler compatibility, then
+persist the verified binding before funding, approvals, signing or queuing.
 
-Every address helper here returns a **recorded** address, never a verified one. `v12EngineAddress()`
-and `v12KitchenAddress()` give the released addresses, the same on every chain; the SDK reads no
-chain, so it cannot say whether code is there. Check the chain before trusting any of them;
-[prepare-pot.ts](../examples/prepare-pot.ts) shows prediction, deployment and the owner and
-Kitchen checks. A Pot's bytecode is part of its address, so a Kitchen release that changes that
-bytecode gives the same owner and salt a new Pot, and a Pot of an earlier release keeps running on the
-engine built for it.
+Address helpers return **recorded or predicted** addresses, never verified ones.
+`v12EngineAddress()` and `v12KitchenAddress()` read no chain. `verifyPotBinding` from
+`@eco-incorp/sauce/evm/engine` checks an explicit binding against deployed code and trusted release
+artifacts. Missing code, unknown profiles or mismatched identity must fail before funds or
+authorizations follow. Getter checks alone are insufficient.
+
+Already deployed historical Pots retain ordinary new work with their explicit original
+engine/compiler and Router bindings. Do not derive a replacement or silently deploy current code
+when a saved Pot is missing. See [Kitchen compatibility](../guides/kitchen-compatibility.md).
 
 On Arc, native value is USDC at 18 decimals, drawn from the same balance as the USDC ERC-20; see
 [Arc: USDC is the native coin](../reference/chains/arc.md#notes).

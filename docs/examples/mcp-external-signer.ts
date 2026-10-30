@@ -18,9 +18,9 @@ export interface Unsigned {
   readonly to?: string;
   readonly data?: string;
   readonly value?: string;
-  /** EVM: the gas limit to sign it with, where the server gives one. A cook planned after its
-   *  Pot's deployment has one, estimated as if the deployment had landed: a signer's own estimate,
-   *  taken while the Pot has no code, is far too low. */
+  /** EVM: the gas limit to sign it with, where the server gives one. A funding plan estimates
+   *  the cook as if its preceding transfers had landed on the already-deployed, authenticated
+   *  Pot; an estimate before those transfers can fail because the Pot is not funded yet. */
   readonly gas?: string;
   readonly transaction?: string;
   readonly feePayer?: string;
@@ -63,6 +63,7 @@ export async function cookWithYourSigner(
     if (signed.length === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
     const report = await callTool("sauce_send", {
       transactions: signed,
+      ...(program.potBinding === undefined ? {} : { potBinding: program.potBinding }),
       ...(typeof step.cursor === "string" ? { cursor: step.cursor } : {}),
       ...(rpcUrl === undefined ? {} : { rpcUrl }),
     });

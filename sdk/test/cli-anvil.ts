@@ -11,7 +11,7 @@ import type { ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +36,8 @@ import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
+import { v12KitchenAbi, type EvmPotBinding } from "../src/evm/engine.js";
+import { POT_SCHEMA, PotStore } from "../src/cli/pot-store.js";
 import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
 
@@ -98,12 +100,15 @@ export interface Run {
   readonly stderr: string;
 }
 
+const potStores = new Map<string, PotStore>();
+
 /** Runs the command in process with `overrides` on the real io — a scripted answer to a prompt. */
 export async function sauceWith(overrides: Partial<CliIo>, ...argv: string[]): Promise<Run> {
   let stdout = "";
   let stderr = "";
   const io: CliIo = {
     ...nodeIo(),
+    potsDir: potStores.get(argv[argv.indexOf("--rpc-url") + 1] ?? "")?.dir,
     ...overrides,
     stdout: (text) => void (stdout += text),
     stderr: (text) => void (stderr += text),
@@ -126,6 +131,9 @@ export interface LocalChain {
   readonly chain: CanonicalChain;
   readonly rpcUrl: string;
   readonly publicClient: PublicClient;
+  readonly seedPot: Address;
+  readonly pots: PotStore;
+  bindingOf(pot: Address): Promise<EvmPotBinding>;
   readonly deployer: WalletClient;
   readonly owner: WalletClient;
   readonly testClient: TestClient;
@@ -151,6 +159,8 @@ export async function startChain(slug: string): Promise<LocalChain> {
   const testClient = createTestClient({ mode: "anvil", transport });
   const deployer = createWalletClient({ account: DEPLOYER, transport });
   const owner = createWalletClient({ account: OWNER, transport });
+  const pots = new PotStore(mkdtempSync(join(tmpdir(), "sauce-cli-chain-pots-")));
+  potStores.set(rpcUrl, pots);
 
   const send = async (from: WalletClient, to: Address, data: Hex, value = 0n): Promise<Hex> => {
     const hash = await from.sendTransaction({
@@ -180,15 +190,18 @@ export async function startChain(slug: string): Promise<LocalChain> {
   };
 
   const stop = async (): Promise<void> => {
+    potStores.delete(rpcUrl);
+    rmSync(pots.dir, { recursive: true, force: true });
     if (anvil.exitCode !== null) return;
     const exited = once(anvil, "exit");
     anvil.kill();
     await exited;
   };
+  let stack: gated.GatedEngine | undefined;
   // A chain that cannot be set up is stopped, not left running for the rest of the worker's life.
   try {
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-    const stack = await gated.startGatedEngine(
+    stack = await gated.startGatedEngine(
       { publicClient, walletClient: deployer, testClient },
       DEPLOYER.address,
       creationCode,
@@ -196,7 +209,7 @@ export async function startChain(slug: string): Promise<LocalChain> {
     // The CLI names the engine the SDK records. A harness that deploys it at that release address
     // needs nothing more; one that deploys it elsewhere moves it there.
     const released = getAddress(v12EngineAddress());
-    if (getAddress(stack.engine) !== released) {
+    if (process.env.SAUCE_LOCAL_CANDIDATE === undefined && getAddress(stack.engine) !== released) {
       const install = (gated as Record<string, unknown>).installEngineAt as
         ((clients: object, from: Address, to: Address) => Promise<void>) | undefined;
       if (install === undefined) throw new Error(`the harness put the engine at ${stack.engine}`);
@@ -220,6 +233,9 @@ export async function startChain(slug: string): Promise<LocalChain> {
     chain,
     rpcUrl,
     publicClient,
+    seedPot: stack!.pot,
+    pots,
+    bindingOf: stack!.bindingOf,
     deployer,
     owner,
     testClient,
@@ -259,12 +275,45 @@ export const registered = (chain: CanonicalChain, symbol: string): Address =>
 export async function deployPot(
   local: LocalChain,
   owner: Address = OWNER.address,
+  salt: Hex = `0x${"00".repeat(32)}`,
 ): Promise<Address> {
-  const out = jsonOf(await sauce("pot", "--owner", owner, "--chain", local.chain.slug));
-  // Anyone may send it: the deployer does, and the Pot is still the owner's.
-  await local.send(local.deployer, out.to as Address, out.data as Hex);
+  // Fixture setup may deploy historical code; the public CLI exposes no historical deployment lane.
+  const { kitchen, potInitCodeHash } = gated.gateAnchors();
+  const pot = await local.publicClient.readContract({
+    address: kitchen,
+    abi: v12KitchenAbi,
+    functionName: "predictPot",
+    args: [owner, salt],
+  });
+  await local.send(
+    local.deployer,
+    kitchen,
+    encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deployPot",
+      args: [owner, salt],
+    }),
+  );
+  const binding = await local.bindingOf(pot);
+  local.pots.save({
+    schema: POT_SCHEMA,
+    chain: local.chain.slug,
+    chainId: local.chain.id,
+    pot,
+    owner,
+    salt,
+    kind: binding.kind,
+    ...(binding.scheme === "create2" && potInitCodeHash !== undefined ? { potInitCodeHash } : {}),
+    kitchen,
+    engine: binding.engine,
+    release: binding.release,
+    binding,
+    sdk: "test",
+    origin: "imported",
+    recordedAt: "2026-10-31T00:00:00.000Z",
+  });
 
-  return out.pot as Address;
+  return pot;
 }
 
 /** A JSON-RPC request, as an endpoint in front of a chain reads it. */
@@ -327,9 +376,8 @@ async function relayEndpoint(
 }
 
 /**
- * An endpoint in front of `upstream` that lags behind the chain the way a load-balanced provider
- * can: after it has relayed a transaction, its next `stale` answers to `eth_getCode` are empty, as
- * from a node that has not seen the block yet. `served` counts the empty answers it gave.
+ * Can lag behind a deployment, serving `stale` missing-code answers from the previous block.
+ * Reads of unchanged contracts do not consume that fault budget; `served` counts injected misses.
  */
 export async function laggingEndpoint(
   upstream: string,
@@ -341,10 +389,12 @@ export async function laggingEndpoint(
   let behind = "latest";
   const relay = await relayEndpoint(upstream, async (request, forward) => {
     if (request.method === "eth_getCode" && owed > 0) {
-      owed--;
       // The code as it was before that transaction: an older contract is there, a new one is not.
       const old = await forward({ ...request, params: [request.params?.[0], behind] });
-      if (old.result === "0x") served++;
+      if (old.result === "0x") {
+        owed--;
+        served++;
+      }
 
       return old;
     }

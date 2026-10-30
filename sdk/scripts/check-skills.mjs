@@ -39,10 +39,9 @@
 //      values. The program compiles through the `sauce` command on each chain its index row names,
 //      run exactly as its usage line says (`main`'s arguments), and on its example's chain as the
 //      example says, offline; every actions document (`.json`) names no chain and lowers through
-//      `sauce actions` on each chain its row names; and the cook either
-//      builds through `sauce tx`, on a chain the release supports (`chainSupport`), or — on a
-//      preview chain — is refused, with that chain's chain-support request in the refusal, as the
-//      skills tell an agent it will be;
+//      `sauce actions` on each chain its row names. An offline `sauce tx` refuses to build a cook:
+//      supported chains require RPC and an authenticated deployed Pot; preview chains refuse
+//      first with their chain-support request.
 //   5. every `sauce …` command line in a skill names a real command and only flags it takes;
 //   6. every ```sauce block compiles (```sauce chain=a,b through the command, ```sauce target=evm|svm
 //      raw) or, as ```sauce fails, does not; every ```json chain=a,b block is an actions document
@@ -1024,16 +1023,23 @@ async function compileJson(file, chain) {
 }
 
 /**
- * `sauce tx` with `argv` on `chain`, offline: on a chain the release supports it builds the cook; on
- * a preview chain it is refused before anything is read, naming the chain as one and carrying its
- * chain-support request (`chainSupportRequest`), which is what the skills say happens there.
+ * `sauce tx` validates `argv` offline, then refuses the handoff: supported chains need RPC and an
+ * authenticated deployed Pot. Preview chains refuse before any network read and name their
+ * chain-support request (`chainSupportRequest`).
  */
 async function txOn(where, chain, argv) {
   const tx = await sauce(argv);
   if (support.chainSupport(chain) === "supported") {
-    if (tx.code !== 0) fail(where, `sauce tx on ${chain} fails: ${diagnostic(tx.stderr)}`);
-    else if (JSON.parse(tx.stdout).data === undefined)
-      fail(where, `sauce tx on ${chain} built no cook`);
+    if (
+      tx.code !== 1 ||
+      tx.stdout !== "" ||
+      !/requires an RPC endpoint and an authenticated deployed Pot/.test(tx.stderr)
+    )
+      fail(
+        where,
+        `sauce tx on ${chain} must refuse an unauthenticated offline cook ` +
+          `(exit ${tx.code}): ${diagnostic(tx.stderr || tx.stdout)}`,
+      );
     return;
   }
   counts.refusals++;
@@ -1071,10 +1077,9 @@ const headerOf = (file) => {
 };
 
 /**
- * Runs a program's command line offline on `chain`: compiles it, and on an EVM chain builds the
- * cook (refused on a preview chain: `txOn`). `header` (once per program, on its usage line) also
- * holds the header to `main`: the usage line's `--args` are `<name>` for each of its parameters,
- * in order, and the header has a line per parameter, `//   name: Type …`.
+ * Runs a program's command line offline on `chain`: compiles it, validates its cook arguments,
+ * and checks that no offline cook is emitted (`txOn`). `header` also holds the usage line to
+ * `main`: it names each parameter as `<name>` in order, with a `//   name: Type …` line.
  */
 async function runUsage(where, file, argv, chain, header = false) {
   const [name, , ...rest] = argv;
@@ -1160,10 +1165,9 @@ async function runUsage(where, file, argv, chain, header = false) {
 }
 
 /**
- * An actions document, lowered through `sauce actions` on each of `chains`, and its cook built by
- * `sauce tx` with `main`'s arguments (its `argument` actions) sampled — as the skill tells an agent
- * to run it, and refused on a preview chain (`txOn`). A document names no chain: `--chain` picks
- * one.
+ * An actions document, lowered through `sauce actions` on each of `chains`, then checked through
+ * `sauce tx` with sampled `main` arguments. The offline handoff is refused (`txOn`); compilation
+ * and argument validation must still succeed first. A document takes its chain from `--chain`.
  */
 async function runDocument(where, file, chains) {
   let document;

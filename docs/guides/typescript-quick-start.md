@@ -67,86 +67,50 @@ the package's version.
 
 ## 3. Build and simulate the cook
 
-A cook is one transaction from the Pot's owner to the Pot, carrying the program and `main`'s
-arguments. This live step requires the release pinned by your SDK to be deployed and active on
-Base: the engine and Router must have code, and the Kitchen must predict the same Pot as the SDK.
-The checks below refuse an incomplete rollout rather than treating a call to an empty address as
-a successful cook. Deterministic [release addresses](../reference/deployments.md) alone do not
-prove those prerequisites. For an offline run with the full released pair deployed locally, use
-the [testing kit](testing.md).
+A cook runs on an already deployed Pot using its verified persisted release binding.
+This Base example needs a trusted `pot-binding.json`, deployment completed separately, and the
+exact compiler paired with that service's engine. Missing or mismatched code stops the example;
+a predicted address or nonempty engine code is not authentication.
+See [Kitchen compatibility](kitchen-compatibility.md) before creating a new service.
 
 Save this as `cook.ts`:
 
 ```ts
 import { readFileSync } from "node:fs";
-import { kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
-import {
-  v12EngineAddress,
-  v12KitchenAddress,
-  v12RouterAddress,
-} from "@eco-incorp/sauce/deployments";
-import { v12KitchenAbi, v12Pot } from "@eco-incorp/sauce/evm/engine";
-import { bytesToHex, concatHex, createPublicClient, getAddress, hexToString, http } from "viem";
+import { kitchenExecutionFee, routes } from "@eco-incorp/sauce";
+import { v12ReleaseSet } from "@eco-incorp/sauce/deployments";
+import { verifyPotBinding, v12Pot, type EvmPotBindingInput } from "@eco-incorp/sauce/evm/engine";
+import { bytesToHex, concatHex, createPublicClient, hexToString, http } from "viem";
 import { base } from "viem/chains";
 
-// Any addresses work here: nothing is signed or sent.
-const owner = getAddress("0x1111111111111111111111111111111111111111");
-const recipient = getAddress("0x2222222222222222222222222222222222222222");
-const amount = BigInt(process.argv[2] ?? "1000000"); // 1000000 is 1 USDC
-
-// 1. The program, compiled for Base.
-const program = routes.compileSauceProgram("base", readFileSync("pay.sauce.ts", "utf8"));
-
-// 2. The owner's Pot, and the call that creates it.
-const salt = `0x${"00".repeat(32)}` as const;
-const pot = v12PredictPot(owner, salt);
-const deploy = routes.sauceEvmDeployPotCall({ owner, salt });
-
-// 3. The cook: the program with main's arguments after it, sent to the Pot.
-const args = routes.encodeEntryArguments(program, [recipient, amount]);
-const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(args)]);
-const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), payload);
-
-// 4. The cook's value is the Kitchen's fee, read from Base.
 const client = createPublicClient({ chain: base, transport: http() });
-const engine = getAddress(v12EngineAddress());
-const router = getAddress(v12RouterAddress());
-const [engineCode, routerCode] = await Promise.all([
-  client.getCode({ address: engine }),
-  client.getCode({ address: router }),
-]);
-const unavailable =
-  "The release pinned by this SDK is not active on Base; its deployment must be completed before this live example can run.";
-if (!engineCode || engineCode === "0x" || !routerCode || routerCode === "0x") {
-  throw new Error(unavailable);
+const input: EvmPotBindingInput = JSON.parse(
+  readFileSync(process.argv[3] ?? "pot-binding.json", "utf8"),
+);
+const binding = await verifyPotBinding(client, input);
+if (binding.chainId !== base.id || binding.compiler !== v12ReleaseSet().compiler) {
+  throw new Error("Use this service's exact Base compiler/engine pair");
 }
-const kitchenPot = await client.readContract({
-  address: getAddress(v12KitchenAddress()),
-  abi: v12KitchenAbi,
-  functionName: "predictPot",
-  args: [owner, salt],
-});
-if (kitchenPot.toLowerCase() !== pot.toLowerCase()) throw new Error(unavailable);
-const feeRead = kitchenExecutionFee();
+const amount = BigInt(process.argv[2] ?? "1000000");
+const program = routes.compileSauceProgram("base", readFileSync("pay.sauce.ts", "utf8"));
+const args = routes.encodeEntryArguments(program, [binding.owner, amount]);
+const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(args)]);
+const data = v12Pot.encodeCook(binding.engine, payload, binding.compiler);
+const feeRead = kitchenExecutionFee(binding.kitchen);
 const answer = await client.call({ to: feeRead.to, data: feeRead.data });
 const fee = feeRead.decode(answer.data ?? "0x");
-
-// 5. Simulate the Pot's deployment and the cook together, on Base as it is now.
 const { results } = await client.simulateCalls({
-  account: owner,
-  calls: [
-    { to: deploy.to, data: deploy.data, value: deploy.value },
-    { to: pot, data, value: fee },
-  ],
+  account: binding.owner,
+  calls: [{ to: binding.pot, data, value: fee }],
 });
-const cook = results[1]!;
-console.log("Pot:", pot);
+const cook = results[0]!;
+console.log("Pot:", binding.pot);
 console.log("Cook:", cook.status, "using", cook.gasUsed.toString(), "gas");
 if (cook.status === "failure") console.log("Reason:", hexToString(cook.data));
 ```
 
-After the deployment checks pass, run it to simulate paying 1 USDC. With an unfunded Pot, expect a
-failure such as the illustration below; the gas used depends on the active release and chain state:
+This example verifies the supplied deployed binding and only simulates the cook; it signs and sends
+nothing. With an unfunded Pot, expect a failure such as the illustration below.
 
 ```sh
 node cook.ts
@@ -172,21 +136,17 @@ Cook: success using <gas used> gas
 
 Your gas figures may differ. Step by step:
 
-- `v12PredictPot(owner, salt)` works out the owner's Pot address, which is known before the Pot
-  exists. The salt is a label, so one owner can have several Pots.
-- `routes.sauceEvmDeployPotCall` is the transaction that creates the Pot, through the **Kitchen**,
-  the contract that makes Pots. Anyone may send it, once.
+- `verifyPotBinding` checks the actual deployed Pot against trusted explicit release provenance.
+  It does not deploy missing code, change a salt or select a replacement engine.
 - `routes.encodeEntryArguments` encodes `main`'s arguments the way `--args` does, checked against
   the types `main` declares. The program, then its arguments, is the payload.
-- `v12Pot.encodeCook` is the cook's calldata: the payload, and the engine that runs it.
-  `v12EngineAddress()` is the Sauce release's engine, the same on every chain.
+- `v12Pot.encodeCook` binds the payload to the verified engine and explicit compiler selection.
 - `kitchenExecutionFee()` reads the Kitchen's fee, which every cook pays as its value.
-- `client.simulateCalls` is viem's: it runs the deployment, then the cook, on Base as it is now,
-  and sends nothing. The Base endpoint is viem's default for the chain; the Sauce package has none
-  of its own.
+- `client.simulateCalls` runs the cook on Base as it is now and sends nothing. Its endpoint is
+  viem's default for the chain; the Sauce package has none of its own.
 
-To send it for real, the owner signs and sends `deploy` once, then `{ to: pot, data, value: fee }`
-with any wallet library. [Run a program](cli-run.md) does the same from the command line.
+Before sending for real, retain the verified service binding and review the transaction.
+The owner signs `{ to: binding.pot, data, value: fee }`; no new deployment is part of that cook.
 
 ## 4. Compile for every chain
 

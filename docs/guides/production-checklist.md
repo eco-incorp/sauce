@@ -78,19 +78,20 @@ section in order. Each item is a check you can do with the `sauce` command; the
   This checks that the program in the call is the one your file compiles to, and decodes the
   arguments after it. `to` must be your Pot.
 
-- **Sign with the gas the plan gives.** For a Pot not created yet, `sauce tx` prints its creation
-  and the cook, each with `gas`. A signer's own estimate of the cook is far too low.
+- **Sign with the gas the plan gives.** Build EVM cooks only after separate deployment and
+  binding verification. Do not estimate or sign a cook against an undeployed predicted address.
 - **Accepting settlements from someone else?** Verify them before you rely on them, with
   `sauce verify` or the SDK's checks ([Verifying settlement programs](verification.md)).
 
 ## Know what it costs
 
-- **Your wallet pays.** It pays the gas and the Kitchen's fee in the chain's coin, and the first
-  run pays for your Pot's creation too. On Solana it also pays rent for new accounts.
-- **Deploy the Pot, then fund it, or fund it with the cook.** Deploy it with `sauce pot --deploy`,
-  or pass `--fund`, which plans the transfer after the Pot's deployment. Do not send tokens to a
-  Pot's address before it is deployed: a Kitchen upgrade that changes the Pot's code moves the
-  address.
+- **Your wallet pays.** It pays the cook's gas and the Kitchen's fee in the chain's coin.
+  EVM Pot deployment is separately authorized and paid before the cook. On Solana the first run
+  can also pay rent for new accounts.
+- **Deploy → verify → persist → fund/sign.** New EVM Pots require actual code/profile and
+  engine/compiler/Router binding verification before funds, approvals or signatures follow.
+  Prediction alone is not authentication. A missing saved Pot or mismatched profile must fail,
+  not deploy current code or choose another salt.
 - [Costs](../concepts/costs.md) lists every part.
 
 ## Pin the versions
@@ -102,6 +103,9 @@ section in order. Each item is a check you can do with the `sauce` command; the
   exits 1 while the skills are outdated.
 - **Upgrade on purpose.** Read the [changelog](../changelog.md) before moving to a new version, then
   simulate your programs again on it ([Upgrading](upgrading.md)).
+- **Retain existing service bindings.** Keep historical deployed Pots usable for ordinary new work
+  with their explicit engine/compiler and Router policy. Use the maintainer
+  [compatibility gates](kitchen-compatibility.md) before changing creation or retiring a path.
 
 ## Next
 

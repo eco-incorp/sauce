@@ -100,13 +100,23 @@ describe("the release table", () => {
     }
     expect(set["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
     expect(set["v12-svm"].engine).toBe(v12SvmEngineProgramId());
-    // The Kitchen and Pot init-code hash the row records are the synced release's own.
     const { pot } = v12DeployedAddresses().evm;
-    expect(set["kitchen-evm"].kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
-    expect(set["kitchen-evm"].potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash.toLowerCase());
+    const pin = set["kitchen-evm"];
+    expect(pin.kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
+    if (pot.scheme === "create3") {
+      expect(pot).toMatchObject({
+        scheme: pin.scheme,
+        helperInitCodeHash: pin.helperInitCodeHash,
+        potProfileHash: pin.potProfileHash,
+        fixedRouter: pin.fixedRouter,
+      });
+    } else {
+      expect(pot.initCodeHash).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(pin.potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash?.toLowerCase());
+    }
   });
 
-  it("names the Kitchen and the Pot init-code hash of every kitchen-evm release, the same in every row", () => {
+  it("retains consistent Kitchen and code-profile provenance for every pinned release", () => {
     const hashOf = new Map<string, string>();
     for (const row of V12_RELEASE_SETS) {
       const pin = row["kitchen-evm"];
@@ -114,18 +124,28 @@ describe("the release table", () => {
         row.compiler,
         expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
       ]);
-      expect([row.compiler, pin.potInitCodeHash]).toEqual([
+      const profile = pin.scheme === "create3" ? pin.potProfileHash : pin.potInitCodeHash;
+      expect([row.compiler, profile]).toEqual([
         row.compiler,
         expect.stringMatching(/^0x[0-9a-f]{64}$/),
       ]);
-      // A release mints under one hash, whichever row names it.
+      if (pin.scheme === "create3") {
+        expect(pin.helperInitCodeHash).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(pin.fixedRouter).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      }
+      const identity = JSON.stringify([
+        pin.kitchen,
+        pin.scheme ?? "create2",
+        profile,
+        pin.fixedRouter,
+      ]);
       const seen = hashOf.get(pin.version);
-      if (seen !== undefined) expect(pin.potInitCodeHash).toBe(seen);
-      hashOf.set(pin.version, pin.potInitCodeHash!);
+      if (seen !== undefined) expect(identity).toBe(seen);
+      hashOf.set(pin.version, identity);
     }
   });
 
-  it("holds every row's Kitchen and Pot init-code hash to its release's addresses.json, where cached", () => {
+  it("matches pinned Kitchen and code-profile provenance against cached release artifacts", () => {
     // The sync checks the installed row's against its release; an older row's release is checked
     // here wherever a sync (or `--report`) left it in the cache.
     const cache = join(dirname(fileURLToPath(import.meta.url)), "../../node_modules/.cache");
@@ -145,22 +165,29 @@ describe("the release table", () => {
           ? {
               version: deployed.releases["kitchen-evm"].version,
               contracts: { kitchen: { address: deployed.evm.contracts.kitchen.address } },
-              pot: { initCodeHash: deployed.evm.pot.initCodeHash },
+              pot: deployed.evm.pot,
             }
           : (JSON.parse(readFileSync(path, "utf8")) as {
               version: string;
               contracts: { kitchen: { address: string } };
-              pot: { initCodeHash: string };
+              pot: typeof deployed.evm.pot;
             });
       expect([pin.version, published.version]).toEqual([pin.version, pin.version]);
       expect([pin.version, pin.kitchen?.toLowerCase()]).toEqual([
         pin.version,
         published.contracts.kitchen.address.toLowerCase(),
       ]);
-      expect([pin.version, pin.potInitCodeHash]).toEqual([
-        pin.version,
-        published.pot.initCodeHash.toLowerCase(),
-      ]);
+      if (pin.scheme === "create3") {
+        expect(published.pot).toMatchObject({
+          scheme: "create3",
+          helperInitCodeHash: pin.helperInitCodeHash,
+          potProfileHash: pin.potProfileHash,
+          fixedRouter: pin.fixedRouter,
+        });
+      } else {
+        expect(published.pot.initCodeHash).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(pin.potInitCodeHash).toBe(published.pot.initCodeHash?.toLowerCase());
+      }
       checked++;
     }
     // The installed row is always checked: the sync fetched its release or wrote its addresses.

@@ -16,13 +16,15 @@ import { fileURLToPath } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { encodeFunctionData, type Address } from "viem";
 
-import { fork, local, type TestChain } from "../../src/testing/index.js";
+import type { TestChain } from "../../src/testing/index.js";
 import { rpc, startAnvil } from "../../src/testing/node.js";
 import { startForkNode } from "../../src/testing/state.js";
 import {
   anvilMissing,
   children,
   fakeAnvil,
+  fork,
+  local,
   gone,
   program,
   uniswapV3Pool,

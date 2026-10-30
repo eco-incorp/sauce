@@ -452,15 +452,21 @@ const printed = (run: Run): Record<string, unknown> => {
   return JSON.parse(run.stdout) as Record<string, unknown>;
 };
 
-/** The cook `sauce tx` prints for `argv` (whose `--args`, if any, comes last). */
-const cookOf = async (file: string, ...argv: string[]): Promise<Hex> =>
-  printed(await sauce("tx", file, "--owner", OWNER, "--value", "0", ...argv)).data as Hex;
-
 describe("sauce inspect", () => {
   it("decodes a cook's arguments against the program's source", async () => {
     const split = file("split.sauce.ts", SPLIT);
-    const args = [TOKEN, JSON.stringify([RECIPIENT, OTHER_RECIPIENT]), "5", '{"tag":7,"ok":true}'];
-    const data = await cookOf(split, "--chain", "base", "--args", ...args);
+    const program = compileSauceProgram("base", SPLIT);
+    const args = encodeEntryArguments(program, [
+      TOKEN,
+      [RECIPIENT, OTHER_RECIPIENT],
+      5n,
+      { tag: 7n, ok: true },
+    ]);
+    // Inspection accepts raw calldata offline; creating an authenticated handoff is a separate command.
+    const data = v12Pot.encodeCook(
+      ENGINE,
+      bytesToHex(new Uint8Array([...program.bytecode, ...args])),
+    );
     const inspected = json(
       await sauce("inspect", data, "--source", split, "--chain", "base", "--json"),
     );

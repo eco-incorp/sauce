@@ -27,6 +27,15 @@ export { TOKEN_REGISTRY, svmTokenRows } from "../../../sdk/dist/routes/token-reg
 export { BalanceSlotError, balanceOverride } from "../../../sdk/dist/evm/balance-slot.js";
 export { deployReleaseStack } from "../../../sdk/dist/evm/release-stack.js";
 export {
+  verifyPotBinding,
+  type EvmPotBinding,
+  type EvmPotBindingInput,
+  type EvmPotKind,
+  type EvmPotRuntimeProfile,
+} from "../../../sdk/dist/evm/engine.js";
+export { v12PredictPot, v12PredictSharedPot } from "../../../sdk/dist/deployments/pot.js";
+export { sdkCompilerVersion } from "../../../sdk/dist/deployments/releases.js";
+export {
   addressLabels,
   effectsOf,
   type Effects,

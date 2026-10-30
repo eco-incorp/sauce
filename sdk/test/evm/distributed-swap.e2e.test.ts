@@ -76,6 +76,7 @@ import type { Abi, Address, Hex, TransactionReceipt } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { nodeIo, runCli, type CliIo } from "../../src/cli/run.js";
+import { withPotBinding } from "../../src/cli/pot-binding.js";
 import { sqrtPriceX96FromPrice } from "../../src/price.js";
 import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
@@ -634,37 +635,35 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       stdout: (text) => void (stdout += text),
       stderr: (text) => void (stderr += text),
     };
-    const code = await runCli(
-      [
-        "simulate",
-        PROGRAM_PATH,
-        "--chain",
-        "base",
-        "--owner",
-        OWNER.address,
-        "--rpc-url",
-        RPC_URL,
-        "--assume-balance",
-        "USDC:2000",
-        "--args",
-        String(budget),
-        String(PRICE_LIMIT),
-        "0",
-        "0",
-        RECIPIENT,
-      ],
-      io,
+    const code = await withPotBinding(await sauce.bindingOf(sauce.pot), () =>
+      runCli(
+        [
+          "simulate",
+          "--json",
+          PROGRAM_PATH,
+          "--chain",
+          "base",
+          "--pot",
+          sauce.pot,
+          "--rpc-url",
+          RPC_URL,
+          "--assume-balance",
+          "USDC:2000",
+          "--args",
+          String(budget),
+          String(PRICE_LIMIT),
+          "0",
+          "0",
+          RECIPIENT,
+        ],
+        io,
+      ),
     );
     expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
-    // The cook's gas: after the Pot's deploy, when the rehearsal deploys it first.
-    expect(stdout).toMatch(
-      /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+( for the cook, after the Pot's deploy \(1\. below\))?, returns 0x/,
-    );
-    expect(stdout).toContain(
-      `main returns { spent: Uint256, bought: Uint256, unspent: Uint256 }: ` +
-        `{ spent: ${spent}, bought: ${bought}, unspent: ${unspent} }`,
-    );
-    console.log(stdout);
+    expect(JSON.parse(stdout)).toMatchObject({
+      ok: true,
+      returned: { spent: String(spent), bought: String(bought), unspent: String(unspent) },
+    });
   });
 
   it("spends only what priceLimit allows: every pool with liquidity, V4's too, stops at its own limit", async () => {

@@ -103,6 +103,9 @@ Upgrading an existing project? [Move from compiler 2.5 to 2.6](docs/guides/upgra
 covers signed `Int256` values, ABI-only inputs, EVM atomic `try`/`catch`, and the engine/Kitchen
 pairing. The [language reference](docs/reference/saucescript.md) is the source for exact semantics.
 
+For service maintainers, [Kitchen compatibility](docs/guides/kitchen-compatibility.md) defines
+CREATE3 creation, retained deployed-Pot bindings and the required cutover gates.
+
 ## Three words you will see
 
 Sauce borrows its words from a kitchen. Your program is a recipe.
@@ -112,9 +115,9 @@ Sauce borrows its words from a kitchen. Your program is a recipe.
 - **Cook**: the transaction that runs one program on your Pot. Every step happens, or none does.
 - **Kitchen**: the contract that makes Pots and charges a small flat fee for each cook.
 
-Your Pot's address is known before it exists, but fund it once it is deployed: a Kitchen release
-with new Pot code derives another address. `sauce run` creates it the first time it needs it, and
-`sauce run --fund` creates it, then moves your tokens in, in one go.
+Your Pot's address is known before it exists, but a prediction does not authenticate its code.
+New EVM Pots use CREATE3: deploy, verify and save the release binding before funding or signing.
+Already deployed Pots keep their explicit engine/compiler and Router bindings across SDK updates.
 
 ## Supported chains
 

@@ -1,16 +1,10 @@
 /**
- * `sauce simulate` with no key, no deployed Pot and no real balances: the Pot's deployment and the
- * cook rehearsed together, the Pot given balances by state override (`--assume-balance`, a keyless
- * `--fund`), and what the cook did read back from its logs. On a local anvil running the released
- * gated stack (`cli-anvil.ts`), through both routes:
+ * `sauce simulate` with no key and no real balances, on an explicitly deployed authenticated Pot.
+ * State overrides supply simulation-only balances (`--assume-balance`, a keyless `--fund`);
+ * the cook's logs report transfers without changing the local chain.
  *
- *   - `eth_simulateV1`, which anvil serves: the deploy and the cook in one simulated block, with the
- *     cook's logs and traced native transfers;
- *   - `eth_call` with state overrides, reached through a proxy that answers `eth_simulateV1` the way
- *     a node without it does: the Pot put in place as `Kitchen.deployPot` deploys it, then the cook.
- *
- * Nothing is ever sent: after every rehearsal the Pot is still not deployed and nobody's balance
- * has moved.
+ * Both routes run the same deployed Pot: `eth_simulateV1`, and `eth_call` with state overrides
+ * through a proxy that reports `eth_simulateV1` unavailable and refuses every write.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite (CLAUDE.md).
  */
@@ -19,25 +13,23 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeAbiParameters, getAddress, pad, parseAbi, type Address, type Hex } from "viem";
+import { encodeAbiParameters, getAddress, parseAbi, type Address, type Hex } from "viem";
 
-import { kitchenAddress } from "../src/cli/commands.js";
-import { POT_ROUTER_SLOT, probePot } from "../src/cli/rehearse.js";
-import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import {
   CLI_FIXTURES,
+  deployPot,
   describeEvm,
   FEE,
   fixture,
   jsonOf,
   registered,
-  sauce,
+  sauceWith,
   startChain,
   type LocalChain,
 } from "./cli-anvil.js";
 
 const PAY = join(CLI_FIXTURES, "pay.sauce.ts");
-/** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
+/** An owner nobody holds the key of, with no native currency or tokens. */
 const OWNER: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const USDT_CREATION = `${fixture("NoReturnERC20")}${encodeAbiParameters(
@@ -104,17 +96,25 @@ async function withoutSimulateV1(
   return { url: `http://127.0.0.1:${port}`, server, refused };
 }
 
-describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
+describeEvm("sauce simulate: no key or real balances, on an authenticated deployed Pot", () => {
   let local: LocalChain;
   let proxy: { url: string; server: Server; refused: string[] };
   let work: string;
   let usdc: Address;
   let usdt: Address;
-  const pot = getAddress(v12PredictPot(OWNER, `0x${"00".repeat(32)}`) as Address);
+  let pot: Address;
+  let kitchen: Address;
+  let potCode: Hex;
+  let deploymentBlock: bigint;
+  const sauce = (...argv: string[]) => sauceWith({ potsDir: local.pots.dir }, ...argv);
 
   beforeAll(async () => {
     work = mkdtempSync(join(tmpdir(), "sauce-simulate-e2e-"));
     local = await startChain("ethereum");
+    pot = await deployPot(local, OWNER);
+    kitchen = (await local.bindingOf(pot)).kitchen;
+    potCode = (await local.publicClient.getCode({ address: pot }))!;
+    deploymentBlock = await local.publicClient.getBlockNumber({ cacheTime: 0 });
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
     usdt = await local.plant(USDT_CREATION, registered(local.chain, "USDT"));
     proxy = await withoutSimulateV1(local.rpcUrl);
@@ -131,7 +131,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
 
   /** Nothing a rehearsal does reaches the chain. */
   const untouched = async (): Promise<void> => {
-    expect(await local.publicClient.getCode({ address: pot })).toBeUndefined();
+    expect(await local.publicClient.getCode({ address: pot })).toBe(potCode);
     expect(await local.balanceOf(usdc, RECIPIENT)).toBe(0n);
     expect(await local.balanceOf(usdc, pot)).toBe(0n);
     expect(await local.publicClient.getBalance({ address: OWNER })).toBe(0n);
@@ -153,7 +153,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       "1500000",
     );
 
-  it("rehearses the Pot's deployment and the cook in one eth_simulateV1 block, and shows what moved", async () => {
+  it("rehearses only the deployed Pot's cook in eth_simulateV1, and shows what moved", async () => {
     const run = await pay(
       local.rpcUrl,
       "--assume-balance",
@@ -169,25 +169,14 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       from: OWNER,
       to: pot,
       value: FEE.toString(),
-      deployPot: { kitchen: kitchenAddress(), owner: OWNER, salt: `0x${"00".repeat(32)}` },
       gasKind: "used",
       returns: "0x",
     });
     expect(BigInt(out.gas as string)).toBeGreaterThan(21_000n);
-    // Two transactions, each with its own gas: the Pot's deployment, then the cook, whose gas is
-    // `gas`.
+    expect(out).not.toHaveProperty("deployPot");
     expect(out.transactions).toEqual([
-      {
-        step: "deployPot",
-        from: OWNER,
-        to: kitchenAddress(),
-        gas: expect.any(String),
-        gasKind: "used",
-      },
       { step: "cook", from: OWNER, to: pot, gas: out.gas, gasKind: "used" },
     ]);
-    const [deployed] = out.transactions as Array<{ gas: string }>;
-    expect(BigInt(deployed!.gas)).toBeGreaterThan(21_000n);
     // The balances it assumed, with where each token keeps them: OpenZeppelin's ERC-20 at slot 0,
     // the USDT-shaped fixture after its name, symbol, decimals and totalSupply.
     expect(out.assumed).toEqual([
@@ -234,7 +223,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       { from: OWNER, to: pot, amount: FEE.toString(), formatted: "0.000000000000001234" },
       {
         from: pot,
-        to: kitchenAddress(),
+        to: kitchen,
         amount: FEE.toString(),
         formatted: "0.000000000000001234",
       },
@@ -262,7 +251,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
           deltas: [expect.objectContaining({ token: "native", amount: (-FEE).toString() })],
         }),
         expect.objectContaining({
-          address: kitchenAddress(),
+          address: kitchen,
           label: "Kitchen",
           deltas: [expect.objectContaining({ token: "native", amount: FEE.toString() })],
         }),
@@ -276,25 +265,17 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(run.stderr).toBe("");
     expect(run.code).toBe(0);
     const lines = run.stdout.split("\n");
-    // The gas the headline gives is the cook's, and each transaction says its own.
+    // Only the cook runs: no deployment is simulated or offered to the signer.
     expect(lines[0]).toMatch(
-      new RegExp(
-        `^The cook succeeds from ${OWNER}: gas used (\\d+) for the cook, after the Pot's deploy ` +
-          "\\(1\\. below\\), returns 0x$",
-      ),
+      new RegExp(`^The cook succeeds from ${OWNER}: gas used \\d+, returns 0x$`),
     );
-    const cookGas = /gas used (\d+) for the cook/.exec(lines[0]!)![1];
     expect(run.stdout).toMatch(
       /^Simulated with eth_simulateV1 on the state of block \d+; nothing was signed or sent:$/m,
     );
     expect(run.stdout).toMatch(
-      new RegExp(
-        `^ {2}1\\. Kitchen\\.deployPot\\(${OWNER}, 0x${"00".repeat(32)}\\), gas used \\d+: ` +
-          `Pot ${pot} is not deployed on ethereum yet, so the simulation deploys it first`,
-        "m",
-      ),
+      new RegExp(`^ {2}the cook, from the owner ${OWNER}, gas used \\d+$`, "m"),
     );
-    expect(run.stdout).toContain(`  2. the cook, from the owner ${OWNER}, gas used ${cookGas}\n`);
+    expect(run.stdout).not.toContain("Kitchen.deployPot");
     expect(run.stdout).toContain("  the Pot holds 2 USDC: --assume-balance");
     // What moved, in order, each party by its role: the cook's value in, the Kitchen's fee out,
     // then the payments.
@@ -449,6 +430,7 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       );
     // Uncached: viem serves a block number up to 4 s old, which can predate the suite's setup.
     const before = await local.publicClient.getBlockNumber({ cacheTime: 0 });
+    expect(before).toBeGreaterThanOrEqual(deploymentBlock);
     await local.mint(usdc, holder, 5_000_000n);
     const now = await at();
     expect(now).toMatchObject({ returned: "5000000" });
@@ -481,14 +463,12 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
       ok: true,
       path: "eth_call",
       fallback: expect.stringContaining("the endpoint did not run eth_simulateV1"),
-      deployPot: { owner: OWNER },
       gasKind: "estimated",
       returns: "0x",
     });
     expect(BigInt(out.gas as string)).toBeGreaterThan(50_000n);
-    // The deploy estimated as its own transaction, on the chain before the Pot exists.
+    expect(out).not.toHaveProperty("deployPot");
     expect(out.transactions).toEqual([
-      expect.objectContaining({ step: "deployPot", gas: expect.any(String), gasKind: "estimated" }),
       expect.objectContaining({ step: "cook", gas: out.gas, gasKind: "estimated" }),
     ]);
     expect(out.transfers).toBeUndefined();
@@ -552,20 +532,22 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(other.stdout.split("\n")[0]).toBe(
       'Expected a revert with "too late", but the cook reverts: the program threw "not today"',
     );
+    const missingPot = "0x0000000000000000000000000000000000000999";
+    const nonce = await local.publicClient.getTransactionCount({ address: OWNER });
     const named = await sauce(
       "simulate",
       refusing,
       "--chain",
       "ethereum",
       "--pot",
-      pot,
+      missingPot,
       "--rpc-url",
       local.rpcUrl,
     );
     expect(named.code).toBe(1);
-    expect(named.stderr).toContain(
-      `Pot ${pot} is not deployed on ethereum, and --pot does not say whose it is`,
-    );
+    expect(named.stdout).toBe("");
+    expect(await local.publicClient.getCode({ address: missingPot })).toBeUndefined();
+    expect(await local.publicClient.getTransactionCount({ address: OWNER })).toBe(nonce);
   }, 120_000);
 
   it("gives the Pot native currency with ETH:, and shows it leave", async () => {
@@ -665,25 +647,5 @@ describeEvm("sauce simulate: no key, no deployed Pot, no real balances", () => {
     expect(run.stderr).toContain(
       `no storage slot of ${computed} holds the balance its balanceOf reports`,
     );
-  }, 120_000);
-
-  it("puts in place, on the eth_call route, exactly the Pot Kitchen.deployPot then deploys", async () => {
-    // Another owner's Pot, labelled, so this one test deploys it for real and compares.
-    const owner = getAddress("0x5a0ce00000000000000000000000000000000b0b");
-    const salt = potSalt("probe");
-    const probed = await probePot(local.publicClient, kitchenAddress(), owner, salt);
-    if ("reason" in probed) throw new Error(`the probe reverted: ${probed.reason}`);
-    expect(probed.pot).toBe(getAddress(v12PredictPot(owner, salt) as Address));
-    expect(await local.publicClient.getCode({ address: probed.pot })).toBeUndefined();
-
-    const deployed = jsonOf(
-      await sauce("pot", "--owner", owner, "--chain", "ethereum", "--salt", "probe"),
-    );
-    await local.send(local.deployer, deployed.to as Address, deployed.data as Hex);
-    expect(await local.publicClient.getCode({ address: probed.pot })).toBe(probed.code);
-    expect(
-      await local.publicClient.getStorageAt({ address: probed.pot, slot: POT_ROUTER_SLOT }),
-    ).toBe(pad(probed.router.toLowerCase() as Hex, { size: 32 }));
-    expect(await local.publicClient.getTransactionCount({ address: probed.pot })).toBe(1);
   }, 120_000);
 });

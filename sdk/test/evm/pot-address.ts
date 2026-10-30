@@ -1,25 +1,13 @@
-/**
- * A Pot's address derived from the released Pot's OWN creation code, for tests that pin one.
- *
- * NOT a `.test.ts`. `v12PredictPot` reads the init-code hash `addresses.json` records; this hashes
- * the `V12Pot.json` creation code the kitchen release ships instead, so a pin derived here checks
- * the SDK's derivation against an independent source rather than restating it. Nothing is
- * hand-typed: a release whose Pot bytecode moves moves every derived Pot, and these follow.
- *
- * The Pot's initcode is its creation code alone since kitchen-evm put the Router in Pot storage;
- * up to 1.0.0 it was the creation code followed by the Router — read off the Pot's constructor, the
- * way v12's own deploy tooling reads it (`release-artifacts.mjs#initCode`).
- */
+/** Independent CREATE3 prediction for current factory tests. */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  concat,
   encodeAbiParameters,
   getAddress,
+  getContractAddress,
   getCreate2Address,
   keccak256,
-  type Abi,
   type Hex,
 } from "viem";
 
@@ -27,27 +15,22 @@ const ARTIFACTS = resolve(dirname(fileURLToPath(import.meta.url)), "../../src/ar
 const read = <T>(name: string): T =>
   JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), "utf8")) as T;
 
-/** The released Pot's initcode, as the Kitchen deploys it. */
-export function releasedPotInitCode(): Hex {
-  const pot = read<{ abi: Abi; bytecode: Hex }>("V12Pot");
-  const constructor = pot.abi.find((entry) => entry.type === "constructor") as
-    { inputs: readonly unknown[] } | undefined;
-  if ((constructor?.inputs.length ?? 0) === 0) return pot.bytecode;
-  const router = read<{ evm: { contracts: { router: { address: Hex } } } }>("V12Deployments").evm
-    .contracts.router.address;
-
-  return concat([pot.bytecode, encodeAbiParameters([{ type: "address" }], [router])]);
-}
-
-/** `CREATE2(kitchen, keccak256(abi.encode(owner, salt)), keccak256(released Pot initcode))`. */
+/** Derive under Kitchen's fixed helper, independent of Pot creation/runtime bytecode. */
 export function potFromReleasedBytecode(owner: Hex, salt: Hex = `0x${"00".repeat(32)}`): Hex {
-  const kitchen = read<{ kitchen: Hex }>("V12EngineGate").kitchen;
-
-  return getCreate2Address({
-    bytecodeHash: keccak256(releasedPotInitCode()),
+  const candidatePath = process.env.SAUCE_LOCAL_CANDIDATE;
+  const candidate = candidatePath
+    ? JSON.parse(readFileSync(resolve(candidatePath), "utf8"))
+    : undefined;
+  const kitchen = candidate
+    ? getAddress(candidate.kitchen)
+    : read<{ kitchen: Hex }>("V12EngineGate").kitchen;
+  const helper = getCreate2Address({
+    bytecodeHash: "0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f",
     from: kitchen,
     salt: keccak256(
       encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [getAddress(owner), salt]),
     ),
   });
+
+  return getContractAddress({ from: helper, nonce: 1n });
 }

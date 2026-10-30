@@ -68,6 +68,8 @@ interface Contract {
  *  Permit2 already approved: the first thing a Permit2 funding does then is to sign. */
 function client(contract: Contract): PublicClient {
   return {
+    getChainId: async () => ETHEREUM.id,
+    getCode: async () => (contract.owner === undefined ? undefined : "0x60006000f3"),
     getBlock: async () => ({ timestamp: 1_000n }),
     readContract: async ({ functionName }: { functionName: string }) => {
       switch (functionName) {
@@ -123,12 +125,11 @@ const own = (wallet: Address): { pot: Address; contract: Contract } => ({
 const notOwn = /is not 0x[0-9a-fA-F]{40}'s own Pot of a release this sauce records/;
 
 describe("--fund signs and sends only for the wallet's own Pot", () => {
-  it("signs for a Pot the chain shows is the wallet's: its owner, salt and Kitchen derive its address", async () => {
+  it("refuses getter-only code at a CREATE3 prediction before any funding signature", async () => {
     const { account, calls } = recording();
     const { pot, contract } = own(account.address);
-    const planned = await planFunding(funding(account, pot, contract));
-    expect(calls).toEqual(["signTypedData"]);
-    expect(planned.signed).toBe(true);
+    await expect(planFunding(funding(account, pot, contract))).rejects.toThrow();
+    expect(calls).toEqual([]);
   });
 
   it("refuses a contract whose owner() is the wallet at an address no release's Kitchen derives, before signing", async () => {
@@ -180,19 +181,12 @@ describe("--fund signs and sends only for the wallet's own Pot", () => {
     },
   );
 
-  it("signs for the Pot the same run deploys first: no code yet, at the wallet's v12PredictPot for the salt", async () => {
+  it("refuses an undeployed prediction even when the caller supplies deploySalt", async () => {
     const { account, calls } = recording();
     const salt = potSalt("deployed-first");
-    const pot = getAddress(v12PredictPot(account.address, salt) as Address);
-    await planFunding(funding(account, pot, {}, salt));
-    expect(calls).toEqual(["signTypedData"]);
-    // Another salt does not put the wallet's Pot there, and neither does another owner's.
-    await expect(planFunding(funding(account, pot, {}, potSalt("elsewhere")))).rejects.toThrow(
-      notOwn,
-    );
-    const others = getAddress(v12PredictPot(RECIPIENT, salt) as Address);
-    await expect(planFunding(funding(account, others, {}, salt))).rejects.toThrow(notOwn);
-    expect(calls).toEqual(["signTypedData"]);
+    const pot = getAddress(v12PredictPot(account.address, salt));
+    await expect(planFunding(funding(account, pot, {}, salt))).rejects.toThrow();
+    expect(calls).toEqual([]);
   });
 
   it("leaves a simulation with no key as it was: it signs nothing, and credits the Pot", async () => {
@@ -232,24 +226,21 @@ describe("--fund of the native coin alone, on a chain whose registry records no 
     ["base-sepolia", "ETH:0.01", 10n ** 16n],
     ["arc-testnet", "native:1", 10n ** 18n],
   ])(
-    "plans --fund %s %s as value, with a key or without one, asking Permit2 nothing",
+    "plans --fund %s %s as unsigned value, but refuses an unverified Pot with a signer",
     async (slug, raw, value) => {
       const { account, calls } = recording();
-      for (const signer of [account, undefined]) {
-        const planned = await planFunding(fundOn(slug, raw, signer));
-        expect(planned.value).toBe(value);
-        expect(planned.signed).toBe(false);
-      }
+      const planned = await planFunding(fundOn(slug, raw));
+      expect(planned.value).toBe(value);
+      expect(planned.signed).toBe(false);
+      await expect(planFunding(fundOn(slug, raw, account))).rejects.toThrow();
       expect(calls).toEqual([]);
     },
   );
 
   it("still refuses a token pull there, naming the chain", async () => {
-    const { account, calls } = recording();
-    await expect(planFunding(fundOn("base-sepolia", "USDC:1", account))).rejects.toThrow(
+    await expect(planFunding(fundOn("base-sepolia", "USDC:1"))).rejects.toThrow(
       "Permit2 is not registered on base-sepolia",
     );
-    expect(calls).toEqual([]);
   });
 });
 
@@ -299,15 +290,11 @@ describe("--fund is held to the wallet's policy before it signs", () => {
     expect(calls).toEqual([]);
   });
 
-  it("signs for a wallet whose policy allows its Pot: native and token limits are its cook's to weigh", async () => {
+  it("does not let an allowing policy replace code authentication", async () => {
     const { account, calls } = recording();
     const { pot, contract } = own(account.address);
-    guard(account, {
-      to: [pot.toLowerCase()],
-      native: { perTransaction: "1" },
-      tokens: { USDC: { perTransaction: "5" } },
-    });
-    await planFunding(funding(account, pot, contract));
-    expect(calls).toEqual(["signTypedData"]);
+    guard(account, { to: [pot.toLowerCase()] });
+    await expect(planFunding(funding(account, pot, contract))).rejects.toThrow();
+    expect(calls).toEqual([]);
   });
 });

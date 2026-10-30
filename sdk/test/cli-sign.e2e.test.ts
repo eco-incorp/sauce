@@ -2,9 +2,8 @@
  * `sauce sign` on a local anvil running the released gated stack (`cli-anvil.ts`, the Kitchen's fee
  * set non-zero): the owner signs with the chain read, ANOTHER account submits the cook — signed by
  * it and broadcast with `sauce send`, or sent with viem — and the program runs as the Pot, which
- * pays the Kitchen's fee; a Pot with no code yet comes with its `deployPot`, sent first by that other
- * account; and `--cancel` sends the owner's `invalidateNonces`, after which the earlier signature
- * reverts with NonceUsed. The fields and their encoding are `cli-sign.test.ts`'s, offline.
+ * pays the Kitchen's fee. Missing Pots cannot sign. `--cancel` sends the owner's
+ * `invalidateNonces`, after which the earlier signature reverts with NonceUsed.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite.
  */
@@ -26,7 +25,6 @@ import {
   OTHER_KEY,
   OWNER,
   OWNER_KEY,
-  potOwner,
   registered,
   sauce,
   startChain,
@@ -198,34 +196,19 @@ describeEvm("sauce sign, submitted by another account", () => {
     await expect(refused(cook, DEPLOYER.address)).rejects.toThrow(/NonceUsed/);
   }, 120_000);
 
-  it("comes with deployPot for a Pot with no code, sent first by any account, then the cook", async () => {
+  it("refuses to sign a missing Pot instead of returning a future deployment and signature", async () => {
     const fresh = getAddress(v12PredictPot(OWNER.address, potSalt("signed-fresh")));
+    const before = await base.publicClient.getTransactionCount({ address: OWNER.address });
     expect(await base.publicClient.getCode({ address: fresh })).toBeUndefined();
     const run = await sauce(
       ...["sign", file, "--chain", "base", "--private-key", OWNER_KEY, "--salt", "signed-fresh"],
       ...["--rpc-url", base.rpcUrl, "--json", "--args", RECIPIENT, "2000000"],
     );
-    const signed = jsonOf(run) as unknown as Signed;
-    expect(signed.pot).toBe(fresh);
-    expect(signed.deployPot).toMatchObject({ chainId: base.chain.id, value: "0x0" });
-    expect(run.stderr).toContain(`Pot ${fresh} has no code yet: send deployPot first`);
-    // An unfunded Pot is warned of: neither its balance nor the value covers the fee. With no code
-    // yet, it is told to deploy the Pot before funding it, never to fund its address first.
-    expect(run.stderr).toContain(
-      "do not cover the Kitchen's fee: send deployPot, then fund the Pot before the cook is " +
-        "submitted (not its address before it is deployed: a Kitchen upgrade that changes the " +
-        "Pot's code moves it), or it reverts with FeeNotPaid.",
-    );
-
-    // Another account deploys it; the Pot is funded once it exists, and the cook is submitted.
-    await base.send(base.deployer, signed.deployPot!.to, signed.deployPot!.data);
-    expect(await potOwner(base, fresh)).toBe(OWNER.address);
-    await base.mint(usdc, fresh, 2_000_000n);
-    await base.testClient.setBalance({ address: fresh, value: FEE });
-    const before = await base.balanceOf(usdc, RECIPIENT);
-    await base.send(base.deployer, signed.cook!.to, signed.cook!.data, BigInt(signed.cook!.value));
-    expect(await base.balanceOf(usdc, RECIPIENT)).toBe(before + 2_000_000n);
-    expect(await base.publicClient.getBalance({ address: fresh })).toBe(0n);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/explicitly deploy|no code/i);
+    expect(run.stdout).toBe("");
+    expect(await base.publicClient.getCode({ address: fresh })).toBeUndefined();
+    expect(await base.publicClient.getTransactionCount({ address: OWNER.address })).toBe(before);
   }, 120_000);
 
   it("--cancel sends the owner's invalidateNonces, and the signature then reverts NonceUsed", async () => {

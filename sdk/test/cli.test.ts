@@ -49,6 +49,7 @@ import {
 } from "../src/cli/terminal.js";
 import { castSend } from "../src/cli/commands.js";
 import { PRICE_UNITS } from "../src/cli/price.js";
+import { parseFund, transfersToPot } from "../src/cli/funding.js";
 import {
   awaitAccount,
   failureReason,
@@ -75,6 +76,14 @@ import * as routes from "../src/routes/index.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 import { svmTokenRows } from "../src/routes/token-registry.js";
 import { TOKEN_2022_PROGRAM_ID } from "../src/svm/token-program.js";
+import {
+  deployPot,
+  fixture,
+  registered,
+  RUNTIME_HEX_PATH,
+  startChain,
+  type LocalChain,
+} from "./cli-anvil.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
@@ -139,6 +148,46 @@ beforeEach(() => {
   work = mkdtempSync(join(tmpdir(), "sauce-cli-"));
 });
 afterEach(() => rmSync(work, { recursive: true, force: true }));
+
+const itDeployed = RUNTIME_HEX_PATH ? it : it.skip;
+const localChains = new Map<string, LocalChain>();
+const deployedPots = new Map<string, `0x${string}`>();
+beforeAll(async () => {
+  if (!RUNTIME_HEX_PATH) return;
+  for (const slug of ["ethereum", "base", "arc"]) {
+    const local = await startChain(slug);
+    localChains.set(slug, local);
+    deployedPots.set(slug, await deployPot(local));
+    if (slug === "ethereum") {
+      const usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
+      await local.mint(usdc, OWNER, 10_000_000n);
+    }
+    // These cases exercise unsigned values, including zero, rather than the execution-fee floor.
+    await local.send(
+      local.deployer,
+      (await local.bindingOf(deployedPots.get(slug)!)).kitchen,
+      encodeFunctionData({
+        abi: parseAbi(["function setExecutionFee(uint256)"]),
+        functionName: "setExecutionFee",
+        args: [0n],
+      }),
+    );
+  }
+}, 120_000);
+afterAll(async () => {
+  await Promise.all([...localChains.values()].map((local) => local.stop()));
+});
+const deployedSauce = (...argv: string[]): Promise<Run> => {
+  const local = localChains.get(parseChain(argv[argv.indexOf("--chain") + 1]!).slug)!;
+
+  return sauceWith(
+    { potsDir: local.pots.dir },
+    argv[0]!,
+    "--rpc-url",
+    local.rpcUrl,
+    ...argv.slice(1),
+  );
+};
 
 const PAY = "USDC.transfer(RECIPIENT, AMOUNT);\nUSDT.transfer(RECIPIENT, AMOUNT);\n";
 const PAY_DEFINES = [`--define`, `RECIPIENT=${RECIPIENT}`, `--define`, `AMOUNT=1000`];
@@ -1087,8 +1136,8 @@ describe("sauce compile", () => {
 describe("sauce tx", () => {
   const pay = (): string => file("pay.sauce.ts", PAY);
 
-  it("prints the unsigned cook on the owner's derived Pot as JSON, and what must hold on stderr", async () => {
-    const run = await sauce(
+  itDeployed("prints the unsigned cook on the owner's authenticated deployed Pot", async () => {
+    const run = await deployedSauce(
       "tx",
       pay(),
       "--chain",
@@ -1101,15 +1150,16 @@ describe("sauce tx", () => {
     );
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as Record<string, unknown>;
-    const pot = v12PredictPot(OWNER, DEFAULT_POT_SALT);
+    const pot = deployedPots.get("ethereum")!;
+    const engine = (await localChains.get("ethereum")!.bindingOf(pot)).engine;
     const program = (
       await sauce("compile", pay(), "--chain", "ethereum", ...PAY_DEFINES)
     ).stdout.trim();
     const cook = decodeFunctionData({ abi: v12Pot.abi, data: out.data as Hex });
     expect(cook.functionName).toBe("cook");
-    expect(cook.args).toEqual([getAddress(v12EngineAddress()), program]);
-    const data = v12Pot.encodeCook(getAddress(v12EngineAddress()), program as Hex);
-    // What a wallet's own tool takes as it is: the value a hex quantity, and a batch of one.
+    expect(cook.args).toEqual([engine, program]);
+    const data = v12Pot.encodeCook(engine, program as Hex);
+    // Wallet handoff uses a hex quantity and never adds an implicit deployment.
     expect(out).toEqual({
       chainId: 1,
       to: pot,
@@ -1118,9 +1168,6 @@ describe("sauce tx", () => {
       sendCalls: { chain: "ethereum", calls: [{ to: pot, value: "0x4d2", data }] },
     });
     expect(run.stderr).toContain(`Pot ${pot} belongs to ${OWNER} (salt ${DEFAULT_POT_SALT}).`);
-    expect(run.stderr).toContain(
-      `It must be deployed (sauce pot --deploy --owner ${OWNER} --chain ethereum --keystore <keystore>)`,
-    );
     expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
 
@@ -1142,58 +1189,72 @@ describe("sauce tx", () => {
     expect(run.stderr).toContain("deploySharedPot");
   });
 
-  it("plans the owner's transfers into the Pot before the cook with --fund, ETH as its value", async () => {
-    const run = await sauce(
-      ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
-      ...["--fund", "USDC:1.5", "--fund", "ETH:0.000000000000001"],
-    );
-    expect(run.code).toBe(0);
-    const out = JSON.parse(run.stdout) as {
-      pot: Address;
-      transactions: Array<Record<string, unknown>>;
-      sendCalls: { chain: string; calls: Array<Record<string, unknown>> };
-    };
-    const pot = v12PredictPot(OWNER, DEFAULT_POT_SALT);
-    const usdc = getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address);
-    const transfer = encodeFunctionData({
-      abi: parseAbi(["function transfer(address, uint256) returns (bool)"]),
-      functionName: "transfer",
-      args: [pot, 1_500_000n],
-    });
-    // No endpoint, so no Pot read: the transfer, then the cook, carrying the fee and the ETH.
-    expect(out.pot).toBe(pot);
-    expect(out.transactions).toEqual([
-      {
-        what: "transfer 1500000 USDC to the Pot",
-        chainId: 1,
-        to: usdc,
-        data: transfer,
-        value: "0x0",
-      },
-      expect.objectContaining({ chainId: 1, to: pot, value: `0x${(1234n + 1000n).toString(16)}` }),
-    ]);
-    expect(out.sendCalls).toEqual({
-      chain: "ethereum",
-      calls: out.transactions.map(({ to, value, data }) => ({ to, value, data })),
-    });
-    expect(run.stderr).toMatch(
-      /--fund: the owner's transfer into the Pot comes before the cook\. Sent as one batch \(sendCalls, a smart wallet's single approval\), the Pot is funded and cooked on at once, or not at all\./,
-    );
-  });
+  itDeployed(
+    "plans the owner's transfers into the Pot before the cook with --fund, ETH as its value",
+    async () => {
+      const run = await deployedSauce(
+        ...[
+          "tx",
+          pay(),
+          "--chain",
+          "ethereum",
+          "--owner",
+          OWNER,
+          ...PAY_DEFINES,
+          "--value",
+          "1234",
+        ],
+        ...["--fund", "USDC:1.5", "--fund", "ETH:0.000000000000001"],
+      );
+      expect(run.code).toBe(0);
+      const out = JSON.parse(run.stdout) as {
+        pot: Address;
+        transactions: Array<Record<string, unknown>>;
+        sendCalls: { chain: string; calls: Array<Record<string, unknown>> };
+      };
+      const pot = deployedPots.get("ethereum")!;
+      const usdc = getAddress(routes.TOKEN_REGISTRY[1]!.find((t) => t.symbol === "USDC")!.address);
+      const transfer = encodeFunctionData({
+        abi: parseAbi(["function transfer(address, uint256) returns (bool)"]),
+        functionName: "transfer",
+        args: [pot, 1_500_000n],
+      });
+      // Authentication precedes the transfer plan; neither transfer nor cook deploys a Pot.
+      expect(out.pot).toBe(pot);
+      expect(out.transactions).toEqual([
+        expect.objectContaining({
+          what: "transfer 1500000 USDC to the Pot",
+          chainId: 1,
+          to: usdc,
+          data: transfer,
+          value: "0x0",
+        }),
+        expect.objectContaining({
+          chainId: 1,
+          to: pot,
+          value: `0x${(1234n + 1000n).toString(16)}`,
+        }),
+      ]);
+      expect(out.sendCalls).toEqual({
+        chain: "ethereum",
+        calls: out.transactions.map(({ to, value, data }) => ({ to, value, data })),
+      });
+    },
+  );
 
-  it("carries a native-only --fund in the single cook's value", async () => {
-    const run = await sauce(
+  itDeployed("carries a native-only --fund in the single cook's value", async () => {
+    const run = await deployedSauce(
       ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
       ...["--fund", "ETH:0.000000000000001"],
     );
     expect(run.code).toBe(0);
     const out = JSON.parse(run.stdout) as { to: Address; value: string };
     // No transfer to plan, so the plan is the cook alone, carrying the fee and the ETH.
-    expect(out.to).toBe(v12PredictPot(OWNER, DEFAULT_POT_SALT));
+    expect(out.to).toBe(deployedPots.get("ethereum"));
     expect(out.value).toBe(`0x${(1234n + 1000n).toString(16)}`);
   });
 
-  it("refuses a --fund it cannot plan: a token twice, a token's decimals with no endpoint, Solana", async () => {
+  it("refuses duplicate funding before RPC, and never builds an offline cook even in base units", async () => {
     const tx = (...fund: string[]) =>
       sauce(
         ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES],
@@ -1202,60 +1263,114 @@ describe("sauce tx", () => {
     const twice = await tx("USDC:1", "usdc:2");
     expect(twice.code).toBe(2);
     expect(twice.stderr).toMatch(/--fund names USDC twice: give it once, with the total/);
-    const unread = await tx(`${RECIPIENT}:1.5`);
-    expect(unread.code).toBe(2);
-    expect(unread.stderr).toMatch(
-      /reading .* decimals needs an endpoint; or give the amount in base units/,
-    );
-    // In base units it needs no read.
-    expect((await tx(`${RECIPIENT}:1500000n`)).code).toBe(0);
+    for (const amount of ["1.5", "1500000n"]) {
+      const unread = await tx(`${RECIPIENT}:${amount}`);
+      expect(unread.code).toBe(1);
+      expect(unread.stdout).toBe("");
+      expect(unread.stderr).toMatch(/requires an RPC endpoint and an authenticated deployed Pot/);
+    }
   });
 
-  it("prints a cast send line only when asked to, with the endpoint and key left open", async () => {
-    const asJson = JSON.parse(
-      (await sauce("tx", pay(), "--chain", "1", "--owner", OWNER, ...PAY_DEFINES, "--value", "5"))
-        .stdout,
-    ) as { to: `0x${string}`; data: Hex };
-    const run = await sauce(
-      "tx",
-      pay(),
-      "--chain",
-      "1",
-      "--owner",
-      OWNER,
-      ...PAY_DEFINES,
-      "--value",
-      "5",
-      "--format",
-      "cast",
-    );
-    expect(run.stdout).toBe(
-      `cast send ${asJson.to} ${asJson.data} --value 5 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
-    );
-    expect(castSend(asJson.to, asJson.data, 5n)).toBe(run.stdout.trim());
-    const bad = await sauce(
-      "tx",
-      pay(),
-      "--chain",
-      "1",
-      "--owner",
-      OWNER,
-      ...PAY_DEFINES,
-      "--value",
-      "5",
-      "--format",
-      "yaml",
-    );
-    expect(bad.code).toBe(2);
-    expect(bad.stderr).toMatch(/--format: 'yaml' is not json or cast/);
+  it("requires decimals for a funding address unless the amount uses base units", async () => {
+    const chain = requireChain("ethereum");
+    await expect(
+      transfersToPot({
+        requests: [parseFund(`${RECIPIENT}:1.5`, chain)],
+        pot: OWNER,
+      }),
+    ).rejects.toThrow(/decimals needs an endpoint; or give the amount in base units/);
+    const plan = await transfersToPot({
+      requests: [parseFund(`${RECIPIENT}:1500000n`, chain)],
+      pot: OWNER,
+    });
+    const transfer = decodeFunctionData({
+      abi: parseAbi(["function transfer(address, uint256) returns (bool)"]),
+      data: plan.transfers[0]!.tx.data,
+    });
+    expect(transfer.args).toEqual([OWNER, 1_500_000n]);
   });
 
-  it("derives a labelled Pot with potSalt, and an exact salt as given", async () => {
+  it("requires RPC for an offline cook, with or without an explicit value", async () => {
+    for (const value of [[], ["--value", "0"]]) {
+      const run = await sauce(
+        "tx",
+        pay(),
+        "--chain",
+        "ethereum",
+        "--owner",
+        OWNER,
+        ...PAY_DEFINES,
+        ...value,
+      );
+      expect(run.code).toBe(1);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toMatch(/requires an RPC endpoint and an authenticated deployed Pot/);
+    }
+  });
+
+  itDeployed(
+    "prints a cast send line only when asked to, with the endpoint and key left open",
+    async () => {
+      const asJson = JSON.parse(
+        (
+          await deployedSauce(
+            "tx",
+            pay(),
+            "--chain",
+            "1",
+            "--owner",
+            OWNER,
+            ...PAY_DEFINES,
+            "--value",
+            "5",
+          )
+        ).stdout,
+      ) as { to: `0x${string}`; data: Hex };
+      const run = await deployedSauce(
+        "tx",
+        pay(),
+        "--chain",
+        "1",
+        "--owner",
+        OWNER,
+        ...PAY_DEFINES,
+        "--value",
+        "5",
+        "--format",
+        "cast",
+      );
+      expect(run.stdout).toBe(
+        `cast send ${asJson.to} ${asJson.data} --value 5 --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>\n`,
+      );
+      expect(castSend(asJson.to, asJson.data, 5n)).toBe(run.stdout.trim());
+      const bad = await sauce(
+        "tx",
+        pay(),
+        "--chain",
+        "1",
+        "--owner",
+        OWNER,
+        ...PAY_DEFINES,
+        "--value",
+        "5",
+        "--format",
+        "yaml",
+      );
+      expect(bad.code).toBe(2);
+      expect(bad.stderr).toMatch(/--format: 'yaml' is not json or cast/);
+    },
+  );
+
+  itDeployed("selects the deployed labelled Pot and the deployed exact salt", async () => {
+    const local = localChains.get("ethereum")!;
+    const labelled = await deployPot(local, OWNER, potSalt("treasury"));
+    const exact: Hex = `0x${"00".repeat(31)}08`;
+    const exactPot = await deployPot(local, OWNER, exact);
     const pots = async (...salt: string[]) =>
       (
         JSON.parse(
           (
-            await sauce(
+            await deployedSauce(
               "tx",
               pay(),
               "--chain",
@@ -1270,26 +1385,9 @@ describe("sauce tx", () => {
           ).stdout,
         ) as { to: string }
       ).to;
-    expect(await pots("--salt", "treasury")).toBe(v12PredictPot(OWNER, potSalt("treasury")));
-    const exact: Hex = `0x${"00".repeat(31)}07`;
-    expect(await pots("--salt-hex", exact)).toBe(v12PredictPot(OWNER, exact));
-    expect(await pots()).toBe(v12PredictPot(OWNER, DEFAULT_POT_SALT));
-    const hinted = await sauce(
-      "tx",
-      pay(),
-      "--chain",
-      "1",
-      "--owner",
-      OWNER,
-      ...PAY_DEFINES,
-      "--value",
-      "0",
-      "--salt",
-      "treasury",
-    );
-    expect(hinted.stderr).toContain(
-      `sauce pot --deploy --owner ${OWNER} --chain ethereum --salt treasury --keystore <keystore>`,
-    );
+    expect(await pots("--salt", "treasury")).toBe(labelled);
+    expect(await pots("--salt-hex", exact)).toBe(exactPot);
+    expect(await pots()).toBe(deployedPots.get("ethereum"));
   });
 
   describe("main's arguments", () => {
@@ -1304,14 +1402,14 @@ describe("sauce tx", () => {
       "}\n";
     const POT = "0x1111111111111111111111111111111111111111";
     const ARGS = [OWNER, `["${RECIPIENT}","${SECOND}"]`, "1000", "true"];
-    const tx = (...extra: string[]) =>
-      sauce(
+    const tx = (run: typeof sauce, ...extra: string[]) =>
+      run(
         "tx",
         file("split.sauce.ts", SPLIT),
         "--chain",
         "base",
         "--pot",
-        POT,
+        deployedPots.get("base") ?? POT,
         "--value",
         "0",
         ...extra,
@@ -1335,8 +1433,8 @@ describe("sauce tx", () => {
       ]);
     });
 
-    it("appends the encoded values to the program the cook runs", async () => {
-      const data = dataOf(await tx("--args", ...ARGS));
+    itDeployed("appends the encoded values to the program the cook runs", async () => {
+      const data = dataOf(await tx(deployedSauce, "--args", ...ARGS));
       const program = (
         await sauce("compile", file("split.sauce.ts", SPLIT), "--chain", "base")
       ).stdout.trim();
@@ -1345,15 +1443,22 @@ describe("sauce tx", () => {
         [OWNER, [RECIPIENT, SECOND], 1000n, true],
       );
       const cook = decodeFunctionData({ abi: v12Pot.abi, data });
-      expect(cook.args).toEqual([getAddress(v12EngineAddress()), `${program}${encoded.slice(2)}`]);
+      const engine = (await localChains.get("base")!.bindingOf(deployedPots.get("base")!)).engine;
+      expect(cook.args).toEqual([engine, `${program}${encoded.slice(2)}`]);
       expect(
-        dataOf(await tx("--args-json", JSON.stringify([OWNER, [RECIPIENT, SECOND], 1000, true]))),
+        dataOf(
+          await tx(
+            deployedSauce,
+            "--args-json",
+            JSON.stringify([OWNER, [RECIPIENT, SECOND], 1000, true]),
+          ),
+        ),
       ).toBe(data);
       const argsFile = file(
         "args.json",
         JSON.stringify([OWNER, [RECIPIENT, SECOND], "1000", true]),
       );
-      expect(dataOf(await tx("--args-json", argsFile))).toBe(data);
+      expect(dataOf(await tx(deployedSauce, "--args-json", argsFile))).toBe(data);
     });
 
     it("names what is wrong with them, exiting 2", async () => {
@@ -1383,11 +1488,11 @@ describe("sauce tx", () => {
         [["--args-json", "[1]", "--args", "1"], /give --args or --args-json, not both/],
       ];
       for (const [extra, message] of cases) {
-        const run = await tx(...extra);
+        const run = await tx(sauce, ...extra);
         expect(run.stderr).toMatch(message);
         expect(run.code).toBe(2);
       }
-      const missing = await tx("--args-json", join(work, "nope.json"));
+      const missing = await tx(sauce, "--args-json", join(work, "nope.json"));
       expect(missing.code).toBe(1);
       expect(missing.stderr).toMatch(/nope\.json: no such file/);
       const none = await sauce(
@@ -1408,9 +1513,9 @@ describe("sauce tx", () => {
     });
   });
 
-  it("cooks on a Pot named outright", async () => {
-    const pot = "0x1111111111111111111111111111111111111111";
-    const run = await sauce(
+  itDeployed("cooks on an authenticated Pot named outright", async () => {
+    const pot = deployedPots.get("ethereum")!;
+    const run = await deployedSauce(
       "tx",
       pay(),
       "--chain",
@@ -1422,7 +1527,7 @@ describe("sauce tx", () => {
       "0",
     );
     expect(JSON.parse(run.stdout)).toMatchObject({ to: pot, value: "0x0" });
-    expect(run.stderr).toContain("Send from the Pot's owner: cook() is onlyOwner.");
+    expect(run.stderr).toContain(`Send from ${OWNER}: cook() is onlyOwner.`);
   });
 
   it("names what is wrong with the invocation, exiting 2", async () => {
@@ -1471,10 +1576,6 @@ describe("sauce tx", () => {
           "0",
         ],
         /--salt-hex: '0x07' is not exactly 32 bytes/,
-      ],
-      [
-        ["tx", program, "--chain", "ethereum", "--owner", OWNER],
-        /missing --value <wei>[^]*--rpc-url or --config/,
       ],
       [
         ["tx", program, "--chain", "ethereum", "--owner", "0x12", "--value", "0"],
@@ -1526,8 +1627,7 @@ describe("sauce tx", () => {
     );
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(/rpcUrls\["1"\] is not a URL; replace the placeholder/);
-    // A chain the file has no entry for is read through the built-in endpoints (none here), not
-    // refused: with --value, the cook is built without reading it.
+    // A missing config entry cannot authorize an offline cook, even with an explicit value.
     const other = await sauce(
       "tx",
       file("usdc.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n"),
@@ -1541,8 +1641,31 @@ describe("sauce tx", () => {
       "--value",
       "0",
     );
-    expect(other.code).toBe(0);
-    expect(JSON.parse(other.stdout).chainId).toBe(8453);
+    expect(other.code).toBe(1);
+    expect(other.stdout).toBe("");
+    expect(other.stderr).toMatch(/requires an RPC endpoint and an authenticated deployed Pot/);
+  });
+
+  itDeployed("reads its endpoint and execution fee from the selected config entry", async () => {
+    const local = localChains.get("base")!;
+    const config = file("local.config.json", JSON.stringify({ rpcUrls: { "8453": local.rpcUrl } }));
+    const run = await sauceWith(
+      { potsDir: local.pots.dir },
+      "tx",
+      file("configured.sauce.ts", "function main(): Uint256 { return 7; }"),
+      "--chain",
+      "base",
+      "--owner",
+      OWNER,
+      "--config",
+      config,
+    );
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      chainId: 8453,
+      to: deployedPots.get("base"),
+      value: "0x0",
+    });
   });
 });
 
@@ -1627,26 +1750,29 @@ describe("sauce pot", () => {
     expect(run.stderr).toContain("deploySharedPot");
   });
 
-  it("tells a signer elsewhere Arc's minimum base fee, which its transactions carry no fee for", async () => {
-    const floor =
-      "On arc a transaction is included only with a maxFeePerGas (or gasPrice) of at least 20 " +
-      "gwei, the chain's minimum base fee";
-    const pot = await sauce("pot", "--owner", OWNER, "--chain", "arc");
-    expect(pot.code).toBe(0);
-    expect(pot.stderr).toContain(floor);
-    const program = file("arc-pay.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n");
-    const tx = await sauce(
-      ...["tx", program, "--chain", "arc", "--owner", OWNER, ...PAY_DEFINES],
-      ...["--value", "10000000000000000"],
-    );
-    expect(tx.code).toBe(0);
-    expect(tx.stderr).toContain(floor);
-    expect(JSON.parse(tx.stdout)).not.toHaveProperty("maxFeePerGas");
-    // A chain that sets no minimum says nothing of one.
-    expect((await sauce("pot", "--owner", OWNER, "--chain", "base")).stderr).not.toMatch(
-      /minimum base fee/,
-    );
-  });
+  itDeployed(
+    "tells a signer elsewhere Arc's minimum base fee, which its transactions carry no fee for",
+    async () => {
+      const floor =
+        "On arc a transaction is included only with a maxFeePerGas (or gasPrice) of at least 20 " +
+        "gwei, the chain's minimum base fee";
+      const pot = await sauce("pot", "--owner", OWNER, "--chain", "arc");
+      expect(pot.code).toBe(0);
+      expect(pot.stderr).toContain(floor);
+      const program = file("arc-pay.sauce.ts", "USDC.transfer(RECIPIENT, AMOUNT);\n");
+      const tx = await deployedSauce(
+        ...["tx", program, "--chain", "arc", "--owner", OWNER, ...PAY_DEFINES],
+        ...["--value", "10000000000000000"],
+      );
+      expect(tx.code).toBe(0);
+      expect(tx.stderr).toContain(floor);
+      expect(JSON.parse(tx.stdout)).not.toHaveProperty("maxFeePerGas");
+      // A chain that sets no minimum says nothing of one.
+      expect((await sauce("pot", "--owner", OWNER, "--chain", "base")).stderr).not.toMatch(
+        /minimum base fee/,
+      );
+    },
+  );
 
   it("is the signer's own Pot with a signer and no --owner, unlocking nothing it need not", async () => {
     // A keystore that names its address: read, never decrypted (there is no password to give).
@@ -1887,15 +2013,49 @@ describe("sauce pot", () => {
 describe("flags in any order", () => {
   const SPLIT = "function main(to: Address, amount: Uint256) {\n  USDC.transfer(to, amount);\n}\n";
 
-  it("reads a flag after main's arguments as a flag, and -- makes the rest arguments", async () => {
-    const program = file("split.sauce.ts", SPLIT);
-    const stdout = (run: Run): Record<string, unknown> => {
-      expect(run.code).toBe(0);
+  itDeployed(
+    "reads a flag after main's arguments as a flag, and -- makes the rest arguments",
+    async () => {
+      const program = file("split.sauce.ts", SPLIT);
+      const stdout = (run: Run): Record<string, unknown> => {
+        expect(run.code).toBe(0);
 
-      return JSON.parse(run.stdout) as Record<string, unknown>;
-    };
-    const before = stdout(
-      await sauce(
+        return JSON.parse(run.stdout) as Record<string, unknown>;
+      };
+      const before = stdout(
+        await deployedSauce(
+          "tx",
+          program,
+          "--chain",
+          "base",
+          "--owner",
+          OWNER,
+          "--value",
+          "7",
+          "--args",
+          RECIPIENT,
+          "5",
+        ),
+      );
+      // The same flags after --args, in another order, with --flag=value too.
+      const after = stdout(
+        await deployedSauce(
+          "tx",
+          program,
+          "--args",
+          RECIPIENT,
+          "--value=7",
+          "5",
+          "--chain",
+          "base",
+          "--owner",
+          OWNER,
+        ),
+      );
+      expect(after).toEqual(before);
+      expect(before.value).toBe("0x7");
+      // After `--`, a word that looks like a flag is an argument.
+      const escaped = await sauce(
         "tx",
         program,
         "--chain",
@@ -1903,51 +2063,20 @@ describe("flags in any order", () => {
         "--owner",
         OWNER,
         "--value",
-        "7",
+        "0",
         "--args",
         RECIPIENT,
-        "5",
-      ),
-    );
-    // The same flags after --args, in another order, with --flag=value too.
-    const after = stdout(
-      await sauce(
-        "tx",
-        program,
-        "--args",
-        RECIPIENT,
-        "--value=7",
-        "5",
-        "--chain",
-        "base",
-        "--owner",
-        OWNER,
-      ),
-    );
-    expect(after).toEqual(before);
-    expect(before.value).toBe("0x7");
-    // After `--`, a word that looks like a flag is an argument.
-    const escaped = await sauce(
-      "tx",
-      program,
-      "--chain",
-      "base",
-      "--owner",
-      OWNER,
-      "--value",
-      "0",
-      "--args",
-      RECIPIENT,
-      "--",
-      "--value",
-    );
-    expect(escaped.code).toBe(2);
-    expect(escaped.stderr).toMatch(/--args: .*amount/);
-  });
+        "--",
+        "--value",
+      );
+      expect(escaped.code).toBe(2);
+      expect(escaped.stderr).toMatch(/--args: .*amount/);
+    },
+  );
 
-  it("takes a negative Int256 after --args with no --, as its help says", async () => {
+  itDeployed("takes a negative Int256 after --args with no --, as its help says", async () => {
     const program = file("signed.sauce.ts", "function main(x: Int256): Int256 {\n  return x;\n}\n");
-    const run = await sauce(
+    const run = await deployedSauce(
       ...["tx", program, "--chain", "base", "--owner", OWNER, "--value", "0"],
       ...["--args", "-5"],
     );

@@ -18,6 +18,9 @@
  * address is kept beside the first, as `<pot>@<tx>.json`, and said: one of the two landed on a
  * fork or another network with the same chain id, or the Pot was closed and created again (on
  * Solana), and neither is the store's to drop. Nothing is ever read, changed and written back.
+ * A verified binding added to an older record is kept in `<pot>@binding.json`; the original
+ * release/compiler/engine pins remain immutable. Explicit verified owner-controlled Router-only
+ * updates append `<pot>@router-N.json`; the highest sequence supplies the current binding.
  *
  * A record holds only public chain data: no key, password or endpoint. What a Pot holds, and
  * whether it is still there, is read from the chain every time. NODE-ONLY (the filesystem), and it
@@ -27,6 +30,8 @@
 import { linkSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import type { EvmPotBinding } from "../evm/engine.js";
 
 /** The record schema this store reads and writes. */
 export const POT_SCHEMA = "sauce.pot/1" as const;
@@ -52,10 +57,12 @@ export interface PotRecord {
   readonly cluster?: string;
   /** The Kitchen that minted it: the proxy on an EVM chain, the program on Solana. */
   readonly kitchen: string;
-  /** EVM: the init-code hash its address is CREATE2 under, which the engine that cooks it gates on. */
+  /** Historical deployed-Pot creation commitment only; never used for new factory prediction. */
   readonly potInitCodeHash?: string;
   /** The engine its cooks run on: its release's (EVM), or the program its creation named (Solana). */
   readonly engine?: string;
+  /** Authenticated EVM execution identity; never replaced by SDK defaults. */
+  readonly binding?: EvmPotBinding;
   /**
    * The release set it was minted under (`deployments/releases.json`): the compiler whose programs
    * run on it, and the engine's and Kitchen's versions. Absent when no release the SDK knows minted
@@ -192,10 +199,80 @@ export class PotStore {
           "so it is left as it is",
       );
     }
+    const original = kept[0]!;
+    const current = kept.filter((one) => one.binding !== undefined).at(-1) ?? original;
+    if (
+      record.pot.startsWith("0x") &&
+      (original.kind !== record.kind ||
+        original.potInitCodeHash !== record.potInitCodeHash ||
+        original.engine?.toLowerCase() !== record.engine?.toLowerCase() ||
+        !isDeepStrictEqual(original.release, record.release) ||
+        (current.binding !== undefined && !isDeepStrictEqual(current.binding, record.binding)))
+    ) {
+      throw new Error("the persisted Pot binding differs; explicit migration is required");
+    }
+    if (current.binding === undefined && record.binding !== undefined) {
+      const proof = `${stem}@binding.json`;
+      const linked = this.link(dir, proof, record);
+      if (linked === "taken") {
+        const existing = this.read(join(dir, proof));
+        if (!isDeepStrictEqual(existing.binding, record.binding)) {
+          throw new Error("the persisted Pot binding differs; explicit migration is required");
+        }
+      }
+      return linked === "created" ? "beside" : "exists";
+    }
     const tx = record.deployment?.tx;
     if (tx === undefined || kept.some((one) => one.deployment?.tx === tx)) return "exists";
 
     return this.link(dir, besideOf(stem, tx), record) === "created" ? "beside" : "exists";
+  }
+
+  /** Called only after chain verification; never permits an engine, release or profile migration. */
+  saveRouterUpdate(record: PotRecord, previous: EvmPotBinding): "beside" {
+    asRecord("the record", record);
+    const dir = join(this.dir, chainDir(record.chainId, record.cluster));
+    const stem = stemOf(record.pot);
+    const sequence =
+      readdirSync(dir).filter(
+        (name) => name.startsWith(`${stem}@router-`) && name.endsWith(".json"),
+      ).length + 1;
+    const kept = this.recordsOf(record.chainId, record.pot, record.cluster);
+    const original = kept[0];
+    const current = kept.filter((one) => one.binding !== undefined).at(-1);
+    const binding = record.binding;
+    if (
+      original === undefined ||
+      current === undefined ||
+      binding === undefined ||
+      !isDeepStrictEqual(current.binding, previous)
+    ) {
+      throw new Error("the persisted Pot binding changed before the Router update");
+    }
+    const withoutRouter = ({
+      router: _router,
+      routerCodeHash: _routerCodeHash,
+      ...pins
+    }: EvmPotBinding) => pins;
+    if (
+      record.kind !== "private" ||
+      binding.kind !== "private" ||
+      previous.routerPolicy !== "owner-controlled" ||
+      binding.routerPolicy !== "owner-controlled" ||
+      identity(original) !== identity(record) ||
+      original.kind !== record.kind ||
+      original.engine?.toLowerCase() !== record.engine?.toLowerCase() ||
+      original.potInitCodeHash !== record.potInitCodeHash ||
+      !isDeepStrictEqual(original.release, record.release) ||
+      !isDeepStrictEqual(withoutRouter(previous), withoutRouter(binding))
+    ) {
+      throw new Error("only a private Pot Router-only binding update is allowed");
+    }
+    if (this.link(dir, `${stem}@router-${sequence}.json`, record) === "taken") {
+      throw new Error("the persisted Pot binding changed before the Router update; import again");
+    }
+
+    return "beside";
   }
 
   /** Writes `record` as `name` in `dir`, unless the name is taken: linked into place, whole. */
@@ -245,11 +322,24 @@ export class PotStore {
     }
     const first = names.includes(`${stem}.json`) ? [this.read(join(dir, `${stem}.json`))] : [];
     const beside = names
-      .filter((name) => name.startsWith(`${stem}@`) && name.endsWith(".json"))
+      .filter(
+        (name) =>
+          name.startsWith(`${stem}@`) &&
+          name.endsWith(".json") &&
+          !name.startsWith(`${stem}@router-`),
+      )
       .map((name) => this.read(join(dir, name)))
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+    const routers = names
+      .filter((name) => name.startsWith(`${stem}@router-`) && name.endsWith(".json"))
+      .sort(
+        (a, b) =>
+          Number(a.slice(`${stem}@router-`.length, -5)) -
+          Number(b.slice(`${stem}@router-`.length, -5)),
+      )
+      .map((name) => this.read(join(dir, name)));
 
-    return [...first, ...beside];
+    return [...first, ...beside, ...routers];
   }
 
   /**

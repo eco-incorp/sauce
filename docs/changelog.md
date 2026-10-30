@@ -11,6 +11,22 @@ This page is for anyone who upgrades a project, or who wants to know which relea
 program they already have. It assumes you know what a Pot, a cook, the Kitchen and the engine are;
 the [glossary](concepts/glossary.md) defines each one.
 
+## Unreleased
+
+- **Breaking — EVM Pot creation:** new predictions and deployments use CREATE3 under Kitchen,
+  with the existing factory ABI and no family/version selector. Pot bytecode no longer determines
+  the predicted address. There is no supported undeployed CREATE2 lane or automatic salt fallback.
+- **Binding safety:** prediction is not authentication. Explicit new creation follows deploy →
+  verify actual code/profile and engine/compiler/Router compatibility → persist → fund/sign.
+  Missing expected code, unknown profiles and mismatched identities fail before funding or signing.
+- **Retained deployed Pots:** preserve explicit historical engine/compiler and Router bindings for
+  ordinary new work, not only drains or retries. SDK/default updates do not repin existing services.
+  Historical release rows remain unchanged; Solana wire, account ownership and Kitchen ELF do not change.
+- **Rollout gates:** exact artifact pairing, stale-caller exclusion, undeployed prefunding
+  disposition, retained-old/new-pair regression evidence and compatible rollback remain required.
+  These notes do not claim release or deployment readiness. See
+  [Kitchen compatibility for maintainers](guides/kitchen-compatibility.md).
+
 ## How Sauce is versioned
 
 Sauce ships as six packages, and each has its own version number:
@@ -42,10 +58,10 @@ and transaction formats, kitchen-evm its public contract APIs and address deriva
 kitchen-svm its public instruction APIs. No package promises the bytecode a program compiles to, or an address
 derived from a version.
 
-Pot addresses can change even within a 1.x release: kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed
-the Pot address family. Derive addresses with the SDK rather than from a version number. Existing
-Pots and programs retain their original pairing; an upgrade does not move their funds or migrate
-them. [Deployments](reference/deployments.md) lists the SDK's current release addresses.
+Historical kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed the CREATE2 Pot address family.
+New CREATE3 prediction is independent of Pot bytecode and does not replace an occupied target.
+Existing Pots and programs retain their original pairing; an upgrade moves neither funds nor
+service bindings. [Deployments](reference/deployments.md) lists recorded release addresses.
 
 The SDK's 0.99.x releases included breaking changes in patch versions. Read each release's
 **Now refused**, **Removed** and **Also breaking** items before you upgrade, even for a patch.

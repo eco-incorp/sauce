@@ -11,7 +11,15 @@ import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
 import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
-import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn, releaseText } from "./pots.js";
+import {
+  importEvmOwnerPots,
+  importEvmPot,
+  importSvmPot,
+  reauthorizeEvmPotRouter,
+  recordOn,
+  releaseText,
+} from "./pots.js";
+import { keeping } from "./keep.js";
 import { genesisOf } from "./solana.js";
 
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
@@ -70,9 +78,13 @@ export interface PotImportInput extends PotImportTarget {
 }
 
 /** `sauce pot import`: records Pots deployed elsewhere — one by its address, or an owner's by salt. */
-export async function potImportCommand(input: PotImportInput): Promise<CommandOutput> {
+export const potImportCommand = (input: PotImportInput): Promise<CommandOutput> =>
+  keeping({ stores: { pots: input.store }, say: () => undefined }, () => importPot(input));
+
+async function importPot(input: PotImportInput): Promise<CommandOutput> {
   const { chain } = input;
   let found: PotRecord[];
+  let routerUpdated = false;
   if (chain.kind === "svm") {
     const rpc = createSolanaRpc(input.rpcUrl);
     found = [
@@ -93,7 +105,9 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
   } else {
     const client = await connect(input.rpcUrl, chain);
     if (input.pot !== undefined) {
-      found = [await importEvmPot(client, chain, input.pot)];
+      const updated = await reauthorizeEvmPotRouter(client, chain, input.pot, input.store);
+      routerUpdated = updated !== undefined;
+      found = [updated ?? (await importEvmPot(client, chain, input.pot))];
     } else {
       found = await importEvmOwnerPots(client, chain, input.owner as Address, input.salt);
       if (found.length === 0) {
@@ -104,7 +118,7 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
       }
     }
   }
-  // An import has no deployment, so it is a Pot's first record or nothing new.
+  // Imports keep existing records; explicit Router reauthorization appends its own immutable proof.
   const saved = found.map((record) => ({ record, saved: input.store.save(record) }));
   const pots = saved.flatMap(({ record, saved }) =>
     saved === "created"
@@ -116,10 +130,12 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
     text: pots.flatMap(potLines).join("\n"),
     json: { store: input.store.dir, pots },
     notes: saved.map(({ record, saved }) =>
-      saved === "created"
-        ? `recorded Pot ${record.pot} on ${onChain(record)} in ${input.store.dir}`
-        : `Pot ${record.pot} on ${onChain(record)} was already recorded in ${input.store.dir}; ` +
-          "the record is kept as it was",
+      routerUpdated
+        ? `reauthenticated Pot ${record.pot} Router in ${input.store.dir}; historical binding records remain unchanged`
+        : saved === "created"
+          ? `recorded Pot ${record.pot} on ${onChain(record)} in ${input.store.dir}`
+          : `Pot ${record.pot} on ${onChain(record)} was already recorded in ${input.store.dir}; ` +
+            "the record is kept as it was",
     ),
   };
 }

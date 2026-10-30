@@ -25,7 +25,7 @@ Concentrated-liquidity spot DEX on Arc: a Uniswap V3 fork with renamed pool call
 - Pools call back `synthraV3SwapCallback` (`0x13abb0ca`) and `synthraV3MintCallback`, not the `uniswapV3*` callbacks, so a contract that swaps or mints against a Synthra pool directly must implement the renamed callbacks
 - On Arc there is no wrapped native token; pools pair against USDC's ERC-20 interface `0x3600…0000`
 - Addresses come from docs.synthra.org's contract-addresses page
-- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `synthraV3SwapCallback`. `potRouterUpdate(client, pot)` returns an owner-signed update when the Pot differs from its Kitchen's current Router. Compare addresses with `v12RouterAddress()`; Router releases are content-addressed, not generation-numbered.
+- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `synthraV3SwapCallback`. `potRouterUpdate(client, pot, binding)` verifies an explicit binding before proposing an owner-selected Router update. Existing services retain their Router policy until explicit opt-in.
 - `uniswapV3` is exact input: the Router caps what the callback may take at `amountIn`
 
 ## Its names in a program

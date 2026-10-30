@@ -12,6 +12,10 @@ version is out. It needs the command installed ([Install](cli.md#install)). The
 what the compiler and engine releases it shipped changed. Read the entries from your version up to
 the one you move to first.
 
+For Kitchen/Pot creation or persisted service changes, follow the mandatory
+[Kitchen compatibility guide](kitchen-compatibility.md). New EVM creation uses CREATE3 only;
+already deployed Pots keep their explicit release bindings and ordinary new work.
+
 ## Check which version you run
 
 ```sh
@@ -122,11 +126,11 @@ newer engine.
 The package pins one compiler and ships the engines that compiler pairs with
 ([Deployments](../reference/deployments.md) lists them). This is what it means for you:
 
-- **Recompile after you upgrade.** Bytecode compiled by the previous version is for the previous
-  engine. Don't store compiled programs and send them later through a new version; compile again
-  with the version that sends them. The `sauce` command always compiles the file you give it.
-- **Rebuild unsigned transactions.** A cook printed by `sauce tx` before the upgrade names the old
-  engine. Build it again with the new version.
+- **Preserve each service's compiler/engine pair.** Recompile for a newly selected release, not
+  as an implicit migration of an existing service. Keep queued programs and signed work bound
+  to their original artifacts until explicitly resolved.
+- **Rebuild only for an explicit opt-in.** A cook printed before an SDK update still names its
+  original engine. A new default is not permission to replace that engine or compiler.
 - **Know which release made each Pot.** `sauce pot list` shows the release each recorded Pot was
   created under. The changelog entry for the SDK release that ships a new Kitchen or engine says,
   under **Compiler and engines**, what changes for existing Pots.
@@ -171,10 +175,11 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
    or `.catch` catches only that external call's failure, not successful-return decoding.
    Error bytes may be empty/truncated (256-byte cap); validate before decoding them. SVM has no
    catch support.
-5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;
-   the new engine refuses old Pots. Use the earlier SDK/compiler/engine to manage an old Pot,
-   and review the destination before moving funds. An upgrade never migrates balances.
-   Signed cooks are new, and only newly created Pots take them; old Pots do not acquire them.
+5. **Keep old Pots on their old pairing until explicit opt-in.** The historical 2.5-to-2.6
+   transition changed EVM Pot addresses and required its new engine/Pot pair. Existing Pots
+   retain ordinary new work through their original SDK/compiler/engine; upgrading never migrates
+   balances or bindings. New CREATE3 prediction is instead independent of Pot bytecode.
+   Signed cooks arrived with that historical release; earlier Pots do not acquire the method.
    The owner signs with `sauce sign`, `sauce_sign` or `signedCookTypedData` from
    `@eco-incorp/sauce/evm/engine`, and any account sends the result
    ([Signed cooks](signed-cooks.md)).

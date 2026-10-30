@@ -25,6 +25,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                           | [Actions](../guides/actions.md)                                      |
 | Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`            | [Coverage](coverage.md)                                              |
 | Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`     | [Programs and cooks](routes.md#build-a-cook)                         |
+| Verify a deployed Pot binding               | `verifyPotBinding` from `/evm/engine`                                                 | [Kitchen compatibility](../guides/kitchen-compatibility.md)          |
 | Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                       | [Deployments](../reference/deployments.md)                           |
 | Run on Solana from TypeScript               | `createSauceSvmClient`, `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm`              | [Solana from TypeScript](../guides/solana-from-typescript.md)        |
 | Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify` | [Verification](../guides/verification.md)                            |
@@ -50,7 +51,7 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/svm/engine-artifacts`        | Node-only: file paths to the packaged SVM engine and Kitchen binaries and the Kitchen IDL                                                                                                                                                                                                                              |
 | `/svm/verify`                  | SVM program and gated engine CPI verification (`verifySvmSettleProgram`, `decodeSvmSettleExecution`, `verifySvmSettleExecution`); the Kitchen's own envelope is decoded separately                                                                                                                                     |
 | `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                                                                                                                                                                                            |
-| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), `potRouterUpdate`, and the signed-cook helpers (`signedCookTypedData`, `encodeCookSigned`, `encodeInvalidateNonces`, `verifySignedCook`, `checkSignedCookPot` and the nonce helpers)                                |
+| `/evm/engine`                  | EVM Pot/Kitchen ABIs and call encoders, `verifyPotBinding`, `potRouterUpdate`, signed-cook helpers and nonce helpers                                                                                                                                                                                                   |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                                                                                                                                                                |
 | `/skills`                      | The per-protocol documents and their index, as text                                                                                                                                                                                                                                                                    |
 | `/testing`                     | Node-only: run programs on a forked or empty local chain from a test, recorded once and replayed                                                                                                                                                                                                                       |
@@ -135,20 +136,26 @@ you. The `sauce` command is the one exception, and it keeps its public endpoints
 Each step of running a program on a Pot, with the `sauce` command and in TypeScript
 ([Kitchen, Pot and cook](../concepts/kitchen-pot-cook.md) explains the three):
 
-| To                          | With the `sauce` command                        | In TypeScript                                                                       |
-| --------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Find a Pot's address        | `sauce pot --owner <address>`                   | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                               |
-| Deploy a Pot                | `sauce run` (when needed), `sauce pot --deploy` | `routes.sauceEvmDeployPotCall({ owner, salt })`                                     |
-| Simulate a cook             | `sauce simulate`                                | an `eth_call` of the cook from the owner, on a deployed Pot                         |
-| Build a cook                | `sauce tx`                                      | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`            |
-| Send a cook                 | `sauce run`                                     | your own wallet client, with the cook as `to`, `data` and `value`                   |
-| Sign a cook another sends   | `sauce sign`                                    | `signedCookTypedData`, then `encodeCookSigned`, from `@eco-incorp/sauce/evm/engine` |
-| Read the fee                | read by `sauce run` and `sauce tx`              | `kitchenExecutionFee()`                                                             |
-| Find the Kitchen and engine | `sauce pot` prints the Kitchen                  | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments`    |
+| To                          | With the `sauce` command           | In TypeScript                                                                              |
+| --------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| Find a Pot's address        | `sauce pot --owner <address>`      | `v12PredictPot(owner, salt)` from `@eco-incorp/sauce`                                      |
+| Deploy a new Pot            | `sauce pot --deploy`               | `routes.sauceEvmDeployPotCall({ owner, salt })`, then binding verification and persistence |
+| Simulate a cook             | `sauce simulate`                   | an `eth_call` of the cook from the owner, on a deployed Pot                                |
+| Build a cook                | `sauce tx`                         | `v12Pot.encodeCook(engine, program)` from `@eco-incorp/sauce/evm/engine`                   |
+| Send a cook                 | `sauce run`                        | your own wallet client, with the cook as `to`, `data` and `value`                          |
+| Sign a cook another sends   | `sauce sign`                       | `signedCookTypedData`, then `encodeCookSigned`, from `@eco-incorp/sauce/evm/engine`        |
+| Read the fee                | read by `sauce run` and `sauce tx` | `kitchenExecutionFee()`                                                                    |
+| Find the Kitchen and engine | `sauce pot` prints the Kitchen     | `v12KitchenAddress()`, `v12EngineAddress()` from `@eco-incorp/sauce/deployments`           |
 
 A cook is `Pot.cook(engine, program)`, so building one needs both addresses, which you pass to
 `routes.buildSauceEvmCall`. An owner's default Pot is the one under `DEFAULT_POT_SALT`, the zero
 bytes32: `v12PredictPot(owner)` derives it. [Programs and cooks](routes.md) documents each helper.
+
+Prediction is CREATE3 arithmetic, not authentication. Before funding or signing, verify the actual
+deployed binding with `verifyPotBinding` from `/evm/engine` and save its provenance.
+Use an existing service's saved historical compiler/engine/Router pair, not current defaults.
+Missing expected-deployed code or an unknown/mismatched profile fails closed;
+see [Kitchen compatibility](../guides/kitchen-compatibility.md).
 
 On Arc, native value is USDC at 18 decimals, drawn from the same balance as the USDC ERC-20
 ([Arc: USDC is the native coin](../reference/chains/arc.md#notes)). The Kitchen fee there is paid
@@ -156,12 +163,15 @@ in that USDC.
 
 ### A Pot's Router after a rollout
 
-After a Router rollout, `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` reads the
-Pot's Router and the Kitchen's through your client. It returns the `setRouter` call for the Pot's
-owner to sign, or nothing when the Pot is already current. Nothing sends it for you, and a call
-from anyone but the owner reverts with `NotOwner()`. It throws for a Pot of an earlier Kitchen
-release, which has no `setRouter` and keeps its Router for good.
+After explicit owner opt-in, `potRouterUpdate(client, pot, binding)` from
+`@eco-incorp/sauce/evm/engine` verifies the supplied binding before reading Pot and Kitchen Routers.
+Missing bindings fail. It returns an owner-only `setRouter` proposal, or nothing when current;
+fixed/Shared and pre-update Pots retain their Router. Nothing sends or repins automatically.
+After an approved change, verify and persist the explicitly selected new Router binding.
 [pot-router.ts](../examples/pot-router.ts) shows the check.
+For the CLI, [explicitly reimport the updated descriptor](../guides/kitchen-compatibility.md#reauthorize-an-owner-selected-router-change)
+after the owner changes a dynamic Router. Normal funding/signing refuses the stale binding;
+the import retains immutable history and does not permit compiler/engine/profile migration.
 
 ### Signed cooks
 
@@ -176,7 +186,7 @@ A Pot's owner signs a cook as EIP-712 typed data, and any account submits it wit
 | `signedCookDigest(execution)`                                                         | The 32-byte hash the signature is over                                                                                                                    |
 | `encodeCookSigned(call)`                                                              | `{ to, data, value }`: the Pot's `cookSigned` call, with `value` the signed value. The Pot pays the Kitchen's fee                                         |
 | `verifySignedCook(call, client?)`                                                     | Whether the signature is the owner's, as the Pot checks it; with a client, an owner with code is asked through ERC-1271                                   |
-| `checkSignedCookPot(client, pot)`                                                     | `{ ok: true, owner }`, or `{ ok: false, reason }` for no code, not a Pot, a Shared Pot, or a Pot created before signed cooks                              |
+| `checkSignedCookPot(client, pot, binding)`                                            | Verifies the explicit binding and returns signed-cook capability; missing bindings fail                                                                   |
 | `encodeInvalidateNonces(word, mask)`                                                  | `invalidateNonces` calldata, which cancels nonces, for the owner to send to the Pot                                                                       |
 | `randomCookNonce()`                                                                   | A random 256-bit nonce                                                                                                                                    |
 | `cookNonceWordBit(nonce)`, `cookNonceAt(word, bit)`                                   | The word and bit a nonce sets, and back                                                                                                                   |
@@ -184,9 +194,9 @@ A Pot's owner signs a cook as EIP-712 typed data, and any account submits it wit
 | `cookNonceSlot(word)`, `cookNonceUsed(client, pot, nonce)`                            | The storage slot of a nonce word, and whether a nonce is spent                                                                                            |
 | `POT_SIGN_DOMAIN`, `COOK_TYPE`, `COOK_TYPES`, `COOK_TYPEHASH`, `COOK_NONCES_LOCATION` | The domain's name and version, the `Cook` type and its hash, and the nonce bitmap's storage location                                                      |
 
-Only a Private Pot the current Kitchen created answers `cookSigned`; an older one reverts, and a
-Shared Pot refuses every signed cook. [signed-cook.ts](../examples/signed-cook.ts) signs, verifies
-and encodes one offline.
+Only a verified Private Pot profile that supports `cookSigned` may take a signed cook.
+Pre-feature Pots keep their old methods; Shared Pots refuse every signed cook.
+[signed-cook.ts](../examples/signed-cook.ts) exports a helper that verifies before signing.
 
 ### The full ABIs
 

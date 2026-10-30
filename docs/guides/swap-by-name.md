@@ -15,7 +15,11 @@ It takes about fifteen minutes and costs nothing.
 - a program you have written and compiled yourself, from
   [Write your first program](write-your-first-program.md).
 
-No money: every step simulates.
+The simulations spend no funds, but require an already-deployed, authenticated Pot binding on
+Ethereum. The Base Pot from the quick start does not satisfy that prerequisite. Explicitly deploy
+on Ethereum with a trusted qualified descriptor (`sauce pot --chain ethereum --wallet me --deploy
+--pot-binding pot-binding.json`) and wait for authentication and persistence before step 3.
+That separate deployment costs gas; this tutorial does not qualify or authorize a release.
 
 **You will have:** a program that swaps through two exchanges in one transaction, a floor that
 makes the whole transaction revert when the trade is worse than you accept, and the habit of
@@ -126,7 +130,7 @@ sauce simulate router-swap.sauce.ts --chain ethereum --wallet me \
 
 ```text
 ethereum: read through a built-in public endpoint, which can be slow or rate-limited; give your own with --rpc-url <url> or --config <file>
-The cook succeeds from 0x…: gas used 331866 for the cook, after the Pot's deploy (1. below), returns 0x
+The cook succeeds from 0x…: gas used 331866 for the cook, returns 0x
 Left in the Pot, not in the owner's wallet:
   24.512278 USDT
 …

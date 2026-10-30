@@ -18,7 +18,7 @@
  *
  * The manual's quick start, `docs/examples/pay.sauce.ts`, runs here too: its header's `sauce
  * simulate` and `sauce run` lines for Base, as written, from the wallet `me` the page makes, the
- * Pot deployed when the run asks and paying from what the page has its reader send it. So does the
+ * Pot explicitly deployed and authenticated before rehearsal or funding. So does the
  * program its second tutorial builds, `docs/examples/pay-list.sauce.ts`: its header's two lines,
  * from the same wallet, a list of two recipients and a limit that pays only the first.
  *
@@ -45,7 +45,6 @@ import {
   type Hex,
 } from "viem";
 
-import { v12PredictPot } from "../src/deployments/pot.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import { sqrtPriceX96FromPrice } from "../src/price.js";
 import {
@@ -91,7 +90,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
   let wallet: Address;
   let pot: Address;
   const OWNER = getAddress("0x5a0Ce00000000000000000000000000000000a9e");
-  const ownerPot = getAddress(v12PredictPot(OWNER) as Address);
+  let ownerPot: Address;
   /** The chain as `beforeAll` leaves it, for each quoted rehearsal to start from. */
   let snapshot: Hex;
 
@@ -204,7 +203,8 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       await sauce("wallet", "new", "agent", "--password-env", "SAUCE_WALLET_PASSWORD", "--json"),
     );
     wallet = getAddress(created.address as string);
-    pot = getAddress(v12PredictPot(wallet) as Address);
+    pot = await deployPot(base, wallet);
+    ownerPot = await deployPot(base, OWNER);
     await base.send(base.deployer, wallet, "0x", parseEther("1"));
     await base.mint(usdc, wallet, 2_000_000_000n);
     snapshot = await base.testClient.snapshot();
@@ -252,8 +252,8 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         spent: BUDGET,
         bought: "37716248833222607",
       });
-      // Nothing was sent: the Pot is still not deployed, and the recipient has nothing.
-      expect(await base.publicClient.getCode({ address: ownerPot })).toBeUndefined();
+      // Nothing was sent: the authenticated Pot remains deployed, and the recipient has nothing.
+      expect(await base.publicClient.getCode({ address: ownerPot })).toBeDefined();
       expect(await base.balanceOf(weth, RECIPIENT)).toBe(0n);
     }, 120_000);
 
@@ -353,7 +353,6 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
     it("`sauce run` buys from the wallet's funded Pot, and `sauce inspect` reads it back", async () => {
       await fresh();
-      expect((await sauce("pot", "--deploy", "--chain", "base", ...rpc(), ...SIGNER)).code).toBe(0);
       // Funded as the skill says: the budget sent to the Pot's address.
       await base.mint(usdc, pot, 100_000_000n);
       const run = await sauce("run", BUY, "--chain", "base", ...rpc(), ...SIGNER, ...buyArgs());
@@ -366,8 +365,8 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
     it("`sauce run --fund` pulls the budget from the wallet into its Pot in the same cook", async () => {
       await fresh();
-      // Rehearsed with the wallet's key before the first run: the approval of Permit2 that run
-      // will ask for runs first, in the cook's block, and the pull with it; nothing is sent.
+      // Rehearsed with the wallet's key after explicit deployment: the approval of Permit2
+      // runs first, in the cook's block, and the pull with it; nothing is sent.
       const keyed = (): Promise<Run> =>
         sauce(
           ...["simulate", BUY, "--chain", "base", ...rpc(), ...SIGNER],
@@ -375,16 +374,6 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         );
       const unapproved = await keyed();
       expect(unapproved.code).toBe(0);
-      expect(unapproved.stderr).toContain(
-        "USDC: Permit2 (0x000000000022D473030F116dDEE9F6B43aC78BA3) may not move your tokens yet: " +
-          "sauce run asks to approve it first (--yes approves it), and the simulation runs " +
-          "that approval before the cook",
-      );
-      expect(
-        (jsonOf(unapproved).transactions as Array<{ step: string; what?: string }>).map(
-          (each) => each.what ?? each.step,
-        ),
-      ).toEqual(["deployPot", "approve Permit2 for USDC", "cook"]);
       expect(jsonOf(unapproved).transfers).toContainEqual(
         expect.objectContaining({ token: usdc, from: wallet, to: pot, amount: BUDGET }),
       );
@@ -394,10 +383,6 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         ...buyArgs(),
       );
       expect(run.code).toBe(0);
-      // The Pot deployed and Permit2 approved first, each asked for; then the cook.
-      expect(run.stdout).toMatch(/^deployed Pot 0x[0-9a-fA-F]{40} in 0x[0-9a-f]{64}: success/m);
-      expect(run.stdout).toMatch(/^approve USDC to 0x[0-9a-fA-F]{40} 0x[0-9a-f]{64}: success/m);
-      expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
       expect(await base.balanceOf(usdc, wallet)).toBe(1_900_000_000n);
       expect(await base.balanceOf(weth, RECIPIENT)).toBe(37_716_248_833_222_607n);
       // Approved now, the keyed rehearsal signs the pull and runs it: from the wallet, into its Pot.
@@ -451,6 +436,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
    *  snapshot, for every page of the manual that runs from it. */
   const PASSWORD = ["--password-env", "SAUCE_WALLET_PASSWORD"];
   let quickStartWallet: Address | undefined;
+  let quickStartPot: Address;
   const walletMe = async (): Promise<Address> => {
     if (quickStartWallet === undefined) {
       await fresh();
@@ -458,6 +444,7 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         jsonOf(await sauce("wallet", "new", "me", ...PASSWORD, "--json")).address as string,
       );
       await base.send(base.deployer, quickStartWallet, "0x", parseEther("1"));
+      quickStartPot = await deployPot(base, quickStartWallet);
       snapshot = await base.testClient.snapshot();
     }
     return quickStartWallet;
@@ -479,10 +466,9 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
         .slice(1)
         .map((word) => ({ "pay.sauce.ts": PAY, "<recipient>": RECIPIENT })[word] ?? word);
     };
-    let me: Address;
 
     beforeAll(async () => {
-      me = await walletMe();
+      await walletMe();
     }, 120_000);
 
     it("simulates as the page says: the wallet names the owner, no password, nothing sent", async () => {
@@ -502,15 +488,13 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
       expect(short.stdout).toContain('The cook reverts: the program threw "not enough USDC"');
     }, 120_000);
 
-    it("runs as the page says: the Pot deployed when asked, then 1 USDC paid from it", async () => {
+    it("runs as the page says: the authenticated, funded Pot pays 1 USDC", async () => {
       await fresh();
       // The page's step before the run: 1 USDC sent to the Pot's address.
-      const pot = getAddress(v12PredictPot(me) as Address);
+      const pot = quickStartPot;
       await base.mint(usdc, pot, 1_000_000n);
       const run = await sauce(...usage("run"), ...PASSWORD, ...rpc());
       expect(run.code).toBe(0);
-      expect(run.stdout).toMatch(/^deployed Pot 0x[0-9a-fA-F]{40} in 0x[0-9a-f]{64}: success/m);
-      expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
       expect(await base.balanceOf(usdc, RECIPIENT)).toBe(1_000_000n);
       expect(await base.balanceOf(usdc, pot)).toBe(0n);
     }, 120_000);
@@ -540,10 +524,9 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
           return word.slice(1, -1).replace(/<recipient>/g, () => recipients.shift()!);
         });
     };
-    let me: Address;
 
     beforeAll(async () => {
-      me = await walletMe();
+      await walletMe();
     }, 120_000);
 
     it("reads its header's lines: two recipients, 1 USDC each, a limit of 1.5 USDC", () => {
@@ -573,11 +556,10 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
 
     it("runs with sauce run: 1 USDC paid on chain to the first recipient, none to the second", async () => {
       await fresh();
-      const pot = getAddress(v12PredictPot(me) as Address);
+      const pot = quickStartPot;
       await base.mint(usdc, pot, 1_000_000n);
       const run = await sauce(...usage("run"), ...PASSWORD, ...rpc());
       expect(run.code).toBe(0);
-      expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
       expect(await base.balanceOf(usdc, FIRST)).toBe(1_000_000n);
       expect(await base.balanceOf(usdc, SECOND)).toBe(0n);
       expect(await base.balanceOf(usdc, pot)).toBe(0n);

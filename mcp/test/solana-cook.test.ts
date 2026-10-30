@@ -172,6 +172,7 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
     assert.equal(out.fee, FEE.toString());
     assert.equal(out.maxExecutionFee, FEE.toString());
     assert.equal(out.pot, undefined);
+    assert.equal(out.potBinding, undefined, "Solana neither requires nor returns an EVM binding");
     assert.match(out.transaction as string, /^[A-Za-z0-9+/=]+$/);
     // The fee config, read once; no Pot is looked up.
     assert.equal(asked.filter((method) => method === "getAccountInfo").length, 1);

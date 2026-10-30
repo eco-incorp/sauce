@@ -13,6 +13,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { versionTableOf } from "../../sdk/scripts/lib/sdk-releases.mjs";
+import { releasePinPending } from "../../sdk/scripts/lib/evm-release-profile.mjs";
 import {
   defineFlagProblems,
   executedExamplesProblems,
@@ -348,8 +349,8 @@ console.log(`Manual links: ${manual.length} files checked`);
 
   // The table under `## Which versions work together` has a row whose Compiler, v12-evm,
   // kitchen-evm, v12-svm and kitchen-svm cells are the versions of each released row. A row is not
-  // out yet when the sync would refuse it: a `null` engine id, Kitchen, Pot init-code hash or asset
-  // digest in any of its components. Such a row needs no table row. Every table row whose SDK cell
+  // out yet when the sync would refuse its selected identity fields or asset digests.
+  // Such a row needs no table row. Every table row whose SDK cell
   // is a version has its `## SDK <version>` entry; a row whose SDK cell is `Unreleased` needs none.
   // The quote router pin names a kitchen-evm release, which the page names outside code. The
   // installed package ships no releases.json, and its run skips this.
@@ -357,9 +358,6 @@ console.log(`Manual links: ${manual.length} files checked`);
   if (existsSync(pinned)) {
     const releases = JSON.parse(readFileSync(pinned, "utf8"));
     const COMPONENTS = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
-    const pending = (entry) =>
-      ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
-      Object.values(entry?.assets ?? {}).some((digest) => digest === null);
     const changelog = outsideFences(join(docs, "changelog.md"));
     // The table as the build reads it (`sdk/scripts/lib/sdk-releases.mjs`): every line of it a row,
     // each row's cells versions, the Unreleased one included.
@@ -371,7 +369,7 @@ console.log(`Manual links: ${manual.length} files checked`);
     }
     if (table) {
       for (const row of releases.releases) {
-        if (COMPONENTS.some((component) => pending(row[component]))) continue;
+        if (COMPONENTS.some((component) => releasePinPending(row[component]))) continue;
         // A component with no version is one no release publishes: its cell is not compared, and
         // the row's other cells still are.
         const want = { compiler: row.compiler };
@@ -399,7 +397,12 @@ console.log(`Manual links: ${manual.length} files checked`);
           );
     }
     const quote = releases.quoteRouter;
-    if (quote && !pending(quote) && typeof quote.version === "string" && quote.version !== "") {
+    if (
+      quote &&
+      !releasePinPending(quote) &&
+      typeof quote.version === "string" &&
+      quote.version !== ""
+    ) {
       if (!changelog.split(/\s+/).join(" ").includes(`kitchen-evm ${quote.version}`))
         problems.push(
           `docs/changelog.md: never names "kitchen-evm ${quote.version}" outside code fences (releases.json, quoteRouter)`,

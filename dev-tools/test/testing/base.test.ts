@@ -14,9 +14,10 @@
 import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 
-import { CookReverted, fork, type TestChain } from "../../src/testing/index.js";
+import { CookReverted, type TestChain } from "../../src/testing/index.js";
 import {
   anvilMissing,
+  fork,
   pinStateCode,
   program,
   recordRpc,

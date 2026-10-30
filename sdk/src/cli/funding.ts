@@ -41,7 +41,6 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
 import { mainSignature } from "../routes/entry.js";
@@ -190,11 +189,6 @@ export interface FundingInput {
    *  not given. */
   readonly nonce?: bigint;
   readonly deadline?: bigint;
-  /**
-   * The salt the Pot is deployed at first, by this run or in this rehearsal, when it has no code
-   * yet: it is then the signer's own exactly when it is the signer's `v12PredictPot` at that salt.
-   */
-  readonly deploySalt?: Hex;
   /** May the run approve and transfer before the cook (`run`), or only report (`simulate`)? */
   readonly send: boolean;
   /** Who approves the approvals a send makes first. */
@@ -560,15 +554,12 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
  * funding makes names the Pot as the one that may take the signer's tokens (the spender of a
  * Permit2 transfer, a permit or an approval; the recipient of a transfer), so whoever controls that
  * address could take them: a contract that answers `owner()` with the signer shows nothing. The
- * wallet's policy first (`SendGuard.authorizeFunding`), then the chain: the Pot the same run deploys
- * first is the signer's when its address is the signer's `v12PredictPot` at that salt, and any other
- * must show it is (`authenticatePot`: its owner the signer, and its address the CREATE2 of that
- * owner and its salt under a Kitchen a release records). Where that cannot be read, it is refused.
+ * wallet's policy first, then the deployed Pot's authenticated release binding. A predicted
+ * address, including one this command intends to deploy, never authorizes funding signatures.
  */
 async function requireOwnPot(input: FundingInput, signer: Address): Promise<void> {
   const pot = getAddress(input.pot);
   guardOf(signer)?.authorizeFunding(input.chain, pot);
-  if (input.deploySalt !== undefined && pot === v12PredictPot(signer, input.deploySalt)) return;
   const found = await authenticatePot(input.client, signer, pot);
   if (found === "own") return;
   const nothing =
@@ -590,6 +581,9 @@ async function requireOwnPot(input: FundingInput, signer: Address): Promise<void
 export async function planFunding(input: FundingInput): Promise<Funding> {
   if (input.account !== undefined) await requireOwnPot(input, getAddress(input.account.address));
   const { tokens, native, notes } = await amounts(input);
+  // Keyless simulation cannot make an unavailable token-pull route valid.
+  const permit2 =
+    input.mode === "permit2" && tokens.length > 0 ? permit2On(input.chain) : undefined;
   const needs: string[] = [];
   const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
@@ -653,8 +647,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
 
   // Only a token pull needs Permit2: native value rides on the cook, so a chain with no Permit2
   // entry funds it in the default mode, as the early gate (`inputs.ts#fundingFor`) lets it.
-  if (input.mode === "permit2" && tokens.length > 0) {
-    const permit2 = permit2On(input.chain);
+  if (permit2 !== undefined) {
     for (const funded of tokens) {
       const allowed = await read(`${funded.request.label}'s allowance to Permit2`, () =>
         input.client.readContract({

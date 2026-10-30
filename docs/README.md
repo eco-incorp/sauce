@@ -82,6 +82,7 @@ Operate:
 - [Troubleshooting](guides/troubleshooting.md): what an error means and what to do about it.
 - [Production checklist](guides/production-checklist.md): what to check before a program spends real money.
 - [Upgrading](guides/upgrading.md): move to a newer Sauce, and what to check afterwards.
+- [Kitchen compatibility for maintainers](guides/kitchen-compatibility.md): retain deployed bindings, create new EVM Pots safely, and gate breaking cutovers.
 
 ## Concepts
 

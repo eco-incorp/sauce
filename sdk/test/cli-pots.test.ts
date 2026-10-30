@@ -51,7 +51,7 @@ import { keeping, keepLanded } from "../src/cli/keep.js";
 import {
   evmKitchenRelease,
   evmPotRelease,
-  evmPotsDeployed,
+  evmPotsDeployed as readDeployedPots,
   importSvmPot,
   keepPots,
   pairedSdkReleases,
@@ -64,6 +64,7 @@ import {
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
 import { buildCreatePotInstruction, derivePotPda } from "../src/svm/kitchen.js";
+import { withPotCandidate } from "../src/cli/pot-binding.js";
 
 const OWNER = getAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
 const SALT = keccak256(new TextEncoder().encode("treasury"));
@@ -103,8 +104,16 @@ const potDeployed = (kitchen: Address, owner: Address, salt: Hex, pot: Address) 
 const clientOf = (chainId: number, reads: { hash?: Hex; gate?: Hex } = {}) =>
   ({
     getChainId: async () => chainId,
+    getCode: async () => "0x60006000f3",
     readContract: async ({ functionName }: { functionName: string }) => {
-      const answer = { potInitCodeHash: reads.hash, gateSalt: reads.gate }[functionName];
+      const answer = {
+        owner: OWNER,
+        userSalt: SALT,
+        kitchen: KITCHEN,
+        router: SENDER,
+        potInitCodeHash: reads.hash,
+        gateSalt: reads.gate ?? gateSalt(OWNER, SALT, false),
+      }[functionName];
       if (answer === undefined) throw new Error("no such read");
 
       return answer;
@@ -114,10 +123,37 @@ const clientOf = (chainId: number, reads: { hash?: Hex; gate?: Hex } = {}) =>
 const own = V12_RELEASE_SETS.find((set) => set.compiler === sdkCompilerVersion())!;
 const KITCHEN = getAddress(own["kitchen-evm"].kitchen!);
 
+// Receipt/store orchestration only. Fabricated RPC bytes do not prove runtime authentication.
+const evmPotsDeployed = (...input: Parameters<typeof readDeployedPots>) =>
+  withPotCandidate(
+    {
+      compiler: own.compiler,
+      engine: getAddress(own["v12-evm"].engine!),
+      engineCodeHash: keccak256("0x60006000f3"),
+      router: SENDER,
+      routerCodeHash: keccak256("0x60006000f3"),
+      kitchen: KITCHEN,
+      release: {
+        compiler: own.compiler,
+        "v12-evm": own["v12-evm"].version,
+        "kitchen-evm": own["kitchen-evm"].version,
+      },
+      wireProfile: `compiler:${own.compiler}`,
+      storageProfile: "sauce.storage.Pot",
+    },
+    () => readDeployedPots(...input),
+  );
+
 describe("which release minted an EVM Pot", () => {
   it("tells every recorded release, and each kind of Pot, from the address alone", () => {
     for (const set of V12_RELEASE_SETS) {
-      const { kitchen, potInitCodeHash } = set["kitchen-evm"];
+      const { kitchen, potInitCodeHash, scheme } = set["kitchen-evm"];
+      if (
+        scheme === "create3" ||
+        typeof kitchen !== "string" ||
+        typeof potInitCodeHash !== "string"
+      )
+        continue;
       const cases = [
         { owner: OWNER, fixed: false, kind: "private" },
         { owner: OWNER, fixed: true, kind: "private-fixed-router" },
@@ -148,7 +184,13 @@ describe("which release minted an EVM Pot", () => {
 describe("the release a Kitchen mints, and the SDK releases that pair with it", () => {
   it("tells a release by its Kitchen and the Pot init-code hash it reports", () => {
     for (const set of V12_RELEASE_SETS) {
-      const { kitchen, potInitCodeHash } = set["kitchen-evm"];
+      const { kitchen, potInitCodeHash, scheme } = set["kitchen-evm"];
+      if (
+        scheme === "create3" ||
+        typeof kitchen !== "string" ||
+        typeof potInitCodeHash !== "string"
+      )
+        continue;
       const family = evmKitchenRelease(
         kitchen!,
         potInitCodeHash!.toUpperCase().replace("0X", "0x"),
@@ -218,6 +260,13 @@ describe("the Pots a landed EVM transaction deployed", () => {
         "v12-evm": own["v12-evm"].version,
         "kitchen-evm": own["kitchen-evm"].version,
       },
+      binding: expect.objectContaining({
+        compiler: own.compiler,
+        engine: getAddress(own["v12-evm"].engine!),
+        scheme: "create2",
+        codeHash: keccak256("0x60006000f3"),
+        router: SENDER,
+      }),
       sdk: expect.any(String),
       deployment: { tx: TX, block: "12", from: SENDER },
       recordedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
@@ -245,29 +294,23 @@ describe("the Pots a landed EVM transaction deployed", () => {
     }
   });
 
-  it("records a Pot a Kitchen upgraded past the SDK minted, under the hash the Kitchen reports", async () => {
+  it("refuses unknown code profiles even when the Kitchen reports their init-code hash", async () => {
     const hash = `0x${"56".repeat(32)}` as Hex;
     const newer = potOf(KITCHEN, hash, OWNER, SALT, true);
-    const [record] = await evmPotsDeployed(
-      clientOf(BASE.id, { hash }),
-      landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
-      SENDER,
-    );
-    expect(record).toMatchObject({
-      pot: newer,
-      kind: "private-fixed-router",
-      potInitCodeHash: hash,
-    });
-    expect(record!.release).toBeUndefined();
-    expect(record!.engine).toBeUndefined();
-    // The Kitchen's hash unread: the kind from the Pot's own gate salt, and no hash recorded.
-    const [unread] = await evmPotsDeployed(
-      clientOf(BASE.id, { gate: gateSalt(OWNER, SALT, true) }),
-      landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
-      SENDER,
-    );
-    expect(unread).toMatchObject({ pot: newer, kind: "private-fixed-router" });
-    expect(unread!.potInitCodeHash).toBeUndefined();
+    await expect(
+      evmPotsDeployed(
+        clientOf(BASE.id, { hash }),
+        landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
+        SENDER,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      evmPotsDeployed(
+        clientOf(BASE.id, { gate: gateSalt(OWNER, SALT, true) }),
+        landed([potDeployed(KITCHEN, OWNER, SALT, newer)]),
+        SENDER,
+      ),
+    ).rejects.toThrow();
   });
 });
 
@@ -486,6 +529,33 @@ describe("the Pots a landed Solana transaction created", () => {
       ...expected,
       cluster: "mainnet-beta",
     });
+  });
+
+  it("reimports an unchanged SVM engine after the SDK compiler upgrade without replacing historical release pins", async () => {
+    const { pot } = await createOf();
+    const imported = await importSvmPot(
+      {
+        ownerOf: async (address) => (address === pot ? engine : undefined),
+        genesis: DEVNET,
+      },
+      DEVNET_CHAIN,
+      PAYER,
+      `0x${"07".repeat(32)}`,
+    );
+    const original = { ...imported, release: { ...imported.release!, compiler: "2.6.0" } };
+    const dir = mkdtempSync(join(tmpdir(), "sauce-svm-compiler-upgrade-"));
+    try {
+      const store = new PotStore(dir);
+      store.save(original);
+      const file = join(dir, `${SOLANA.id}-devnet`, `${pot}.json`);
+      const bytes = readFileSync(file, "utf8");
+      expect(imported.release!.compiler).toBe("2.6.1");
+      expect(store.save(imported)).toBe("exists");
+      expect(readFileSync(file, "utf8")).toBe(bytes);
+      expect(store.recordsOf(SOLANA.id, pot, "devnet")).toEqual([original]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("finds a devnet Pot through solana-devnet and solana alike, in the one directory it was always filed in", async () => {

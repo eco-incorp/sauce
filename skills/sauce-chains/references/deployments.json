@@ -22,9 +22,9 @@
       "about": "A quote service for Uniswap V3 and V4 swaps, called with eth_call, holding no tokens. No Pot's Router."
     },
     "pot": {
-      "address": "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
-      "initCodeHash": "0xe8e1f54a0a3c700fedc0e0019c5a7dc7ca08e676862db576b864e744186cd7f2",
-      "about": "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen."
+      "address": "CREATE3(kitchen, keccak256(abi.encode(owner, salt)))",
+      "helperInitCodeHash": "0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f",
+      "about": "New Pots use CREATE3 under Kitchen. Fixed and Shared Pots hash abi.encode(owner, salt, true); Shared owner is zero. Prediction does not authenticate code."
     }
   },
   "svm": {

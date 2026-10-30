@@ -5,3 +5,11 @@
  */
 export * from "./releases.js";
 export * from "./v12-addresses.js";
+export {
+  DEFAULT_POT_SALT,
+  POT_CREATE3_HELPER_INIT_CODE_HASH,
+  potSalt,
+  v12PotGateSalt,
+  v12PredictPot,
+  v12PredictSharedPot,
+} from "./pot.js";

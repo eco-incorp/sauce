@@ -15,9 +15,10 @@ import {
   potImportTarget,
   potListCommand,
   potOwner,
+  UsageError,
   type PotStore,
 } from "./sdk.js";
-import { chainRef, POT, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
+import { chainRef, POT, POT_BINDING, RPC_URL, toolRegistrar, type ToolContext } from "./tools.js";
 
 /** The Pot store's tools, in the order `tools/list` gives them. */
 export const POT_TOOL_NAMES = ["sauce_pot_list", "sauce_pot_import"] as const;
@@ -91,14 +92,19 @@ export function registerPotTools(server: McpServer, context: ToolContext, store:
       description:
         "Records in the Pot store a Pot this machine did not deploy, read from the chain, as " +
         "`sauce pot import` does. Give `pot`, its address (EVM chains): its owner, salt and " +
-        "Kitchen are read off it, and its kind and release told from its address; an address " +
-        "no release this server knows mints is refused. Or give `owner` with its salt (salt or " +
-        "saltHex; default zero): every known release's Pot of that owner and salt that has code " +
-        "is recorded. A Solana Pot names no owner, so there only owner and salt find it. A Pot " +
-        "already recorded keeps its record. Returns `pots`, as sauce_pot_list gives them.",
+        "Kitchen are read off it and checked against its trusted binding. EVM potBinding carries " +
+        "the explicit release/profile provenance for this import; give pot with it. Getters alone " +
+        "cannot authenticate an unknown profile. Without an explicit binding, discovery of known " +
+        "historical deployed Pots remains available. Or give owner and salt to find those known " +
+        "Pots. Solana imports keep their existing owner and salt inputs. Existing records keep " +
+        "their execution pins. Returns pots as sauce_pot_list gives them.",
       input: {
         chain: chainRef,
         pot: z.string().max(64).optional().describe("The Pot's 0x address (EVM chains)."),
+        potBinding: POT_BINDING.optional().describe(
+          "EVM only, with pot: the explicit trusted release/profile binding, verified before " +
+            "the imported Pot is persisted. Not a file path or a getter-only proof.",
+        ),
         owner: OWNER.optional(),
         salt: POT.salt,
         saltHex: POT.saltHex,
@@ -111,6 +117,9 @@ export function registerPotTools(server: McpServer, context: ToolContext, store:
       const chain = parseChain(String(args.chain), "chain");
       // The rules `sauce pot import` holds its flags to, its inputs named alike.
       const target = potImportTarget(chain, args);
+      if (args.potBinding !== undefined && (chain.kind !== "evm" || target.pot === undefined)) {
+        throw new UsageError("potBinding imports an EVM Pot by its explicit pot address");
+      }
       const output = await potImportCommand({
         store,
         chain,

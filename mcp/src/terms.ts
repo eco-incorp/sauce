@@ -37,6 +37,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["salt-hex"], input: "saltHex" },
   { flags: ["salt"], input: "salt" },
   { flags: ["owner"], input: "owner" },
+  { flags: ["pot-binding"], input: "potBinding" },
   { flags: ["pot"], input: "pot" },
   { flags: ["value"], input: "value" },
   { flags: ["account", "accounts"], input: "accounts" },

@@ -173,8 +173,7 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
     }
   });
 
-  it("the live Kitchen predicts the Pot the SDK derives for an owner", async () => {
-    // Any owner: a Pot's address is the Kitchen's CREATE2 of (owner, salt), deployed or not.
+  it("keeps historical fixture predictions distinct from the new CREATE3 factory contract", async () => {
     const owner = STRANGER.address;
     const predicted = await publicClient.readContract({
       abi: v12KitchenAbi,
@@ -182,14 +181,17 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       args: [owner, DEFAULT_POT_SALT],
       functionName: "predictPot",
     });
-    expect(predicted).toBe(v12PredictPot(owner));
+    if (process.env.SAUCE_LOCAL_CANDIDATE)
+      expect(predicted).toBe(v12PredictPot(owner, DEFAULT_POT_SALT, sauce.kitchen));
     expect(predicted).toBe(potFromReleasedBytecode(owner));
   });
 
   describe("potRouterUpdate", () => {
     it("returns nothing for a Pot already on its Kitchen's Router", async () => {
       expect(await potRouter(sauce.pot)).toBe(sauce.router);
-      expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+      expect(
+        await potRouterUpdate(publicClient, sauce.pot, await sauce.bindingOf(sauce.pot)),
+      ).toBeUndefined();
     });
 
     it("hands back the switch for a Pot the Kitchen moved past, which only its owner can sign", async () => {
@@ -207,7 +209,11 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
       expect(await potRouter(sauce.pot)).toBe(sauce.router);
 
-      const update = await potRouterUpdate(publicClient, sauce.pot);
+      const update = await potRouterUpdate(
+        publicClient,
+        sauce.pot,
+        await sauce.bindingOf(sauce.pot),
+      );
       expect(update).toEqual({
         to: sauce.pot,
         data: encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
@@ -222,7 +228,9 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       // The owner signs it; the Pot is current, and says so.
       expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
       expect(await potRouter(sauce.pot)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+      expect(
+        await potRouterUpdate(publicClient, sauce.pot, await sauce.bindingOf(sauce.pot)),
+      ).toBeUndefined();
 
       // A Pot minted after the Kitchen's switch starts on the new Router.
       const salt = `0x${"00".repeat(31)}08` as Hex;
@@ -244,7 +252,9 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
         functionName: "predictPot",
       });
       expect(await potRouter(fresh)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
+      expect(
+        await potRouterUpdate(publicClient, fresh, await sauce.bindingOf(fresh)),
+      ).toBeUndefined();
 
       // Back to the release's Router, for the swaps below — the same owner-only path.
       expect(

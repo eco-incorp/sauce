@@ -1,6 +1,9 @@
 // Pays `amount` of USDC from your Pot to each of `recipients` in turn, and stops paying once the
 // next payment would take the total past `limit`. Returns the total it paid.
 //
+// First deploy with `sauce pot --deploy --chain base --wallet me --pot-binding <descriptor.json>`.
+// Continue only after it authenticates and persists the binding. Fund that Pot before the real run.
+//
 //   sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args '["<recipient>","<recipient>"]' 1000000 1500000
 //   sauce run pay-list.sauce.ts --chain base --wallet me --args '["<recipient>","<recipient>"]' 1000000 1500000
 //

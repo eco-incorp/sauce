@@ -35,6 +35,23 @@ and argument helpers, a Solana local-execution runner, and a local EVM node to c
 Needs [Foundry](https://getfoundry.sh)'s `anvil` and a built SDK (`pnpm build` at the root, which
 syncs the release's contract artifacts).
 
+New EVM Pot tests require an explicit authenticated local CREATE3 candidate, not published
+historical CREATE2 deployment defaults:
+
+```sh
+node sdk/scripts/sync-engine-artifacts.mjs --local-candidate <manifest.json>
+export SAUCE_LOCAL_CANDIDATE="$PWD/sdk/dist/artifacts/local-candidate/V12LocalCandidate.json"
+```
+
+Run these from the repository root. The ingest writes separate `local-candidate` artifact
+directories and leaves historical release rows and SVM artifacts unchanged. The raw-manifest
+regression suite takes `SAUCE_LOCAL_CANDIDATE_MANIFEST=<manifest.json>`.
+Candidate presence is not release or deployment qualification.
+
+Programmatic `local({ candidatePath })` and `fork(chain, { block, candidatePath })` take the
+descriptor path explicitly. The library never reads an environment variable. The development
+CLI and test entry points read `SAUCE_LOCAL_CANDIDATE` and pass that option.
+
 ```sh
 pnpm --filter './dev-tools' start:fork <rpc-url>   # fork the chain that RPC serves
 pnpm --filter './dev-tools' start:local            # an empty chain, as Base (--chain-id <id>)
@@ -60,6 +77,7 @@ a program with the package's command, anvil's first key signing:
 
 ```sh
 sauce run <file.sauce.ts> --chain <chain id> --rpc-url http://127.0.0.1:8545 \
+  --pot-binding "$SAUCE_LOCAL_CANDIDATE" \
   --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 

@@ -1,7 +1,7 @@
 /**
  * sauce_pot on Arc, whose native coin is USDC and also the ERC-20 `USDC`: one balance, read twice.
- * Against a JSON-RPC endpoint that answers as Arc, the Kitchen's fee and the Pot's native balance
- * are named in USDC, and a note says the two USDC balances are one, so an agent does not add them.
+ * Against a read-only JSON-RPC fixture that answers as Arc, the Kitchen's fee and the predicted
+ * Pot's native balance are named in USDC. This prediction never proves deployed execution identity.
  */
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -26,6 +26,7 @@ describe("sauce_pot on Arc", () => {
   let url: string;
   let mcp: Connected;
 
+  let sends = 0;
   before(async () => {
     server = createServer((request, response) => {
       let body = "";
@@ -38,12 +39,13 @@ describe("sauce_pot on Arc", () => {
           params?: Array<{ data?: string }>;
         }>;
         const answers = calls.map((call) => {
+          if (call.method === "eth_sendRawTransaction") sends++;
           const data = call.params?.[0]?.data;
           const to = (call.params?.[0] as { to?: string } | undefined)?.to?.toLowerCase();
           const result = {
             eth_chainId: "0x13b2",
             eth_blockNumber: "0x1",
-            // Every address has code but the Pot, not deployed yet: the released contracts.
+            // Fixture reads are not trusted code provenance; the predicted Pot is not deployed.
             eth_getCode:
               String(call.params?.[0]).toLowerCase() === POT.toLowerCase() ? "0x" : "0x00",
             // 2 USDC, as the native coin: 18 decimals.
@@ -78,6 +80,14 @@ describe("sauce_pot on Arc", () => {
 
   it("names the Kitchen's fee and the Pot's native balance in USDC, and says they are one", async () => {
     const out = ok(await mcp.call("sauce_pot", { chain: "arc", owner: OWNER, rpcUrl: url }));
+    assert.equal(out.pot, POT);
+    assert.equal(out.deployed, false);
+    assert.equal(
+      out.potBinding,
+      undefined,
+      "prediction must not fabricate authenticated provenance",
+    );
+    assert.equal(out.to, v12KitchenAddress());
     // Its unsigned deployment carries no fee fields: the signer is told Arc's floor.
     assert.ok(
       (out.notes as string[]).some((note) =>
@@ -111,5 +121,6 @@ describe("sauce_pot on Arc", () => {
       ),
       JSON.stringify(out.notes),
     );
+    assert.equal(sends, 0, "reading Arc balances never sends a transaction");
   });
 });

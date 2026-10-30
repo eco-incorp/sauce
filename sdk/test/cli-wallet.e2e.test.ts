@@ -1,7 +1,7 @@
 /**
  * A wallet the `sauce` command made, sending through the released gated stack on a local anvil
  * (`cli-anvil.ts`): `sauce wallet new`, funded from a dev account, then `sauce run --wallet`
- * deploying its Pot and cooking on it — the password read from the variable `--password-env`
+ * cooking on its explicitly deployed, authenticated Pot — the password read from the variable `--password-env`
  * names, here a throwaway one the test hands the command's `readEnv`. The wallet's file signs as a
  * plain `--keystore` too. Then its policy: a cook that sends more than a limit is refused naming
  * it, with nothing sent; the day's total is counted from the ledger across runs; a chain the policy
@@ -22,8 +22,9 @@ import {
   type Hex,
 } from "viem";
 
-import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
+import { DEFAULT_POT_SALT } from "../src/deployments/pot.js";
 import {
+  deployPot,
   describeEvm,
   erc20,
   fixture,
@@ -75,16 +76,15 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
 
-  it("creates a wallet, and with no policy deploys its Pot and cooks, saying no limits are set", async () => {
+  it("creates a wallet, explicitly deploys its Pot, then cooks with no policy limits", async () => {
     const created = await sauce("wallet", "new", "agent", ...PASSWORD, "--json");
     expect(created.code).toBe(0);
     wallet = getAddress((JSON.parse(created.stdout) as { address: string }).address);
-    pot = v12PredictPot(wallet, DEFAULT_POT_SALT) as Address;
     await base.send(base.deployer, wallet, "0x", parseEther("1"));
+    pot = await deployPot(base, wallet, DEFAULT_POT_SALT);
     await base.mint(usdc, pot, 10_000_000n);
 
     const sent = await run(1_000_000n, "--auto-approve");
-    expect(sent.stderr).toContain("auto-approved: deploy Pot");
     expect(sent.code).toBe(0);
     expect(sent.stderr).toMatch(/note: wallet agent has no policy, so no limits are set/);
     const out = JSON.parse(sent.stdout) as { from: string; pot: string; cook: { hash: Hex } };
@@ -360,11 +360,11 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
     });
   }, 120_000);
 
-  it("deploys its own Pot under a policy whose `to` allows that Pot, and refuses it otherwise", async () => {
+  it("cooks on its deployed Pot only when the policy's `to` allows that Pot", async () => {
     const created = await sauce("wallet", "new", "builder", ...PASSWORD, "--json");
     expect(created.code).toBe(0);
     const builder = getAddress((JSON.parse(created.stdout) as { address: string }).address);
-    const builderPot = getAddress(v12PredictPot(builder, DEFAULT_POT_SALT) as Address);
+    const builderPot = await deployPot(base, builder, DEFAULT_POT_SALT);
     await base.send(base.deployer, builder, "0x", parseEther("1"));
     await base.mint(usdc, builderPot, 1_000_000n);
     const policy = join(wallets, "builder.policy.json");
@@ -374,25 +374,22 @@ describeEvm("sauce run --wallet, through the released gated stack", () => {
         ...["--wallet", "builder", ...PASSWORD, "--yes", "--json"],
         ...["--args", RECIPIENT, "500000"],
       );
-    // `to` names another address: the deploy is refused before anything is sent, naming the Pot.
+    // A different allowed target must not authorize this deployed Pot's cook.
     writeFileSync(policy, JSON.stringify({ to: [RECIPIENT] }), { mode: 0o600 });
     const refused = await build();
     expect(refused.code).toBe(1);
-    expect(refused.stderr).toContain(
-      `this transaction deploys the wallet's Pot ${builderPot}, which is not one of them: add ` +
-        "it to to",
-    );
     expect(await base.publicClient.getTransactionCount({ address: builder })).toBe(0);
-    expect(await base.publicClient.getCode({ address: builderPot })).toBeUndefined();
-    // `to` names the Pot: deploying it is allowed, as cooking on it is, though the Kitchen is not.
+    expect(await base.balanceOf(usdc, builderPot)).toBe(1_000_000n);
+    // The owner's explicit policy change authorizes the cook, not another deployment.
     writeFileSync(policy, JSON.stringify({ to: [builderPot] }), { mode: 0o600 });
     const sent = await build();
     expect(sent.code).toBe(0);
     expect(JSON.parse(sent.stdout)).toMatchObject({
       pot: builderPot,
-      deployPot: { status: "success" },
       cook: { status: "success" },
     });
     expect(await potOwner(base, builderPot)).toBe(builder);
+    expect(await base.publicClient.getTransactionCount({ address: builder })).toBe(1);
+    expect(JSON.parse(sent.stdout).deployPot).toBeUndefined();
   }, 120_000);
 });

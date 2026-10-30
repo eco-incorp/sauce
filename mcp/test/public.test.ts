@@ -97,7 +97,7 @@ describe("a server with no endpoint of its own", () => {
     assert.equal(chains.find((chain) => chain.slug === "ethereum")?.endpoint, "none");
   });
 
-  it("refuses a codeless cook through the public endpoint, and identifies that endpoint", async () => {
+  it("refuses an unbound cook through the public endpoint, and identifies that endpoint", async () => {
     asked.length = 0;
     const refusal = failed(
       await mcp.call("sauce_simulate", {
@@ -109,7 +109,6 @@ describe("a server with no endpoint of its own", () => {
     );
     assert.match(refusal, NOTE);
     assert.ok(asked.length > 0 && asked.every((each) => each.url === PUBLIC));
-    assert.ok(asked.some((each) => each.method === "eth_getCode"));
     assert.ok(!asked.some((each) => each.method === "eth_simulateV1"));
   });
 

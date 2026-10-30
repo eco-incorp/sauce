@@ -9,12 +9,13 @@
  * `owner` and charges no fee.
  */
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   createWalletClient,
   encodeFunctionData,
   getAddress,
   http,
+  keccak256,
   type Abi,
   type Address,
   type Hex,
@@ -23,26 +24,37 @@ import {
 } from "viem";
 
 import { rpc } from "./node.js";
-import { ARTIFACTS, deployReleaseStack } from "./sdk.js";
+import {
+  ARTIFACTS,
+  deployReleaseStack,
+  sdkCompilerVersion,
+  type EvmPotBindingInput,
+} from "./sdk.js";
 
-function artifact<T>(name: string): T {
+function artifact<T>(name: string, directory = ARTIFACTS): T {
   try {
-    return JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), "utf8")) as T;
+    return JSON.parse(readFileSync(resolve(directory, `${name}.json`), "utf8")) as T;
   } catch {
     throw new Error(
-      `${name}.json is not in ${ARTIFACTS}: the package's engine artifacts are missing ` +
-        "(in the repository, run `pnpm build`)",
+      `${name}.json is not in ${directory}: the package's engine artifacts are missing ` +
+        "(ingest a LOCAL candidate, then set SAUCE_LOCAL_CANDIDATE to its V12LocalCandidate.json)",
     );
   }
 }
 
 type Deployments = Parameters<typeof deployReleaseStack>[2]["deployments"];
 
+type StackBinding = Omit<EvmPotBindingInput, "pot" | "owner" | "userSalt" | "kind" | "chainId">;
+interface Candidate extends StackBinding {
+  readonly source: "LOCAL";
+  readonly deployments: Deployments;
+}
+
 export interface Stack {
   readonly engine: Address;
   readonly router: Address;
   readonly kitchen: Address;
-  readonly potInitCodeHash: Hex;
+  readonly binding: StackBinding;
   readonly kitchenAbi: Abi;
   readonly potAbi: Abi;
   /** "live": the chain already ran the release; "deployed": it was deployed here. */
@@ -54,32 +66,43 @@ export async function setUpStack(
   client: PublicClient,
   test: TestClient,
   owner: Address,
-  options: { zeroFee?: boolean } = {},
+  options: { zeroFee?: boolean; candidatePath?: string } = {},
 ): Promise<Stack> {
-  const { evm } = artifact<{ evm: Deployments }>("V12Deployments");
-  const gate = artifact<{ kitchen: Address; potInitCodeHash: Hex }>("V12EngineGate");
-  const kitchenArtifact = artifact<{ abi: Abi; bytecode: Hex }>("V12Kitchen");
+  const candidatePath = options.candidatePath;
+  if (!candidatePath)
+    throw new Error("Pass candidatePath for an explicitly ingested LOCAL CREATE3 descriptor");
+  const directory = dirname(resolve(candidatePath));
+  const candidate = JSON.parse(readFileSync(resolve(candidatePath), "utf8")) as Candidate;
+  if (candidate.source !== "LOCAL" || candidate.profile?.scheme !== "create3") {
+    throw new Error("new local Pots require an explicitly ingested CREATE3 candidate profile");
+  }
+  if (candidate.compiler !== sdkCompilerVersion()) {
+    throw new Error("LOCAL candidate compiler does not match the SDK compiler artifact");
+  }
+  const evm = candidate.deployments;
+  const kitchenArtifact = artifact<{ abi: Abi; bytecode: Hex }>("V12Kitchen", directory);
   const kitchenAbi = kitchenArtifact.abi;
-  const potAbi = artifact<{ abi: Abi }>("V12Pot").abi;
-  const engine = getAddress(evm.contracts.engine.address);
-  const router = getAddress(evm.contracts.router.address);
-  const kitchen = getAddress(gate.kitchen);
+  const potAbi = artifact<{ abi: Abi }>("V12Pot", directory).abi;
+  const engine = getAddress(candidate.engine);
+  const router = getAddress(candidate.router);
+  const kitchen = getAddress(candidate.kitchen);
 
   const has = async (address: Address) => ((await client.getCode({ address })) ?? "0x") !== "0x";
   const read = (functionName: string) =>
     client.readContract({ abi: kitchenAbi, address: kitchen, functionName });
 
-  // The release is live when every contract has code and the Kitchen mints the Pots the engine
-  // accepts, on the Router a new Pot starts with.
+  // A candidate must match actual engine and Router code, not an introspection hash.
   let live = (await has(engine)) && (await has(router)) && (await has(kitchen));
   if (live) {
-    const [hash, kitchenRouter] = (await Promise.all([
-      read("potInitCodeHash"),
+    const [engineCode, routerCode, kitchenRouter] = await Promise.all([
+      client.getCode({ address: engine }),
+      client.getCode({ address: router }),
       read("router"),
-    ])) as [Hex, Address];
+    ]);
     live =
-      hash.toLowerCase() === gate.potInitCodeHash.toLowerCase() &&
-      getAddress(kitchenRouter) === router;
+      keccak256(engineCode!).toLowerCase() === candidate.engineCodeHash.toLowerCase() &&
+      keccak256(routerCode!).toLowerCase() === candidate.routerCodeHash.toLowerCase() &&
+      getAddress(kitchenRouter as Address) === router;
   }
 
   if (live) {
@@ -110,11 +133,11 @@ export async function setUpStack(
       owner,
       {
         deployments: evm,
-        runtimeCreationCode: artifact<{ runtimeCreationCode: Hex }>("V12RuntimeBytecode")
+        runtimeCreationCode: artifact<{ runtimeCreationCode: Hex }>("V12RuntimeBytecode", directory)
           .runtimeCreationCode,
-        routerBytecode: artifact<{ bytecode: Hex }>("Router").bytecode,
+        routerBytecode: artifact<{ bytecode: Hex }>("Router", directory).bytecode,
         kitchen: kitchenArtifact,
-        kitchenProxyBytecode: artifact<{ bytecode: Hex }>("V12KitchenProxy").bytecode,
+        kitchenProxyBytecode: artifact<{ bytecode: Hex }>("V12KitchenProxy", directory).bytecode,
       },
     );
     if (deployed.kitchen !== kitchen) {
@@ -122,22 +145,27 @@ export async function setUpStack(
         `the Kitchen landed at ${deployed.kitchen}, but the engine gates on ${kitchen}`,
       );
     }
-    // The check that makes a mismatched Kitchen fail here, naming the cause, rather than as an
-    // empty revert from the engine's gate on the first cook.
-    const hash = (await read("potInitCodeHash")) as Hex;
-    if (hash.toLowerCase() !== gate.potInitCodeHash.toLowerCase()) {
-      throw new Error(
-        `the deployed Kitchen reports potInitCodeHash ${hash}, but the engine gates on ` +
-          `${gate.potInitCodeHash}: every Pot it mints would be refused`,
-      );
-    }
+  }
+  const [engineCode, routerCode, kitchenRouter] = await Promise.all([
+    client.getCode({ address: engine }),
+    client.getCode({ address: router }),
+    read("router"),
+  ]);
+  if (
+    !engineCode ||
+    !routerCode ||
+    keccak256(engineCode).toLowerCase() !== candidate.engineCodeHash.toLowerCase() ||
+    keccak256(routerCode).toLowerCase() !== candidate.routerCodeHash.toLowerCase() ||
+    getAddress(kitchenRouter as Address) !== router
+  ) {
+    throw new Error("local stack engine, Router or Kitchen does not match the CREATE3 descriptor");
   }
 
   return {
     engine,
     router,
     kitchen,
-    potInitCodeHash: gate.potInitCodeHash,
+    binding: candidate,
     kitchenAbi,
     potAbi,
     origin: live ? "live" : "deployed",

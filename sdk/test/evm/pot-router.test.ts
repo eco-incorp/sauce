@@ -1,84 +1,82 @@
-/**
- * `potRouterUpdate` against a stub client — the decisions it makes from what it reads, with no
- * chain. `router.e2e.test.ts` runs it against a real Kitchen and Pot on anvil.
- */
-import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
-
-import { v12KitchenAddress } from "../../src/deployments/index.js";
-import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
-import { potRouterUpdate, v12PotAbi, type PotRouterClient } from "../../src/evm/engine.js";
+import { decodeFunctionData, getAddress, getCreate2Address, keccak256, type Address } from "viem";
+import { v12ReleaseSet } from "../../src/deployments/releases.js";
+import { DEFAULT_POT_SALT, v12PotGateSalt } from "../../src/deployments/pot.js";
+import {
+  potRouterUpdate,
+  v12PotAbi,
+  type PotRouterClient,
+  type EvmPotBindingInput,
+} from "../../src/evm/engine.js";
 
 const OWNER = "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082" as Address;
 const OLD_ROUTER = "0x1111111111111111111111111111111111111111" as Address;
 const NEW_ROUTER = "0x2222222222222222222222222222222222222222" as Address;
-
-/** A client answering the four Pot reads and the Kitchen's `router()` from a table. */
-const stub = (answers: {
-  pot: Address;
-  potRouter: Address;
-  kitchenRouter: Address;
-  owner?: Address;
-  salt?: Hex;
-}): PotRouterClient & { reads: string[] } => {
-  const reads: string[] = [];
-  const kitchen = getAddress(v12KitchenAddress());
-  const readContract = (async ({
-    address,
-    functionName,
-  }: {
-    address: Address;
-    functionName: string;
-  }) => {
-    reads.push(`${address}.${functionName}`);
-    if (getAddress(address) === kitchen && functionName === "router") return answers.kitchenRouter;
-    if (getAddress(address) !== getAddress(answers.pot)) throw new Error(`read of ${address}`);
-    return {
-      router: answers.potRouter,
-      kitchen,
-      owner: answers.owner ?? OWNER,
-      userSalt: answers.salt ?? DEFAULT_POT_SALT,
-    }[functionName];
-  }) as unknown as PotRouterClient["readContract"];
-
-  return { readContract, reads };
+const release = v12ReleaseSet("2.6.0");
+const kitchen = getAddress(release["kitchen-evm"].kitchen!);
+const gateSalt = v12PotGateSalt(OWNER, DEFAULT_POT_SALT, false);
+const POT = getCreate2Address({
+  from: kitchen,
+  salt: gateSalt,
+  bytecodeHash: release["kitchen-evm"].potInitCodeHash as `0x${string}`,
+});
+const code = "0x6000" as const;
+const binding: EvmPotBindingInput = {
+  pot: POT,
+  owner: OWNER,
+  kitchen,
+  userSalt: DEFAULT_POT_SALT,
+  kind: "private",
+  chainId: 1,
+  engine: getAddress(release["v12-evm"].engine!),
+  compiler: "2.6.0",
+  engineCodeHash: keccak256(code),
+  router: OLD_ROUTER,
+  routerCodeHash: keccak256(code),
+  release: { compiler: "2.6.0", "v12-evm": "1.3.0", "kitchen-evm": "1.3.0" },
+  wireProfile: "compiler-2.6.0",
+  storageProfile: "kitchen-evm-1.3.0",
 };
 
-const POT = v12PredictPot(OWNER) as Address;
+// These unit reads exercise policy only; actual released and candidate runtime tests live in e2e.
+const client = (router: Address, target: Address): PotRouterClient => ({
+  getChainId: async () => binding.chainId,
+  request: async () => {
+    throw new Error("Legacy policy fixtures must not run compatibility requests");
+  },
+  getCode: async () => code,
+  readContract: (async ({ address, functionName }: { address: Address; functionName: string }) => {
+    if (getAddress(address) === kitchen && functionName === "router") return target;
 
-describe("potRouterUpdate", () => {
-  it("returns nothing for a Pot already on its Kitchen's Router", async () => {
-    const client = stub({ pot: POT, potRouter: NEW_ROUTER, kitchenRouter: NEW_ROUTER });
-    expect(await potRouterUpdate(client, POT)).toBeUndefined();
+    return (
+      { owner: OWNER, kitchen, userSalt: DEFAULT_POT_SALT, gateSalt, router } as Record<
+        string,
+        string
+      >
+    )[functionName];
+  }) as PotRouterClient["readContract"],
+});
+
+describe("potRouterUpdate explicit service policy", () => {
+  it("requires an authenticated binding, never a getter-only default", async () => {
+    await expect(potRouterUpdate(client(OLD_ROUTER, NEW_ROUTER), POT)).rejects.toThrow(/explicit/);
   });
 
-  it("compares Routers regardless of address casing", async () => {
-    const client = stub({
-      pot: POT,
-      potRouter: NEW_ROUTER.toLowerCase() as Address,
-      kitchenRouter: getAddress(NEW_ROUTER),
-    });
-    expect(await potRouterUpdate(client, POT)).toBeUndefined();
+  it("retains old compiler provenance when proposing an owner-selected Router update", async () => {
+    const update = await potRouterUpdate(client(OLD_ROUTER, NEW_ROUTER), POT, binding);
+    expect(update?.to).toBe(POT);
+    expect(decodeFunctionData({ abi: v12PotAbi, data: update!.data }).args).toEqual([NEW_ROUTER]);
   });
 
-  it("returns the owner's setRouter call, naming the Kitchen's Router, for a Pot behind it", async () => {
-    const client = stub({ pot: POT, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
-    const update = await potRouterUpdate(client, POT);
-    expect(update?.to).toBe(getAddress(POT));
-    const call = decodeFunctionData({ abi: v12PotAbi, data: update!.data });
-    expect(call.functionName).toBe("setRouter");
-    expect(call.args).toEqual([NEW_ROUTER]);
-    // The Kitchen is the one the Pot names, and the Router is the one that Kitchen names.
-    expect(client.reads).toContain(`${getAddress(v12KitchenAddress())}.router`);
+  it("returns nothing when the explicitly pinned Router already matches", async () => {
+    expect(await potRouterUpdate(client(OLD_ROUTER, OLD_ROUTER), POT, binding)).toBeUndefined();
   });
 
-  it("refuses a Pot whose address does not derive under the pinned Pot init-code hash", async () => {
-    // What a Pot minted before the Router moved into Pot storage looks like from here: it answers
-    // the same reads (same Kitchen, owner and salt) but sits at an address another Pot bytecode
-    // derives, and has no setRouter to call.
-    const foreign = "0x00000000000000000000000000000000DeaDBeef" as Address;
-    const client = stub({ pot: foreign, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
-    await expect(potRouterUpdate(client, foreign)).rejects.toThrow(
-      /not a Pot of the pinned Kitchen release/,
-    );
+  it("rejects changed runtime before offering an owner signature", async () => {
+    await expect(
+      potRouterUpdate(client(OLD_ROUTER, NEW_ROUTER), POT, {
+        ...binding,
+        codeHash: DEFAULT_POT_SALT,
+      }),
+    ).rejects.toThrow(/code hash changed/);
   });
 });

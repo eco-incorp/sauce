@@ -196,19 +196,24 @@ The Sauce contracts have the same address on every EVM chain, and the Sauce prog
 every Solana cluster, so one file lists them, each entry with what it is:
 [references/deployments.json](references/deployments.json).
 
-| Key                         | What it is                                                                                |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| `evm.engine`                | the engine a cook names: the Pot's `cook(engine, program)`                                |
-| `evm.kitchen`               | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays                  |
-| `evm.kitchenImplementation` | the implementation behind the Kitchen, an upgradeable proxy: call the Kitchen, never this |
-| `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run                   |
-| `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router                        |
-| `evm.pot`                   | derivation from owner, salt and the Kitchen release's Pot init-code hash                  |
-| `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key`              |
+| Key                         | What it is                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `evm.engine`                | the engine a cook names: the Pot's `cook(engine, program)`                                   |
+| `evm.kitchen`               | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays                     |
+| `evm.kitchenImplementation` | the implementation behind the Kitchen, an upgradeable proxy: call the Kitchen, never this    |
+| `evm.router`                | the Router a new Pot starts on, through which swaps with a callback run                      |
+| `evm.quoteRouter`           | quotes Uniswap V3 and V4 swaps through `eth_call`; no Pot's Router                           |
+| `evm.pot`                   | CREATE3 prediction under Kitchen from owner, user salt and Pot kind; not code authentication |
+| `svm.engine`, `svm.kitchen` | the Solana engine and Kitchen programs, each as its id and its 32-byte `key`                 |
 
 A program names none of them: the `sauce` command puts the engine and the Kitchen into every cook it
 builds, and finds the Pot. Read the file to check a cook's `to` and `data`, to deploy a Pot by hand,
 or to confirm the deployment on a chain.
+
+For new EVM Pots, deploy explicitly, verify the qualified code/profile and engine/compiler/Router
+binding, persist it, then fund or sign. Existing deployed services retain their explicit historical
+bindings and ordinary new work. Missing saved code or a mismatched/unknown profile fails closed;
+never deploy a replacement, repin defaults or increment the salt automatically.
 
 ## One program for several chains
 

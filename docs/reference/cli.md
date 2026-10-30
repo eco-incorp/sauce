@@ -119,6 +119,7 @@ Options:
       --args-json <json|file>   main's arguments as a JSON array, inline or in a file
       --account NAME=<address>  Solana: an account main takes (an address, pot, owner, authority, pot:USDC, @to:USDC, mint:USDC, program:USDC), to size the cook
       --via <kitchen|engine>    Solana: size the Kitchen's cook (default) or the engine's direct one
+      --pots <dir>              The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>           Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>           Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                 Read no chain: no endpoint, not even a built-in one
@@ -127,6 +128,9 @@ Options:
   -h, --help                    Show this help
       --no-update-check         No notice of a newer sauce, and no registry read for one
       --args <value>…           main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -202,6 +206,7 @@ Options:
       --salt <label>                   Name one of the owner's Pots: salt = keccak256(label)
       --salt-hex <bytes32>             …or give its salt exactly
       --args-json <json|file>          main's arguments as a JSON array, inline or in a file
+      --pots <dir>                     The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>                  Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>                  Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                        Read no chain: no endpoint, not even a built-in one
@@ -220,6 +225,7 @@ Options:
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
       --value <wei>          Kitchen fee plus native spent (default: read the fee)
+      --pot-binding <file>   Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
       --block <number|tag>   Simulate on this block: a number, or latest, safe, finalized (default: latest)
       --fund <TOKEN:amount>  Pull tokens into the Pot in the cook: USDC:1.5 (whole tokens), ETH:0.01
       --fund-mode <mode>     permit2 (default), permit, allowance or transfer
@@ -252,8 +258,8 @@ output names the route it took.
 It runs where the release's engine and Kitchen are deployed on the chain, preview chain
 or not; where they are not, it stops with exit 1, naming the contract that is missing.
 
-A Pot that is not deployed yet is deployed in the simulation first, from --owner (and
---salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.
+A missing Pot is refused. Explicitly deploy, authenticate and persist its release binding
+with sauce pot --deploy before simulating ordinary work.
 An owner holding less than the cook's value is given it for the simulation.
 
 --assume-balance TOKEN:amount gives the Pot that balance for this simulation only, by state
@@ -329,6 +335,7 @@ Options:
       --salt <label>                Name one of the owner's Pots: salt = keccak256(label)
       --salt-hex <bytes32>          …or give its salt exactly
       --args-json <json|file>       main's arguments as a JSON array, inline or in a file
+      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                     Read no chain: no endpoint, not even a built-in one
@@ -339,7 +346,6 @@ Options:
       --password-command <command>  …or what this command prints (a secret manager's CLI)
   -y, --yes                         Approve, without asking, what it sends first (deploying your Pot, an approval)
       --auto-approve                The same as --yes, its older name
-      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --json                        Print one JSON object instead
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
@@ -348,6 +354,7 @@ Options:
 EVM chains only:
       --pot <address>        Or the Pot itself, by address
       --value <wei>          Kitchen fee plus native spent (default: read the fee)
+      --pot-binding <file>   Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
       --keystore <path>      Sign with a JSON keystore (v3), with a password source
       --private-key <hex>    Or sign with a raw key (lands in shell history)
       --fund <TOKEN:amount>  Pull tokens into the Pot in the cook: USDC:1.5 (whole tokens), ETH:0.01
@@ -371,11 +378,10 @@ sends it and waits for the receipt: prints the hash, status and gas used, and th
 reason when it reverts (exit 1). The signer is the owner. The value defaults to the
 Kitchen's execution fee, read from the chain.
 
-You need not deploy the Pot as a step of your own: a run deploys it when it first needs it.
+Deploy, verify and persist an EVM Pot explicitly before running its ordinary work.
 What the run sends before its cook, each in a transaction of its own, it asks you to
 approve at the terminal first; -y (--yes, or --auto-approve) approves every one without
 asking, and says `auto-approved: <action>` for each. They are:
-  deploying your Pot, when it has no code yet (asked as `[deploy/cancel]`, with its gas)
   approving Permit2 for a token --fund pulls, the first time (--fund-mode permit2)
   approving the Pot for the amount --fund pulls (--fund-mode allowance)
 On Solana a missing Pot is created in the cook's own transaction, with nothing asked, when
@@ -608,6 +614,7 @@ Options:
       --salt <label>           Name one of the owner's Pots: salt = keccak256(label)
       --salt-hex <bytes32>     …or give its salt exactly
       --args-json <json|file>  main's arguments as a JSON array, inline or in a file
+      --pots <dir>             The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>          Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>          Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                Read no chain: no endpoint, not even a built-in one
@@ -620,6 +627,7 @@ EVM chains only:
       --pot <address>        Or the Pot itself, by address
       --value <wei>          Kitchen fee plus native spent (default: read the fee)
       --fund <TOKEN:amount>  Transfer tokens from the owner into the Pot before the cook: USDC:1.5 (whole tokens); ETH:0.01 rides as its value
+      --pot-binding <file>   Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Solana only:
       --account NAME=<address>        An account main takes, by name: an address, pot, owner, authority (the account that signs the engine call: the Pot, or the owner with --via engine), system (the System Program), pot:USDC (the Pot's USDC account), @to:USDC (main's argument to's), mint:USDC, program:USDC (its token program), slot:@pool:USDC.vaultA (a pool's account) or pda:<program>:<seeds>. The accounts the token methods and venue namespaces add, and those a program writes where it uses them (Account.pda(…)), are derived without it. A slot derived from the Pot, the owner or the authority (their token accounts, and an address one of them seeds) takes only the account its derivation gives: any other is refused
@@ -635,17 +643,16 @@ Low-level (a program's inputs are main's parameters, given with --args):
 Compiles the file and prints the transaction that runs it, unsigned, as JSON:
 { chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. The value
 is --value, or else the Kitchen's fee, read from the chain, which also checks the Pot.
-When the chain shows the Pot has no code yet, it prints the plan instead: { chainId, pot,
-transactions }, Kitchen.deployPot first (marked deploysPot; any account may send it), then
-the cook, to send in that order. `--format cast` prints each as a `cast send` line. What
-must be true for it to land goes to stderr: the Pot funded, and sent from its owner.
+The Pot must already be deployed, verified and persisted. A missing Pot fails without
+deploying a replacement. Use sauce pot --deploy with an explicit release descriptor first.
+An RPC endpoint is required even with --value; offline EVM cook handoffs are refused.
 Each transaction is what a wallet's send tool takes (value and gas hex), and sendCalls
 is all of them as one batch, for a wallet that sends a batch.
 
 --fund TOKEN:amount (whole tokens, or base units ending in n) plans the owner's transfer
-of each token into the Pot after its deployment and before the cook; ETH:<amount> rides
-as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one
-approval, or nothing happens.
+of each token into the authenticated Pot before the cook; ETH:<amount> rides
+as the cook's value. Sent as one batch, a smart wallet funds and cooks with one
+approval, or nothing happens. Deployment is a separate verified step.
 
 On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },
 the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via
@@ -662,7 +669,7 @@ simulate runs wherever the release is deployed on the chain.
 
 Example:
   sauce tx pay.sauce.ts --chain base --owner 0x…
-  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline
+  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --rpc-url <url>
   sauce tx pay.sauce.ts --chain base --owner 0x… --fund USDC:100
 ```
 
@@ -698,6 +705,7 @@ Options:
       --password-command <command>  …or what this command prints (a secret manager's CLI)
       --keystore <path>             Or with a JSON keystore (v3), with a password source
       --private-key <hex>           Or with a raw key (lands in shell history)
+      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                     Read no chain: no endpoint, not even a built-in one
@@ -706,6 +714,9 @@ Options:
       --no-update-check             No notice of a newer sauce, and no registry read for one
       --args <value>…               main's arguments in order: an integer as digits, negative too (-5), JSON for an array or tuple; -- before a word like a flag
 
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
+
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
       --defines <file.json>  Compile-time values from a JSON object of NAME to value; --define wins
@@ -713,7 +724,7 @@ Low-level (a program's inputs are main's parameters, given with --args):
 Compiles the file with main's arguments, as tx does, and prints what the Pot's owner signs
 so that another account can submit the cook, with the Pot's own cookSigned: { chainId, pot,
 owner, engine, program, value, maxExecutionFee, nonce, deadline, submitter, typedData,
-digest, signature, cook, deployPot }. typedData is EIP-712 (eth_signTypedData_v4): Cook
+digest, signature, cook }. typedData is EIP-712 (eth_signTypedData_v4): Cook
 { engine, program, value, maxExecutionFee, nonce, deadline, submitter } under the Pot's
 domain, for this chain alone. program is the bytecode with the arguments appended, all of
 it signed. Numbers are decimal strings.
@@ -734,11 +745,10 @@ anyone). The Pot pays the Kitchen's fee itself, from its balance and the cook's 
 native coin in it. Whoever holds the signature may submit it until the deadline, once; a
 cook that reverts leaves its nonce unused, to be submitted again.
 
-With an endpoint it reads the Pot first. One with no code that --owner (or the signer) and
-the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any
-account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot
-and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the
-Pot's balance, and warns when they do not cover the fee. --offline reads nothing.
+Signing requires an endpoint and a deployed, authenticated Pot. New Pots must be deployed,
+verified and persisted before typed data or signatures are produced. Offline prediction
+and getter responses alone never authorize signing. Shared Pots cannot sign.
+It reads the Kitchen's fee and the Pot's balance, warning when they do not cover the fee.
 
 --cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce
 word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a
@@ -776,13 +786,16 @@ Options:
       --cursor <cursor | @file>  Solana: the plan's cursor sauce tx (or the last send) gave; prints its next step
       --signature <signature>    Solana: a transaction of the plan you broadcast another way, to confirm
       --close                    Solana, with --cursor: give up on the cook, and close the code buffer it staged
+      --pots <dir>               The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>            Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>            Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                  Read no chain: no endpoint, not even a built-in one
-      --pots <dir>               The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --json                     Print one JSON object instead
   -h, --help                     Show this help
       --no-update-check          No notice of a newer sauce, and no registry read for one
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Sends transactions you signed with any signer — a hardware wallet, a KMS, another wallet's
 tool — and never takes a key. Each operand is one SIGNED transaction: on an EVM chain the
@@ -857,12 +870,16 @@ Options:
       --password-file <path>        …or a file only you can read (else it is asked for)
       --password-command <command>  …or what this command prints (a secret manager's CLI)
   -y, --yes                         Approve, without asking, what it sends first (deploying your Pot, an approval)
+      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                     Read no chain: no endpoint, not even a built-in one
       --json                        Print one JSON object instead
   -h, --help                        Show this help
       --no-update-check             No notice of a newer sauce, and no registry read for one
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Solana only:
       --keypair <path>  Sign with a keypair file (a JSON array of 64 bytes)
@@ -917,6 +934,7 @@ Options:
       --salt <label>                Name one of the owner's Pots: salt = keccak256(label)
       --salt-hex <bytes32>          …or give its salt exactly
       --deploy                      Send the deployment (needs an endpoint and a signer)
+      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>               Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>               Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                     Read no chain: no endpoint, not even a built-in one
@@ -925,7 +943,6 @@ Options:
       --password-env <NAME>         The password is the environment variable NAME (only that one is read)
       --password-file <path>        …or a file only you can read (else it is asked for)
       --password-command <command>  …or what this command prints (a secret manager's CLI)
-      --pots <dir>                  The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
   -y, --yes                         Accepted, approving nothing: --deploy itself is the approval
       --auto-approve                Accepted, approving nothing: --deploy itself is the approval
       --format <json|cast>          json (default), or a `cast send` line with placeholders
@@ -933,17 +950,18 @@ Options:
       --no-update-check             No notice of a newer sauce, and no registry read for one
 
 EVM chains only:
-      --keystore <path>    Sign with a JSON keystore (v3), with a password source
-      --private-key <hex>  Or sign with a raw key (lands in shell history)
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
+      --keystore <path>     Sign with a JSON keystore (v3), with a password source
+      --private-key <hex>   Or sign with a raw key (lands in shell history)
 
 Solana only:
       --keypair <path>  Sign with a keypair file (a JSON array of 64 bytes)
 
-A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known
-before it exists. You need not deploy it yourself: sauce run deploys it when it first
-needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by
-hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with
---deploy, sends it unless the Pot is already there, and waits until the endpoint shows its
+A new Pot's address is CREATE3 from the released Kitchen over (owner, salt). Prediction
+does not authenticate code. Explicitly deploy with --deploy and an authenticated
+--pot-binding descriptor, verify and persist its binding, then fund, sign or cook.
+Missing recorded Pots fail without automatic deployment or replacement.
+--deploy sends it unless the authenticated Pot is already there, and waits for verified
 code. The owner defaults to the signer. Deploying is permissionless: with --owner, the
 signer sends and pays for another owner's Pot, which is that owner's alone. The default
 salt is zero: the one Pot an owner has by default. With a signer and no --owner, it is the
@@ -1022,16 +1040,17 @@ Options:
       --owner <address>     Or its owner, with the salt (default 0): every release's Pot of theirs there
       --salt <label>        Name one of the owner's Pots: salt = keccak256(label)
       --salt-hex <bytes32>  …or give its salt exactly
+      --pots <dir>          The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>       Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>       Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline             Read no chain: no endpoint, not even a built-in one
-      --pots <dir>          The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --json                Print one JSON object instead
   -h, --help                Show this help
       --no-update-check     No notice of a newer sauce, and no registry read for one
 
 EVM chains only:
-      --pot <address>  The Pot, by address
+      --pot <address>       The Pot, by address
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Records in the Pot store (--pots, default ~/.sauce/pots) a Pot this machine did not
 deploy: one deployed from another machine, through another wallet, or before the store
@@ -1098,12 +1117,16 @@ Options:
       --chain <slug|id>         The chain the pool is on
       --sqrt-price-x96 <value>  Read a pool's sqrtPriceX96 as a price instead
       --pool <address>          Read the price from this V3-style pool of the pair now (needs an endpoint)
+      --pots <dir>              The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>           Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>           Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline                 Read no chain: no endpoint, not even a built-in one
       --json                    Print one JSON object instead
   -h, --help                    Show this help
       --no-update-check         No notice of a newer sauce, and no registry read for one
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 `2700 USDC per WETH` says it in words: 2,700 USDC for one WETH. The same price is
 `WETH USDC 2700`: <base> <quote> <price>, the price how many <quote> tokens one <base> is
@@ -1147,6 +1170,7 @@ Usage: sauce pools --chain <slug|id> <token> <token> [--v4-key <fee:spacing>]…
 
 Options:
       --chain <slug|id>  The chain the pools are on
+      --pots <dir>       The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>    Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>    Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline          Read no chain: no endpoint, not even a built-in one
@@ -1157,6 +1181,7 @@ Options:
 EVM chains only:
       --v4-key <fee:spacing>  Also try this hookless Uniswap V4 pool key (3000:60)
       --block <number|tag>    Read the pools at this block: a number, or latest, safe, finalized (default: latest)
+      --pot-binding <file>    Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Solana only:
       --pay <token>      Choose the pools a distributed swap paying this token takes, and print their slots' accounts
@@ -1220,12 +1245,16 @@ Options:
       --target <evm|svm>  Checked against the chain; svm alone means solana
       --source-dir <dir>  Resolve the program's relative imports here (default: beside it; from stdin, .)
       --source <file>     The program a cook was compiled from: decode its arguments
+      --pots <dir>        The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>     Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>     Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline           Read no chain: no endpoint, not even a built-in one
       --json              Print one JSON object instead
   -h, --help              Show this help
       --no-update-check   No notice of a newer sauce, and no registry read for one
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Low-level (a program's inputs are main's parameters, given with --args):
       --define NAME=VALUE    A compile-time value for a name the program leaves undeclared: integer, 0x hex, true, false; base58 on Solana
@@ -1257,12 +1286,16 @@ Options:
       --chain <slug|id>   The chain a transaction hash is on
       --min-out <amount>  Solana: the floor the settle must enforce on its first escrow
       --spl-count <n>     Solana: how many escrows the settle sweeps with its first token program
+      --pots <dir>        The Pot store, where the Pots you deploy are recorded (default: ~/.sauce/pots)
       --rpc-url <url>     Your own RPC endpoint for the chain (default: a built-in public one)
       --config <file>     Or a file of your own: { "rpcUrls": { "<chain id>": "<url>" } }
       --offline           Read no chain: no endpoint, not even a built-in one
       --json              Print one JSON object instead
   -h, --help              Show this help
       --no-update-check   No notice of a newer sauce, and no registry read for one
+
+EVM chains only:
+      --pot-binding <file>  Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins
 
 Takes a settle payload, Pot.cook calldata, or — with an --chain — a transaction hash, and
 checks the settle it carries with the SDK's validateSettleProgram: the program must hash

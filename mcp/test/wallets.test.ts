@@ -1,10 +1,8 @@
 /**
- * The wallet tools in process, with no endpoint: registered only on a server given wallets (which
- * `sauce mcp` over stdio is, unless `--no-wallets`), listing with no password, refusing to create,
- * import or send until the wallets are enabled — by the server's start, or by the source an agent
- * names to `sauce_wallet_enable`, each of which is read here — never taking or returning a key or
- * a password, and refusing what `sauce_wallet_send` cannot send before it reaches any chain.
- * Sending on a chain is `wallets.e2e.test.ts`. Every password and key here is thrown away.
+ * Wallet tools in process: offline wallet management and policy refusals, plus gated real-Anvil
+ * signing with an explicitly deployed, authenticated Pot. Tools never take or return a key or
+ * password. Sending on a chain is covered by `wallets.e2e.test.ts`.
+ * Every password and key here is thrown away.
  */
 import assert from "node:assert/strict";
 import {
@@ -26,7 +24,9 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { decryptKeystoreBytes, encryptKeystore } from "../../sdk/dist/cli/signer.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { signedCookTypedData } from "../../sdk/dist/evm/engine.js";
+import { signedCookTypedData, type EvmPotBinding } from "../../sdk/dist/evm/engine.js";
+import { RUNTIME_HEX_PATH, startChain, type LocalChain } from "../../sdk/test/cli-anvil.js";
+import { deployedPotBinding, endpointsFor } from "./harness.js";
 import { encodeCursor } from "../../sdk/dist/cli/svm-plan.js";
 import { WalletStore } from "../../sdk/dist/cli/wallets.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
@@ -365,48 +365,15 @@ describe("sauce_sign, a cook signed by a wallet of this server's", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("signs as the Pot's owner, and holds the signature to the wallet's policy", async () => {
+  it("refuses offline signing even without policy limits, and keeps policy refusals", async () => {
     const address = getAddress(
       ok(await mcp.call("sauce_wallet_create", { name: "owner" })).address as string,
     );
     const pot = getAddress(v12PredictPot(address));
-    const signed = ok(await mcp.call("sauce_sign", call)) as {
-      pot: Address;
-      owner: Address;
-      engine: Address;
-      program: Hex;
-      signature: Hex;
-      cook: { to: Address; data: Hex; value: string };
-      notes: string[];
-    };
-    assert.deepEqual([signed.pot, signed.owner, signed.cook.to], [pot, address, pot]);
-    const execution = {
-      chainId: 8453,
-      pot,
-      engine: signed.engine,
-      program: signed.program,
-      maxExecutionFee: 1n,
-      nonce: 9n,
-      deadline: 2_000_000_000n,
-    };
-    assert.equal(
-      await recoverTypedDataAddress({
-        ...signedCookTypedData(execution),
-        signature: signed.signature,
-      }),
-      address,
+    assert.match(
+      failed(await mcp.call("sauce_sign", call)),
+      /Signing requires an RPC endpoint and an authenticated deployed Pot/,
     );
-    for (const said of [
-      /wallet owner has no policy/,
-      /sauce_wallet_send \{ wallet, transaction: <this result> \}/,
-      /hot wallet/,
-    ]) {
-      assert.ok(
-        signed.notes.some((note) => said.test(note)),
-        `${said}: ${JSON.stringify(signed.notes)}`,
-      );
-    }
-    // Another wallet of this server's can submit it whole.
     assert.ok(mcp.received.every((text) => !text.includes(password)));
 
     // A policy that limits what leaves the wallet or its Pot cannot bound a signed cook: refused.
@@ -416,15 +383,107 @@ describe("sauce_sign, a cook signed by a wallet of this server's", () => {
       failed(await mcp.call("sauce_sign", call)),
       /refused by the policy of wallet owner .*tokens\.USDC is limited, and a signed cook runs when its submitter sends it/,
     );
-    // One that names only its chains and the Pot signs.
+    // An allowlisted chain and Pot do not turn an offline prediction into signing authority.
     writeFileSync(policy, JSON.stringify({ chains: ["base"], to: [pot.toLowerCase()] }));
-    assert.match(String(ok(await mcp.call("sauce_sign", call)).signature), /^0x[0-9a-f]{130}$/);
+    assert.match(
+      failed(await mcp.call("sauce_sign", call)),
+      /Signing requires an RPC endpoint and an authenticated deployed Pot/,
+    );
     writeFileSync(policy, JSON.stringify({ to: [OWNER.toLowerCase()] }));
     assert.match(
       failed(await mcp.call("sauce_sign", call)),
       new RegExp(`to allows 1 address\\(es\\), and this cook runs on Pot ${pot}`),
     );
     rmSync(policy);
+  });
+
+  describe("an authenticated deployed Pot", { skip: RUNTIME_HEX_PATH === undefined }, () => {
+    let base: LocalChain;
+    let live: Connected;
+    let binding: EvmPotBinding;
+    let address: Address;
+    before(async () => {
+      base = await startChain("base");
+      live = await connect(
+        endpointsFor({ [String(base.chain.id)]: base.rpcUrl }),
+        undefined,
+        walletsAt(join(dir, "wallets"), { start: password }),
+      );
+      address = getAddress(
+        ok(await live.call("sauce_wallet_create", { name: "deployed-owner" })).address as string,
+      );
+      binding = await deployedPotBinding(base, address);
+    });
+    after(async () => {
+      await live?.close();
+      await base?.stop();
+    });
+
+    it("signs only with real provenance and returns the owner's verifiable signature", async () => {
+      const signed = ok(
+        await live.call("sauce_sign", {
+          ...call,
+          wallet: "deployed-owner",
+          potBinding: binding,
+        }),
+      ) as {
+        pot: Address;
+        owner: Address;
+        engine: Address;
+        program: Hex;
+        signature: Hex;
+        cook: { to: Address };
+        potBinding: EvmPotBinding;
+        notes: string[];
+      };
+      assert.deepEqual(
+        [signed.pot, signed.owner, signed.cook.to],
+        [binding.pot, address, binding.pot],
+      );
+      assert.deepEqual(signed.potBinding, binding);
+      assert.equal(
+        await recoverTypedDataAddress({
+          ...signedCookTypedData({
+            chainId: base.chain.id,
+            pot: binding.pot,
+            engine: signed.engine,
+            program: signed.program,
+            maxExecutionFee: 1n,
+            nonce: 9n,
+            deadline: 2_000_000_000n,
+          }),
+          signature: signed.signature,
+        }),
+        address,
+      );
+      for (const said of [
+        /wallet deployed-owner has no policy/,
+        /sauce_wallet_send/,
+        /hot wallet/,
+      ]) {
+        assert.ok(
+          signed.notes.some((note) => said.test(note)),
+          JSON.stringify(signed.notes),
+        );
+      }
+      const policy = join(dir, "wallets", "deployed-owner.policy.json");
+      writeFileSync(policy, JSON.stringify({ chains: ["base"], to: [binding.pot.toLowerCase()] }), {
+        mode: 0o600,
+      });
+      assert.match(
+        String(
+          ok(
+            await live.call("sauce_sign", {
+              ...call,
+              wallet: "deployed-owner",
+              potBinding: binding,
+            }),
+          ).signature,
+        ),
+        /^0x[0-9a-f]{130}$/,
+      );
+      assert.ok(live.received.every((text) => !text.includes(password)));
+    });
   });
 
   it("refuses a Solana wallet, another owner's Pot, and a preview chain before unlocking", async () => {

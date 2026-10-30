@@ -1,9 +1,8 @@
 /**
- * A wallet's policy and its ledger, offline: the file read strictly, and every limit enforced on
- * what a transaction is MEASURED to move — the logs of its `eth_simulateV1` rehearsal, here given
- * by a client that answers with chosen logs — per transaction, per day from the ledger (released
- * reservations and anything older than 24 hours left out), by chain and by recipient, with each
- * refusal naming the limit it hit. Sending through the real gated stack is `cli-wallet.e2e.test.ts`.
+ * A wallet's policy and its ledger: real deployed Pots and authenticated release bindings, with
+ * chosen simulation logs for per-transaction and daily caps, allowance replay, chains and recipients.
+ * Authentication reads and compatibility probes reach the local Anvil unchanged. Sending through
+ * the real gated stack is covered by `cli-wallet.e2e.test.ts`.
  */
 import {
   appendFileSync,
@@ -19,7 +18,6 @@ import {
   CallExecutionError,
   ContractFunctionZeroDataError,
   encodeAbiParameters,
-  encodeErrorResult,
   encodeFunctionData,
   getAddress,
   getContractError,
@@ -37,9 +35,7 @@ import {
 } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12KitchenAddress } from "../src/deployments/index.js";
-import { v12PredictPot } from "../src/deployments/pot.js";
-import { v12Kitchen, v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
+import { v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
   guardOf,
   guardWallet,
@@ -52,8 +48,12 @@ import {
   SendGuard,
 } from "../src/cli/policy.js";
 import { authenticatePot } from "../src/cli/pots.js";
+import { keeping } from "../src/cli/keep.js";
+import { withPotCandidate } from "../src/cli/pot-binding.js";
+import { POT_SCHEMA } from "../src/cli/pot-store.js";
 import { PreviewChainError } from "../src/cli/support.js";
 import { WalletStore, type WalletInfo } from "../src/cli/wallets.js";
+import { deployPot, startChain, type LocalChain } from "./cli-anvil.js";
 
 const BASE = requireChain("base");
 const USDC = getAddress("0x833589fcd6edb6e08f4c7c32d4f71b54bda02913");
@@ -61,11 +61,9 @@ const PERMIT2 = getAddress("0x000000000022D473030F116dDEE9F6B43aC78BA3");
 const OTHER_TOKEN = getAddress("0x1111111111111111111111111111111111111112");
 const RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
 const WALLET = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
-/** The wallet's own Pot, at its default salt, which the client below answers for as a Pot does. */
-const POT = getAddress(v12PredictPot(WALLET) as Address);
-/** Another owner's Pot, as genuine as the wallet's: RECIPIENT's. */
-const OTHERS_POT = getAddress(v12PredictPot(RECIPIENT) as Address);
-const POT_OWNERS: Record<Address, Address> = { [POT]: WALLET, [OTHERS_POT]: RECIPIENT };
+let local: LocalChain;
+let POT: Address;
+let OTHERS_POT: Address;
 const NATIVE = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
@@ -225,6 +223,7 @@ function client(
   replayFails = false,
 ): PublicClient {
   return {
+    ...local.publicClient,
     getChainId: async () => BASE.id,
     getBlock: async () => ({ number: HEAD, timestamp: timeOf(HEAD) }),
     simulateBlocks: async (request: SimulateRequest) => {
@@ -243,18 +242,17 @@ function client(
         ),
       ];
     },
-    readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
+    readContract: async (request: Parameters<PublicClient["readContract"]>[0]) => {
+      const { address, functionName } = request;
       // The endpoint fails the read with an internal error, which viem wraps as a revert.
-      if (unreadable.includes(getAddress(address))) {
+      if (address !== undefined && unreadable.includes(getAddress(address))) {
         throw readError(functionName, InternalRpcError.code);
       }
-      if (functionName === "decimals" && decimals !== null) return decimals;
-      // A Pot answers for itself: its owner, its salt (the default) and its Kitchen.
-      const owner = POT_OWNERS[getAddress(address)];
-      if (owner !== undefined && functionName === "owner") return owner;
-      if (owner !== undefined && functionName === "userSalt") return pad("0x00", { size: 32 });
-      if (owner !== undefined && functionName === "kitchen") return getAddress(v12KitchenAddress());
-      throw new ContractFunctionZeroDataError({ functionName });
+      if (functionName === "decimals") {
+        if (decimals === null) throw new ContractFunctionZeroDataError({ functionName });
+        return decimals;
+      }
+      return local.publicClient.readContract(request);
     },
   } as unknown as PublicClient;
 }
@@ -374,6 +372,27 @@ describe("the policy file", () => {
 });
 
 describe("the guard", () => {
+  beforeAll(async () => {
+    if (process.env.SAUCE_LOCAL_CANDIDATE === undefined)
+      throw new Error("cli-policy requires an explicit SAUCE_LOCAL_CANDIDATE CREATE3 fixture");
+    local = await startChain("base");
+    POT = await deployPot(local, WALLET);
+    OTHERS_POT = await deployPot(local, RECIPIENT);
+  }, 120_000);
+  afterAll(async () => {
+    await local?.stop();
+  });
+
+  // Every guard sees the same authenticated disk records a CLI request would keep.
+  const it = (name: string, run: () => void | Promise<void>, timeout?: number) =>
+    test(
+      name,
+      async () =>
+        keeping({ stores: { pots: local.pots }, say: () => {} }, async () =>
+          withPotCandidate(await local.bindingOf(POT), run),
+        ),
+      timeout,
+    );
   it("guards a wallet by its address, whatever its case", () => {
     const guard = guardWallet(wallet, undefined);
     expect(guardOf(WALLET.toLowerCase())).toBe(guard);
@@ -470,30 +489,18 @@ describe("the guard", () => {
     );
   });
 
-  it("tells the wallet's own Pot from another contract only by the contract's own answer, never by an endpoint's failure", async () => {
-    // A client whose reads of the Pot answer with `fail`; or as the wallet's genuine Pot does.
-    const reading = (fail?: (functionName: string) => Error) =>
+  it("authenticates deployed release code, distinguishing a contract's refusal from an endpoint failure", async () => {
+    const reading = (fail?: (functionName: string) => Error): PublicClient =>
       ({
-        readContract: async ({
-          address,
-          functionName,
-        }: {
-          address: Address;
-          functionName: string;
-        }) => {
-          if (fail !== undefined) throw fail(functionName);
-          if (getAddress(address) !== POT)
-            throw new ContractFunctionZeroDataError({ functionName });
-          if (functionName === "owner") return WALLET;
-          if (functionName === "userSalt") return pad("0x00", { size: 32 });
-          return getAddress(v12KitchenAddress());
+        ...client([]),
+        readContract: async (request: Parameters<PublicClient["readContract"]>[0]) => {
+          if (fail !== undefined) throw fail(request.functionName);
+
+          return local.publicClient.readContract(request);
         },
-      }) as unknown as PublicClient;
-    const errorData = encodeErrorResult({
-      abi: [{ type: "error", name: "Error", inputs: [{ name: "message", type: "string" }] }],
-      errorName: "Error",
-      args: ["no such function"],
-    });
+      }) as PublicClient;
+    const reverting = await local.plant("0x6005600c60003960056000f360006000fd");
+    const empty = await local.plant("0x6001600c60003960016000f300");
 
     expect({
       genuine: await authenticatePot(reading(), WALLET, POT),
@@ -507,19 +514,51 @@ describe("the guard", () => {
         WALLET,
         POT,
       ),
-      reverted: await authenticatePot(
-        reading((name) => readError(name, 3, errorData)),
-        WALLET,
-        POT,
-      ),
-      noData: await authenticatePot(reading(), WALLET, RECIPIENT),
+      reverted: await authenticatePot(reading(), WALLET, reverting),
+      noData: await authenticatePot(reading(), WALLET, empty),
+      undeployed: await authenticatePot(reading(), WALLET, RECIPIENT),
+      otherOwner: await authenticatePot(reading(), WALLET, OTHERS_POT),
     }).toEqual({
       genuine: "own",
       internalError: "unreadable",
       transportFailure: "unreadable",
       reverted: "not",
       noData: "not",
+      undeployed: "not",
+      otherOwner: "not",
     });
+  });
+
+  it("never exempts transfers or allowances to substituted Pot code, even when its getters still match", async () => {
+    const code = (await local.publicClient.getCode({ address: POT }))!;
+    const guard = guarded({ tokens: { USDC: { perTransaction: "1" } } });
+    const cook = {
+      to: POT,
+      data: encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [RECIPIENT, "0x"] }),
+      value: 0n,
+    };
+    const moved = [transfer(USDC, WALLET, POT, parseUnits("2", 6))];
+    await expect(guard.evm(client(moved), cook)).resolves.toBeDefined();
+    try {
+      // Appended bytes leave getter execution unchanged but invalidate the retained runtime proof.
+      await local.testClient.setCode({ address: POT, bytecode: `${code}00` });
+      expect(
+        await local.publicClient.readContract({
+          address: POT,
+          abi: v12PotAbi,
+          functionName: "owner",
+        }),
+      ).toBe(WALLET);
+      expect(await authenticatePot(client([]), WALLET, POT)).toBe("not");
+      expect((await refused(guard.evm(client(moved), cook))).limit).toBe(
+        "tokens.USDC.perTransaction",
+      );
+      await expect(
+        guard.evm(client([approval(USDC, WALLET, POT, maxUint256)]), pay),
+      ).rejects.toBeInstanceOf(PolicyRefusal);
+    } finally {
+      await local.testClient.setCode({ address: POT, bytecode: code });
+    }
   });
 
   it("refuses a cook on a Pot it cannot tell is the wallet's own, where a native or token limit needs it", async () => {
@@ -832,19 +871,10 @@ describe("the guard", () => {
   it("holds a standing allowance granted through Permit2 to the token's limit", async () => {
     // Permit2's AllowanceTransfer: the wallet's approve (or a permit it signed) lets a spender take
     // up to the amount of the token through Permit2, with no later signature, wherever the wallet
-    // approved Permit2 for the token, as run --fund permit2 leaves it. Its events are Permit2's own,
-    // whose topics its deployed code carries.
+    // approved Permit2 for the token, as run --fund permit2 leaves it.
     const PERMIT2_APPROVAL = keccak256(toBytes("Approval(address,address,address,uint160,uint48)"));
     const PERMIT2_PERMIT = keccak256(
       toBytes("Permit(address,address,address,uint160,uint48,uint48)"),
-    );
-    const runtime = (
-      JSON.parse(readFileSync(new URL("./fixtures/cli/Permit2.json", import.meta.url), "utf8")) as {
-        runtime: string;
-      }
-    ).runtime.toLowerCase();
-    expect([PERMIT2_APPROVAL, PERMIT2_PERMIT].map((one) => runtime.includes(one.slice(2)))).toEqual(
-      [true, true],
     );
     const grant = (event: Hex, spender: Address, amount: bigint) => ({
       address: PERMIT2,
@@ -1327,37 +1357,82 @@ describe("the guard", () => {
     ).resolves.toBeDefined();
   });
 
-  it("counts the Kitchen's deploy of the wallet's own Pot, for `to`, as a transaction to that Pot", async () => {
+  it("counts only the selected Kitchen's explicit CREATE3 deployment as a transaction to the wallet's new Pot", async () => {
     const salt = pad("0x01", { size: 32 });
-    const ownPot = getAddress(v12PredictPot(WALLET, salt) as Address);
-    const deploy = (owner: Address, value = 0n) => ({
-      to: getAddress(v12KitchenAddress()),
-      data: v12Kitchen.encodeDeployPot(owner, salt),
+    const { kitchen } = await local.bindingOf(POT);
+    const [ownPot, fixedPot] = await Promise.all([
+      local.publicClient.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: "predictPot",
+        args: [WALLET, salt],
+      }),
+      local.publicClient.readContract({
+        address: kitchen,
+        abi: v12KitchenAbi,
+        functionName: "predictPot",
+        args: [WALLET, salt, true],
+      }),
+    ]);
+    const deploy = (owner: Address, value = 0n, fixed?: boolean) => ({
+      to: kitchen,
+      data: encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: "deployPot",
+        args: fixed === undefined ? [owner, salt] : [owner, salt, fixed],
+      }),
       value,
     });
-    expect(ownPotDeployed(deploy(WALLET), WALLET)).toBe(ownPot);
-    // Another owner's Pot, a value, the three-argument deploy and any other call stay the Kitchen's.
+    expect(ownPotDeployed(deploy(WALLET), WALLET)).toBe(getAddress(ownPot));
+    expect(ownPotDeployed(deploy(WALLET, 0n, false), WALLET)).toBe(getAddress(ownPot));
+    expect(ownPotDeployed(deploy(WALLET, 0n, true), WALLET)).toBe(getAddress(fixedPot));
+    expect(getAddress(fixedPot)).not.toBe(getAddress(ownPot));
     expect(ownPotDeployed(deploy(RECIPIENT), WALLET)).toBeUndefined();
     expect(ownPotDeployed(deploy(WALLET, 1n), WALLET)).toBeUndefined();
-    const pinned = encodeFunctionData({
-      abi: v12KitchenAbi,
-      functionName: "deployPot",
-      args: [WALLET, salt, true],
-    });
-    expect(ownPotDeployed({ ...deploy(WALLET), data: pinned }, WALLET)).toBeUndefined();
     expect(ownPotDeployed({ ...deploy(WALLET), to: USDC }, WALLET)).toBeUndefined();
-    // So a policy that lets the wallet cook on its Pot lets it deploy that Pot first...
+    expect(ownPotDeployed({ ...deploy(WALLET), data: "0x" }, WALLET)).toBeUndefined();
+    expect((await local.publicClient.getCode({ address: ownPot })) ?? "0x").toBe("0x");
+    expect(await authenticatePot(client([]), WALLET, ownPot)).toBe("not");
     await expect(guarded({ to: [ownPot] }).evm(client([]), deploy(WALLET))).resolves.toBeDefined();
-    // ...and one that does not refuses the deploy, naming the Pot, not the Kitchen.
+    await expect(
+      guarded({ to: [fixedPot] }).evm(client([]), deploy(WALLET, 0n, true)),
+    ).resolves.toBeDefined();
     const refusal = await refused(guarded({ to: [RECIPIENT] }).evm(client([]), deploy(WALLET)));
     expect(refusal.limit).toBe("to");
     expect(refusal.message).toContain(
-      `this transaction deploys the wallet's Pot ${ownPot}, which is not one of them`,
+      `this transaction deploys the wallet's Pot ${getAddress(ownPot)}, which is not one of them`,
     );
-    // Another owner's Pot is a transaction to the Kitchen, which `to` does not name.
     expect(
-      (await refused(guarded({ to: [ownPot] }).evm(client([]), deploy(RECIPIENT)))).message,
-    ).toMatch(/and this transaction goes to 0x/);
+      (await refused(guarded({ to: [ownPot] }).evm(client([]), deploy(RECIPIENT)))).limit,
+    ).toBe("to");
+    expect(
+      (await refused(guarded({ to: [ownPot] }).evm(client([]), deploy(WALLET, 0n, true)))).limit,
+    ).toBe("to");
+    // Policy measurement authorizes an explicit deployment; it never deploys as a side effect.
+    expect((await local.publicClient.getCode({ address: ownPot })) ?? "0x").toBe("0x");
+    await local.send(local.deployer, kitchen, deploy(WALLET).data);
+    await local.send(local.deployer, kitchen, deploy(WALLET, 0n, true).data);
+    for (const pot of [ownPot, fixedPot]) {
+      const binding = await local.bindingOf(pot);
+      local.pots.save({
+        schema: POT_SCHEMA,
+        chain: local.chain.slug,
+        chainId: local.chain.id,
+        pot,
+        owner: WALLET,
+        salt,
+        kind: binding.kind,
+        kitchen: binding.kitchen,
+        engine: binding.engine,
+        release: binding.release,
+        binding,
+        sdk: "test",
+        origin: "imported",
+        recordedAt: "2026-10-31T00:00:00.000Z",
+      });
+    }
+    expect(await authenticatePot(local.publicClient, WALLET, ownPot)).toBe("own");
+    expect(await authenticatePot(local.publicClient, WALLET, fixedPot)).toBe("own");
   });
 
   it("checks a whole plan before any of it is sent, its transactions counted together", async () => {

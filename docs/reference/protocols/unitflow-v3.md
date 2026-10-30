@@ -23,7 +23,7 @@ Concentrated-liquidity AMM on Arc, forked from Uniswap V3 with native USDC in pl
 
 - Pools call back `unitFlowV3SwapCallback`, not `uniswapV3SwapCallback`, so a contract that swaps against a pool directly must implement the renamed callback
 - The GitHub README lists testnet addresses; these mainnet addresses are the defaults in UnitFlow's own app build
-- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `unitFlowV3SwapCallback`. `potRouterUpdate(client, pot)` returns an owner-signed update when the Pot differs from its Kitchen's current Router. Compare addresses with `v12RouterAddress()`; Router releases are content-addressed, not generation-numbered.
+- From a Pot program, `@sauce/router`'s `uniswapV3` uses the paired execution Router's `swapV3` and `unitFlowV3SwapCallback`. `potRouterUpdate(client, pot, binding)` verifies an explicit binding before proposing an owner-selected Router update. Existing services retain their Router policy until explicit opt-in.
 - `uniswapV3` is exact input: the Router caps what the callback may take at `amountIn`
 
 ## Its names in a program

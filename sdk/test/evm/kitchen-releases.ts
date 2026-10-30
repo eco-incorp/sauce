@@ -65,6 +65,11 @@ export async function withKitchenImplementation<T>(
   body: () => Promise<T>,
 ): Promise<T> {
   const kitchen = getAddress(v12KitchenAddress());
+  const original = await local.publicClient.getStorageAt({
+    address: kitchen,
+    slot: IMPLEMENTATION_SLOT,
+  });
+  if (!original) throw new Error("Kitchen implementation storage is unavailable");
   await local.testClient.setStorageAt({
     address: kitchen,
     index: IMPLEMENTATION_SLOT,
@@ -76,7 +81,7 @@ export async function withKitchenImplementation<T>(
     await local.testClient.setStorageAt({
       address: kitchen,
       index: IMPLEMENTATION_SLOT,
-      value: pad(getAddress(v12KitchenImplementationAddress())),
+      value: original,
     });
   }
 }

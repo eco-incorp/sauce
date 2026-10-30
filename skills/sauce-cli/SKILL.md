@@ -1,6 +1,6 @@
 ---
 name: sauce-cli
-description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; the owner's Pot, deployed when first needed and recorded; funding it (--fund and its modes); simulating the cook with no key and reading what it prints; sauce run to sign and send, sauce tx for the user's wallet MCP server (Coinbase, Phantom) or any signer, sauce send for what it signed, sauce sign for a cook another account sends; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, sign with a wallet's MCP server or an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
+description: The sauce command line, and the same steps as tools of the Sauce MCP server. Getting the command; looking up a chain's names and pools; compiling a program file or a JSON actions document; explicitly deploying, verifying and recording the owner's Pot; funding it (--fund and its modes); simulating the cook with no key and reading what it prints; sauce run to sign and send, sauce tx for the user's wallet MCP server (Coinbase, Phantom) or any signer, sauce send for what it signed, sauce sign for a cook another account sends; arguments to main; sauce inspect; endpoints and signers; an agent's own wallets, password sources and policies; what a preview chain refuses. Use when asked to compile, simulate, run, test, send or deploy a Sauce program (*.sauce.ts), pass arguments to its main, get its bytecode or unsigned transaction, fund or create a Pot, check what a transaction did, sign with a wallet's MCP server or an agent's own wallet and its policy, map a command to its MCP tool, or when a command refuses a chain.
 ---
 
 # The sauce command
@@ -31,9 +31,9 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
   names (in `sauce mcp` over stdio, also the one `sauce_wallet_enable`'s `env` names), and reads a
   chain through a built-in public endpoint unless given one of its own (`--rpc-url`, `--config`);
   `--offline` reads none.
-- **The run, in order**: look up names → compile → simulate → (Pot, deployed when first needed) →
-  fund → run, or `sauce tx` for another signer → read it back. Every command takes the chain as
-  `--chain <slug or id>`.
+- **The EVM lifecycle**: select qualified artifacts → explicitly deploy → verify code, engine and
+  compiler provenance → persist the binding → simulate → fund/sign/run. Existing services retain
+  their saved bindings. Every command takes `--chain <slug or id>`.
 - **The signer is the Pot's owner.** `run` cooks on the signer's Pot; `tx` and `simulate` take
   `--owner <address>` instead.
 - **Units differ by flag.** `--args` and a program take **base units** (`1000000` is 1 USDC);
@@ -96,9 +96,9 @@ fetches and runs npm's unrelated `sauce` package.
 
 The safer signer is a wallet whose key stays with its provider, reached through that wallet's own
 MCP server: the key never reaches the agent or this machine, and the wallet applies its own
-approvals and limits. On Base and Ethereum that is Coinbase Wallet MCP, the user's own wallet, whose
-one batch deploys the Pot and cooks; on Solana, Phantom MCP, which signs on Base and Ethereum too.
-Build for the wallet's address (`--owner`), simulate, show the user, then hand the result over.
+approvals and limits. On Base and Ethereum that is Coinbase Wallet MCP; on Solana, Phantom MCP,
+which signs on Base and Ethereum too. Explicitly deploy and authenticate an EVM Pot first, then
+build for the wallet's address (`--owner`), simulate, show the user, and hand over the cook.
 Every command and tool that prints unsigned transactions writes what these servers take, beside
 its own fields, so nothing is converted:
 
@@ -120,12 +120,10 @@ its own fields, so nothing is converted:
   transaction runs as one atomic batch after one approval: the user approves in their wallet
   through the link it returns (open it for them where a shell can), and `get_request_status` with
   its request id says when it landed. The signer is a smart wallet: its address (`get_wallets`) is
-  the Pot's owner, so one batch deploys the Pot and cooks on it, and a cook that reverts leaves no
-  Pot behind. With `--fund USDC:100` (the tool's `fund`), the plan also moves the owner's tokens
-  into the Pot between the two (`ETH:<amount>` rides as the cook's value): deploying, funding and
-  cooking are one approval, all of it or none. Fund a Pot by a transfer only once it is deployed:
-  a Kitchen release with new Pot code derives another address, and tokens sent to the old one stay
-  where no Pot is deployed.
+  the Pot's owner. For EVM, deployment and binding verification happen separately before this
+  funding/cook batch. With `--fund USDC:100` (the tool's `fund`), the plan moves tokens into the
+  already authenticated Pot before the cook (`ETH:<amount>` rides as its value).
+  Prediction alone never authorizes a transfer, allowance or signature.
 - **Phantom MCP**: the agent gets a wallet of its own, held by Phantom; fund its address
   (`wallet_addresses`) first. On an EVM chain, `evm_send` with each transaction as its input, in
   order, each landed before the next (`sauce inspect <hash>`). On Solana,
@@ -197,8 +195,8 @@ strings in whole tokens (`"100"` is 100 USDC):
 on an EVM chain the contract the wallet calls, usually its Pot, and on Solana the programs its
 instructions call. It does not limit whom a program pays: a cook on an allowed Pot can pay any
 address, so a payee is held by the program itself (a recipient it fixes, a `require` on it).
-Deploying the wallet's own Pot counts as a transaction to that Pot, so a `to` naming the Pot lets a
-run deploy it first. `native` and each token count what leaves the wallet or the Pot a transaction
+The explicit Pot deployment is a separate authorized transaction. A later run does not deploy a
+missing Pot. `native` and each token count what leaves the wallet or the Pot a transaction
 cooks on, measured by simulating it on the chain's head with the gas and fees the wallet then signs
 it with, exactly; `perDay` is the last 24 hours on every chain. On Arc, whose
 native coin is also the `USDC` token (one balance), what leaves as either counts against `native`
@@ -259,7 +257,18 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    with `main`'s arguments given by `--args`); on Solana, `cook` says whether the cook fits one
    transaction. A failing compile points at the file's line and column, and its `hint:` lines name
    what to add (`sauce-script`).
-3. **Simulate**, before anything is deployed, funded or signed:
+3. **Prepare the EVM Pot, then simulate** before funding or signing a cook:
+
+   Explicitly select a qualified descriptor and ask the user before paying deployment gas:
+
+   ```sh
+   sauce pot --deploy --chain base --owner <address> --pot-binding <descriptor.json> \
+     --wallet <name> --password-env <NAME>
+   ```
+
+   The deployment command verifies and persists the actual binding. A Pot deployed elsewhere
+   needs an explicit provenance import. Continue only after that succeeds; Solana keeps its
+   separate instruction/account lifecycle (`sauce-solana`).
 
    ```sh
    sauce simulate buy.sauce.ts --chain base --owner <address> --assume-balance USDC:100 \
@@ -267,23 +276,21 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
      37000000000000000 <recipient>
    ```
 
-   It runs the cook from the owner with no key and nothing sent, and needs neither a deployed Pot
-   nor a funded one: a Pot not deployed yet is deployed in the same simulation first, as
-   `sauce run` deploys it. `--assume-balance TOKEN:amount` (repeatable; `ETH:<amount>` for the
+   It runs the cook from the owner with no key and nothing sent. The EVM Pot must already be
+   deployed and authenticated; a missing Pot is refused rather than inserted into the simulation.
+   `--assume-balance TOKEN:amount` (repeatable; `ETH:<amount>` for the
    native currency) gives the Pot that balance for the simulation only; a token that keeps no stored
    balance (rebasing, shares) is refused. On Arc, `USDC:<amount>` sets the Pot's native balance (the
    token is the native coin, which no token storage holds), and `ETH:<amount>` or
    `native:<amount>` is native USDC there, not ether. A simulation that passes with an assumed
    balance shows the program works if the Pot holds it, not that the owner does: tell the user so.
-   On a local chain with Uniswap V3's own pools at 2,650 USDC per WETH, it printed, addresses
-   written as their roles:
+   A successful simulation reports the decoded result and assumed balances. Its output shape is:
 
    ```text
-   The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
+   The cook succeeds from <owner>: gas used <gas> for the cook, returns <encoded result>
    main returns { pool: Address, spent: Uint256, bought: Uint256 }: { pool: <pool>, spent: 100000000, bought: 37716248833222607 }
    Simulated with eth_simulateV1 on the state of block <block>; nothing was signed or sent:
-     1. Kitchen.deployPot(<owner>, …), gas used 535944: Pot <Pot> is not deployed on base yet, so the simulation deploys it first, …
-     2. the cook, from the owner <owner>, gas used 273670
+     1. the cook, from the owner <owner>, gas used <gas>
    Assumed for this simulation only, by state override:
      the Pot holds 100 USDC: --assume-balance (…)
    …
@@ -311,7 +318,7 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    A program that supplies the Pot's USDC to Aave V3 for `pot` keeps the aTokens there:
 
    ```text
-   The cook succeeds from <owner>: gas used 268566 for the cook, after the Pot's deploy (1. below), returns 0x
+   The cook succeeds from <owner>: gas used <gas> for the cook, returns 0x
    Left in the Pot, not in the owner's wallet:
      0.999999 aBasUSDC
      Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
@@ -350,30 +357,19 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    - **`--json`** gives the same for a program to read: `returned` is the record, `transfers` each
      transfer.
 
-4. **The Pot.** `sauce pot --chain base --owner <address>` (or `--wallet <name>` for the signer's)
-   prints the Pot's address, known before it exists, its deploy transaction, whether the chain has
-   the released engine and Kitchen (and the Kitchen's fee), and whether the Pot is deployed. A
-   command deploys your Pot when it first needs it (asks, or `--yes`), and `sauce tx` puts its
-   deployment first; deploy it by hand only to send it tokens yourself (step 5).
-   `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys it by hand.
-   `--salt <label>` names another Pot of the same owner
-   (`--salt-hex <bytes32>` for an exact salt); use the same salt in every later command.
-   Deploying the Pot is a transaction of its own, which costs gas once, on top of the cook's. How
-   much varies with the chain and its gas price, and the command estimates it: `run`'s question
-   says about how much gas and what it costs, the simulation's first step gives the deployment's
-   gas used, and `sauce tx` gives the deployment its `gas`.
+4. **Inspect the saved Pot.** `sauce pot --chain base --owner <address>` (or `--wallet <name>`)
+   resolves the saved owner/salt target before a new CREATE3 prediction. A historical target
+   is not accompanied by a current factory call that would deploy a different address.
+   `--salt <label>` names another Pot (`--salt-hex <bytes32>` gives an exact salt); keep the same
+   salt throughout a service's work. A numerical prediction is not code authentication.
 
-   Every Pot a command deploys (`pot --deploy`, a run that deploys it first, `sauce send` of a
-   signed deployment) is recorded on this machine once the chain shows it deployed, in `.sauce/pots`
-   in the user's home (`--pots <dir>` for another). `sauce pot list` prints each with its owner,
-   salt and kind, the engine and compiler it pairs with, and the transaction that deployed it
-   (`--chain`, `--owner` and `--json` narrow and shape it), reading no chain. A Pot deployed
-   elsewhere is recorded with `sauce pot import --chain base --pot <pot>`, or by owner and salt
-   (`sauce pot import --chain solana --owner <owner> --salt <label>`, the only way on Solana).
-   `sauce tx` sends nothing, so it records nothing.
+   `sauce pot list` reads saved bindings without a chain read: owner, salt/kind, engine/compiler,
+   provenance and known deployment transaction. Use `--chain`, `--owner` and `--json` to narrow it.
+   Import an already deployed EVM Pot with `sauce pot import --chain base --pot <pot>
+--pot-binding <descriptor.json>`. Solana import remains by owner and salt.
+   `sauce tx` sends nothing and does not deploy a missing Pot.
 
-5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet once
-   it is deployed (`sauce pot --deploy`), or
+5. **Fund** only the already deployed, authenticated Pot with what the program spends, or
    pass `--fund USDC:100` (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer
    into the Pot in the same cook; `--sweep` sends the Pot's whole balance of each funded token back
    to the signer (and of the native coin, when native is funded), not only what this run brought,
@@ -421,13 +417,11 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
      `leftInPot`, the moves as `moves`, and `explorer` and `trace` beside each hash. A receipt
      records no native transfer inside the cook, so the moves there are tokens only.
    - **Report a sent transaction** with its two links, for the user to open; never fetch them.
-   - A missing Pot: `run` asks
-     `Your Pot <address> on base isn't deployed yet. Deploy it now (one transaction, about <gas>), then run? [deploy/cancel]`,
-     then sends the deployment and the cook.
-     `--yes` (`-y`; `--auto-approve` is its older name) approves, in advance, everything a run sends
-     before its cook (deploying the Pot, approving Permit2 or the Pot for `--fund`) and names each;
-     with no terminal, or with `--json`, the run lists what it needs approved and sends nothing until
-     it is given. Ask the user before passing `--yes`.
+   - A missing or mismatched EVM Pot is refused before funding or signing. Use the explicit
+     deployment/import lifecycle; `run` never creates a replacement or changes saved pins.
+     `--yes` (`-y`; older spelling `--auto-approve`) approves the reported funding approvals,
+     not a hidden Pot deployment. Without a terminal, or with `--json`, required approvals are
+     reported and nothing sends until authorized. Ask the user before passing `--yes`.
    - The transaction's value defaults to the Kitchen's execution fee, read from the chain; pass
      `--value <wei>` when the program also spends native currency.
 
@@ -459,14 +453,12 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 - **`sauce tx`** with the same arguments prints the unsigned transaction as JSON,
   `{ chainId, to, data, value }` (`value` in wei, a hex quantity) with `sendCalls` beside it, as a
   wallet's MCP server takes them (above), for any wallet to sign from the owner:
-  `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`. While the
-  Pot has no code its deployment comes first (`transactions`), each with `gas`: have each signed with
-  that limit (the cook's is estimated as if the deployment had landed; a signer's own estimate, taken
-  while the Pot has no code, is far too low), or send `sendCalls` as one batch.
-  `--fund <TOKEN>:<amount>` adds the owner's transfer of each token into the Pot after the
-  deployment and before the cook (whole tokens, or base units ending in `n`; `ETH:<amount>` rides
-  as the cook's value), simulated with them for its gas where an endpoint is given; a balance short
-  of a transfer is said, as the batch would revert. `--format cast` prints a `cast send` line
+  `sauce tx buy.sauce.ts --chain base --owner <address> --value <wei> --args <arguments>`.
+  EVM cook handoffs require an RPC endpoint and an authenticated deployed binding even with
+  explicit `--value`. Deployment never appears implicitly before the cook.
+  `--fund <TOKEN>:<amount>` plans transfers into the verified Pot before its cook (whole tokens,
+  or base units ending in `n`; `ETH:<amount>` rides as the cook's value). A balance short of a
+  transfer is reported because the batch would revert. `--format cast` prints a `cast send` line
   instead. It simulates only for gas: show the user the program, the arguments and
   `sauce simulate`'s outcome first. The transactions carry no gas price fields (`maxFeePerGas`,
   `maxPriorityFeePerGas`): the signer sets them, and on Arc and Arc Testnet it must set a
@@ -505,8 +497,8 @@ program, value, maxExecutionFee, nonce, deadline, submitter, typedData, digest, 
   and its notes, the fee warning among them, on stderr either way. Each
   number a decimal string, `typedData` as `eth_signTypedData_v4` takes it. `cook` is
   `{ chainId, to, data, value }` with `value` a hex quantity, as `sauce tx` writes a transaction:
-  hand it to the sender. While the Pot has no code, `deployPot` comes too, for any account to send
-  first.
+  hand it to the sender. Signing requires a deployed, authenticated binding; no counterfactual
+  deployment call is appended.
 - **Sending it.** Any wallet sends `cook` from the account it names (or any account), with exactly
   its `value`: the Pot refuses another amount. The sender pays only gas; the Pot pays the Kitchen's
   fee out of its balance, which includes the value, up to the ceiling. The notes say the fee now,
@@ -625,30 +617,17 @@ put at a terminal (a password, a yes or no) is not here: pass the flags that ans
   chain and has no endpoint for it; a few chains have no built-in public one. Pass
   `--rpc-url <url>`, or `--config <file>` naming the chain's id (one of the two, not both).
   `--offline reads no chain…`: the command reads the chain, which `--offline` forbids; drop it.
-  `missing --value <wei>…`: with no endpoint the Kitchen's fee could not be read; pass
-  `--value <wei>`, or an endpoint.
+  An explicit `--value` does not make an offline EVM cook handoff safe: supply an endpoint and
+  authenticate the deployed binding.
 - **The endpoint is another chain's** (exit 1). `the RPC endpoint serves chain …`: use the chain's
   own endpoint, or a `--config` file with each chain's under its id.
-- **The package is not the deployed Kitchen's** (exit 1, EVM). `the Kitchen … puts the Pot of
-owner … and salt … at …, but this SDK has it at …` (`the Shared Pot of salt …` for a Shared Pot's
-  deployment): the chain's Kitchen puts a Pot not deployed yet at another address than this copy
-  of the package does, so a cook it built would reach no Pot.
-  `… is a Pot of compiler …` or `… has code, but no release this SDK knows minted a Pot there`: the
-  Pot named was minted by another release, and its engine runs no program this package compiles.
-  The message names the release the chain's Kitchen mints and the package versions that pair with
-  it, or says `the Kitchen is newer than this SDK`. It names where this package deploys the owner's
-  Pot, and lists the owner's other Pots from the Pot store, each with its release. Nothing was
-  simulated, built or sent: when the Kitchen is newer, the user upgrades the package
-  (`sauce update`); a listed Pot of the package's own release still cooks, named with
-  `--pot <address>`. A batch (`sauce send`'s transactions, a wallet's send, the approvals and
-  transfers `sauce run --fund` sends first) is checked whole before any of it is sent:
-  `nothing was sent — transaction 2 of 2 (…): …` names the step refused. A deployment the chain
-  already has that left no Pot where the package expects one stops the rest of the batch:
-  `not sent — because transaction 1 of 2 (…) landed and left no Pot at …`. `the released Kitchen …
-is not deployed on <chain>`: there is no Pot to cook on there. The checks trust the endpoint, as
-  every read does: a contract at a Pot's address that answers as a Pot would needs a dishonest
-  endpoint (a fork, or an RPC that lies). Offline the deployed release cannot be checked, and the
-  notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+- **A binding or release mismatch** (exit 1, EVM). Actual code, chain, protected identity, engine,
+  Router policy and compiler/WASM/probe provenance must match the saved or explicit binding.
+  Missing expected code and unknown profiles stop the operation before funding or signing.
+  Keep an existing service on its pinned engine and exact compiler; use its matching SDK/compiler
+  for fresh source compilation. A newer default never repairs a mismatch. A new service requires
+  explicit opt-in, a chosen salt, deployment, verification and persistence.
+  Read-only offline prediction is unverified and never authorizes a cook, allowance or signature.
 - **A Pot with no owner** (exit 2, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
   given is the zero address, and no Kitchen call deploys a private Pot for it, so nothing was built,
   online or offline. Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may
@@ -663,13 +642,13 @@ is not deployed on <chain>`: there is no Pot to cook on there. The checks trust 
   (`sauce wallet new <name> --solana`) or `--keypair <path>`. `--keypair is a Solana keypair…`: an
   EVM transaction takes `--wallet`, `--keystore` or `--private-key`.
 - **An approval is needed** (exit 1). `nothing was sent: this run needs an approval…` (or
-  approvals): before its cook the run must send something, such as the Pot's deployment or an
-  approval for `--fund`, and it cannot ask: there is no terminal, or `--json` asks nothing. The
+  approvals): before its cook the run must send an approval for `--fund`, and it cannot ask:
+  there is no terminal, or `--json` asks nothing. The
   message lists each one. Show the user the list; once they agree, run it again with `--yes`
   (`-y`) and a password source that needs no prompt.
 - **A policy refusal** (exit 1). `refused by the policy of wallet <name> (<policy file>)…`, then the
   limit: `chains allows …`; `to allows <n> address(es), and this transaction …` (a target outside
-  `to`, or the wallet's own Pot, deployed first, missing from it: add the Pot to `to`);
+  `to`, or the wallet's own authenticated Pot missing from it: add the Pot to `to`);
   `<limit>.perTransaction is …`; `<limit>.perDay is …`;
   `this transaction approves …` (an approval above what a token's limit leaves); or
   `native is limited, and …` (`tokens.<symbol> is limited, and …`), when what the transaction
@@ -763,12 +742,12 @@ a note when the cook leaves anything in the Pot: tell the user.
   name the password's source.
 - **Editing a wallet's policy to get past a refusal.** The limit is the user's: tell them what was
   refused and which limit.
-- **`--yes`, or a Pot deployed, without the user's go-ahead.** Deploying costs gas, and with `--fund`
-  it also approves Permit2 (or the Pot) to move the user's tokens.
+- **`--yes`, or a Pot deployed, without the user's go-ahead.** Deployment costs gas.
+  Funding can separately approve Permit2 (or the Pot) to move the user's tokens.
 - **Sending before simulating, or before the user has seen the program, its arguments and the
   simulation.** Simulate with `sauce simulate` first.
-- **A `sauce tx` cook signed with the wallet's own gas estimate while the Pot has no code.** Use the
-  `gas` the plan gives, or send `sendCalls` as one batch.
+- **Signing a cook before authenticating deployed code.** Deploy and verify separately first;
+  a wallet's estimate or `sendCalls` batch does not establish Pot identity.
 - **Converting a result by hand for a wallet's tool.** Pass `sendCalls`, or each transaction, whole:
   `value` and `gas` are hex already, and a decimal value is refused or misread.
 - **A Solana transaction handed to a wallet the user approves slowly.** Past about a minute it can

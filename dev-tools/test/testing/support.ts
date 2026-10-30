@@ -29,7 +29,22 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import type { TestChain } from "../../src/testing/index.js";
+import {
+  fork as forkChain,
+  local as localChain,
+  type ForkOptions,
+  type LocalOptions,
+  type TestChain,
+} from "../../src/testing/index.js";
+
+export const local = (options: LocalOptions = {}): Promise<TestChain> =>
+  localChain({ ...options, candidatePath: process.env.SAUCE_LOCAL_CANDIDATE });
+
+export const fork = (
+  chain: Parameters<typeof forkChain>[0],
+  options: ForkOptions,
+): Promise<TestChain> =>
+  forkChain(chain, { ...options, candidatePath: process.env.SAUCE_LOCAL_CANDIDATE });
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

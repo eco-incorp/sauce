@@ -1,22 +1,7 @@
 /**
- * Stands up the released v12 EVM stack on an anvil — engine, Router, Kitchen implementation and
- * Kitchen proxy — for suites that execute compiler-emitted bytecode.
- *
- * NOT a `.test.ts`, so jest never collects it.
- *
- * **The engine cannot be called directly.** It re-derives `CREATE2(KITCHEN, gateSalt(potId),
- * POT_INITCODEHASH)` and runs only when that lands on its caller, so an `eth_call` straight to the
- * engine reverts with empty returndata — no reason string, nothing to match on. Both constants are
- * baked into the released artifact, so the caller has to be a REAL Pot, minted by CREATE2 from the
- * one Kitchen address the engine was built against, with init code hashing to exactly the pinned
- * hash.
- *
- * **Everything is deployed from its creation code, at its release address**, by
- * `src/evm/release-stack.ts#deployReleaseStack` — CreateX's CREATE3 proxy child installed at each
- * release salt's address and sent the creation code — which `@eco-incorp/sauce/testing` deploys
- * with too. This reads the synced artifacts for it, checks the Kitchen landed where the engine gates,
- * and mints the harness Pot. The Kitchen is left with its owner (the harness account) and a zero
- * execution fee, so no cook needs `value`.
+ * Real artifact-backed local fixtures: explicit LOCAL CREATE3 candidates or retained published stacks.
+ * Published stacks reconstruct pre-cutover deployed state only; they are not a future deployment lane.
+ * Each contract runs its constructor at its recorded address through deployReleaseStack.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -27,10 +12,18 @@ import {
   getAddress,
   getCreate2Address,
   keccak256,
+  zeroAddress,
 } from "viem";
 import type { Abi, Address, Hex, PublicClient, TestClient, WalletClient } from "viem";
 
 import { deployReleaseStack, type ReleaseStackArtifacts } from "../../src/evm/release-stack.js";
+import { v12PotGateSalt, v12PredictPot } from "../../src/deployments/pot.js";
+import { v12ReleaseSet } from "../../src/deployments/releases.js";
+import {
+  verifyPotBinding,
+  type EvmPotBinding,
+  type EvmPotBindingInput,
+} from "../../src/evm/pot-binding.js";
 
 const ARTIFACTS = resolve(dirname(fileURLToPath(import.meta.url)), "../../src/artifacts");
 
@@ -40,13 +33,16 @@ const artifact = (name: string): { abi: Abi; bytecode: Hex } =>
     bytecode: Hex;
   };
 
-/** `kitchen` and `potInitCodeHash`, written by `sync-engine-artifacts` from the engine release's
- *  own manifest: the two anchors the released engine gates every cook on. */
-export const gateAnchors = (): { kitchen: Address; potInitCodeHash: Hex } =>
-  JSON.parse(readFileSync(resolve(ARTIFACTS, "V12EngineGate.json"), "utf8")) as {
+/** Historical gate anchors, or the explicitly selected LOCAL candidate's Kitchen. */
+export const gateAnchors = (): { kitchen: Address; potInitCodeHash?: Hex } => {
+  const candidatePath = process.env.SAUCE_LOCAL_CANDIDATE;
+  const directory = candidatePath ? dirname(resolve(candidatePath)) : ARTIFACTS;
+
+  return JSON.parse(readFileSync(resolve(directory, "V12EngineGate.json"), "utf8")) as {
     kitchen: Address;
-    potInitCodeHash: Hex;
+    potInitCodeHash?: Hex;
   };
+};
 
 /** The release's CREATE3 inputs, from `V12Deployments.json`. */
 const deployments = (): ReleaseStackArtifacts["deployments"] =>
@@ -73,6 +69,7 @@ export interface GatedEngine {
   cookData: (program: Hex) => Hex;
   /** What a cook must pay. Zero here: the harness sets the Kitchen's fee to zero. */
   fee: bigint;
+  bindingOf: (pot: Address) => Promise<EvmPotBinding>;
 }
 
 /**
@@ -88,7 +85,95 @@ export const startGatedEngine = async (
   runtimeCreationCode: Hex,
 ): Promise<GatedEngine> => {
   const { publicClient, walletClient } = clients;
+  const bindingReader =
+    (
+      template: Omit<EvmPotBindingInput, "pot" | "owner" | "userSalt" | "kind" | "chainId">,
+      abi: Abi,
+    ) =>
+    async (pot: Address): Promise<EvmPotBinding> => {
+      const [owner, userSalt, gateSalt, router] = (await Promise.all(
+        ["owner", "userSalt", "gateSalt", "router"].map((functionName) =>
+          publicClient.readContract({ address: pot, abi, functionName }),
+        ),
+      )) as [Address, Hex, Hex, Address];
+      const fixed = gateSalt.toLowerCase() === v12PotGateSalt(owner, userSalt, true).toLowerCase();
+
+      return verifyPotBinding(publicClient, {
+        ...template,
+        pot,
+        owner,
+        userSalt,
+        router,
+        kind:
+          getAddress(owner) === zeroAddress ? "shared" : fixed ? "private-fixed-router" : "private",
+        chainId: await publicClient.getChainId(),
+      });
+    };
+  const candidatePath = process.env.SAUCE_LOCAL_CANDIDATE;
+  if (candidatePath) {
+    const directory = dirname(resolve(candidatePath));
+    const candidate = JSON.parse(readFileSync(resolve(candidatePath), "utf8")) as Omit<
+      EvmPotBindingInput,
+      "pot" | "owner" | "userSalt" | "kind" | "chainId"
+    > & { source: string; deployments: ReleaseStackArtifacts["deployments"] };
+    if (candidate.source !== "LOCAL" || candidate.profile?.scheme !== "create3") {
+      throw new Error("expected an explicitly ingested LOCAL CREATE3 candidate");
+    }
+    const localArtifact = <T>(name: string): T =>
+      JSON.parse(readFileSync(resolve(directory, `${name}.json`), "utf8")) as T;
+    const kitchenArtifact = localArtifact<{ abi: Abi; bytecode: Hex }>("V12Kitchen");
+    const potAbi = localArtifact<{ abi: Abi }>("V12Pot").abi;
+    const actualCreation = localArtifact<{ runtimeCreationCode: Hex }>(
+      "V12RuntimeBytecode",
+    ).runtimeCreationCode;
+    if (runtimeCreationCode.toLowerCase() !== actualCreation.toLowerCase()) {
+      throw new Error("candidate engine creation bytes do not match the selected runtime fixture");
+    }
+    const { engine, router, kitchen } = await deployReleaseStack(clients, owner, {
+      deployments: candidate.deployments,
+      runtimeCreationCode,
+      routerBytecode: localArtifact<{ bytecode: Hex }>("Router").bytecode,
+      kitchen: kitchenArtifact,
+      kitchenProxyBytecode: localArtifact<{ bytecode: Hex }>("V12KitchenProxy").bytecode,
+    });
+    const pot = getAddress(v12PredictPot(owner, POT_SALT, kitchen));
+    const hash = await walletClient.sendTransaction({
+      account: owner,
+      chain: null,
+      to: kitchen,
+      data: encodeFunctionData({
+        abi: kitchenArtifact.abi,
+        functionName: "deployPot",
+        args: [owner, POT_SALT],
+      }),
+    });
+    if ((await publicClient.waitForTransactionReceipt({ hash })).status !== "success") {
+      throw new Error("candidate CREATE3 Pot deployment reverted");
+    }
+    await verifyPotBinding(publicClient, {
+      ...candidate,
+      pot,
+      owner,
+      userSalt: POT_SALT,
+      kind: "private",
+      chainId: await publicClient.getChainId(),
+    });
+
+    return {
+      engine,
+      router,
+      kitchen,
+      pot,
+      fee: 0n,
+      bindingOf: bindingReader(candidate, potAbi),
+      cookData: (program) =>
+        encodeFunctionData({ abi: potAbi, functionName: "cook", args: [engine, program] }),
+    };
+  }
+  // Published fixtures exercise retained old-deployed execution, not the current factory API.
   const { kitchen: gateKitchen, potInitCodeHash } = gateAnchors();
+  if (!potInitCodeHash)
+    throw new Error("retained published fixture is missing its historical gate hash");
   const kitchenAbi = artifact("V12Kitchen").abi;
 
   const send = async (to: Address, data: Hex): Promise<void> => {
@@ -168,6 +253,24 @@ export const startGatedEngine = async (
     engine,
     fee,
     kitchen,
+    bindingOf: bindingReader(
+      {
+        compiler: "2.6.1",
+        engine,
+        kitchen,
+        router,
+        engineCodeHash: keccak256((await publicClient.getCode({ address: engine }))!),
+        routerCodeHash: keccak256((await publicClient.getCode({ address: router }))!),
+        release: {
+          compiler: "2.6.1",
+          "v12-evm": v12ReleaseSet("2.6.1")["v12-evm"].version,
+          "kitchen-evm": v12ReleaseSet("2.6.1")["kitchen-evm"].version,
+        },
+        wireProfile: "sauce-compiler-2.6.1",
+        storageProfile: "kitchen-evm-retained",
+      },
+      artifact("V12Pot").abi,
+    ),
     pot,
     router,
   };

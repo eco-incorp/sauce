@@ -288,79 +288,46 @@ chain; `--value` sets it. The transaction is exactly what a wallet's MCP server 
 `sendCalls` is the same transactions as one batch, for a wallet that sends a batch
 ([Sign with your wallet's MCP server](wallet-mcp.md)).
 
-### Sign a new Pot's creation and its first cook
+### Create a new Pot before building its first cook
 
-When the chain shows the Pot has no code yet, `sauce tx` prints a plan of two instead: the Pot's
-creation, marked `deploysPot`, then the cook. Sign and send them in that order. Any account may
-send the first; only the owner can send the second. This output is abbreviated:
+For a new EVM Pot, explicitly deploy with a trusted qualified descriptor, verify its actual
+code/profile and exact engine/compiler/Router binding, then persist it:
 
-```text
-{
-  "chainId": 8453,
-  "pot": "0x8a…",
-  "transactions": [
-    {
-      "what": "Kitchen.deployPot(0xYou, 0x00…00): deploys the Pot, which has no code yet",
-      "deploysPot": "0x8a…",
-      "chainId": 8453,
-      "to": "0x…",
-      "data": "0x…",
-      "value": "0x0",
-      "gas": "0x32e9b"
-    },
-    {
-      "what": "cook on Pot 0x8a…",
-      "chainId": 8453,
-      "to": "0x8a…",
-      "data": "0x…",
-      "value": "0x3e8",
-      "gas": "0x28f12"
-    }
-  ],
-  "sendCalls": { "chain": "base", "calls": [ … ] }
-}
+```sh
+sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json
 ```
 
-Sign each with the `gas` the plan gives it. The two are simulated together, so the cook's gas is
-estimated as if the creation had landed, with 30% room. A signer's own estimate of the cook, taken
-while the Pot has no code, is far too low.
-
-What must be true for the plan to land goes to stderr: the Pot funded after its deployment, and
-sent from its owner. A cook that would revert, as a cook on a Pot not funded yet does, comes with
-no `gas` and a note saying why: deploy the Pot first (`sauce pot --deploy`, or `sauce run --fund`,
-which deploys before it funds) rather than sending tokens to its address, which a Kitchen upgrade
-that changes the Pot's code would move, and build the plan again. A Pot
-named with `--pot` and no code is not planned, because its owner and salt are not known: the note
-names `sauce pot --deploy`. On Solana a cook may need several transactions, and `sauce tx` prints
-the first step of a plan ([Solana](cli-solana.md#a-cook-in-several-transactions)).
+Only after verification succeeds should you fund, simulate, build or sign the cook. `sauce tx`
+does not return a deployment-and-cook plan for an undeployed EVM Pot. A missing saved Pot must
+fail without creating current code, changing its salt or repinning its original binding.
+For an unfunded verified Pot, fund it after verification or use `--fund` for the cook.
+On Solana a cook may need several transactions, and `sauce tx` prints the first step of a plan
+([Solana](cli-solana.md#a-cook-in-several-transactions)).
 
 ### Fund the Pot in the same batch
 
-`--fund USDC:100` puts the tokens the program spends into the plan too: a transfer from you into the
-Pot, right before the cook. With an endpoint, the plan deploys the Pot first, so the transfer comes
-after the deployment; offline, the plan has no deployment step. A wallet that sends a batch then
-creates the Pot, fills it and runs the program in one go, or does nothing.
+`--fund USDC:100` includes a transfer into the Pot before the cook. For a new EVM Pot, complete
+deployment, binding verification and persistence before signing or funding that cook.
+An offline plan or a smart-wallet batch does not replace these checks.
 
 ### Send what you signed
 
 ```sh
-sauce send 0x02f8…deploy 0x02f8…cook --rpc-url <url>
+sauce send 0x02f8…cook --rpc-url <url>
 sauce send AQAB… --chain solana
 ```
 
 Each operand is one signed transaction: on an EVM chain the raw `0x…` hex a signer returns, on
 Solana the base64 wire transaction. `-` reads them from stdin. They go out in the order given:
 
-- Every cook and Pot deployment among them is checked against the chain first, all together: the
-  Pot each cook goes to must be one of your SDK's release, or one an earlier transaction deploys,
-  and each deployment must put its Pot where your SDK has it, as the Kitchen's own `predictPot`
-  (`predictSharedPot` for a Shared Pot) says, one the chain already has too while its Pot has no
-  code. One that fails the check stops the batch before anything goes out, and the message names
-  it: `nothing was sent — transaction 2 of 2 (cook on Pot 0x…): …`.
+- Check every cook against its verified persisted binding and exact compiler/engine pair.
+  Historical deployed Pots remain usable with their original binding; current defaults do not
+  replace them. Unknown profiles, missing expected code and identity mismatches stop funding
+  and signing. New factory calls use CREATE3 only.
 - Each is simulated as it was signed first. One that would fail is not sent: the reason is printed,
   the command exits 1, and nothing after it goes out.
-- Each lands before the next is simulated, so the cook after its Pot's creation runs on the Pot.
-  After a deployment, the next waits until the endpoint shows the Pot's code.
+- Each lands before the next is simulated. After an explicit deployment, verify the actual
+  binding and persist it before funding or signing later work.
 - A cook signed with less gas than its simulation uses is refused, unsent.
 - A transaction already on chain is read back, not sent again. One the chain had, pending, then
   lost is reported as gone, to sign anew.

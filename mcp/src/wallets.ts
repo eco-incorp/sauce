@@ -60,6 +60,7 @@ import {
 import {
   chainRef,
   LIMITS,
+  POT_BINDING,
   potsKept,
   refusable,
   SIGNED_COOK_OUTPUT,
@@ -642,6 +643,11 @@ export function registerWalletTools(
         "before any endpoint is reached, with `refused` saying how to request the chain.",
       input: {
         wallet: WALLET,
+        potBinding: POT_BINDING.optional().describe(
+          "EVM cooks: the explicit trusted binding for the already-deployed Pot. Supply it " +
+            "at this top level when no Pot store is configured, even when transaction carries " +
+            "another tool's result; nested result metadata is not automatically trusted.",
+        ),
         transaction: z
           .union([
             z.looseObject({}),
@@ -685,6 +691,7 @@ export function registerWalletTools(
       // A Solana plan (sauce_tx's, or sauce_send's `next`): every step, from its cursor.
       const cursor = plannedCursor(args.transaction);
       if (cursor !== undefined) {
+        if (args.potBinding !== undefined) throw new UsageError("potBinding is for EVM cooks only");
         // The plan's owner, held to the wallet before the wallet is unlocked or anything is read.
         const plan = planFor(cursor, store.info(walletName(args.wallet)));
         // The chain the plan was made for, which a `chain` given must be (`sendSvmPlan`).
@@ -710,6 +717,9 @@ export function registerWalletTools(
         transactions,
         args.chain === undefined ? undefined : parseChain(String(args.chain), "chain"),
       );
+      if (args.potBinding !== undefined && chain.kind !== "evm") {
+        throw new UsageError("potBinding is for EVM cooks only");
+      }
       const password = session.password("Sending");
       const { unlocked, guard } = await openWallet(store, walletName(args.wallet), password);
       // Before any endpoint is reached: what this wallet can send there, and the release's chains,
@@ -734,8 +744,9 @@ export function registerWalletTools(
         "(the wallet must own it). Returns `typedData`, `digest`, `signature` and `cook`, { " +
         "chainId, to: the Pot, data: cookSigned(…), value }, which the submitter sends with " +
         "exactly `value` and pays gas for — another of this server's wallets through " +
-        "sauce_wallet_send, or any account — and `deployPot` first when the Pot has no code " +
-        "yet. The Pot pays the Kitchen's fee itself, from its balance. Whoever holds the " +
+        "sauce_wallet_send, or any account. The EVM Pot must already be deployed and its explicit " +
+        "potBinding or configured Pot record must verify before signing. The Pot pays the " +
+        "Kitchen's fee itself, from its balance. Whoever holds the " +
         "signature may submit it until the deadline, once. Needs the wallets enabled " +
         "(sauce_wallet_enable). The wallet's policy applies: its chains and to (the Pot) are " +
         "held to, and a policy that limits native or tokens refuses to sign, naming the limit, " +
@@ -784,7 +795,7 @@ export function registerWalletTools(
             ? []
             : [
                 "To submit it from another of this server's wallets: sauce_wallet_send { wallet, " +
-                  "transaction: <this result> } (it sends deployPot first, when there is one).",
+                  "transaction: <this result>, potBinding: <its verified binding> }.",
               ]),
           HOT_WALLET,
         ],

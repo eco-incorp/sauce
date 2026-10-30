@@ -16,6 +16,12 @@ TypeScript ones are offline: they compile programs and build transactions withou
 Repeated-digit addresses (`0x4444…`) and round fees are fixtures, not values to copy. The few that
 read a chain do so only when your application calls them.
 
+EVM execution requires an explicitly deployed Pot whose actual code/profile and exact
+engine/compiler/Router binding have been authenticated and persisted. Deploy using a trusted
+qualified release descriptor before simulation; fund or sign only after verification succeeds.
+The prepared local examples qualify fixture behavior, not live deployment or release readiness,
+and do not authorize deploying a release. Existing services keep their original verified binding.
+
 **Level** says how much you need to know first: Beginner after the quick start, Intermediate once
 you have written a program of your own, Advanced for code that reads a chain or builds programs
 with the raw compiler. **Chain** names the chains the example is written for, or where it runs.
@@ -47,13 +53,13 @@ a preview chain.
 
 ## Compiling, reading a chain and signing
 
-| Example                                          | Level        | Chain                  | Shows                                                                                                                                                                                                  |
-| ------------------------------------------------ | ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [compile-program.ts](compile-program.ts)         | Intermediate | Any                    | Direct compilation, ABI-v1 entry arguments, and argument encoding and decoding                                                                                                                         |
-| [prepare-pot.ts](prepare-pot.ts)                 | Advanced     | Any EVM chain          | Your Pot before your first cook: the Kitchen and engine checked, the Pot predicted from your address and salt, its deployment or its owner and Router checked, and the Kitchen's fee                   |
-| [pot-router.ts](pot-router.ts)                   | Advanced     | Any EVM chain          | Whether a Pot runs its Kitchen's current Router, and the owner's `setRouter` call when it does not                                                                                                     |
-| [signed-cook.ts](signed-cook.ts)                 | Advanced     | Base                   | A cook the owner signs and another account sends: `pay.sauce.ts` signed as EIP-712 typed data with a throwaway key, verified, encoded as `cookSigned`, and the `invalidateNonces` call that cancels it |
-| [mcp-external-signer.ts](mcp-external-signer.ts) | Advanced     | Ethereum, Base, Solana | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports, a Solana plan's every step, by its cursor            |
+| Example                                          | Level        | Chain                  | Shows                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [compile-program.ts](compile-program.ts)         | Intermediate | Any                    | Direct compilation, ABI-v1 entry arguments, and argument encoding and decoding                                                                                                              |
+| [prepare-pot.ts](prepare-pot.ts)                 | Advanced     | Any EVM chain          | Verify an already deployed explicit service binding and read its Kitchen fee; missing code fails                                                                                            |
+| [pot-router.ts](pot-router.ts)                   | Advanced     | Any EVM chain          | Verify a persisted binding before proposing an explicit owner-selected Router update                                                                                                        |
+| [signed-cook.ts](signed-cook.ts)                 | Advanced     | Base                   | Binding-checked signing helper using its exact compiler/engine pair; no signing or RPC on import                                                                                            |
+| [mcp-external-signer.ts](mcp-external-signer.ts) | Advanced     | Ethereum, Base, Solana | The MCP server with a signer it never sees: `sauce_tx` builds, your signer (a KMS, a hardware wallet) signs, `sauce_send` broadcasts and reports, a Solana plan's every step, by its cursor |
 
 ## Run an example in your project
 
@@ -100,12 +106,12 @@ Each TypeScript example is typechecked and run, and its encoded output is checke
 program is also executed through the released engine. The RPC helpers are not live-chain
 integration tests: they are the shape of the reads you make.
 
-A cook on an EVM chain carries the Kitchen's fee as its value: read the Kitchen's `executionFee()`
-(`kitchenExecutionFee()` builds the read) shortly before sending, instead of a fixture. The cook
-runs on your Pot, which must exist first. To check that it does, call `preparePot` from
-`prepare-pot.ts` with a client for the chain and your address. If it returns `ready: false`, send
-its deployment request with your signer, wait for a successful receipt, and call it again; `sauce
-run` does this for you. Read [Solana](../guides/solana.md) for how a cook runs there.
+A cook carries the Kitchen's current execution fee; `kitchenExecutionFee()` builds that read.
+Offline builders and simulated deployments do not authenticate a live Pot. Before funding or
+signing, explicitly deploy a new Pot, verify its actual code/profile and engine/compiler/Router
+binding with trusted artifacts, then persist the result. Existing services retain their verified
+historical bindings. See [Kitchen compatibility](../guides/kitchen-compatibility.md) for the
+required order and [Solana](../guides/solana.md) for Solana execution.
 
 ## Next
 

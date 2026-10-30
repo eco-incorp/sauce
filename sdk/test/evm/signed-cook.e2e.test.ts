@@ -408,10 +408,12 @@ describeEvm("signed cooks on the released Pot", () => {
 
     it("runs on a Private Pot whose Router is fixed", async () => {
       const pinned = await mintPot(OWNER.address, salt(20), true);
-      expect(await checkSignedCookPot(publicClient, pinned)).toEqual({
-        ok: true,
-        owner: OWNER.address,
-      });
+      expect(await checkSignedCookPot(publicClient, pinned, await sauce.bindingOf(pinned))).toEqual(
+        {
+          ok: true,
+          owner: OWNER.address,
+        },
+      );
       const call = await signedBy(OWNER, cookOf({ pot: pinned }));
       expect((await submit(STRANGER, call)).status).toBe("success");
       expect(await cookNonceUsed(publicClient, pinned, call.nonce)).toBe(true);
@@ -624,23 +626,25 @@ describeEvm("signed cooks on the released Pot", () => {
 
   describe("checkSignedCookPot", () => {
     it("takes the release's Private Pot, naming its owner", async () => {
-      expect(await checkSignedCookPot(publicClient, sauce.pot)).toEqual({
+      expect(
+        await checkSignedCookPot(publicClient, sauce.pot, await sauce.bindingOf(sauce.pot)),
+      ).toEqual({
         ok: true,
         owner: OWNER.address,
       });
     });
 
-    it("refuses an address with no code", async () => {
+    it("refuses an undeployed address without a release binding", async () => {
       const check = await checkSignedCookPot(publicClient, RECIPIENT);
       expect(check.ok).toBe(false);
-      expect(!check.ok && check.reason).toMatch(/has no code/);
+      expect(!check.ok && check.reason).toMatch(/explicit authenticated/);
     });
 
-    it("refuses a contract that is not a Pot", async () => {
+    it("does not infer signing provenance from an arbitrary contract", async () => {
       const token = await deploy(MOCK_ERC20.creationCode);
       const check = await checkSignedCookPot(publicClient, token);
       expect(check.ok).toBe(false);
-      expect(!check.ok && check.reason).toMatch(/it is not a Pot/);
+      expect(!check.ok && check.reason).toMatch(/explicit authenticated/);
     });
 
     it("refuses a Shared Pot, which refuses every signed cook and every cancellation", async () => {
@@ -664,7 +668,7 @@ describeEvm("signed cooks on the released Pot", () => {
         functionName: "predictSharedPot",
         args: [sharedSalt],
       });
-      const check = await checkSignedCookPot(publicClient, shared);
+      const check = await checkSignedCookPot(publicClient, shared, await sauce.bindingOf(shared));
       expect(check.ok).toBe(false);
       expect(!check.ok && check.reason).toMatch(/Shared Pot/);
 
@@ -745,10 +749,10 @@ describeEvm("signed cooks on the released Pot", () => {
       expect((await submit(SUBMITTER, call)).status).toBe("reverted");
     });
 
-    it("is refused by checkSignedCookPot as minted before signed cooks", async () => {
+    it("refuses signing without authenticated historical provenance", async () => {
       const check = await checkSignedCookPot(publicClient, oldPot);
       expect(check.ok).toBe(false);
-      expect(!check.ok && check.reason).toMatch(/minted before signed cooks/);
+      expect(!check.ok && check.reason).toMatch(/explicit authenticated/);
     });
   });
 
@@ -767,7 +771,10 @@ describeEvm("signed cooks on the released Pot", () => {
     });
 
     it("signs through isValidSignature, which the Pot and verifySignedCook both ask", async () => {
-      expect(await checkSignedCookPot(publicClient, pot)).toEqual({ ok: true, owner: wallet });
+      expect(await checkSignedCookPot(publicClient, pot, await sauce.bindingOf(pot))).toEqual({
+        ok: true,
+        owner: wallet,
+      });
       const call = await signedBy(WALLET_SIGNER, cookOf({ pot }));
       // The key is not the owner: only a client that can ask the wallet accepts it.
       expect(await verifySignedCook({ ...call, owner: wallet })).toBe(false);

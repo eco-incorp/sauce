@@ -15,3 +15,4 @@ Start with the [quick start](../docs/guides/quick-start.md), then use the
 - [Compiling programs](../docs/guides/compiling.md) — standalone programs and runtime arguments.
 - [Solana](../docs/guides/solana.md) — account plans and Kitchen execution.
 - [Examples](../docs/examples/README.md) — complete programs to copy.
+- [Kitchen compatibility](../docs/guides/kitchen-compatibility.md) — mandatory maintainer policy for CREATE3 creation, retained deployed bindings and release gates.

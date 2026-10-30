@@ -71,6 +71,22 @@ describe("buildSauceEvmCall / buildSauceEvmCalls", () => {
 });
 
 describe("sauceEvmDeployPotCall", () => {
+  it("encodes the existing fixed Router overload without a family selector", () => {
+    const call = sauceEvmDeployPotCall({
+      owner: OWNER,
+      salt: SALT,
+      kitchen: KITCHEN,
+      routerFixed: true,
+    });
+    expect(call.data).toBe(
+      encodeFunctionData({
+        abi: v12KitchenAbi,
+        functionName: "deployPot",
+        args: [OWNER, SALT, true],
+      }),
+    );
+  });
+
   it("encodes deployPot against the given kitchen, matching v12Kitchen.encodeDeployPot", () => {
     const call = sauceEvmDeployPotCall({ owner: OWNER, salt: SALT, kitchen: KITCHEN });
     expect(call.target).toBe(KITCHEN);

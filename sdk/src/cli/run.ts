@@ -168,6 +168,7 @@ import {
   updateTarget,
   type SkillsSource,
 } from "./skills.js";
+import { readPotCandidate, withPotCandidate } from "./pot-binding.js";
 
 /** Where the command writes, what it reads, and how it runs a package manager or asks a question. */
 export interface CliIo extends CliFiles {
@@ -478,6 +479,13 @@ const COOK: FlagSpecs = {
 };
 
 const ENDPOINT: FlagSpecs = {
+  ...POTS,
+  "pot-binding": {
+    type: "string",
+    value: "<file>",
+    help: "Explicit authenticated EVM release descriptor (including a local candidate); never changes stored Pot pins",
+    only: "evm",
+  },
   "rpc-url": {
     type: "string",
     value: "<url>",
@@ -1823,8 +1831,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "It runs where the release's engine and Kitchen are deployed on the chain, preview chain",
       "or not; where they are not, it stops with exit 1, naming the contract that is missing.",
       "",
-      "A Pot that is not deployed yet is deployed in the simulation first, from --owner (and",
-      "--salt): any account may send Kitchen.deployPot, and the Pot is the owner's either way.",
+      "A missing Pot is refused. Explicitly deploy, authenticate and persist its release binding",
+      "with sauce pot --deploy before simulating ordinary work.",
       "An owner holding less than the cook's value is given it for the simulation.",
       "",
       "--assume-balance TOKEN:amount gives the Pot that balance for this simulation only, by state",
@@ -1927,11 +1935,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
       "Kitchen's execution fee, read from the chain.",
       "",
-      "You need not deploy the Pot as a step of your own: a run deploys it when it first needs it.",
+      "Deploy, verify and persist an EVM Pot explicitly before running its ordinary work.",
       "What the run sends before its cook, each in a transaction of its own, it asks you to",
       "approve at the terminal first; -y (--yes, or --auto-approve) approves every one without",
       "asking, and says `auto-approved: <action>` for each. They are:",
-      "  deploying your Pot, when it has no code yet (asked as `[deploy/cancel]`, with its gas)",
       "  approving Permit2 for a token --fund pulls, the first time (--fund-mode permit2)",
       "  approving the Pot for the amount --fund pulls (--fund-mode allowance)",
       "On Solana a missing Pot is created in the cook's own transaction, with nothing asked, when",
@@ -2064,17 +2071,16 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Compiles the file and prints the transaction that runs it, unsigned, as JSON:",
       "{ chainId, to: the Pot, data: Pot.cook(engine, program ++ arguments), value }. The value",
       "is --value, or else the Kitchen's fee, read from the chain, which also checks the Pot.",
-      "When the chain shows the Pot has no code yet, it prints the plan instead: { chainId, pot,",
-      "transactions }, Kitchen.deployPot first (marked deploysPot; any account may send it), then",
-      "the cook, to send in that order. `--format cast` prints each as a `cast send` line. What",
-      "must be true for it to land goes to stderr: the Pot funded, and sent from its owner.",
+      "The Pot must already be deployed, verified and persisted. A missing Pot fails without",
+      "deploying a replacement. Use sauce pot --deploy with an explicit release descriptor first.",
+      "An RPC endpoint is required even with --value; offline EVM cook handoffs are refused.",
       "Each transaction is what a wallet's send tool takes (value and gas hex), and sendCalls",
       "is all of them as one batch, for a wallet that sends a batch.",
       "",
       "--fund TOKEN:amount (whole tokens, or base units ending in n) plans the owner's transfer",
-      "of each token into the Pot after its deployment and before the cook; ETH:<amount> rides",
-      "as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one",
-      "approval, or nothing happens.",
+      "of each token into the authenticated Pot before the cook; ETH:<amount> rides",
+      "as the cook's value. Sent as one batch, a smart wallet funds and cooks with one",
+      "approval, or nothing happens. Deployment is a separate verified step.",
       "",
       "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },",
       "the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via",
@@ -2086,7 +2092,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "",
       "Example:",
       "  sauce tx pay.sauce.ts --chain base --owner 0x…",
-      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --offline",
+      "  sauce tx pay.sauce.ts --chain base --owner 0x… --value 0 --rpc-url <url>",
       "  sauce tx pay.sauce.ts --chain base --owner 0x… --fund USDC:100",
     ].join("\n"),
     trailing: "args",
@@ -2142,7 +2148,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Compiles the file with main's arguments, as tx does, and prints what the Pot's owner signs",
       "so that another account can submit the cook, with the Pot's own cookSigned: { chainId, pot,",
       "owner, engine, program, value, maxExecutionFee, nonce, deadline, submitter, typedData,",
-      "digest, signature, cook, deployPot }. typedData is EIP-712 (eth_signTypedData_v4): Cook",
+      "digest, signature, cook }. typedData is EIP-712 (eth_signTypedData_v4): Cook",
       "{ engine, program, value, maxExecutionFee, nonce, deadline, submitter } under the Pot's",
       "domain, for this chain alone. program is the bytecode with the arguments appended, all of",
       "it signed. Numbers are decimal strings.",
@@ -2163,11 +2169,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "native coin in it. Whoever holds the signature may submit it until the deadline, once; a",
       "cook that reverts leaves its nonce unused, to be submitted again.",
       "",
-      "With an endpoint it reads the Pot first. One with no code that --owner (or the signer) and",
-      "the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any",
-      "account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot",
-      "and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the",
-      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing.",
+      "Signing requires an endpoint and a deployed, authenticated Pot. New Pots must be deployed,",
+      "verified and persisted before typed data or signatures are produced. Offline prediction",
+      "and getter responses alone never authorize signing. Shared Pots cannot sign.",
+      "It reads the Kitchen's fee and the Pot's balance, warning when they do not cover the fee.",
       "",
       "--cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce",
       "word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a",
@@ -2525,11 +2530,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...HELP,
     },
     details: [
-      "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
-      "before it exists. You need not deploy it yourself: sauce run deploys it when it first",
-      "needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by",
-      "hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with",
-      "--deploy, sends it unless the Pot is already there, and waits until the endpoint shows its",
+      "A new Pot's address is CREATE3 from the released Kitchen over (owner, salt). Prediction",
+      "does not authenticate code. Explicitly deploy with --deploy and an authenticated",
+      "--pot-binding descriptor, verify and persist its binding, then fund, sign or cook.",
+      "Missing recorded Pots fail without automatic deployment or replacement.",
+      "--deploy sends it unless the authenticated Pot is already there, and waits for verified",
       "code. The owner defaults to the signer. Deploying is permissionless: with --owner, the",
       "signer sends and pays for another owner's Pot, which is that owner's alone. The default",
       "salt is zero: the one Pot an owner has by default. With a signer and no --owner, it is the",
@@ -3462,9 +3467,6 @@ const COMMANDS: Readonly<Record<string, Command>> = {
 function render(command: Command, output: CommandOutput, args: ParsedArgs): string {
   const format = stringFlag(args, "format");
   if (format === "cast") return output.cast ?? JSON.stringify(output.json, null, 2);
-  if (format !== undefined && format !== "json") {
-    throw new UsageError(`--format: '${format}' is not json or cast`);
-  }
   // `tx` and `pot` print a transaction, so JSON is their default; every other command a report.
   const jsonByDefault = "format" in command.flags && !("json" in command.flags);
 
@@ -3758,6 +3760,10 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     }
     const foreign = Object.keys(args.values).find((flag) => !(flag in command.flags));
     if (foreign !== undefined) throw new UsageError(notTaken(label, foreign));
+    const format = stringFlag(args, "format");
+    if (format !== undefined && format !== "json" && format !== "cast") {
+      throw new UsageError(`--format: '${format}' is not json or cast`);
+    }
     // A command that reads a chain reads it, with no endpoint of the user's, through the built-in
     // public ones: their forwarder starts before the command asks for one.
     if ("config" in command.flags) {
@@ -3771,7 +3777,10 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     // deploys. `sauce mcp` keeps its own, a tool call at a time, over stdio only.
     const potsDir = label === "mcp" ? undefined : (stringFlag(args, "pots") ?? io.potsDir);
     const stores: LocalStores = potsDir === undefined ? {} : { pots: new PotStore(potsDir) };
-    const run = async () => command.run(args, io, trailing);
+    const descriptor = stringFlag(args, "pot-binding");
+    const candidate =
+      descriptor === undefined ? undefined : readPotCandidate(readInput(io, descriptor));
+    const run = async () => withPotCandidate(candidate, () => command.run(args, io, trailing));
     const output = await (keepsAny(stores)
       ? keeping({ stores, say: (line) => io.stderr(`${line}\n`) }, run)
       : run());

@@ -15,8 +15,9 @@ The quick start's words, such as Pot, cook and simulate, are in the
 
 ## You will need
 
-- No funds. Nothing in this tutorial is signed or sent: every run is a free simulation.
-- The quick start done: the `sauce` command installed and the wallet `me`.
+- No additional funds. Every run here is a simulation that signs and sends nothing.
+- The quick start done: the command installed, wallet `me`, and its deployed, authenticated Pot
+  binding persisted. That earlier deployment cost gas; these simulations do not.
 - A text editor and a terminal, in the folder where you saved `pay.sauce.ts`.
 
 ## You will have
@@ -129,7 +130,7 @@ Your check stopped it: the whole cook would fail, and nothing would move. Run it
 `1000000 1000000` after the recipient, a payment of 1 USDC with a limit of 1 USDC, and it succeeds:
 
 ```text
-The cook succeeds from 0x2b89…71cc: gas used 96500 for the cook, after the Pot's deploy (1. below), returns 0x
+The cook succeeds from 0x2b89…71cc: gas used 96500 for the cook, returns 0x
 …
 ```
 
@@ -159,7 +160,7 @@ sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:
 ```
 
 ```text
-The cook succeeds from 0x2b89…71cc: gas used 136185 for the cook, after the Pot's deploy (1. below), returns 0x
+The cook succeeds from 0x2b89…71cc: gas used 136185 for the cook, returns 0x
 Left in the Pot, not in the owner's wallet:
   3 USDC (it held 5 USDC before)
 …
@@ -207,7 +208,7 @@ sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:
 ```
 
 ```text
-The cook succeeds from 0x2b89…71cc: gas used 117115 for the cook, after the Pot's deploy (1. below), returns 0x00000000000000000000000000000000000000000000000000000000000f4240
+The cook succeeds from 0x2b89…71cc: gas used 117115 for the cook, returns 0x00000000000000000000000000000000000000000000000000000000000f4240
 main returns Uint256: 1000000
 Left in the Pot, not in the owner's wallet:
   4 USDC (it held 5 USDC before)
@@ -231,6 +232,9 @@ knows how to run it. The finished program:
 ```js
 // Pays `amount` of USDC from your Pot to each of `recipients` in turn, and stops paying once the
 // next payment would take the total past `limit`. Returns the total it paid.
+//
+// First deploy with `sauce pot --deploy --chain base --wallet me --pot-binding <descriptor.json>`.
+// Continue only after it authenticates and persists the binding. Fund that Pot before the real run.
 //
 //   sauce simulate pay-list.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args '["<recipient>","<recipient>"]' 1000000 1500000
 //   sauce run pay-list.sauce.ts --chain base --wallet me --args '["<recipient>","<recipient>"]' 1000000 1500000

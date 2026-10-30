@@ -27,14 +27,15 @@ import { getChain } from "../chains/index.js";
 import {
   v12DeployedAddresses,
   v12EngineAddress,
-  v12KitchenAddress,
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
+import { executionEngine, potCandidate, resolvePotTarget, selectedKitchen } from "./pot-binding.js";
+import { keptPots } from "./keep.js";
 import { nativeSymbol } from "../evm/effects.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
-export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
+export const kitchenAddress = (): Address => selectedKitchen();
 import { encodeEntryArguments, type EntryParam, type EntryValue } from "../routes/entry.js";
 import { MAX_SQRT_PRICE_X96, MIN_SQRT_PRICE_X96 } from "../price.js";
 import type { AccessorTarget } from "../routes/protocol-rewrite.js";
@@ -51,8 +52,9 @@ import {
   requireCookContracts,
   requirePlanSendable,
   requirePot,
+  requireReleasePot,
+  requireKitchenPredicts,
   requirePotOwner,
-  POT_UNCHECKED,
   potState,
   releasedContracts,
   sendAndWait,
@@ -64,7 +66,6 @@ import {
 import { describeCompileError } from "./diagnostics.js";
 import {
   approveAll,
-  gasEstimate,
   unapproved,
   type Approver,
   type ChainReach,
@@ -542,8 +543,6 @@ export interface CookInput extends ProgramInput {
     options?: {
       /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
       readonly plan?: boolean;
-      /** The salt the run deploys the Pot at first, or the rehearsal does, when it has no code. */
-      readonly deploySalt?: Hex;
       /** Called before each transaction the funding sends first (`run`): what holds the rest of
        *  the run to the guard again, so none is sent once the cook would be refused. */
       readonly beforeSend?: () => Promise<void>;
@@ -567,76 +566,13 @@ export function cookOf(input: CookInput, files: CliFiles): Cook {
   }
   const target = input.target;
   if ("owner" in target) requirePotOwner(target.owner);
-  const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
-  const engine = getAddress(v12EngineAddress());
+  const pot = resolvePotTarget(input.chain.id, target);
+  const engine = executionEngine(input.chain.id, pot);
   const program = compileProgram(input, files);
   // The cook `compileSauceRoute` would build, over the program with its arguments appended.
   const data = buildSauceEvmCall({ pot, engine, program: payloadOf(program, input.args) }).data;
 
   return { pot, engine, data, program };
-}
-
-/** What a run says of a Pot it cooks on that has no code yet. */
-export const potMissing = (pot: string, chain: CanonicalChain): string =>
-  `Your Pot ${pot} on ${chain.slug} isn't deployed yet`;
-
-/**
- * The Pot's deployment as a step a command sends first (`approvals.ts`): `Kitchen.deployPot(owner,
- * salt)` from the signer, asked about with its gas, listed first in a plan, and sent through
- * `sendAndWait` (the wallet guard, the policy, the release gate) — done once the endpoint shows the
- * Pot's code, since a cook rehearsed on an endpoint behind the deployment would "succeed" on an
- * address with no code. With no account (`sauce tx`), it is planned and never sent.
- */
-export async function potDeployStep(input: {
-  readonly chain: CanonicalChain;
-  readonly target: Extract<PotInput, { readonly owner: Address }>;
-  readonly pot: Address;
-  readonly client?: PublicClient;
-  readonly rpcUrl?: string;
-  readonly account?: PrivateKeyAccount;
-}): Promise<SetupStep> {
-  const { chain, target, pot } = input;
-  const tx: TxRequest = {
-    to: kitchenAddress(),
-    data: sauceEvmDeployPotCall({
-      kitchen: kitchenAddress(),
-      owner: target.owner,
-      salt: target.salt,
-    }).data,
-    value: 0n,
-  };
-  const estimate =
-    input.client === undefined || input.account === undefined
-      ? "its gas"
-      : await gasEstimate(input.client, input.account.address, tx, chain);
-
-  return {
-    action: `deploy Pot ${pot}`,
-    reason: potMissing(pot, chain),
-    offer: "Deploy it now",
-    estimate,
-    byHand: `deploy it yourself with ${deployHint(chain, target)}`,
-    planned: {
-      what: `Kitchen.deployPot(${target.owner}, ${target.salt}): deploys the Pot, which has no code yet`,
-      deploysPot: pot,
-      chainId: chain.id,
-      to: tx.to,
-      data: tx.data,
-      value: hexQuantity(0n),
-    },
-    send: async () => {
-      if (input.client === undefined || input.rpcUrl === undefined || input.account === undefined) {
-        throw new Error("internal: a planned Pot deployment has no signer to send it");
-      }
-      const sent = await sendAndWait(input.client, input.rpcUrl, input.account, tx);
-      if (sent.status !== "success") {
-        throw new CliError(`${sentText("deploying the Pot", sent)}; the Pot is not there`);
-      }
-      await awaitPot(input.client, pot, sent.blockNumber);
-
-      return sent;
-    },
-  };
 }
 
 /**
@@ -740,171 +676,125 @@ export function valueOf(
 const withRoom = (gas: bigint): bigint => (gas * 13n) / 10n;
 
 /**
- * The gas to sign a plan's transactions with: the Pot's deployment (with `salt`, when it has no
- * code), the owner's transfers into it (`before`), and the cook, simulated together from `owner`,
- * the cook on the Pot they leave. A signer's own estimate of the cook, taken before they have
- * landed, prices a call to an empty address or an unfunded Pot. Each with room (`withRoom`); with a
- * note saying so, or why the cook has none. `simulateWith` is the rehearsal, given by a test.
+ * Suggest gas for the owner's transfers and cook on an authenticated Pot that is already there.
+ * Each estimate includes 30% room. Deployment is a separate explicit operation, never rehearsed.
  */
 export async function planGas(
   client: PublicClient,
-  plan: { readonly owner: Address; readonly salt?: Hex; readonly before?: readonly BeforeCook[] },
+  plan: { readonly owner: Address; readonly before?: readonly BeforeCook[] },
   cook: TxRequest,
   simulateWith: typeof rehearse = rehearse,
-): Promise<{ deploy?: bigint; before?: readonly bigint[]; cook?: bigint; note: string }> {
+): Promise<{ before?: readonly bigint[]; cook?: bigint; note: string }> {
   const before = plan.before ?? [];
-  const landed =
-    plan.salt === undefined
-      ? "the transfers"
-      : before.length === 0
-        ? "the deployment"
-        : "the deployment and the transfers";
+  const after = before.length === 0 ? "" : " after the transfers";
   const roomless =
-    `sign the cook with a gas limit that has room, or once ${landed} ${before.length === 0 && plan.salt !== undefined ? "has" : "have"} landed: a ` +
-    `signer's own estimate, taken while ${plan.salt === undefined ? "the Pot is not funded" : "the Pot has no code"}, is far too low`;
+    "sign the cook with a gas limit that has room, or build the plan again after funding: " +
+    "a signer's estimate on an unfunded Pot can be too low";
   let rehearsal;
   try {
     rehearsal = await simulateWith(client, {
       owner: plan.owner,
       pot: cook.to,
-      kitchen: kitchenAddress(),
-      ...(plan.salt === undefined ? {} : { deploy: { salt: plan.salt } }),
       ...(before.length === 0 ? {} : { before }),
       cook,
       overrides: [],
     });
   } catch (error) {
-    // The plan stands without it: an endpoint that cannot simulate them together.
-    return {
-      note:
-        `the endpoint could not simulate the cook after ${landed} ` +
-        `(${(error as { shortMessage?: string }).shortMessage ?? (error as Error).message.split("\n")[0]}): ` +
-        roomless,
-    };
+    const reason =
+      typeof error === "object" &&
+      error !== null &&
+      "shortMessage" in error &&
+      typeof error.shortMessage === "string"
+        ? error.shortMessage
+        : error instanceof Error
+          ? error.message.split("\n")[0]
+          : "the request failed";
+    return { note: `the endpoint could not simulate the cook${after} (${reason}): ${roomless}` };
   }
   if (!rehearsal.ok) {
     return {
       note:
         rehearsal.stage === "deploy"
-          ? `the Pot's deployment would revert (${rehearsal.reason}), so no gas is suggested`
+          ? rehearsal.reason
           : rehearsal.stage === "before"
             ? `${rehearsal.what ?? "a transfer"} would revert (${rehearsal.reason}), so no gas is ` +
               "suggested: the owner must hold what it transfers"
-            : `the cook is given no gas: simulated after ${landed}, on the chain as it is, it ` +
-              `would revert (${rehearsal.reason}). ${
-                before.length > 0 || plan.salt === undefined
-                  ? "Fund the Pot and build it again for its gas"
-                  : "The Pot has no code yet: deploy it first (`sauce pot --deploy` with the signer, " +
-                    "or `sauce run --fund`, which deploys before it funds), and do not send tokens to " +
-                    "its address before it is deployed, as a Kitchen upgrade that changes the Pot's " +
-                    "code moves the address and strands them. Then build the plan again for its gas"
-              }, or ${roomless}`,
+            : `the cook is given no gas: simulated on the authenticated Pot${after}, it would ` +
+              `revert (${rehearsal.reason}). Resolve the revert and build the plan again for its gas`,
     };
   }
   if (rehearsal.gas === undefined) {
-    return { note: `the endpoint could not estimate the cook after ${landed}: ${roomless}` };
+    return { note: `the endpoint could not estimate the cook${after}: ${roomless}` };
   }
   const gas = withRoom(rehearsal.gas);
-  const deployed = plan.salt === undefined;
 
   return {
-    ...(rehearsal.deployGas === undefined ? {} : { deploy: withRoom(rehearsal.deployGas) }),
     ...(before.length === 0 ? {} : { before: rehearsal.beforeGas.map(withRoom) }),
     cook: gas,
     note:
-      `each transaction's gas is a limit to sign it with: the cook's, ${gas}, is estimated as if ` +
-      `${landed} had landed (${rehearsal.gas} ${rehearsal.gasKind}, simulated after ` +
-      `${before.length === 0 && !deployed ? "it" : "them"}), with 30% room. A signer's own ` +
-      `estimate of the cook, taken while ${deployed ? "the Pot is not funded" : "the Pot has no code"}, ` +
-      "is far too low" +
-      // Not the deployment's: it calls the Kitchen, which has code, so a signer estimates it right.
-      (!deployed && rehearsal.deployGas === undefined
-        ? ". The deployment carries no gas: the endpoint did not report it apart, and a signer's " +
-          "own estimate of it is right, as the Kitchen it calls has code"
-        : ""),
+      `each transaction's gas is a limit to sign it with: the cook's, ${gas} ` +
+      `(${rehearsal.gas} ${rehearsal.gasKind}${after}), with 30% room`,
   };
 }
 
-/** An offline transaction is a builder result, not evidence that its release is live. */
-const UNVERIFIED_COOK =
-  "Release availability is NOT verified: no RPC endpoint was given. The released engine and " +
-  "compatible Kitchen must be deployed, and the Pot must have code before the cook is sent. " +
-  "Pass an RPC endpoint to check; an empty target can accept value without running the program.";
-
 export interface TxInput extends CookInput {
-  /** An endpoint, when given: it reads the fee and checks the Pot. */
+  /** Required for transaction construction: reads the fee and authenticates the deployed Pot. */
   readonly rpcUrl?: string;
-  /** More transactions the cook needs sent first, listed after the Pot's deployment (when it has
-   *  no code) and before the cook: another chain's setup, say (`approvals.ts`). */
+  /** Transactions the cook needs sent first, such as another chain's setup (`approvals.ts`). */
   readonly setup?: (reach: SetupReach) => Promise<readonly SetupStep[]>;
   /** Another chain's endpoint, as the command finds it, for what `setup` reads there. */
   readonly endpointOf?: EndpointOf;
-  /** `--fund`: what the owner moves into the Pot, planned after its deployment and before the cook,
-   *  each token a plain transfer and the native currency the cook's value (`transfersToPot`). */
+  /** `--fund`: owner transfers into the authenticated Pot before the cook. Each token is a plain
+   * transfer; native currency rides as the cook's value (`transfersToPot`). */
   readonly transfers?: readonly FundRequest[];
 }
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
 export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
-  if (input.value === undefined && input.rpcUrl === undefined)
-    valueOf(undefined, undefined, input.chain);
   const cook = cookOf(input, files);
   requireSupported("building the cook transaction", [input.chain]);
-  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
-  const fee = client === undefined ? undefined : await requireCookContracts(client, input.chain);
-  const state = client === undefined ? undefined : await potState(client, cook.pot);
-  if (state !== undefined && !state.deployed && "pot" in input.target) {
+  if (input.rpcUrl === undefined) {
     throw new CliError(
-      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
-        `is. Give its --owner (and --salt) to plan its deployment, or deploy it first`,
+      "Building a cook transaction requires an RPC endpoint and an authenticated deployed Pot",
     );
   }
-  if (client !== undefined && state !== undefined) {
-    await requirePot(client, input.chain, {
-      ...input.target,
-      pot: cook.pot,
-      deployed: state.deployed,
-    });
+  const client = await connect(input.rpcUrl, input.chain);
+  const fee = await requireCookContracts(client, input.chain, cook.pot);
+  const state = await potState(client, cook.pot);
+  if (!state.deployed && "pot" in input.target) {
+    throw new CliError(
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
+        "is. Explicitly deploy, verify and persist it first with sauce pot --deploy",
+    );
   }
+  await requirePot(client, input.chain, {
+    ...input.target,
+    pot: cook.pot,
+    deployed: state.deployed,
+  });
   const value = valueOf(input.value, fee, input.chain);
   const target = input.target;
-  const owner = state?.owner ?? ("owner" in target ? target.owner : undefined);
+  const owner = state.owner ?? ("owner" in target ? target.owner : undefined);
   const head =
     "owner" in target
       ? `Pot ${cook.pot} belongs to ${target.owner} (salt ${target.salt}).`
       : `Pot ${cook.pot}.`;
   const from = `Send from ${owner ?? "the Pot's owner"}: cook() is onlyOwner.`;
-  // What the cook needs first: its Pot, when it has no code and its owner and salt are known, and
-  // whatever else the caller sets up. A plan then lists them, and the cook last.
-  const deployFirst = state !== undefined && !state.deployed && "owner" in target;
   const setup = [
-    ...(deployFirst
-      ? [
-          await potDeployStep({
-            chain: input.chain,
-            target,
-            pot: cook.pot,
-            ...(client === undefined ? {} : { client }),
-          }),
-        ]
-      : []),
     ...((await input.setup?.(
-      setupReach(
-        input.chain,
-        input.endpointOf,
-        client === undefined
-          ? undefined
-          : { client, ...(owner === undefined ? {} : { from: owner }) },
-      ),
+      setupReach(input.chain, input.endpointOf, {
+        client,
+        ...(owner === undefined ? {} : { from: owner }),
+      }),
     )) ?? []),
   ];
-  // `--fund`: the owner's transfers into the Pot, after its deployment and before the cook; the
+  // `--fund`: the owner's transfers into the authenticated Pot before the cook;
   // native currency rides as the cook's value.
   const funds =
     input.transfers === undefined || input.transfers.length === 0
       ? undefined
       : await transfersToPot({
-          ...(client === undefined ? {} : { client }),
+          client,
           requests: input.transfers,
           ...(owner === undefined ? {} : { owner }),
           pot: cook.pot,
@@ -912,25 +802,20 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   const transfers = funds?.transfers ?? [];
   const cookValue = value + (funds?.native ?? 0n);
   if (setup.length > 0 || transfers.length > 0) {
-    // The cook's gas, as if what comes before it had landed: the Pot's deployment, the transfers.
+    // The cook's gas, as if the owner's transfers into the existing Pot had landed.
     const gas =
-      setup.length === (deployFirst ? 1 : 0) && client !== undefined && owner !== undefined
+      setup.length === 0 && owner !== undefined
         ? await planGas(
             client,
             {
               owner,
-              ...(deployFirst && "owner" in target ? { salt: target.salt } : {}),
               before: transfers,
             },
             { to: cook.pot, data: cook.data, value: cookValue },
           )
         : undefined;
     const steps = [
-      ...setup.map((step, index) =>
-        index === 0 && gas?.deploy !== undefined
-          ? { ...step.planned, gas: hexQuantity(gas.deploy) }
-          : step.planned,
-      ),
+      ...setup.map((step) => step.planned),
       ...transfers.map((each, index) => ({
         what: each.what,
         chainId: input.chain.id,
@@ -967,48 +852,28 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       ].join("\n"),
       notes: [
         head,
-        ...(deployFirst
-          ? [
-              `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
-                "may send it; the Pot is the owner's either way), and the cook comes last. " +
-                (transfers.length === 0
-                  ? "Send the deployment, fund the Pot with what the program spends, then send " +
-                    "the cook (or plan with `--fund`)."
-                  : "Send them in order."),
-            ]
-          : []),
-        ...setup
-          .slice(deployFirst ? 1 : 0)
-          .map((step) => `${step.reason}: ${step.planned.what} comes first.`),
+        ...setup.map((step) => `${step.reason}: ${step.planned.what} comes first.`),
         ...(transfers.length === 0
           ? []
           : [
               `--fund: the owner's ${transfers.length === 1 ? "transfer into the Pot comes" : `${transfers.length} transfers into the Pot come`} ` +
                 "before the cook. Sent as one batch (sendCalls, a smart wallet's single " +
-                `approval), the Pot is ${deployFirst ? "deployed, funded" : "funded"} and cooked ` +
+                "approval), the verified Pot is funded and cooked " +
                 "on at once, or not at all.",
             ]),
         ...(funds?.notes ?? []),
         ...(gas === undefined ? [] : [`${gas.note.charAt(0).toUpperCase()}${gas.note.slice(1)}.`]),
         from,
         ...feeFloorNotes(input.chain),
-        ...(client === undefined ? [UNVERIFIED_COOK, POT_UNCHECKED] : []),
       ],
     };
   }
   const notes = [
     head,
-    state === undefined
-      ? `It must be deployed (${deployHint(input.chain, target)}) and funded with what the ` +
-        "program spends; pass an RPC endpoint to check."
-      : state.deployed
-        ? "It is deployed. Fund it with what the program spends."
-        : `It is NOT deployed, and --pot does not say whose it is: deploy it first ` +
-          `(${deployHint(input.chain, target)}), then fund it.`,
+    "It is deployed and authenticated. Fund it with what the program spends.",
     ...(funds?.notes ?? []),
     from,
     ...feeFloorNotes(input.chain),
-    ...(client === undefined ? [UNVERIFIED_COOK, POT_UNCHECKED] : []),
   ];
   const json = {
     chainId: input.chain.id,
@@ -1075,7 +940,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const cook = cookOf(input, files);
   requireSupported("sending the cook", [input.chain]);
   const client = await connect(input.rpcUrl, input.chain);
-  const fee = await requireCookContracts(client, input.chain);
+  const fee = await requireCookContracts(client, input.chain, cook.pot);
   const state = await potState(client, cook.pot);
   // What the cook needs sent first, approved together in one question: the Pot, when it has no
   // code, then whatever else the caller sets up.
@@ -1091,21 +956,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       `Pot ${cook.pot} belongs to ${state.owner}, not the signer ${signer}: cook() is onlyOwner`,
     );
   }
-  // The Pot this run deploys first, which funding takes as the signer's own by its address.
-  const deploySalt = !state.deployed && "owner" in target ? target.salt : undefined;
   const setup = [
-    ...(!state.deployed && "owner" in target
-      ? [
-          await potDeployStep({
-            chain: input.chain,
-            target,
-            pot: cook.pot,
-            client,
-            rpcUrl: input.rpcUrl,
-            account: input.account,
-          }),
-        ]
-      : []),
     ...((await input.setup?.(
       setupReach(input.chain, input.endpointOf, {
         client,
@@ -1120,7 +971,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       ...setup.map((step) => step.action),
       ...(input.fund === undefined
         ? []
-        : ((await input.fund(client, cook.pot, signer, { plan: true, deploySalt })).needs ?? [])),
+        : ((await input.fund(client, cook.pot, signer, { plan: true })).needs ?? [])),
     ];
     if (needs.length > 0) throw unapproved(needs, input.approver.why);
   }
@@ -1150,13 +1001,12 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     sentFirst.push([step, await step.send()]);
     unsent.delete(step);
   }
-  const deployed = sentFirst.find(([step]) => step.planned.deploysPot === cook.pot)?.[1];
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
   const funding =
     input.fund === undefined
       ? undefined
-      : await input.fund(client, cook.pot, signer, { deploySalt, beforeSend: holdPlan });
+      : await input.fund(client, cook.pot, signer, { beforeSend: holdPlan });
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
@@ -1184,13 +1034,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
 
   return {
     text: [
-      ...sentFirst.flatMap(([step, first]) =>
-        sentLines(
-          first === deployed ? `deployed Pot ${cook.pot} in` : `${step.action} in`,
-          first,
-          input.chain,
-        ),
-      ),
+      ...sentFirst.flatMap(([step, first]) => sentLines(`${step.action} in`, first, input.chain)),
       ...(funding?.sent ?? []).flatMap((step) => sentLines(step.what, step.sent, input.chain)),
       ...sentLines("cook", sent, input.chain),
       ...(cost === undefined
@@ -1205,13 +1049,12 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
       pot: cook.pot,
       value: value.toString(),
       ...(report === undefined ? {} : { leftInPot: report.leftInPot }),
-      ...(deployed === undefined ? {} : { deployPot: sentJson(deployed, input.chain) }),
-      // What else was sent first, beside the Pot's deployment.
-      ...(sentFirst.some(([, first]) => first !== deployed)
+      ...(sentFirst.length > 0
         ? {
-            setup: sentFirst
-              .filter(([, first]) => first !== deployed)
-              .map(([step, first]) => ({ what: step.action, ...sentJson(first, input.chain) })),
+            setup: sentFirst.map(([step, first]) => ({
+              what: step.action,
+              ...sentJson(first, input.chain),
+            })),
           }
         : {}),
       ...(funding === undefined
@@ -1256,8 +1099,19 @@ export function potCommand(input: PotCommandInput): CommandOutput {
   }
   requirePotOwner(input.owner);
   const kitchen = kitchenAddress();
-  const pot = v12PredictPot(input.owner, input.salt) as Address;
+  const pot = resolvePotTarget(input.chain.id, { owner: input.owner, salt: input.salt });
   const predicted = { chainId: input.chain.id, pot, owner: input.owner, salt: input.salt, kitchen };
+  if (pot !== getAddress(v12PredictPot(input.owner, input.salt, kitchen))) {
+    const json = { ...predicted, retained: true };
+
+    return {
+      text: JSON.stringify(json, null, 2),
+      json,
+      notes: [
+        "Retained Pot selection: no current factory deployment call is emitted for its historical address.",
+      ],
+    };
+  }
   const refused: PreviewChainRefusal | undefined = previewRefusal(POT_DEPLOYMENT, [input.chain]);
   if (refused !== undefined) {
     const json = { ...predicted, refused };
@@ -1339,12 +1193,12 @@ export async function potStatusCommand(
   // The deployment it prints is refused where the Kitchen would put the Pot elsewhere; where the
   // Kitchen has no code, the lines below say so.
   if (released.kitchen.deployed) {
-    await requirePot(client, input.chain, {
-      owner: input.owner,
-      salt: input.salt,
-      pot,
-      deployed: state.deployed,
-    });
+    if (state.deployed) await requireReleasePot(client, input.chain, pot);
+    else if (predicted.json.retained === true)
+      throw new CliError(
+        `Expected retained Pot ${pot} is missing; no replacement deployment is allowed`,
+      );
+    else await requireKitchenPredicts(client, input.chain, input.owner, input.salt);
   }
   const deployment = deploymentLines(input.chain, released, pot, state);
   const json = { ...predicted.json, deployment: deployment.json };
@@ -1365,6 +1219,11 @@ export async function potDeployCommand(
   input: PotCommandInput & ChainAccess & { readonly account: PrivateKeyAccount },
 ): Promise<CommandOutput> {
   requireSupported("deploying a Pot", [input.chain]);
+  if (keptPots() === undefined) {
+    throw new CliError(
+      "Deploying a Pot requires a configured Pot store (--pots) to persist its verified binding",
+    );
+  }
   const predicted = potCommand(input);
   const pot = predicted.json.pot as Address;
   const client = await connect(input.rpcUrl, input.chain);
@@ -1377,17 +1236,21 @@ export async function potDeployCommand(
     );
   }
   const state = await potState(client, pot);
-  await requirePot(client, input.chain, {
-    owner: input.owner,
-    salt: input.salt,
-    pot,
-    deployed: state.deployed,
-  });
+  if (state.deployed) await requireReleasePot(client, input.chain, pot);
   if (state.deployed) {
     const json = { ...predicted.json, deployed: true, owner: state.owner };
     const note = `Pot ${pot} is already deployed on ${input.chain.slug}, owned by ${state.owner}.`;
 
     return { text: JSON.stringify(json, null, 2), json, notes: [note] };
+  }
+  if (predicted.json.retained === true) {
+    throw new CliError(
+      `Expected retained Pot ${pot} is missing; no replacement deployment is allowed`,
+    );
+  }
+  await requireKitchenPredicts(client, input.chain, input.owner, input.salt);
+  if (potCandidate()?.profile === undefined) {
+    throw new CliError("Deploying a new Pot requires an explicit CREATE3 release descriptor");
   }
   const sent = await sendAndWait(client, input.rpcUrl, input.account, {
     to: predicted.json.to as Address,
@@ -1395,7 +1258,10 @@ export async function potDeployCommand(
     value: 0n,
   });
   // Deployed means the endpoint shows its code, not only that a receipt said success.
-  if (sent.status === "success") await awaitPot(client, pot, sent.blockNumber);
+  if (sent.status === "success") {
+    await awaitPot(client, pot, sent.blockNumber);
+    await requireReleasePot(client, input.chain, pot);
+  }
   const sender = input.account.address;
   const json = {
     ...predicted.json,

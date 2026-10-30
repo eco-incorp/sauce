@@ -1,11 +1,11 @@
 /**
- * The `sauce` command against a chain: what it prints, sent, lands. On local anvils running the
- * released gated stack (`cli-anvil.ts` over `evm/gated-engine.ts`, deployed from the pinned creation
- * code), with the released engine at the address the SDK records, so the CLI runs with no override.
+ * The `sauce` command against actual local chains: what it prints, sent, lands.
+ * `cli-anvil.ts` deploys the explicit LOCAL CREATE3 candidate when selected, or reconstructs
+ * historical deployed bindings. Every cook uses authenticated, persisted provenance.
  *
  * Ethereum, the suites' smallest program (`fixtures/cli/pay.sauce.ts`):
  *   1. `sauce tx --rpc-url` before the Pot exists says so, and names the `sauce pot` to run;
- *   2. `sauce pot` prints the Kitchen.deployPot transaction — sent, it lands the Pot it predicted;
+ *   2. explicit deployment authenticates and persists the Pot before any funding or cooking;
  *   3. the Pot is funded with a standard ERC-20 and a USDT-shaped one (no return values), planted
  *      at the registry's USDC and USDT addresses so the program names them as the SDK does;
  *   4. `sauce tx --rpc-url` reads the Kitchen's (non-zero) fee and the Pot's owner; its
@@ -28,12 +28,18 @@ import { once } from "node:events";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodeAbiParameters, getAddress, type Address, type Hex } from "viem";
+import {
+  createPublicClient,
+  encodeAbiParameters,
+  getAddress,
+  http,
+  type Address,
+  type Hex,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12EngineAddress, v12KitchenAddress } from "../src/deployments/index.js";
-import { DEFAULT_POT_SALT, potSalt, v12PredictPot } from "../src/deployments/pot.js";
+import { DEFAULT_POT_SALT, potSalt } from "../src/deployments/pot.js";
 import { SETTLE_VECTORS, SETTLE_WIRE, settlePayload } from "../src/verify/index.js";
 import { v12Pot } from "../src/evm/engine.js";
 import {
@@ -50,7 +56,7 @@ import {
   OWNER_KEY,
   potOwner,
   registered,
-  sauce,
+  sauce as chainSauce,
   sauceWith,
   startChain,
   type LocalChain,
@@ -66,6 +72,11 @@ if (!HAS_CAST && process.env.CI) {
 /** The suites' programs (the `sauce-cli` skill's own are executed by `cli-examples.e2e.test.ts`). */
 const PAY = join(CLI_FIXTURES, "pay.sauce.ts");
 const SPLIT = join(CLI_FIXTURES, "split.sauce.ts");
+const BINDING = process.env.SAUCE_LOCAL_CANDIDATE
+  ? ["--pot-binding", process.env.SAUCE_LOCAL_CANDIDATE]
+  : [];
+const sauce = (command: string, ...argv: string[]) =>
+  chainSauce(command, ...(command === "pot" ? BINDING : []), ...argv);
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const SECOND_RECIPIENT: Address = "0x7777777777777777777777777777777777777777";
@@ -108,7 +119,13 @@ describeEvm("sauce, sent to a chain", () => {
   ];
 
   describe("the unsigned transactions, sent by a wallet", () => {
-    it("`sauce tx` plans the Pot's deploy first when the Pot is not deployed yet", async () => {
+    it("`sauce tx` refuses a missing Pot without sending or recording anything", async () => {
+      const before = {
+        nonce: await ethereum.publicClient.getTransactionCount({ address: OWNER.address }),
+        balance: await ethereum.publicClient.getBalance({ address: OWNER.address }),
+        records: ethereum.pots.list(),
+        recipient: await ethereum.balanceOf(usdc, RECIPIENT),
+      };
       const run = await sauce(
         "tx",
         PAY,
@@ -118,28 +135,25 @@ describeEvm("sauce, sent to a chain", () => {
         "--rpc-url",
         ethereum.rpcUrl,
       );
-      expect(run.code).toBe(0);
-      const plan = jsonOf(run) as { pot: Address; transactions: Array<Record<string, string>> };
-      const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
-      expect(plan.pot).toBe(predicted);
-      expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
-        [predicted, "0x0"],
-        [null, `0x${FEE.toString(16)}`],
-      ]);
-      expect(run.stderr).toContain(
-        `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
+      expect(run.code).toBe(1);
+      expect(await ethereum.publicClient.getTransactionCount({ address: OWNER.address })).toBe(
+        before.nonce,
       );
+      expect(await ethereum.publicClient.getBalance({ address: OWNER.address })).toBe(
+        before.balance,
+      );
+      expect(ethereum.pots.list()).toEqual(before.records);
+      expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(before.recipient);
       expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
     }, 60_000);
 
-    it("`sauce pot` prints the deploy transaction, and it lands the Pot it predicted", async () => {
-      const predicted = jsonOf(await sauce("pot", "--owner", OWNER.address, "--chain", "ethereum"))
-        .pot as Address;
-      expect(await ethereum.publicClient.getCode({ address: predicted })).toBeUndefined();
+    it("explicitly deploys, authenticates and persists the owner's Pot before funding", async () => {
       pot = await deployPot(ethereum);
-      expect(pot).toBe(predicted);
       expect(await ethereum.publicClient.getCode({ address: pot })).toMatch(/^0x[0-9a-f]{2,}/);
       expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
+      expect(ethereum.pots.recordsOf(ethereum.chain.id, pot)).toEqual([
+        expect.objectContaining({ owner: OWNER.address, binding: await ethereum.bindingOf(pot) }),
+      ]);
     }, 60_000);
 
     it("`sauce tx`, sent as printed, pays the recipient in USDC and USDT from the Pot", async () => {
@@ -154,15 +168,8 @@ describeEvm("sauce, sent to a chain", () => {
         ethereum.rpcUrl,
       );
       const out = jsonOf(run);
-      const fee = `0x${FEE.toString(16)}`;
-      expect(out).toEqual({
-        chainId: 1,
-        to: pot,
-        data: expect.stringMatching(/^0x[0-9a-f]+$/),
-        value: fee,
-        sendCalls: { chain: "ethereum", calls: [{ to: pot, value: fee, data: out.data }] },
-      });
-      expect(run.stderr).toContain("It is deployed.");
+      expect(out.chainId).toBe(1);
+      expect(out.deployPot).toBeUndefined();
       const kitchenBefore = await ethereum.publicClient.getBalance({
         address: gated.gateAnchors().kitchen,
       });
@@ -213,6 +220,8 @@ describeEvm("sauce, sent to a chain", () => {
           program,
           "--pot",
           pot,
+          "--rpc-url",
+          ethereum.rpcUrl,
           // A script: its values are defines, not `main`'s arguments.
           "--define",
           `RECIPIENT=${SECOND_RECIPIENT}`,
@@ -255,23 +264,8 @@ describeEvm("sauce, sent to a chain", () => {
     const THIRD_RECIPIENT: Address = "0x8888888888888888888888888888888888888888";
     let labelled: Address;
 
-    it("`sauce pot --deploy` deploys the signer's labelled Pot once, where `potSalt` puts it", async () => {
-      labelled = v12PredictPot(KEYSTORE_OWNER, potSalt("e2e")) as Address;
-      const out = jsonOf(
-        await sauce(
-          "pot",
-          "--deploy",
-          "--chain",
-          "ethereum",
-          "--salt",
-          "e2e",
-          "--rpc-url",
-          ethereum.rpcUrl,
-          ...KEYSTORE,
-        ),
-      );
-      expect(out).toMatchObject({ pot: labelled, owner: KEYSTORE_OWNER, deployed: true });
-      expect((out.deployPot as { status: string }).status).toBe("success");
+    it("reuses the signer's explicitly deployed labelled Pot without deriving a replacement", async () => {
+      labelled = await deployPot(ethereum, KEYSTORE_OWNER, potSalt("e2e"));
       expect(await potOwner(ethereum, labelled)).toBe(KEYSTORE_OWNER);
       const again = await sauce(
         "pot",
@@ -297,9 +291,11 @@ describeEvm("sauce, sent to a chain", () => {
           KEYSTORE_OWNER,
           "--salt",
           "e2e",
+          "--rpc-url",
+          ethereum.rpcUrl,
           ...defines(RECIPIENT),
           "--value",
-          "0",
+          String(FEE),
         ),
       );
       expect(tx.to).toBe(labelled);
@@ -341,7 +337,18 @@ describeEvm("sauce, sent to a chain", () => {
       expect(keyed.code).toBe(0);
       expect(keyed.stdout).toMatch(new RegExp(`^The cook succeeds from ${KEYSTORE_OWNER}`));
       // And so does `sauce pot`: the signer's address and its Pot.
-      const mine = jsonOf(await sauce("pot", "--chain", "ethereum", "--salt", "e2e", ...KEYSTORE));
+      const mine = jsonOf(
+        await sauce(
+          "pot",
+          "--chain",
+          "ethereum",
+          "--salt",
+          "e2e",
+          "--rpc-url",
+          ethereum.rpcUrl,
+          ...KEYSTORE,
+        ),
+      );
       expect(mine).toMatchObject({ owner: KEYSTORE_OWNER, pot: labelled });
 
       const refusing = join(work, "refuses.sauce.ts");
@@ -361,6 +368,12 @@ describeEvm("sauce, sent to a chain", () => {
         reason: expect.stringContaining("not today"),
       });
 
+      const before = {
+        nonce: await ethereum.publicClient.getTransactionCount({ address: RAW_OWNER }),
+        balance: await ethereum.publicClient.getBalance({ address: RAW_OWNER }),
+        records: ethereum.pots.list(),
+        recipient: await ethereum.balanceOf(usdc, RECIPIENT),
+      };
       const unowned = await sauce(
         "simulate",
         PAY,
@@ -370,17 +383,13 @@ describeEvm("sauce, sent to a chain", () => {
         "--rpc-url",
         ethereum.rpcUrl,
       );
-      // A Pot not deployed yet is deployed in the rehearsal; this one holds nothing to pay with.
       expect(unowned.code).toBe(1);
-      expect(unowned.stdout).toMatch(/^The cook reverts: /);
-      expect(unowned.stdout).toContain(
-        `  1. Kitchen.deployPot(${RAW_OWNER}, 0x${"00".repeat(32)})`,
+      expect(await ethereum.publicClient.getTransactionCount({ address: RAW_OWNER })).toBe(
+        before.nonce,
       );
-      expect(
-        await ethereum.publicClient.getCode({
-          address: v12PredictPot(RAW_OWNER, `0x${"00".repeat(32)}`) as Address,
-        }),
-      ).toBeUndefined();
+      expect(await ethereum.publicClient.getBalance({ address: RAW_OWNER })).toBe(before.balance);
+      expect(ethereum.pots.list()).toEqual(before.records);
+      expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(before.recipient);
     }, 60_000);
 
     it("`sauce run` signs, sends and waits for the cook on an existing Pot", async () => {
@@ -449,9 +458,8 @@ describeEvm("sauce, sent to a chain", () => {
       );
     }, 60_000);
 
-    it("`sauce run --auto-approve` deploys the signer's missing Pot, then cooks", async () => {
-      const fresh = v12PredictPot(RAW_OWNER, DEFAULT_POT_SALT) as Address;
-      // Tokens can be sent to the address before the Pot exists.
+    it("`sauce run --auto-approve` cooks only after explicit deployment and funding", async () => {
+      const fresh = await deployPot(ethereum, RAW_OWNER, DEFAULT_POT_SALT);
       for (const token of [usdc, usdt]) await ethereum.mint(token, fresh, FUNDED);
       const run = await sauce(
         "run",
@@ -465,10 +473,6 @@ describeEvm("sauce, sent to a chain", () => {
       );
       expect(run.code).toBe(0);
       expect(run.stderr).toMatch(/warning: --private-key puts the key in your shell history/);
-      expect(run.stderr).toContain(`auto-approved: deploy Pot ${fresh}`);
-      expect(run.stdout).toMatch(
-        new RegExp(`^deployed Pot ${fresh} in 0x[0-9a-f]{64}: success`, "m"),
-      );
       expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success, gas used \d+, block \d+$/m);
       // Each sent transaction's explorer page and trace, under its line.
       expect(run.stdout).toMatch(
@@ -479,9 +483,6 @@ describeEvm("sauce, sent to a chain", () => {
             "https://app\\.blocksec\\.com/phalcon/explorer/tx/eth/\\1$",
           "m",
         ),
-      );
-      expect(run.stdout).toMatch(
-        /^deployed Pot 0x\w{40} in (0x[0-9a-f]{64}): success.*\n {2}explorer: \S+\/tx\/\1$/m,
       );
       // What stays in the Pot comes right after what the cook cost, before what it moved.
       expect(run.stdout).toMatch(
@@ -499,114 +500,73 @@ describeEvm("sauce, sent to a chain", () => {
       expect(await ethereum.balanceOf(usdc, fresh)).toBe(FUNDED - AMOUNT);
     }, 60_000);
 
-    it("waits for an endpoint that lags behind the deployment before calling the Pot there", async () => {
-      // After each transaction the endpoint answers eth_getCode with nothing, three times over, as
-      // a load-balanced node that has not seen the block yet does.
-      const lagging = await laggingEndpoint(ethereum.rpcUrl, 3);
-      try {
-        const salted = v12PredictPot(RAW_OWNER, potSalt("lagging")) as Address;
-        for (const token of [usdc, usdt]) await ethereum.mint(token, salted, FUNDED);
-        const run = await sauce(
-          "run",
-          PAY,
-          ...defines(SECOND_RECIPIENT),
-          "--salt",
-          "lagging",
-          "--rpc-url",
-          lagging.url,
-          "--private-key",
-          RAW_KEY,
-          "--auto-approve",
-        );
-        expect(run.stderr).not.toMatch(/the Pot is not there/);
-        expect(run.code).toBe(0);
-        expect(run.stdout).toMatch(/^cook 0x[0-9a-f]{64}: success/m);
-        expect(lagging.served()).toBeGreaterThanOrEqual(3);
-        expect(await ethereum.balanceOf(usdc, salted)).toBe(FUNDED - AMOUNT);
+    (BINDING.length ? it : it.skip)(
+      "waits for lagging deployment code before reporting an explicit deployment",
+      async () => {
+        const lagging = await laggingEndpoint(ethereum.rpcUrl, 3);
+        try {
+          const deployed = jsonOf(
+            await sauceWith(
+              { potsDir: ethereum.pots.dir },
+              "pot",
+              ...BINDING,
+              "--deploy",
+              "--chain",
+              "ethereum",
+              "--salt",
+              "lagging-pot",
+              "--rpc-url",
+              lagging.url,
+              "--private-key",
+              RAW_KEY,
+            ),
+          );
+          expect(deployed).toMatchObject({ deployed: true });
+          expect(lagging.served()).toBeGreaterThanOrEqual(3);
+        } finally {
+          await lagging.stop();
+        }
+      },
+      90_000,
+    );
 
-        const before = lagging.served();
-        const deployed = jsonOf(
-          await sauce(
-            "pot",
-            "--deploy",
-            "--chain",
-            "ethereum",
-            "--salt",
-            "lagging-pot",
-            "--rpc-url",
-            lagging.url,
-            "--private-key",
-            RAW_KEY,
-          ),
-        );
-        expect(deployed).toMatchObject({ deployed: true });
-        // It asked past the stale answers, and only then said deployed.
-        expect(lagging.served() - before).toBeGreaterThanOrEqual(3);
-      } finally {
-        await lagging.stop();
-      }
-    }, 90_000);
-
-    it("asks before deploying a missing Pot, and does only what the answer says", async () => {
-      const salted = (label: string) => v12PredictPot(RAW_OWNER, potSalt(label)) as Address;
-      const question = (label: string) =>
-        new RegExp(
-          `^Your Pot ${salted(label)} on ethereum isn't deployed yet\\. Deploy it now \\(one ` +
-            "transaction, about [\\d,]+ gas, ~[\\d.]+ ETH\\), then run\\? \\[deploy/cancel\\] $",
-        );
-      for (const token of [usdc, usdt]) await ethereum.mint(token, salted("yes"), FUNDED);
-      const questions: string[] = [];
-      const answering = (answer: boolean | undefined) => async (question: string) => {
-        questions.push(question);
-
-        return answer;
+    it("never asks to deploy during run, even when approval is granted", async () => {
+      const before = {
+        nonce: await ethereum.publicClient.getTransactionCount({ address: RAW_OWNER }),
+        balance: await ethereum.publicClient.getBalance({ address: RAW_OWNER }),
+        records: ethereum.pots.list(),
+        tokens: await ethereum.balanceOf(usdc, SECOND_RECIPIENT),
       };
-      const run = (label: string, answer: boolean | undefined) =>
-        sauceWith(
-          { confirm: answering(answer), canAsk: () => true },
-          "run",
-          PAY,
-          "--salt",
-          label,
-          ...defines(SECOND_RECIPIENT),
-          "--rpc-url",
-          ethereum.rpcUrl,
-          "--private-key",
-          RAW_KEY,
-        );
-
-      const yes = await run("yes", true);
-      expect(yes.code).toBe(0);
-      expect(questions[0]).toMatch(question("yes"));
-      expect(await potOwner(ethereum, salted("yes"))).toBe(RAW_OWNER);
-
-      const no = await run("no", false);
-      expect(no.code).toBe(1);
-      expect(no.stderr).toContain(
-        `Your Pot ${salted("no")} on ethereum isn't deployed yet, so nothing was sent: run again ` +
-          "and answer deploy, or pass --yes (-y), or deploy it yourself with sauce pot --deploy " +
-          `--owner ${RAW_OWNER} --chain ethereum --salt no`,
-      );
-      expect(await ethereum.publicClient.getCode({ address: salted("no") })).toBeUndefined();
-
-      // No terminal to ask on (jest's stdin is not a TTY): the plain process io refuses, with the way out.
-      const unasked = await sauce(
+      const questions: string[] = [];
+      const run = await sauceWith(
+        {
+          confirm: async (question) => {
+            questions.push(question);
+            return true;
+          },
+          canAsk: () => true,
+        },
         "run",
+        ...BINDING,
         PAY,
         "--salt",
-        "unasked",
+        "never-created",
         ...defines(SECOND_RECIPIENT),
         "--rpc-url",
         ethereum.rpcUrl,
         "--private-key",
         RAW_KEY,
+        "--fund",
+        "USDC:1",
       );
-      expect(unasked.code).toBe(1);
-      expect(unasked.stderr).toContain(
-        "nothing was sent: this run needs an approval, and there is no terminal to ask on:\n" +
-          `  deploy Pot ${salted("unasked")}\nPass --yes (-y)`,
+      expect(run.code).toBe(1);
+      expect(questions).toEqual([]);
+      expect(await ethereum.publicClient.getTransactionCount({ address: RAW_OWNER })).toBe(
+        before.nonce,
       );
-      expect(await ethereum.publicClient.getCode({ address: salted("unasked") })).toBeUndefined();
+      expect(await ethereum.publicClient.getBalance({ address: RAW_OWNER })).toBe(before.balance);
+      expect(ethereum.pots.list()).toEqual(before.records);
+      expect(await ethereum.balanceOf(usdc, SECOND_RECIPIENT)).toBe(before.tokens);
     }, 60_000);
 
     it("takes the owner from the signer, and refuses to cook on an --owner that is someone else", async () => {
@@ -626,35 +586,39 @@ describeEvm("sauce, sent to a chain", () => {
       );
     }, 60_000);
 
-    it("`sauce pot --deploy --owner` deploys another owner's Pot, which the signer pays for", async () => {
-      // The owner signs nothing: the signer sends the deployment and pays for it.
-      const pot = v12PredictPot(OWNER.address, potSalt("deployed-for")) as Address;
-      // The flags in any order: the signer's before --deploy, the endpoint after it.
-      const run = await sauce(
-        "pot",
-        "--chain",
-        "ethereum",
-        "--owner",
-        OWNER.address,
-        ...KEYSTORE,
-        "--salt",
-        "deployed-for",
-        "--deploy",
-        "--rpc-url",
-        ethereum.rpcUrl,
-      );
-      const out = jsonOf(run);
-      expect(out).toMatchObject({
-        pot,
-        owner: OWNER.address,
-        sender: KEYSTORE_OWNER,
-        deployed: true,
-      });
-      expect(run.stderr).toContain(
-        `The Pot is ${OWNER.address}'s: ${KEYSTORE_OWNER} sent and paid for the deployment`,
-      );
-      expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
-    }, 60_000);
+    (BINDING.length ? it : it.skip)(
+      "`sauce pot --deploy --owner` deploys another owner's Pot, which the signer pays for",
+      async () => {
+        // The owner signs nothing: the signer sends the deployment and pays for it.
+        // The flags in any order: the signer's before --deploy, the endpoint after it.
+        const run = await sauce(
+          "pot",
+          "--chain",
+          "ethereum",
+          "--owner",
+          OWNER.address,
+          ...KEYSTORE,
+          "--salt",
+          "deployed-for",
+          "--deploy",
+          "--rpc-url",
+          ethereum.rpcUrl,
+        );
+        const out = jsonOf(run);
+        const pot = out.pot as Address;
+        expect(out).toMatchObject({
+          pot,
+          owner: OWNER.address,
+          sender: KEYSTORE_OWNER,
+          deployed: true,
+        });
+        expect(run.stderr).toContain(
+          `The Pot is ${OWNER.address}'s: ${KEYSTORE_OWNER} sent and paid for the deployment`,
+        );
+        expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
+      },
+      60_000,
+    );
   });
 });
 
@@ -754,7 +718,7 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
         to: pot,
         value: FEE.toString(),
         call: "Pot.cook",
-        engine: { address: getAddress(v12EngineAddress()), released: true },
+        engine: { address: (await local.bindingOf(pot)).engine },
         program: {
           source: {
             file: SPLIT,
@@ -792,14 +756,15 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
   it("`sauce verify` reads a settle cook back off the chain, and rejects a cook that is not one", async () => {
     const local = chains.base!;
     const usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
-    const pot = v12PredictPot(OWNER.address) as Address;
-    if ((await local.publicClient.getCode({ address: pot })) === undefined) await deployPot(local);
+    const pot = getAddress(
+      local.pots.list().pots.find((record) => record.owner === OWNER.address)!.pot,
+    );
     await local.mint(usdc, pot, FUNDED);
     // The conformance corpus's single-token settle: sweep the Pot's USDC, no floor.
     const vector = SETTLE_VECTORS[0]!;
     const before = await local.balanceOf(usdc, getAddress(vector.recipient));
     const swept = await local.balanceOf(usdc, pot);
-    const engine = getAddress(v12EngineAddress());
+    const engine = (await local.bindingOf(pot)).engine;
     const hash = await local.send(
       local.owner,
       pot,
@@ -808,7 +773,9 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
     );
     expect(await local.balanceOf(usdc, getAddress(vector.recipient))).toBe(before + swept);
 
-    expect(jsonOf(await sauce("verify", hash, "--rpc-url", local.rpcUrl, "--json"))).toEqual({
+    expect(
+      jsonOf(await sauce("verify", hash, "--rpc-url", local.rpcUrl, "--engine", engine, "--json")),
+    ).toEqual({
       hash,
       chain: "base",
       to: pot,
@@ -829,8 +796,10 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
         "base",
         "--owner",
         OWNER.address,
+        "--rpc-url",
+        local.rpcUrl,
         "--value",
-        "0",
+        String(FEE),
         "--args",
         usdc,
         "[]",
@@ -839,7 +808,14 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
       ),
     );
     const notSettle = await local.send(local.owner, pot, split.data as Hex, FEE);
-    const rejected = await sauce("verify", notSettle, "--rpc-url", local.rpcUrl);
+    const rejected = await sauce(
+      "verify",
+      notSettle,
+      "--rpc-url",
+      local.rpcUrl,
+      "--engine",
+      engine,
+    );
     expect(rejected.code).toBe(1);
     // Split at the settle's 435 bytes, its tail is not a settle's arguments, or its program not
     // the settle's: either way one of the SDK's codes.
@@ -873,27 +849,26 @@ describeEvm("what is deployed: the released contracts and a Pot", () => {
 
   it("`sauce pot` with an endpoint reports the engine, the Kitchen and its fee, and the Pot", async () => {
     const owner = getAddress("0x9999999999999999999999999999999999999999");
-    const pot = v12PredictPot(owner, DEFAULT_POT_SALT) as Address;
-    const status = async () => {
-      const run = await sauce("pot", "--chain", "base", "--owner", owner, "--rpc-url", base.rpcUrl);
-      expect(run.code).toBe(0);
-
-      return { out: JSON.parse(run.stdout) as Record<string, unknown>, stderr: run.stderr };
-    };
-    const before = await status();
-    expect(before.out.deployment).toEqual({
-      engine: { address: getAddress(v12EngineAddress()), deployed: true },
-      kitchen: { address: getAddress(v12KitchenAddress()), deployed: true, executionFee: `${FEE}` },
-      pot: { address: pot, deployed: false },
+    const pot = await deployPot(base, owner);
+    const binding = await base.bindingOf(pot);
+    const run = await sauce("pot", "--chain", "base", "--owner", owner, "--rpc-url", base.rpcUrl);
+    const out = jsonOf(run);
+    expect(out.deployment).toEqual({
+      engine: { address: binding.engine, deployed: true },
+      kitchen: { address: binding.kitchen, deployed: true, executionFee: `${FEE}` },
+      pot: { address: pot, deployed: true, owner },
     });
-    expect(before.stderr).toContain(`the Pot ${pot} is NOT deployed`);
-    await base.send(base.deployer, before.out.to as Address, before.out.data as Hex);
-    const after = await status();
-    expect(after.out.deployment).toMatchObject({ pot: { address: pot, deployed: true, owner } });
-    expect(after.stderr).toContain(`the Pot ${pot} is deployed, owned by ${owner}`);
+    expect(run.stderr).toContain(`the Pot ${pot} is deployed, owned by ${owner}`);
   }, 60_000);
 
   it("names a chain with no Sauce contracts, and refuses to deploy a Pot there", async () => {
+    const client = createPublicClient({ transport: http(BARE) });
+    const signer = privateKeyToAccount(OTHER_KEY).address;
+    const before = {
+      nonce: await client.getTransactionCount({ address: signer }),
+      balance: await client.getBalance({ address: signer }),
+      records: base.pots.list(),
+    };
     const run = await sauce(
       "pot",
       "--chain",
@@ -910,13 +885,22 @@ describeEvm("what is deployed: the released contracts and a Pot", () => {
       pot: { deployed: false },
     });
     expect(run.stderr).toContain("The released Kitchen has no code on ethereum");
-    const deploy = await sauce(
-      ...["pot", "--deploy", "--chain", "ethereum", "--rpc-url", BARE],
-      ...["--private-key", OTHER_KEY],
+    const deploy = await sauceWith(
+      { potsDir: base.pots.dir },
+      "pot",
+      ...BINDING,
+      "--deploy",
+      "--chain",
+      "ethereum",
+      "--rpc-url",
+      BARE,
+      "--private-key",
+      OTHER_KEY,
     );
     expect(deploy.code).toBe(1);
-    expect(deploy.stderr).toMatch(
-      /has no code on ethereum: no Pot can be deployed there, so nothing was sent/,
-    );
+    expect(await client.getTransactionCount({ address: signer })).toBe(before.nonce);
+    expect(await client.getBalance({ address: signer })).toBe(before.balance);
+    expect(base.pots.list()).toEqual(before.records);
+    expect(await client.getCode({ address: gated.gateAnchors().kitchen })).toBeUndefined();
   }, 60_000);
 });

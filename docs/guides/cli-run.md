@@ -18,9 +18,11 @@ You will need:
   the wallet's address ([Wallets and signing](cli-wallets.md) says more);
 - `pay.sauce.ts`, the quick start's program, which pays a recipient USDC from your Pot.
 
-Simulating needs no money. Creating your Pot (step 3) and a real run need a little ETH in your
-wallet for gas and the Kitchen's fee, and the run needs the USDC the program pays, in your Pot.
-[Costs](../concepts/costs.md) explains each.
+Simulation itself spends no money, but EVM execution requires a deployed, authenticated Pot
+binding first. Creating your Pot (step 3) and a real run need ETH for gas; the cook also pays
+the Kitchen's fee and needs the USDC it pays. Use a trusted qualified descriptor supplied by
+your release/operator, not a descriptor guessed from a prediction. This guide is not release
+qualification or deployment authorization. [Costs](../concepts/costs.md) explains the charges.
 
 ## The steps
 
@@ -31,10 +33,10 @@ sauce globals --chain base
 # 2. Check that the program compiles.
 sauce compile pay.sauce.ts --chain base
 
-# 3. Create your Pot and print its address. Send it tokens only once it is deployed.
-sauce pot --chain base --wallet me --deploy
+# 3. Explicitly deploy, authenticate and persist your Pot before simulation or funding.
+sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json
 
-# 4. Try it: no password, no money, nothing sent.
+# 4. Try it on that verified Pot: no password or funds spent by the simulation.
 sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
   --args <recipient> 1000000
 
@@ -50,28 +52,27 @@ differences ([Solana](cli-solana.md)).
 ## Try it: `sauce simulate`
 
 `sauce simulate` runs the program on a copy of the chain as it is right now. It signs nothing,
-sends nothing and changes nothing. It needs no key, no Pot and no tokens:
+sends nothing and changes nothing. On EVM it requires the Pot to be deployed and its authenticated
+binding persisted, but it needs no signing key or actual token balance:
 
 - **Whose Pot.** `--wallet me` names the owner without a password, and so does `--owner <address>`.
-  Any address works, even one you made up.
-- **A Pot that does not exist yet** is created first, in the copy, as the real run will.
+  That owner's selected Pot must already have a verified binding.
+- **Missing code or provenance.** Simulation refuses it; it does not create counterfactual code
+  or authorize a deployment. Keep existing services on their original authenticated binding.
 - **Tokens the Pot does not hold.** `--assume-balance USDC:5` gives the Pot 5 USDC, in the copy
   only. Repeat it for more tokens. `ETH:0.1` gives it ETH.
 - **The fee.** Every cook pays the **Kitchen**, the contract that makes Pots, a small flat fee in
   the chain's coin. An owner short of it is given it, in the copy, and told.
 
-It prints what would happen. This is the output for an owner whose Pot is not deployed yet; after
-step 3 yours is, so its headline has no "after the Pot's deploy" and there is no
-`Kitchen.deployPot` step:
+It prints what would happen on the deployed Pot:
 
 ```text
-The cook succeeds from 0xYou: gas used 128999 for the cook, after the Pot's deploy (1. below), returns 0x
+The cook succeeds from 0xYou: gas used 128999 for the cook, returns 0x
 Left in the Pot, not in the owner's wallet:
   4 USDC (it held 5 USDC before)
   Only another cook moves it out. To end in a wallet, the program must send it there, or name the wallet as the recipient of the call that produces it.
 Simulated with eth_simulateV1 on the state of block 36120411; nothing was signed or sent:
-  1. Kitchen.deployPot(0xYou, 0x00…00), gas used 160415: Pot 0x8a… is not deployed on base yet, so the simulation deploys it first, as sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; the Pot is the owner's either way.
-  2. the cook, from the owner 0xYou, gas used 128999
+  1. the cook, from the owner 0xYou, gas used 128999
 Assumed for this simulation only, by state override:
   the Pot holds 5 USDC: --assume-balance (its balance word 0x1d39…: Solidity mapping at slot 9)
   the owner holds 0.00000374478538635 ETH: the cook's value; it holds 0, and a real cook needs the value and gas
@@ -94,9 +95,9 @@ Read it top down:
    declares a return type gets it decoded: `main returns Address: 0xd0b5…`.
 2. **What stays in your Pot**, before and after. It is yours, but it is not in your wallet: only
    another program moves it out.
-3. **What was simulated**: the Pot created first if it was missing, then the cook.
-   `eth_simulateV1` is the node method that runs several transactions in one simulated block and
-   returns their logs.
+3. **What was simulated**: the cook on the authenticated Pot.
+   `eth_simulateV1` is the node method that runs transactions in a simulated block and returns
+   their logs.
 4. **What was assumed**: the balances you gave with `--assume-balance`.
 5. **What moved**, in order, each party by its role: `wallet` (you), `Pot`, `Kitchen`, a registry
    name, a token's symbol, and `mint` or `burn` for the zero address.
@@ -135,8 +136,7 @@ sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:0.5 \
 
 ### When the simulation fails
 
-A revert prints `The cook reverts: <reason>` (or `Deploying the Pot reverts: …`) and exits 1. The
-reason is decoded where it can be:
+A cook revert prints `The cook reverts: <reason>` and exits 1. The reason is decoded where it can be:
 
 - `the program threw "…"` for your own `require` or `throw` message;
 - a Pot, Kitchen, Router or Permit2 error by name, and ERC-20's standard errors, such as
@@ -152,9 +152,9 @@ failures with their fixes.
 ### When the endpoint has no `eth_simulateV1`
 
 Some endpoints do not offer `eth_simulateV1`. The command then falls back to `eth_call` with state
-overrides: a Pot that is not deployed is put in place as its deployment would leave it, and the
-cook runs against it. That route reports the result and an estimated gas, but no logs, so not what
-moved. The `Simulated with …` line names the route taken and why it fell back. Give an endpoint of
+overrides for assumed balances, still against the deployed, authenticated Pot. This does not
+install missing Pot code. That route reports the result and estimated gas, but no logs, so not
+what moved. The `Simulated with …` line names the route and why it fell back. Give an endpoint of
 your own ([Your own endpoints](cli.md#your-own-endpoints)) to get the full report.
 
 ## Run it: `sauce run`
@@ -184,22 +184,20 @@ The cost line adds up three things: the gas at the price the receipt records, an
 L1 data fee where the receipt carries one (Base has one), and the value the cook carried. The value
 is the Kitchen's fee plus any native coin the program spends.
 
-### Let it create your Pot
+### Create and authenticate your Pot separately
 
-Before it sends anything, the run checks that your Pot exists. If not, it asks first, with what
-creating it costs:
+For a new EVM Pot, explicitly deploy with a trusted qualified descriptor:
 
-```text
-Your Pot 0x8a… on base isn't deployed yet. Deploy it now (one transaction, about 274,512 gas, ~0.000082 ETH), then run? [deploy/cancel]
+```sh
+sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json
 ```
 
-The Pot's deployment is a transaction of its own, paid by your wallet. So the first run needs your
-wallet to hold the deployment's gas, shown in the question, as well as the cook's gas and the
-Kitchen's fee. The figures above are an estimate at the gas price of that moment.
+The deployment is a transaction of its own, paid by the signer. Wait for actual code/profile,
+identity and exact engine/compiler/Router binding verification and persistence before funding,
+approvals, simulation or signing. `run` does not deploy a missing Pot, change its salt or repin
+an existing binding. Missing expected code or provenance is a failure, not a repair request.
 
-`deploy` (or `y`) creates the Pot, then cooks. Anything else sends nothing. The deployment goes
-through the same signer, wallet policy and checks as the cook. On Solana a missing Pot is created
-in the cook's own transaction, with nothing asked, when the two fit in one.
+Solana retains its separate account/instruction lifecycle; see [Solana](cli-solana.md).
 
 ### Know what it refuses
 
@@ -209,13 +207,11 @@ with code 1. On a preview chain the run is refused before it reads anything
 
 ### Approve ahead with `--yes`
 
-Each question can be answered ahead with `-y` (`--yes`), which says what it approved:
-`auto-approved: deploy Pot 0x…`. `--auto-approve` is its older name. With no terminal to ask on (in
-CI, or in a pipe), or with `--json`, the run sends nothing until it is given `--yes`. It names what
-it needs approved and stops.
-
-The run asks the same way about everything it sends before its cook: deploying a missing Pot,
-approving Permit2 for a token `--fund` pulls, and approving the Pot under `--fund-mode allowance`.
+Required funding approvals, including Permit2 and allowance-mode funding, can be authorized with
+`-y` (`--yes`; `--auto-approve` is its older name). With no terminal, or with `--json`, a run that
+needs an approval sends nothing until authorized. Read what is requested before approving it.
+This flag never authorizes hidden EVM Pot deployment or replacement: deployment and binding
+verification must already be complete.
 
 ### Pay native coin the program spends
 
@@ -227,10 +223,10 @@ refused, since the cook would revert.
 
 A program spends what your Pot holds. There are two ways to get tokens there.
 
-**Send them to the Pot's address** once the Pot is deployed, from any wallet or exchange, like any
-other address. `sauce pot --chain base --wallet me` prints the address, and with `--deploy` creates
-the Pot first. Do not send tokens to it before it exists: a Kitchen release with new Pot code
-derives another address, and what was sent to the old one stays where no Pot is deployed.
+**Send them to the Pot's address** only after deployment and binding verification, from any wallet
+or exchange. `sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json` explicitly creates a new Pot.
+Keep the verified binding before funding: CREATE3 prediction does not prove what code was deployed,
+and an SDK update must not replace a saved Pot or its release.
 
 **Or let the run pull them in.** `--fund` moves tokens from your wallet into the Pot in the same
 transaction as the cook:
@@ -335,11 +331,11 @@ sauce run pay.sauce.ts --chain base --wallet me --salt savings --args <recipient
 
 ## Create a Pot by hand
 
-You never need to: `sauce run` creates your Pot when it first needs it, and `sauce tx` plans its
-creation. To create one ahead of time:
+New EVM creation is explicit. Supply a trusted qualified descriptor; `run`, `tx` and `sign`
+require the deployed verified binding in the Pot store instead of deploying a missing Pot:
 
 ```sh
-sauce pot --chain base --wallet me --deploy
+sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json
 ```
 
 Without `--deploy`, `sauce pot` prints the Pot's address and the unsigned deployment, and reads the
@@ -347,21 +343,18 @@ chain: whether the released engine and Kitchen are there, the Kitchen's fee, and
 deployed and whose it is. With `--deploy` it sends the deployment, unless the Pot is already there,
 and waits until the endpoint shows the Pot's code.
 
-On an EVM chain the command also checks the Pot against the chain, before `pot` prints or sends a
-deployment and before `simulate`, `tx`, `run` or `sign` uses the Pot. For a Pot not deployed yet, it
-asks the deployed Kitchen where it puts the owner's Pot (`predictPot`), and refuses when that is not
-the SDK's own address: a cook sent to the SDK's address would reach no Pot. For a deployed Pot, it
-tells the Pot's release from the chain, as `sauce pot import` does, and refuses a Pot of another
-release, whose engine runs no program this SDK compiles. A refusal names the release the deployed
-Kitchen mints and the SDK versions that pair with it, or says the Kitchen is newer than the SDK. It
-says where the SDK deploys the Pot, and lists the owner's other Pots on the chain from the Pot
-store, each with its release. `run` holds its whole plan to these checks before each transaction
-it sends ahead of the cook (the Pot's deployment, and the approvals and transfers `--fund` makes), so
-none goes out once the cook would be refused. The checks read the chain through your endpoint, as
-every read does: a contract at the Pot's address that answers as a Pot would needs a dishonest
-endpoint (a fork, or an RPC that lies) to be there. Offline, nothing is read, and the output says
-the address is not checked
-([Troubleshooting](troubleshooting.md#this-sdk-does-not-match-the-deployed-kitchen)).
+For new EVM Pots, prediction must match Kitchen's CREATE3 derivation, but this agreement does not
+authenticate code. After deployment, verify the actual code/profile, identity, Router policy and
+exact engine/compiler pairing, then persist the binding before transfers, approvals or signatures.
+An unknown profile or mismatch stops subsequent work.
+
+For existing services, load the saved deployed Pot and its explicit release first. A missing Pot
+must fail, not trigger a new deployment. Historical Pots keep ordinary new work with their original
+engine/compiler and Router bindings; a newer SDK or default does not repin them.
+Offline prediction cannot establish readiness. These checks use the configured RPC endpoint and
+cannot protect against dishonest chain responses. See
+[Kitchen compatibility](kitchen-compatibility.md) and
+[Troubleshooting](troubleshooting.md#this-sdk-does-not-match-the-deployed-kitchen).
 
 Anyone may deploy a Pot, and it is its owner's either way. So `--deploy` with `--owner <address>`
 deploys another owner's Pot, which your signer sends and pays for. On Solana the owner signs the

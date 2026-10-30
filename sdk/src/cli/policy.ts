@@ -93,11 +93,7 @@ import {
 
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import {
-  v12KitchenAddress,
-  v12SvmEngineProgramId,
-  v12SvmKitchenProgramId,
-} from "../deployments/index.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
@@ -113,6 +109,7 @@ import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
 import { requireSupported } from "./support.js";
 import { authenticatePot } from "./pots.js";
+import { selectedKitchen } from "./pot-binding.js";
 import {
   accountsNow,
   approvesOn,
@@ -451,24 +448,29 @@ const PERMIT2_ALLOWANCE = parseAbi([
 const NATIVE_EMITTER = getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
 /** `Kitchen.deployPot(owner, salt)`, as `sauce run` and `sauce tx` send it. */
 const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32 salt)");
+const DEPLOY_POT_FIXED = toFunctionSelector(
+  "function deployPot(address owner, bytes32 salt, bool routerFixed)",
+);
 
 /**
  * The Pot `call` deploys, when it is the released Kitchen's `deployPot` of `wallet`'s own Pot with
  * no value; `undefined` for any other call. The Pot is the one cooking on it would reach: the
- * CREATE2 address over (wallet, salt) that `v12PredictPot` gives, and the Kitchen derives.
+ * CREATE3 address over (wallet, salt, kind) under the selected Kitchen.
  */
 export function ownPotDeployed(call: TxRequest, wallet: Address): Address | undefined {
-  if (call.value !== 0n || getAddress(call.to) !== getAddress(v12KitchenAddress()))
-    return undefined;
-  if (call.data.slice(0, 10).toLowerCase() !== DEPLOY_POT) return undefined;
+  if (call.value !== 0n || getAddress(call.to) !== selectedKitchen()) return undefined;
+  const selector = call.data.slice(0, 10).toLowerCase();
+  if (selector !== DEPLOY_POT && selector !== DEPLOY_POT_FIXED) return undefined;
   try {
-    const [owner, salt] = decodeAbiParameters(
-      [{ type: "address" }, { type: "bytes32" }],
+    const [owner, salt, fixed] = decodeAbiParameters(
+      selector === DEPLOY_POT_FIXED
+        ? [{ type: "address" }, { type: "bytes32" }, { type: "bool" }]
+        : [{ type: "address" }, { type: "bytes32" }],
       `0x${call.data.slice(10)}`,
-    );
+    ) as readonly [Address, Hex, boolean?];
     if (getAddress(owner) !== getAddress(wallet)) return undefined;
 
-    return getAddress(v12PredictPot(owner, salt) as Address);
+    return getAddress(v12PredictPot(owner, salt, selectedKitchen(), fixed === true));
   } catch {
     return undefined;
   }
@@ -1915,7 +1917,7 @@ export class SendGuard {
    *
    * Why `native` and `tokens` are not refused here, as {@link authorizeSignedCook} refuses them:
    * what funding signs or sends names only the wallet's own Pot, which `--fund` authenticates first
-   * (`pots.ts#authenticatePot`, or the Pot the same run deploys at the wallet's `v12PredictPot`).
+   * (`pots.ts#authenticatePot`, which verifies and persists deployed release identity).
    * A Permit2 transfer is spendable by that Pot alone, and an EIP-2612 permit or an approval lets
    * that Pot alone pull; the Pot moves anything only in a cook, which only the wallet sends
    * (`cook` is onlyOwner, and that send is measured and reserved against every limit) or signs for

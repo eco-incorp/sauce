@@ -10,11 +10,10 @@
  * pot --deploy`, a run that deploys its Pot first, `sauce send`, a cook whose program calls the
  * Kitchen.
  *
- * Which release minted an EVM Pot is told from its address: `CREATE2(kitchen, gate salt, hash)`
- * under each Kitchen and Pot init-code hash `deployments/releases.json` records, with the gate salt
- * of each kind of Pot (`keccak256(abi.encode(owner, salt))`, and `…, true)` for a fixed Router or a
- * Shared Pot). Offline: the release the SDK pins today does not decide it. A Solana Pot is the
- * Kitchen's PDA under every release; its engine is the program its creation named.
+ * Historical CREATE2 address commitments identify possible releases of deployed Pots only.
+ * Imports and execution also verify code, protected identity and explicit engine/Router bindings.
+ * New candidates use CREATE3 and require an operator-selected authenticated release descriptor.
+ * Solana discovery and engine-owned account behavior remain unchanged.
  *
  * Every landed transaction carries its records (`Sent.pots`, `SvmSent.pots`), which every JSON that
  * reports it includes. Where a scope keeps the Pot store (`keep.ts`: the command, and the local MCP
@@ -51,16 +50,25 @@ import { requireChain, resolveChain, type CanonicalChain } from "../chains/canon
 import {
   sdkCompilerVersion,
   V12_RELEASE_SETS,
-  v12PotDerivation,
   v12SvmKitchenProgramId,
   type V12ReleaseSet,
 } from "../deployments/index.js";
+import { v12PredictPot, v12PredictSharedPot } from "../deployments/pot.js";
 import { SDK_RELEASES } from "../embedded/sdk-releases.generated.js";
-import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
+import { v12KitchenAbi, v12PotAbi, verifyPotBinding, type EvmPotBinding } from "../evm/engine.js";
+import {
+  getVerifiedPotBinding,
+  observedCodeHash,
+  potCandidate,
+  requestedPotBinding,
+  selectedKitchen,
+  storedPot,
+  verifyRecordedPot,
+} from "./pot-binding.js";
 import { svmClusterOf } from "../routes/token-registry.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
 import { CliError } from "./args.js";
-import type { Landed } from "./keep.js";
+import { keptPots, type Landed } from "./keep.js";
 import {
   MAINNET_CLUSTER,
   POT_SCHEMA,
@@ -154,8 +162,9 @@ function gatherFamilies(): PotFamily[] {
     { kitchen: Address; potInitCodeHash: Hex; sets: V12ReleaseSet[] }
   >();
   for (const set of preferred()) {
-    const { kitchen, potInitCodeHash } = set["kitchen-evm"];
-    if (kitchen === null || potInitCodeHash === null) continue;
+    const { kitchen, potInitCodeHash, scheme } = set["kitchen-evm"];
+    if (scheme === "create3" || typeof kitchen !== "string" || typeof potInitCodeHash !== "string")
+      continue;
     const key = `${kitchen.toLowerCase()}:${potInitCodeHash.toLowerCase()}`;
     const family = families.get(key) ?? {
       kitchen: getAddress(kitchen),
@@ -224,9 +233,8 @@ export function evmPotRelease(input: {
 }
 
 /**
- * The release Kitchen `kitchen` mints under when it reports Pot init-code hash `potInitCodeHash`
- * (its `potInitCodeHash()`): the family a known release records. `undefined` for a hash no release
- * the SDK knows records — a Kitchen upgraded past this SDK.
+ * Historical CREATE2 release family indexed by its recorded Kitchen and creation commitment.
+ * This does not discover or authenticate the current CREATE3 factory profile.
  */
 export const evmKitchenRelease = (
   kitchen: string,
@@ -238,22 +246,11 @@ export const evmKitchenRelease = (
       family.potInitCodeHash === potInitCodeHash.toLowerCase(),
   );
 
-/**
- * The Pot of kind `kind` the release this SDK pins mints for (`owner`, `salt`): its Kitchen's
- * CREATE2 under its Pot init-code hash, where this SDK deploys that Pot.
- */
+/** New candidates use CREATE3 only; historical CREATE2 addresses remain discovery evidence. */
 export function ownReleasePot(owner: Address, salt: Hex, kind: PotKind): Address {
-  const derivation = v12PotDerivation();
-  const own = candidates(
-    {
-      kitchen: getAddress(derivation.deployer),
-      potInitCodeHash: derivation.initCodeHash.toLowerCase() as Hex,
-    },
-    getAddress(owner),
-    salt,
-  );
-
-  return (own.find((one) => one.kind === kind) ?? own[0]!).pot;
+  return kind === "shared"
+    ? v12PredictSharedPot(salt, selectedKitchen())
+    : v12PredictPot(owner, salt, selectedKitchen(), kind === "private-fixed-router");
 }
 
 /** The EVM part of a release set, as a record names it. */
@@ -291,9 +288,9 @@ const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
  */
 const svmRecordChain = (): CanonicalChain => requireChain("solana");
 
-/** An EVM Pot's record, its release told from its address; `unknown` reads, from the chain, the
- *  init-code hash and kind of one no known release minted. */
+/** Authenticated deployed identity, retaining historical release provenance when it is known. */
 async function evmRecord(input: {
+  readonly client: PublicClient;
   readonly chain: CanonicalChain;
   readonly kitchen: Address;
   readonly owner: Address;
@@ -301,77 +298,97 @@ async function evmRecord(input: {
   readonly pot: Address;
   readonly origin: PotRecord["origin"];
   readonly deployment?: PotRecord["deployment"];
-  readonly unknown?: () => Promise<{ readonly hash?: Hex; readonly kind?: PotKind }>;
 }): Promise<PotRecord> {
   const known = evmPotRelease(input);
-  const read = known === undefined ? await input.unknown?.() : undefined;
-  const set = known?.family.sets[0];
-  const hash = known?.family.potInitCodeHash ?? read?.hash;
-  // Told by neither: a Pot with no owner is a Shared one, and any other its owner's.
+  const stored = storedPot(input.chain.id, input.pot);
+  const candidate = potCandidate();
+  const requested = requestedPotBinding();
+  if (stored?.binding === undefined && known === undefined) {
+    const expectedKitchen = requested?.kitchen ?? candidate?.kitchen;
+    if (
+      expectedKitchen !== undefined &&
+      getAddress(expectedKitchen) !== getAddress(input.kitchen)
+    ) {
+      throw new CliError(
+        `Pot ${input.pot} reports a foreign Kitchen; it does not match the explicit binding Kitchen`,
+      );
+    }
+  }
+  const choices =
+    known?.family.sets.filter(
+      (set) => stored?.release?.compiler === undefined || set.compiler === stored.release.compiler,
+    ) ?? [];
+  const compilers = new Set(choices.map((set) => set.compiler));
+  const set = compilers.size === 1 ? choices[0] : undefined;
+  const hash = known?.family.potInitCodeHash;
+  const router =
+    stored?.binding?.router ??
+    (known === undefined ? candidate?.router : undefined) ??
+    (await input.client.readContract({
+      address: input.pot,
+      abi: v12PotAbi,
+      functionName: "router",
+    }));
   const kind =
-    known?.kind ?? read?.kind ?? kindOf(getAddress(input.owner), input.owner === zeroAddress);
-  const engine = set?.["v12-evm"].engine;
-
+    stored?.kind ??
+    known?.kind ??
+    (input.owner === zeroAddress
+      ? "shared"
+      : v12PredictPot(input.owner, input.salt, input.kitchen, true) === getAddress(input.pot)
+        ? "private-fixed-router"
+        : "private");
+  const trusted =
+    stored?.binding ??
+    requested ??
+    (set === undefined
+      ? undefined
+      : {
+          pot: input.pot,
+          kitchen: input.kitchen,
+          owner: input.owner,
+          userSalt: input.salt,
+          kind,
+          chainId: input.chain.id,
+          compiler: set.compiler,
+          engine: getAddress(set["v12-evm"].engine!),
+          engineCodeHash: await observedCodeHash(input.client, getAddress(set["v12-evm"].engine!)),
+          router,
+          routerCodeHash: await observedCodeHash(input.client, router),
+          release: evmRelease(set),
+          wireProfile: `compiler:${set.compiler}`,
+          storageProfile: "sauce.storage.Pot",
+        }) ??
+    (candidate === undefined
+      ? undefined
+      : {
+          ...candidate,
+          pot: input.pot,
+          owner: input.owner,
+          userSalt: input.salt,
+          kind,
+          chainId: input.chain.id,
+        });
+  if (trusted === undefined) {
+    throw new CliError(
+      `Pot ${input.pot} has unknown profile or ambiguous compiler identity; supply an authenticated release descriptor`,
+    );
+  }
+  const binding = await verifyRecordedPot(input.client, input.chain.id, input.pot, trusted);
+  const engine = binding.engine;
   return {
     ...base(input.chain, input.origin),
     pot: getAddress(input.pot),
     owner: getAddress(input.owner),
     salt: input.salt.toLowerCase(),
-    kind,
-    kitchen: getAddress(input.kitchen),
+    kind: binding.kind,
+    kitchen: binding.kitchen,
+    binding,
     ...(hash === undefined ? {} : { potInitCodeHash: hash }),
     ...(engine === undefined || engine === null ? {} : { engine: getAddress(engine) }),
-    ...(set === undefined ? {} : { release: evmRelease(set) }),
+    release: binding.release,
     sdk: sdkVersion(),
     ...(input.deployment === undefined ? {} : { deployment: input.deployment }),
     recordedAt: new Date().toISOString(),
-  };
-}
-
-/**
- * The init-code hash and kind of `pot`, which Kitchen `kitchen` minted at `blockNumber` for
- * (`owner`, `salt`) under a hash no known release records: the hash the Kitchen reported then, and
- * the kind its CREATE2 or, failing that, the Pot's own `gateSalt()` gives. What cannot be read is
- * left out.
- */
-async function unknownRelease(
-  client: PublicClient,
-  at: {
-    readonly kitchen: Address;
-    readonly owner: Address;
-    readonly salt: Hex;
-    readonly pot: Address;
-  },
-  blockNumber: bigint,
-): Promise<{ readonly hash?: Hex; readonly kind?: PotKind }> {
-  const hash = await client
-    .readContract({
-      address: at.kitchen,
-      abi: v12KitchenAbi,
-      functionName: "potInitCodeHash",
-      blockNumber,
-    })
-    .then(
-      (read) => read.toLowerCase() as Hex,
-      () => undefined,
-    );
-  const under =
-    hash === undefined
-      ? undefined
-      : candidates({ kitchen: at.kitchen, potInitCodeHash: hash }, at.owner, at.salt).find(
-          (one) => one.pot === at.pot,
-        )?.kind;
-  if (under !== undefined) return { hash, kind: under };
-  const gate = await client
-    .readContract({ address: at.pot, abi: v12PotAbi, functionName: "gateSalt", blockNumber })
-    .catch(() => undefined);
-  const fixed = [false, true].find(
-    (routerFixed) => gateSalt(at.owner, at.salt, routerFixed) === gate,
-  );
-
-  return {
-    ...(hash === undefined ? {} : { hash }),
-    ...(fixed === undefined ? {} : { kind: kindOf(at.owner, fixed) }),
   };
 }
 
@@ -408,7 +425,9 @@ export async function evmPotsDeployed(
   from: Address,
 ): Promise<PotRecord[]> {
   if (sent.status !== "success") return [];
-  const known = kitchens();
+  const candidate = potCandidate();
+  const known =
+    candidate === undefined ? kitchens() : new Set([...kitchens(), getAddress(candidate.kitchen)]);
   const deployed = sent.logs.filter(
     (log) => log.topics[0]?.toLowerCase() === POT_DEPLOYED && known.has(getAddress(log.address)),
   );
@@ -431,6 +450,7 @@ export async function evmPotsDeployed(
       }).args;
 
       return evmRecord({
+        client,
         chain,
         kitchen,
         owner,
@@ -443,8 +463,6 @@ export async function evmPotsDeployed(
           ...(sent.blockHash === undefined ? {} : { blockHash: sent.blockHash }),
           from: getAddress(from),
         },
-        // A Kitchen upgraded past the releases the SDK knows: as the chain says it was then.
-        unknown: () => unknownRelease(client, { kitchen, owner, salt, pot }, sent.blockNumber),
       });
     }),
   );
@@ -714,15 +732,6 @@ export function ownerPotsText(
 // Pots deployed elsewhere: `sauce pot import`
 // ---------------------------------------------------------------------------------------------
 
-/** What every release says of where Pots come from, for a refusal. */
-const knownReleases = (): string =>
-  potFamilies()
-    .map(
-      (family) =>
-        `kitchen-evm ${[...new Set(family.sets.map((set) => set["kitchen-evm"].version))].join(", ")}`,
-    )
-    .join("; ");
-
 const hasCode = async (client: PublicClient, address: Address): Promise<boolean> => {
   const code = await client.getCode({ address });
 
@@ -764,7 +773,7 @@ export async function importEvmPot(
   pot: Address,
 ): Promise<PotRecord> {
   if (!(await hasCode(client, pot))) {
-    throw new Error(`${pot} has no code on ${chain.slug}: no Pot is deployed there`);
+    throw new CliError(`${pot} has no code on ${chain.slug}: no Pot is deployed there`);
   }
   const read = <T>(functionName: "owner" | "userSalt" | "kitchen") =>
     client
@@ -787,15 +796,10 @@ export async function importEvmPot(
     read<Hex>("userSalt"),
     read<Address>("kitchen"),
   ]);
-  if (evmPotRelease({ kitchen, owner, salt, pot }) === undefined) {
-    throw new Error(
-      `${pot} on ${chain.slug} says it is Kitchen ${kitchen}'s, for owner ${owner} and salt ` +
-        `${salt}, but no release this sauce knows minted it there (${knownReleases()}): it is not ` +
-        "recorded. A newer sauce may know its release",
-    );
-  }
+  // Getters supply identity to the verifier; they never authenticate code themselves.
 
   return evmRecord({
+    client,
     chain,
     kitchen,
     owner,
@@ -806,39 +810,75 @@ export async function importEvmPot(
 }
 
 /**
- * Whether `pot` is `wallet`'s own Pot, as the chain shows it: its owner is the wallet, and its
- * address is the CREATE2 of its owner and salt under a Kitchen a release records, which no other
- * contract can sit at. `"not"` where the contract answers otherwise (it has no such getters, or
- * another owner), `"unreadable"` where a read failed for any reason but the contract's own answer:
- * the wallet's claim to it is then neither shown nor refuted.
+ * Explicit `pot import --pot-binding` reauthenticates an owner's already-updated Router.
+ * The descriptor may change only Router address/code hash; no default release repinning.
  */
+export async function reauthorizeEvmPotRouter(
+  client: PublicClient,
+  chain: CanonicalChain,
+  pot: Address,
+  store: PotStore,
+): Promise<PotRecord | undefined> {
+  const previous = storedPot(chain.id, pot);
+  const candidate = potCandidate();
+  if (
+    previous?.binding === undefined ||
+    candidate === undefined ||
+    (getAddress(previous.binding.router) === getAddress(candidate.router) &&
+      previous.binding.routerCodeHash.toLowerCase() === candidate.routerCodeHash.toLowerCase())
+  )
+    return undefined;
+  const binding: EvmPotBinding = await verifyPotBinding(client, {
+    ...previous.binding,
+    ...candidate,
+    pot: previous.binding.pot,
+    owner: previous.binding.owner,
+    userSalt: previous.binding.userSalt,
+    kind: previous.binding.kind,
+    chainId: previous.binding.chainId,
+  });
+  const updated = { ...previous, binding, recordedAt: new Date().toISOString() };
+  store.saveRouterUpdate(updated, previous.binding);
+
+  return updated;
+}
+
+/** Authenticates deployed code, retaining disk pins or an explicit request-local proof before funding. */
 export async function authenticatePot(
   client: PublicClient,
   wallet: Address,
   pot: Address,
 ): Promise<"own" | "not" | "unreadable"> {
-  type Read<T> = { readonly value: T } | { readonly answer: "not" | "unreadable" };
-  const read = async <T>(functionName: "owner" | "userSalt" | "kitchen"): Promise<Read<T>> => {
-    try {
-      return {
-        value: (await client.readContract({ address: pot, abi: v12PotAbi, functionName })) as T,
-      };
-    } catch (error) {
-      return { answer: answered(error) ? "not" : "unreadable" };
+  try {
+    const chainId = await client.getChainId();
+    const chain = resolveChain(chainId);
+    if (chain === undefined) return "not";
+    const record = await importEvmPot(client, chain, pot);
+    const store = keptPots();
+    if (store === undefined) {
+      const requested = requestedPotBinding();
+      const verified = getVerifiedPotBinding();
+      if (
+        requested === undefined ||
+        verified === undefined ||
+        requested.chainId !== chainId ||
+        getAddress(requested.pot) !== getAddress(pot) ||
+        verified.chainId !== chainId ||
+        getAddress(verified.pot) !== getAddress(pot)
+      )
+        return "not";
+    } else {
+      store.save(record);
     }
-  };
-  // The owner first: a contract that is no Pot, or another owner's, ends it with one read.
-  const owner = await read<Address>("owner");
-  if ("answer" in owner) return owner.answer;
-  if (getAddress(owner.value) !== getAddress(wallet)) return "not";
-  const [salt, kitchen] = await Promise.all([read<Hex>("userSalt"), read<Address>("kitchen")]);
-  if ("answer" in salt) return salt.answer;
-  if ("answer" in kitchen) return kitchen.answer;
 
-  return evmPotRelease({ kitchen: kitchen.value, owner: owner.value, salt: salt.value, pot }) ===
-    undefined
-    ? "not"
-    : "own";
+    return getAddress(record.owner) === getAddress(wallet) ? "own" : "not";
+  } catch (error) {
+    return answered(error) ||
+      answered((error as Error | undefined)?.cause) ||
+      error instanceof CliError
+      ? "not"
+      : "unreadable";
+  }
 }
 
 /** The Pots `owner` has at `salt` on `chain`, one per release and kind whose address has code. */
@@ -848,11 +888,16 @@ export async function importEvmOwnerPots(
   owner: Address,
   salt: Hex,
 ): Promise<PotRecord[]> {
+  const addresses = new Set<Address>([
+    ...potFamilies().flatMap((family) =>
+      candidates(family, getAddress(owner), salt).map(({ pot }) => pot),
+    ),
+    ownReleasePot(owner, salt, "private"),
+    ownReleasePot(owner, salt, "private-fixed-router"),
+  ]);
   const found = await Promise.all(
-    potFamilies().flatMap((family) =>
-      candidates(family, getAddress(owner), salt).map(async ({ pot }) =>
-        (await hasCode(client, pot)) ? importEvmPot(client, chain, pot) : undefined,
-      ),
+    [...addresses].map(async (pot) =>
+      (await hasCode(client, pot)) ? importEvmPot(client, chain, pot) : undefined,
     ),
   );
 

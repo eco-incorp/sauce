@@ -68,6 +68,8 @@ export interface ForkOptions {
   readonly blockInterval?: number;
   /** Clear the Kitchen's execution fee, so cooks need no value. Default: keep the chain's fee. */
   readonly zeroFee?: boolean;
+  /** Explicit LOCAL CREATE3 descriptor for a new EVM test stack. */
+  readonly candidatePath?: string;
   /** The anvil binary. Default: `anvil` on PATH. */
   readonly anvil?: string;
 }
@@ -109,13 +111,13 @@ async function ready(
   url: string,
   mode: TestChain["mode"],
   stop: () => Promise<void>,
-  zeroFee: boolean | undefined,
+  options: { zeroFee?: boolean; candidatePath?: string },
 ): Promise<TestChain> {
   try {
     const transport = http(url);
     const client = createPublicClient({ transport });
     const test = createTestClient({ mode: "anvil", transport });
-    const stack = await setUpStack(url, client, test, owner(), { zeroFee: zeroFee ?? false });
+    const stack = await setUpStack(url, client, test, owner(), options);
     const testChain = new TestChain(chain, url, mode, stack, stop);
     await testChain.deployPot(0);
 
@@ -179,13 +181,15 @@ export async function fork(
     ...(options.anvil === undefined ? {} : { anvil: options.anvil }),
   });
 
-  return ready(resolved, node.url, mode, () => node.stop(), options.zeroFee);
+  return ready(resolved, node.url, mode, () => node.stop(), options);
 }
 
 export interface LocalOptions {
   /** The chain the empty node runs as: its id, and the names programs compile with. Default Base. */
   readonly chain?: ChainRef;
   readonly anvil?: string;
+  /** Explicit LOCAL CREATE3 descriptor for a new EVM test stack. */
+  readonly candidatePath?: string;
 }
 
 /**
@@ -208,5 +212,5 @@ export async function local(options: LocalOptions = {}): Promise<TestChain | Sol
     options.anvil === undefined ? {} : { binary: options.anvil },
   );
 
-  return ready(chain, node.url, "local", () => node.stop(), true);
+  return ready(chain, node.url, "local", () => node.stop(), { ...options, zeroFee: true });
 }

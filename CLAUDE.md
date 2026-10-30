@@ -6,6 +6,13 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+**Compatibility:** before changing Kitchen/Pot creation, engine/compiler pairing, Router policy,
+persisted pins, defaults or retirement behavior, MUST read
+[Kitchen compatibility for maintainers](docs/guides/kitchen-compatibility.md). Update that guide
+when approved policy changes. Preserve deployed historical bindings and ordinary new work;
+new EVM creation is CREATE3 only, with deploy → verify → persist → fund/sign order.
+Public documentation must not expose private engine implementation or exploit details.
+
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
 **Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
 a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
@@ -273,13 +280,21 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   An ISA label is not a compatibility check. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
   `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
   same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
-  Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
-  run the sync, paste the digests, engine ids and the kitchen-evm pin's `kitchen` and
-  `potInitCodeHash` it reports — a row with a `null` digest, engine id, Kitchen or hash is a release
-  not out yet, and the sync refuses it and writes nothing. The Kitchen and hash are what the `sauce`
-  command tells a Pot's release from (`cli/pots.ts`), so every row keeps its own after a newer
-  release moves the hash; the sync checks the installed row's against its `addresses.json`. Then `pnpm build`: the
-  release's addresses are written in docs and skills ONLY in the generated
+  Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler.
+  Keep historical `releases.json` rows unchanged. Record a new qualified pair separately, with its
+  authenticated code/profile artifacts and provenance; do not invent release identifiers or turn
+  candidate artifacts into release-readiness claims. Historical CREATE2 rows keep their Kitchen
+  and `potInitCodeHash` for deployed-Pot identification. CREATE3 instead requires its authenticated
+  runtime profile; `potInitCodeHash` is not its prediction, authentication or build anchor.
+  For a published CREATE3 pair, pin `scheme: "create3"`, `helperInitCodeHash`, `potProfileHash`
+  and `fixedRouter`. Pin each EVM component's `pot-profile.json` independently and require matching
+  canonical profile identity, not identical JSON formatting or asset digests.
+  Preserve `V12PotProfile.json`, `V12EnginePotProfile.json`, `V12EvmReleaseEvidence.json` and
+  `V12ReleaseAbis.json` as generated authentication/provenance evidence, including public npm
+  transport. Their presence does not qualify a release or authorize deployment. Do not rewrite
+  historical rows to this shape.
+  Run artifact sync only for the selected exact pair, then `pnpm build`:
+  the release's addresses are written in docs and skills ONLY in the generated
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
   diff.
@@ -440,8 +455,9 @@ fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-c
   not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Five ABIs
   come from the `kitchen-evm` release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
   never v12's), `IUniswapV3Pool` comes from `@uniswap/v3-core`, and `V12RuntimeBytecode` wraps the
-  release's creation code. `V12EngineGate` records the released engine's Kitchen/Pot gate anchors —
-  the Kitchen and the Pot init-code hash, and not the Router, which no Pot hash derives from.
+  release's creation code. `V12EngineGate` records the selected engine's authenticated Pot profile.
+  Historical CREATE2 releases retain their original Kitchen/init-code anchors; new CREATE3 builds
+  use their qualified runtime profile and release Router policy instead.
   CI asserts all 10 landed, so a broken generation fails there rather than
   shipping an empty dir. No generated file is committed and drift-checked any more:
   `engine-abi.generated.ts` went with the engine that produced it.
@@ -1209,9 +1225,9 @@ Pot address (a fork with the chain's id, or a Solana Pot closed and created agai
 the first as `<pot>@<tx>.json` and said, never dropped; an EVM record keeps its block's hash. Its records are not written by the commands: the two
 places every send lands, `chain.ts#landed` and `solana.ts#svmLanded`, read what a transaction
 deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded, its `create_pot`
-in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
-under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
-that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
+in a Solana transaction that succeeded; `pots.ts`, which verifies deployed identity against trusted
+release provenance and records the explicit binding), put it on `Sent.pots`/`SvmSent.pots` (so every
+JSON that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
 That is the ONE hook a store a landed transaction feeds attaches to (`LocalStores`, the Pot store
 its one member): it gives the transaction to each store of the current scope, which `runCli` sets
 per command and the local MCP server per tool call (`AsyncLocalStorage`, so scopes keep apart).
@@ -1507,7 +1523,8 @@ old #134's `@sauce/signed` handlers, Router fallback and `--signed-salt` are gon
 back. The helpers are the block between `v12Pot` and `v12Kitchen` in `sdk/src/evm/engine.ts`
 (`signedCookTypedData`/`Json`/`Digest`, `encodeCookSigned`, `encodeInvalidateNonces`, the nonce
 helpers, `verifySignedCook` with the Pot's ecrecover rules and ERC-1271 through a client, and
-`checkSignedCookPot`, which reads a pre-1.3.0 Pot off the pinned init-code hash). `sauce sign`
+`checkSignedCookPot` for signed-cook capability). Capability or signature checks do not replace
+`verifyPotBinding`: deploy and verify an explicit new Pot, then persist before signing. `sauce sign`
 (`sdk/src/cli/sign.ts`) signs with a signer or prints the typed data for one (`--signature`
 verifies and builds `cook`), and `--cancel <nonce>` sends or prints `invalidateNonces`; it is
 gated as "signing a cook" and refuses Solana. **A wallet whose policy sets `native` or `tokens`
@@ -1517,8 +1534,8 @@ nothing and the ledger cannot count a cook that may never land; the policy's own
 what it cannot measure. MCP: `sauce_signed_cook` (pure, stdio and HTTP) and the wallet tool
 `sauce_sign`; `sauce_wallet_send` accepts their `cook` and cancellations. Tests:
 `sdk/test/evm/signed-cook*.test.ts` (the helpers against the released Pot on anvil) and
-`sdk/test/cli-sign*.test.ts`; the manual's guide is `docs/guides/signed-cooks.md`, and
-`docs/examples/signed-cook.ts` signs and encodes one offline.
+`sdk/test/cli-sign*.test.ts`; the manual's guide is `docs/guides/signed-cooks.md`.
+`docs/examples/signed-cook.ts` verifies an explicit persisted binding before its signing helper runs.
 
 **Which chains execute.** The `sauce` command's policy, and the CLI's alone: nothing outside
 `sdk/src/cli/` changes for it, and the package exports none of it — the registry keeps every chain
@@ -1642,8 +1659,8 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
 - **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its
-  implementation, the Pot init-code hash, the Solana programs in base58 and
-  as keys, and every engine `V12_RELEASE_SETS` names) are the same on every chain, so each audience
+  implementation, historical Pot init-code hashes, CREATE3 derivation data, the Solana programs
+  in base58 and as keys, and every engine `V12_RELEASE_SETS` names) are the same on every chain, so each audience
   writes them in one generated file: `docs/reference/deployments.md` and
   `skills/sauce-chains/references/deployments.json` (prettier-ignored; the MCP server serves it like
   any skill file, and `mcp/test/deployments.test.ts` reads it through the server). A chain's file

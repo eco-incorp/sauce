@@ -31,11 +31,14 @@ export interface V12ReleasePin {
   readonly engine?: string | null;
 }
 
-/** The EVM Kitchen's release: the Kitchen proxy and the init-code hash every Pot it mints is
- *  `CREATE2(kitchen, …, potInitCodeHash)` under — `null` until the release says. */
+/** Published Kitchen provenance; absent scheme denotes a historical CREATE2 commitment. */
 export interface V12KitchenEvmPin extends V12ReleasePin {
   readonly kitchen: string | null;
-  readonly potInitCodeHash: string | null;
+  readonly scheme?: "create2" | "create3";
+  readonly potInitCodeHash?: string | null;
+  readonly helperInitCodeHash?: string | null;
+  readonly potProfileHash?: string | null;
+  readonly fixedRouter?: string | null;
 }
 
 /** One compiler version and the four releases its output pairs with. */

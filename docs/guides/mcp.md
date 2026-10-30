@@ -139,8 +139,9 @@ configure. Your own endpoint is optional, and faster ([Use your own endpoints](#
   agent and send from them, each under a policy, a spending limit you set. They are handy for
   experiments with small amounts: [What a local server keeps](mcp-local.md).
 
-It builds transactions only on the supported chains. On a preview chain it compiles and reads, and
-simulates wherever the release is deployed, but it refuses to build ([Supported and preview chains](mcp-tools.md#supported-and-preview-chains)).
+It builds transactions only on the supported chains. On a preview chain it compiles and reads;
+simulation still needs the required contracts and, on EVM, an authenticated deployed Pot binding.
+It refuses to build transactions there ([Supported and preview chains](mcp-tools.md#supported-and-preview-chains)).
 
 ## Share the setup with your project
 

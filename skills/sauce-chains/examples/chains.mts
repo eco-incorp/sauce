@@ -5,27 +5,37 @@
 // the words the skill quotes; a chain-qualified contract is that chain's address, called or not,
 // and a chain-qualified token is refused. Then payout-solana.sauce.ts: the accounts compiling adds
 // to main and how each is derived, its arguments, USDC an SPL Token mint moved by transfer and TSLAx
-// a Token-2022 mint moved by transferChecked with its decimals. Last, the Sauce deployment: references/deployments.json holds the addresses the SDK builds
-// every cook with, under the keys the skill's table names, `evm.pot` gives an owner's default Pot
-// under the zero salt, and each chain's file points at it.
-// Offline: nothing is sent.
+// a Token-2022 mint moved by transferChecked with its decimals. Last, the Sauce deployment:
+// references/deployments.json records the SDK's release addresses and active CREATE3 prediction
+// inputs. Prediction gives an address, not deployed or authenticated code.
+// Offline: nothing is sent and no cook handoff is built.
 //
 //   node chains.mts
 import { readFileSync } from "node:fs";
 
-import { DEFAULT_POT_SALT, routes, v12PredictPot } from "@eco-incorp/sauce";
+import {
+  DEFAULT_POT_SALT,
+  POT_CREATE3_HELPER_INIT_CODE_HASH,
+  routes,
+  v12PredictPot,
+} from "@eco-incorp/sauce";
 import {
   v12EngineAddress,
   v12KitchenAddress,
   v12KitchenImplementationAddress,
-  v12PotDerivation,
   v12QuoteRouterAddress,
   v12RouterAddress,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "@eco-incorp/sauce/deployments";
 import { address, getAddressEncoder } from "@eco-incorp/sauce/svm";
-import { encodeAbiParameters, getCreate2Address, keccak256, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  getContractAddress,
+  getCreate2Address,
+  keccak256,
+  type Hex,
+} from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -228,7 +238,7 @@ check(
     evm.kitchenImplementation.address === v12KitchenImplementationAddress() &&
     evm.router.address === v12RouterAddress() &&
     evm.quoteRouter.address === v12QuoteRouterAddress() &&
-    evm.pot.initCodeHash === v12PotDerivation().initCodeHash,
+    evm.pot.helperInitCodeHash === POT_CREATE3_HELPER_INIT_CODE_HASH,
   "deployments.json gives the EVM contracts the SDK builds cooks with",
 );
 // An owner's default Pot is its Pot under the zero salt, and `evm.pot` derives it: any owner
@@ -236,12 +246,18 @@ check(
 const owner = evm.engine.address as Hex;
 check(
   DEFAULT_POT_SALT === `0x${"00".repeat(32)}` &&
-    getCreate2Address({
-      from: evm.kitchen.address,
-      bytecodeHash: evm.pot.initCodeHash,
-      salt: keccak256(
-        encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, DEFAULT_POT_SALT]),
-      ),
+    getContractAddress({
+      from: getCreate2Address({
+        from: evm.kitchen.address,
+        bytecodeHash: evm.pot.helperInitCodeHash,
+        salt: keccak256(
+          encodeAbiParameters(
+            [{ type: "address" }, { type: "bytes32" }],
+            [owner, DEFAULT_POT_SALT],
+          ),
+        ),
+      }),
+      nonce: 1n,
     }) === v12PredictPot(owner),
   "deployments.json's evm.pot gives an owner's default Pot, under the zero salt",
 );

@@ -7,17 +7,28 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { concat, encodeAbiParameters, numberToHex, size, toHex, type Hex } from "viem";
+import {
+  concat,
+  encodeAbiParameters,
+  getAddress,
+  getContractAddress,
+  getCreate2Address,
+  keccak256,
+  numberToHex,
+  size,
+  toHex,
+  zeroAddress,
+  type Hex,
+} from "viem";
 
 import {
   CookReverted,
-  local,
   type Effects,
   type Movement,
   type TestChain,
 } from "../../src/testing/index.js";
 import { rpc } from "../../src/testing/node.js";
-import { anvilMissing, program } from "./support.js";
+import { anvilMissing, local, program } from "./support.js";
 
 describe("local()", { skip: anvilMissing() }, () => {
   let chain: TestChain;
@@ -32,6 +43,68 @@ describe("local()", { skip: anvilMissing() }, () => {
     assert.equal(chain.stack.origin, "deployed");
     assert.equal(await chain.executionFee(), 0n);
     assert.notEqual(await chain.client.getCode({ address: chain.account(0).pot }), undefined);
+  });
+
+  it("derives dynamic, fixed and Shared Pots under Kitchen's CREATE3 helper", async () => {
+    const owner = chain.account(0);
+    const salt = toHex(141n, { size: 32 });
+    for (const [identity, fixed] of [
+      [owner.address, false],
+      [owner.address, true],
+      [zeroAddress, true],
+    ] as const) {
+      const gateSalt = keccak256(
+        fixed
+          ? encodeAbiParameters(
+              [{ type: "address" }, { type: "bytes32" }, { type: "bool" }],
+              [identity, salt, true],
+            )
+          : encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [identity, salt]),
+      );
+      const helper = getCreate2Address({
+        from: chain.kitchen,
+        salt: gateSalt,
+        bytecodeHash: "0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f",
+      });
+      const predicted = getContractAddress({ from: helper, nonce: 1n });
+      const pot = await chain.deployPot(0, {
+        salt,
+        kind: identity === zeroAddress ? "shared" : fixed ? "private-fixed-router" : "private",
+      });
+      assert.equal(getAddress(pot), predicted);
+      assert.notEqual(await chain.client.getCode({ address: pot }), undefined);
+      assert.equal(
+        await chain.deployPot(0, {
+          salt,
+          kind: identity === zeroAddress ? "shared" : fixed ? "private-fixed-router" : "private",
+        }),
+        pot,
+      );
+    }
+  });
+
+  it("refuses funding an undeployed dev Pot", async () => {
+    const account = chain.account(9);
+    assert.equal(await chain.client.getCode({ address: account.pot }), undefined);
+    await assert.rejects(chain.fund(account.pot, { ETH: 1n }), /deploy|missing|code/i);
+    assert.equal(await chain.client.getBalance({ address: account.pot }), 0n);
+  });
+
+  it("refuses an occupied dev Pot with unrecognized code before funding or cooking", async () => {
+    const account = chain.account(8);
+    const saved = await chain.client.getCode({ address: chain.account(0).pot });
+    assert.ok(saved);
+    await chain.test.setCode({ address: account.pot, bytecode: saved });
+    try {
+      await assert.rejects(chain.deployPot(8), /owner|identity|salt|profile|binding/i);
+      await assert.rejects(
+        chain.fund(account.pot, { ETH: 1n }),
+        /owner|identity|salt|profile|binding/i,
+      );
+      assert.equal(await chain.client.getBalance({ address: account.pot }), 0n);
+    } finally {
+      await chain.test.setCode({ address: account.pot, bytecode: "0x" });
+    }
   });
 
   it("runs a program and decodes what main returns", async () => {

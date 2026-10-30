@@ -16,10 +16,12 @@ import {
   sendCommand,
   signedChain,
   supportedChainNames,
+  UsageError,
 } from "./sdk.js";
 import {
   chainRef,
   LIMITS,
+  POT_BINDING,
   potsKept,
   refusable,
   RPC_URL,
@@ -59,11 +61,10 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "land, and reports what it did. It takes no key and never signs. `transactions` are the " +
         "SIGNED bytes, in the order to send them: on an EVM chain the raw 0x… hex a signer " +
         "returns (chain and sender read from it), on Solana the base64 wire transaction (every " +
-        "signature checked). Every cook and Pot deployment among them is held to the Pot guard " +
-        "first, together: one it refuses (a cook on no Pot, or on a Pot of another release; a " +
-        "deployment the Kitchen puts elsewhere, or whose calldata names no owner and salt) " +
-        "fails the call before any is sent, naming which. Each is simulated as signed first — " +
-        "EVM an eth_call from its sender " +
+        "signature checked). Every EVM cook is held to its explicit potBinding or authenticated " +
+        "stdio Pot record before any transaction is sent. Missing expected code or conflicting " +
+        "provenance refuses the whole call; it never repairs the Pot by deploying a replacement. " +
+        "Each is simulated as signed first — EVM an eth_call from its sender " +
         "with its gas limit held to what that used, Solana a simulation that checks the " +
         "signatures — and one that would fail is not sent: the call fails with the reason, or, " +
         "once an earlier one landed, stops there with ok false. Each lands before the next is " +
@@ -97,6 +98,11 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         "chains this release supports; on any other it is refused before any endpoint is " +
         "reached, with `refused` saying how to request the chain.",
       input: {
+        potBinding: POT_BINDING.optional().describe(
+          "EVM cooks: the explicit trusted binding for the already-deployed Pot these signed " +
+            "transactions target. Required without a configured stdio Pot store; verified before " +
+            "any transaction is broadcast. Supply again even if sauce_tx returned it.",
+        ),
         transactions: z
           .array(z.string().min(2).max(SIGNED_MOST))
           .max(SEND_MOST)
@@ -155,6 +161,9 @@ export function registerSendTools(server: McpServer, context: ToolContext): void
         input,
         args.chain === undefined ? undefined : parseChain(String(args.chain), "chain"),
       );
+      if (args.potBinding !== undefined && chain.kind !== "evm") {
+        throw new UsageError("potBinding is for EVM cooks only");
+      }
       // Before any endpoint is reached.
       requireSupported("sending", [chain]);
       const rpcUrl = await reach.require(chain, args.rpcUrl, "Sending");

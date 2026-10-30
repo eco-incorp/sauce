@@ -3,11 +3,11 @@
  * the test signs (a throwaway key standing in for a KMS or a hardware wallet), sauce_send
  * broadcasts and reports.
  *
- * Ethereum, an anvil running the released gated stack (`sdk/test/cli-anvil.ts`): the plan for an
- * owner with no Pot yet — Kitchen.deployPot, then the cook — signed with consecutive nonces and
- * sent in one call. Solana, the released Kitchen and engine in LiteSVM behind
- * `sdk/test/svm/rpc-shim.ts`, which checks every signature it is sent: the one-transaction cook,
- * its Pot created in it, signed by the owner's keypair.
+ * Ethereum, an anvil running the selected gated stack (`sdk/test/cli-anvil.ts`): the cook on an
+ * explicitly deployed and authenticated Pot, signed externally and sent in one call. Solana,
+ * the released Kitchen and engine in LiteSVM behind `sdk/test/svm/rpc-shim.ts`, which checks
+ * every signature it is sent: the one-transaction cook, its Pot created in it, signed by the
+ * owner's keypair.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX and on the engine artifacts respectively, like every
  * execution suite.
@@ -44,6 +44,7 @@ import { bytesToHex, hexToBigInt, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import type { EvmPotBinding } from "../../sdk/dist/evm/engine.js";
 import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
 import { deriveProgramDataPda, derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
@@ -72,7 +73,16 @@ import {
   type Unsigned,
 } from "../../docs/examples/mcp-external-signer.js";
 import { SEND_MOST, SIGNED_MOST } from "../src/send.js";
-import { connect, endpointsFor, erred, failed, ok, type Connected, walletsAt } from "./harness.js";
+import {
+  connect,
+  deployedPotBinding,
+  endpointsFor,
+  erred,
+  failed,
+  ok,
+  type Connected,
+  walletsAt,
+} from "./harness.js";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const AMOUNT = 1_000_000n;
@@ -92,11 +102,13 @@ describe(
     let local: LocalChain;
     let usdc: Address;
     let mcp: Connected;
+    let binding: EvmPotBinding;
     const signer = privateKeyToAccount(generatePrivateKey());
 
     before(async () => {
       local = await startChain("ethereum");
       usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
+      binding = await deployedPotBinding(local, signer.address);
       await local.deployer.sendTransaction({
         account: local.deployer.account!,
         chain: null,
@@ -131,23 +143,23 @@ describe(
     const program = {
       source: PAY,
       chain: "ethereum",
-      owner: signer.address,
       args: [RECIPIENT, AMOUNT.toString()],
     };
 
-    it("deploys the Pot and cooks on it: the documented example, end to end", async () => {
-      // Unfunded, the cook would revert after the deployment: no gas is suggested for it.
-      const planned = ok(await mcp.call("sauce_tx", program)) as {
-        pot: Address;
-        transactions: Unsigned[];
-        notes: string[];
-      };
-      assert.equal(planned.transactions[1]!.gas, undefined);
-      assert.ok(planned.notes.some((note) => /The cook is given no gas/.test(note)));
-      await local.mint(usdc, planned.pot, AMOUNT * 2n);
+    it("cooks on an authenticated Pot: the documented external signer example, end to end", async () => {
+      // Unfunded, the cook would revert, so no gas is suggested for it.
+      const planned = ok(
+        await mcp.call("sauce_tx", {
+          ...program,
+          pot: binding.pot,
+          potBinding: binding,
+        }),
+      ) as unknown as Unsigned;
+      assert.equal(planned.to, binding.pot);
+      assert.equal(planned.gas, undefined);
+      await local.mint(usdc, signer.address, AMOUNT * 2n);
 
-      // docs/examples/mcp-external-signer.ts, as a reader runs it, signing with the gas each
-      // transaction comes with: the cook's estimated as if the deployment had landed.
+      // The example signs the funding transfer and cook with their ordered-plan gas estimates.
       const signedWith: bigint[] = [];
       const sent = (await cookWithYourSigner(
         async (name, args) => ok(await mcp.call(name, args)),
@@ -157,7 +169,7 @@ describe(
 
           return BigInt(tx.gas);
         }),
-        program,
+        { ...program, pot: binding.pot, potBinding: binding, fund: ["USDC:2"] },
       )) as { ok: boolean; chain: string; sent: Array<Record<string, unknown>> };
       assert.equal(signedWith.length, 2);
       // Each a limit a transaction can run in, past the 21000 any transaction costs.
@@ -172,39 +184,40 @@ describe(
         sent.sent.map((each) => each.status),
         ["success", "success"],
       );
-      assert.match(String(sent.sent[0]!.what), /deployPot/);
-      // The Pot it deployed, as the sauce command records it, for the caller to keep: the server
-      // keeps no store.
-      const [deployed, ...more] = sent.sent[0]!.pots as Array<Record<string, unknown>>;
-      assert.deepEqual(more, []);
-      assert.deepEqual(
-        [deployed!.pot, deployed!.owner, deployed!.chain, deployed!.kind, deployed!.origin],
-        [planned.pot, signer.address, "ethereum", "private", "deployed"],
+      assert.ok(
+        sent.sent.every((each) => each.pots === undefined),
+        "execution does not deploy a Pot",
       );
-      assert.deepEqual(deployed!.deployment, {
-        tx: sent.sent[0]!.hash,
-        block: sent.sent[0]!.blockNumber,
-        blockHash: (
-          await local.publicClient.getTransactionReceipt({ hash: sent.sent[0]!.hash as Hex })
-        ).blockHash,
-        from: signer.address,
-      });
-      assert.equal(sent.sent[1]!.pots, undefined);
-      assert.equal(sent.sent[1]!.what, `cook on Pot ${planned.pot}`);
+      assert.equal(
+        await local.balanceOf(usdc, binding.pot),
+        AMOUNT,
+        "funding landed before the cook",
+      );
+      assert.equal(sent.sent[1]!.what, `cook on Pot ${binding.pot}`);
       assert.ok(Array.isArray(sent.sent[1]!.moves));
       assert.equal(await local.balanceOf(usdc, RECIPIENT), AMOUNT);
       assert.ok(mcp.received.every((text) => !text.includes(local.rpcUrl)));
     });
 
     it("returns a send that stopped as an error result that still carries what was sent", async () => {
-      // The Pot is there now: sauce_tx builds the cook alone. Signed short of gas, it is refused
-      // after the transfer ahead of it lands.
-      const built = ok(await mcp.call("sauce_tx", program)) as unknown as Unsigned;
+      // Signed short of gas, the cook is refused after the transfer ahead of it lands.
+      const built = ok(
+        await mcp.call("sauce_tx", {
+          ...program,
+          pot: binding.pot,
+          potBinding: binding,
+        }),
+      ) as unknown as Unsigned;
       const sign = await evmSigner((_, index) => (index === 0 ? 21_000n : 30_000n));
       const transfer = await sign({ chainId: 1, to: RECIPIENT, data: "0x", value: "1" }, 0);
       const cook = await sign(built, 1);
 
-      const stopped = erred(await mcp.call("sauce_send", { transactions: [transfer, cook] })) as {
+      const stopped = erred(
+        await mcp.call("sauce_send", {
+          transactions: [transfer, cook],
+          potBinding: binding,
+        }),
+      ) as {
         ok: boolean;
         sent: Array<{ status: string; reason?: string }>;
         notes: string[];

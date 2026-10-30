@@ -26,7 +26,7 @@ import {
 import { bytesToHex, getAddress, type Address, type Hex } from "viem";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
-import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
+import type { EvmPotBinding } from "../../sdk/dist/evm/engine.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
   fixture,
@@ -48,7 +48,7 @@ import {
   type EngineHarness,
 } from "../../sdk/test/svm/engine-harness.js";
 import { solanaShim, type SolanaShim } from "../../sdk/test/svm/rpc-shim.js";
-import { connect, endpointsFor, ok, type Connected } from "./harness.js";
+import { connect, deployedPotBinding, endpointsFor, ok, type Connected } from "./harness.js";
 import { coinbaseMock, type CoinbaseMock } from "./wallet-mcp/coinbase.js";
 import { phantomMock, type PhantomMock } from "./wallet-mcp/phantom.js";
 
@@ -57,7 +57,6 @@ const EVM_FIXTURES = join(
   "../../sdk/test/evm/fixtures",
 );
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
-const ZERO_SALT = `0x${"00".repeat(32)}` as Hex;
 const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
   "  USDC.transfer(recipient, amount);",
@@ -93,6 +92,8 @@ describe(
     let sauce: Connected;
     let phantom: PhantomMock;
     let coinbase: CoinbaseMock;
+    let phantomBinding: EvmPotBinding;
+    let coinbaseBinding: EvmPotBinding;
 
     before(async () => {
       base = await startChain("base");
@@ -106,6 +107,8 @@ describe(
         creationCode: fixture("BatchWallet", EVM_FIXTURES),
         setBalance: (address, value) => base.testClient.setBalance({ address, value }),
       });
+      phantomBinding = await deployedPotBinding(base, phantom.evmAddress);
+      coinbaseBinding = await deployedPotBinding(base, coinbase.wallet);
     });
 
     after(async () => {
@@ -115,19 +118,24 @@ describe(
       await base?.stop();
     });
 
-    it("Phantom's evm_send takes each transaction of sauce_tx's plan as it is: the Pot, then the cook", async () => {
+    it("Phantom's evm_send takes each transaction of sauce_tx's plan as it is: funding, then cook", async () => {
       const owner = phantom.evmAddress;
-      const pot = getAddress(v12PredictPot(owner, ZERO_SALT) as Address);
-      await base.mint(usdc, pot, 1_500_000n);
+      const pot = phantomBinding.pot;
+      await base.mint(usdc, owner, 1_500_000n);
       const plan = ok(
         await sauce.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner,
+          pot,
+          potBinding: phantomBinding,
+          fund: ["USDC:1.5"],
           args: [RECIPIENT, "1500000"],
         }),
       ) as unknown as { transactions: Tx[] };
-      assert.equal(plan.transactions.length, 2, "the Pot's deployment, then the cook");
+      assert.deepEqual(
+        plan.transactions.map((tx) => tx.what.split(" ")[0]),
+        ["transfer", "cook"],
+      );
 
       for (const tx of plan.transactions) {
         // First the preview Phantom shows the user, then the send once they agree.
@@ -150,7 +158,8 @@ describe(
         await sauce.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner: phantom.evmAddress,
+          pot: phantomBinding.pot,
+          potBinding: phantomBinding,
           args: [RECIPIENT, "0"],
         }),
       ) as unknown as Tx;
@@ -171,27 +180,28 @@ describe(
       );
     });
 
-    it("Coinbase's send_calls runs the Pot's deployment, --fund's transfer and the cook as one approval", async () => {
+    it("Coinbase's send_calls runs --fund's transfer and the authenticated Pot's cook as one approval", async () => {
       const wallets = result(await coinbase.call("get_wallets", {})) as {
         wallets: Array<{ address: Address }>;
       };
       const owner = wallets.wallets[0]!.address;
       assert.equal(owner, coinbase.wallet);
-      const pot = getAddress(v12PredictPot(owner, ZERO_SALT) as Address);
+      const pot = coinbaseBinding.pot;
       await base.mint(usdc, owner, 1_500_000n);
       const before = await base.balanceOf(usdc, RECIPIENT);
       const plan = ok(
         await sauce.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner,
+          pot,
+          potBinding: coinbaseBinding,
           fund: ["USDC:1.5"],
           args: [RECIPIENT, "1500000"],
         }),
       ) as unknown as { transactions: Tx[]; sendCalls: Record<string, unknown> };
       assert.deepEqual(
         plan.transactions.map((tx) => tx.what.split(" ")[0]),
-        [`Kitchen.deployPot(${owner},`, "transfer", "cook"],
+        ["transfer", "cook"],
       );
 
       const asked = result(await coinbase.call("send_calls", plan.sendCalls));
@@ -202,7 +212,10 @@ describe(
         "pending",
         "nothing runs before the user approves",
       );
-      assert.equal(await base.publicClient.getCode({ address: pot }), undefined);
+      assert.notEqual(await base.publicClient.getCode({ address: pot }), undefined);
+      assert.equal(await base.balanceOf(usdc, owner), 1_500_000n);
+      assert.equal(await base.balanceOf(usdc, pot), 0n);
+      assert.equal(await base.balanceOf(usdc, RECIPIENT), before);
 
       await coinbase.approve(requestId);
       assert.equal(
@@ -218,17 +231,20 @@ describe(
       );
     });
 
-    it("a batch with a call that fails reverts every call: no Pot, nothing moved", async () => {
+    it("a batch with a call that fails reverts every call: the existing Pot stays, nothing moved", async () => {
       const owner = coinbase.wallet;
-      // Another Pot of the same wallet's, and less USDC than the transfer moves.
-      const pot = getAddress(v12PredictPot(owner, `0x${"00".repeat(31)}02`) as Address);
+      // Another authenticated Pot of the same wallet's, and less USDC than the transfer moves.
+      const saltHex: Hex = `0x${"00".repeat(31)}02`;
+      const binding = await deployedPotBinding(base, owner, saltHex);
+      const pot = binding.pot;
       await base.mint(usdc, owner, 1_000_000n);
+      const before = await base.balanceOf(usdc, RECIPIENT);
       const plan = ok(
         await sauce.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner,
-          saltHex: `0x${"00".repeat(31)}02`,
+          pot,
+          potBinding: binding,
           fund: ["USDC:1.5"],
           args: [RECIPIENT, "1500000"],
         }),
@@ -246,8 +262,14 @@ describe(
         result(await coinbase.call("get_request_status", { requestId })).status,
         "failed",
       );
-      assert.equal(await base.publicClient.getCode({ address: pot }), undefined, "no Pot");
+      assert.notEqual(
+        await base.publicClient.getCode({ address: pot }),
+        undefined,
+        "the Pot stays deployed",
+      );
       assert.equal(await base.balanceOf(usdc, owner), 1_000_000n, "the wallet's USDC untouched");
+      assert.equal(await base.balanceOf(usdc, pot), 0n);
+      assert.equal(await base.balanceOf(usdc, RECIPIENT), before);
     });
 
     it("send_calls refuses what its documented shape does not take", async () => {
@@ -255,7 +277,8 @@ describe(
         await sauce.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner: coinbase.wallet,
+          pot: coinbaseBinding.pot,
+          potBinding: coinbaseBinding,
           args: [RECIPIENT, "0"],
         }),
       ) as unknown as { sendCalls: { chain: string; calls: Array<Record<string, unknown>> } };

@@ -36,7 +36,14 @@ import "./routes/builtins.generated.js";
 export { installRouteGlobals, uninstallRouteGlobals, routeGlobals } from "./routes/globals.js";
 export { kitchenExecutionFee } from "./evm/execution-fee.js";
 export type { ExecutionFeeCall } from "./evm/execution-fee.js";
-export { potSalt, DEFAULT_POT_SALT, v12PredictPot } from "./deployments/pot.js";
+export {
+  potSalt,
+  DEFAULT_POT_SALT,
+  POT_CREATE3_HELPER_INIT_CODE_HASH,
+  v12PotGateSalt,
+  v12PredictPot,
+  v12PredictSharedPot,
+} from "./deployments/pot.js";
 export {
   MAX_SQRT_PRICE_X96,
   MIN_SQRT_PRICE_X96,

@@ -8,16 +8,14 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
-  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getCreate2Address,
   http,
   isAddress,
-  keccak256,
   parseAbi,
   parseUnits,
   toHex,
+  zeroAddress,
   type Address,
   type Chain,
   type Hex,
@@ -43,6 +41,11 @@ import {
   buildSauceEvmCall,
   effectsOf,
   TOKEN_REGISTRY,
+  v12PredictPot,
+  v12PredictSharedPot,
+  verifyPotBinding,
+  type EvmPotBinding,
+  type EvmPotKind,
   type CanonicalChain,
   type Effects,
   type EntryValue,
@@ -132,6 +135,7 @@ export class TestChain {
   private readonly viemChain: Chain;
   private readonly snapshots: Hex[] = [];
   private readonly accounts: TestAccount[];
+  private readonly bindings = new Map<Address, EvmPotBinding>();
 
   constructor(
     /** The chain the node runs as. */
@@ -162,16 +166,7 @@ export class TestChain {
         index,
         address,
         privateKey: toHex(hd.getHdKey().privateKey!),
-        pot: getCreate2Address({
-          bytecodeHash: stack.potInitCodeHash,
-          from: stack.kitchen,
-          salt: keccak256(
-            encodeAbiParameters(
-              [{ type: "address" }, { type: "bytes32" }],
-              [address, DEFAULT_POT_SALT],
-            ),
-          ),
-        }),
+        pot: v12PredictPot(address, DEFAULT_POT_SALT, stack.kitchen) as Address,
       };
     });
   }
@@ -215,24 +210,46 @@ export class TestChain {
     })) as bigint;
   }
 
-  /** Deploys `account`'s Pot if it is not deployed yet. */
-  async deployPot(account: number | TestAccount = 0): Promise<Address> {
-    const owner = this.accountOf(account);
-    if (((await this.client.getCode({ address: owner.pot })) ?? "0x") !== "0x") return owner.pot;
-    const wallet = this.wallet(owner);
-    const hash = await wallet.sendTransaction({
-      to: this.stack.kitchen,
-      data: encodeFunctionData({
-        abi: this.stack.kitchenAbi,
-        functionName: "deployPot",
-        args: [owner.address, DEFAULT_POT_SALT],
-      }),
+  /** Explicitly deploys and authenticates a dynamic, fixed or Shared Pot before use. */
+  async deployPot(
+    account: number | TestAccount = 0,
+    options: { salt?: Hex; kind?: EvmPotKind } = {},
+  ): Promise<Address> {
+    const sender = this.accountOf(account);
+    const kind = options.kind ?? "private";
+    const userSalt = options.salt ?? DEFAULT_POT_SALT;
+    const owner = kind === "shared" ? zeroAddress : sender.address;
+    const pot = getAddress(
+      kind === "shared"
+        ? v12PredictSharedPot(userSalt, this.stack.kitchen)
+        : v12PredictPot(owner, userSalt, this.stack.kitchen, kind !== "private"),
+    );
+    const code = await this.client.getCode({ address: pot });
+    if (code === undefined || code === "0x") {
+      const wallet = this.wallet(sender);
+      const hash = await wallet.sendTransaction({
+        to: this.stack.kitchen,
+        data: encodeFunctionData({
+          abi: this.stack.kitchenAbi,
+          functionName: kind === "shared" ? "deploySharedPot" : "deployPot",
+          args: kind === "shared" ? [userSalt] : [owner, userSalt, kind !== "private"],
+        }),
+      });
+      const receipt = await this.client.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`deploying the Pot of ${owner} reverted`);
+    }
+    const binding = await verifyPotBinding(this.client, {
+      ...this.stack.binding,
+      ...this.bindings.get(pot),
+      pot,
+      owner,
+      userSalt,
+      kind,
+      chainId: this.chain.id,
     });
-    const receipt = await this.client.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success")
-      throw new Error(`deploying the Pot of ${owner.address} reverted`);
+    this.bindings.set(pot, binding);
 
-    return owner.pot;
+    return pot;
   }
 
   private wallet(account: TestAccount) {
@@ -293,6 +310,21 @@ export class TestChain {
    * fund the holder from an account that has it instead (`impersonate`).
    */
   async fund(holder: Address, amounts: Readonly<Record<string, string | bigint>>): Promise<void> {
+    const address = getAddress(holder);
+    const account = this.accounts.find((entry) => getAddress(entry.pot) === address);
+    const binding = this.bindings.get(address);
+    if (binding) await verifyPotBinding(this.client, binding);
+    else if (account) {
+      const verified = await verifyPotBinding(this.client, {
+        ...this.stack.binding,
+        pot: address,
+        owner: account.address,
+        userSalt: DEFAULT_POT_SALT,
+        kind: "private",
+        chainId: this.chain.id,
+      });
+      this.bindings.set(address, verified);
+    }
     for (const [name, amount] of Object.entries(amounts)) {
       const token = this.token(name);
       const units =
@@ -381,6 +413,7 @@ export class TestChain {
       pot: owner.pot,
       engine: this.stack.engine,
       program: program.payload(options.args),
+      compiler: this.stack.binding.compiler,
       value: fee + (options.value ?? 0n),
     });
 

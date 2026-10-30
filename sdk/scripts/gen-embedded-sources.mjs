@@ -27,6 +27,10 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sdkReleasesOf } from "./lib/sdk-releases.mjs";
+import {
+  compileInstalledCompilerProbe,
+  readInstalledCompilerProvenance,
+} from "./lib/compiler-provenance.mjs";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(SDK, "src");
@@ -123,7 +127,80 @@ function module(from, blocks) {
   ].join("\n");
 }
 
+const recordCompiler = process.argv.includes("--record-compiler-probe");
+if (recordCompiler && process.argv.includes("--check")) {
+  throw new Error("--record-compiler-probe cannot be combined with --check");
+}
+const actualProbe = recordCompiler ? compileInstalledCompilerProbe() : undefined;
+const compilerProvenance =
+  actualProbe === undefined
+    ? readInstalledCompilerProvenance()
+    : {
+        compiler: actualProbe.compiler,
+        wasmSha256: actualProbe.wasmSha256,
+      };
+const releaseTablePath = join(SRC, "deployments/releases.json");
+const releaseTable = JSON.parse(read(releaseTablePath));
+if (actualProbe !== undefined) {
+  const descriptor = { compilerWasmSha256: actualProbe.wasmSha256, program: actualProbe.program };
+  const previous = releaseTable.compilerProvenance?.[actualProbe.compiler];
+  if (
+    previous !== undefined &&
+    (previous.compilerWasmSha256 !== descriptor.compilerWasmSha256 ||
+      previous.program !== descriptor.program)
+  ) {
+    throw new Error(
+      `compiler ${actualProbe.compiler} already has different immutable WASM/probe provenance`,
+    );
+  }
+  if (previous === undefined) {
+    releaseTable.compilerProvenance = {
+      ...releaseTable.compilerProvenance,
+      [actualProbe.compiler]: descriptor,
+    };
+    writeFileSync(releaseTablePath, `${JSON.stringify(releaseTable, null, 2)}\n`);
+  }
+}
+const compilerProbes = releaseTable.compilerProvenance;
+if (
+  compilerProbes === null ||
+  typeof compilerProbes !== "object" ||
+  Array.isArray(compilerProbes)
+) {
+  throw new Error(
+    "Missing trusted compiler provenance: run gen-embedded-sources.mjs --record-compiler-probe",
+  );
+}
+for (const [version, descriptor] of Object.entries(compilerProbes)) {
+  if (
+    !version ||
+    !/^[0-9a-f]{64}$/.test(descriptor.compilerWasmSha256) ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/.test(descriptor.program) ||
+    descriptor.program.length > 2050
+  ) {
+    throw new Error(`Malformed retained compiler provenance for ${version}`);
+  }
+}
+if (
+  compilerProbes[compilerProvenance.compiler]?.compilerWasmSha256 !== compilerProvenance.wasmSha256
+) {
+  throw new Error(
+    `Installed compiler ${compilerProvenance.compiler} needs matching retained WASM/probe provenance; run gen-embedded-sources.mjs --record-compiler-probe`,
+  );
+}
+
 const OUTPUTS = {
+  "compiler.generated.ts": () =>
+    module("the installed sauce-compiler package and its actual Node/browser WASM bytes", [
+      [
+        "/** Actual build-time compiler artifact identity; browser consumers need no filesystem access. */",
+        `export const COMPILER_PROVENANCE = ${JSON.stringify(compilerProvenance)} as const;`,
+        "/** Immutable compiler-produced known-answer descriptors, retained across SDK upgrades. */",
+        "export const COMPILER_COMPATIBILITY_PROBES: Readonly<Record<string, { readonly compilerWasmSha256: string; readonly program: `0x${string}` }>> = " +
+          JSON.stringify(compilerProbes) +
+          ";",
+      ],
+    ]),
   "sources.generated.ts": () =>
     module("src/std, src/recipes/*.sauce.ts and src/protocols/*/*.json", [
       record(

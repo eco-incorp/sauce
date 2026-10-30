@@ -1,20 +1,6 @@
 /**
- * `sauce sign`: a cook the owner of a Private Pot signs for anyone (or one named account) to submit
- * with the Pot's own `cookSigned`. The command compiles the file with `main`'s arguments as `tx`
- * does and prints the EIP-712 typed data the owner signs (`evm/engine.ts#signedCookTypedData`:
- * engine, program, value, fee ceiling, nonce, deadline, submitter, under the Pot's domain); with a
- * signer (the Pot's owner) it signs it, and with a signature made elsewhere it checks it, and either
- * way builds `cook`: `cookSigned(…)` as `{ chainId, to: the Pot, data, value }`, for the submitter
- * to send with exactly the signed value. The Pot pays the Kitchen's fee itself, out of its balance.
- *
- * With an endpoint the Pot is read (`checkSignedCookPot`): one with no code that the owner and salt
- * name still signs, and the result carries `deployPot`, the Kitchen call any account sends first; a
- * Pot minted before signed cooks, a Shared Pot or a contract that is not a Pot is refused. `--offline`
- * reads nothing. `--cancel <nonce>` builds the owner's `invalidateNonces` per nonce word, and with a
- * signer and an endpoint sends them through `chain.ts#sendAndWait`.
- *
- * Every byte of calldata is the SDK's: `encodeCookSigned`, `encodeInvalidateNonces` and
- * `v12Kitchen.encodeDeployPot`.
+ * Signed cooks require an authenticated deployed Pot and its explicit compiler/engine binding.
+ * New Pots must be deployed, verified and persisted before typed data or signatures are produced.
  */
 import {
   formatEther,
@@ -27,8 +13,6 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress } from "../deployments/index.js";
-import { v12PredictPot } from "../deployments/pot.js";
 import { nativeSymbol } from "../evm/effects.js";
 import {
   checkSignedCookPot,
@@ -39,7 +23,6 @@ import {
   signedCookDigest,
   signedCookTypedData,
   signedCookTypedDataJson,
-  v12Kitchen,
   verifySignedCook,
   type SignedCookExecution,
 } from "../evm/engine.js";
@@ -56,7 +39,6 @@ import {
 } from "./chain.js";
 import {
   compileProgram,
-  kitchenAddress,
   payloadOf,
   type ArgsInput,
   type CliFiles,
@@ -67,6 +49,7 @@ import {
 import { hexQuantity } from "./handoff.js";
 import { linkLines, txLinks } from "./links.js";
 import { guardOf } from "./policy.js";
+import { executionBinding, executionEngine, resolvePotTarget } from "./pot-binding.js";
 import { requireSupported } from "./support.js";
 
 export interface SignInput extends ProgramInput {
@@ -172,7 +155,8 @@ async function hasCode(client: PublicClient, pot: Address): Promise<boolean> {
 
 /** Refuses a Pot the chain shows cannot take a signed cook, naming why; its owner otherwise. */
 async function signedCookOwner(client: PublicClient, pot: Address): Promise<Address> {
-  const check = await checkSignedCookPot(client, pot).catch((error: unknown) => {
+  const binding = executionBinding(await client.getChainId(), pot);
+  const check = await checkSignedCookPot(client, pot, binding).catch((error: unknown) => {
     throw new CliError(`reading Pot ${pot}: ${reasonOf(error)}`);
   });
   if (!check.ok) throw new CliError(`Pot ${pot} takes no signed cook: ${check.reason}`);
@@ -188,14 +172,11 @@ export async function signCommand(
 ): Promise<CommandOutput> {
   const chain = input.chain;
   refuseSignInput(input, signer !== undefined);
-  const compiled = compileProgram(input, files);
   requireSupported("signing a cook", [chain]);
-  const program = payloadOf(compiled, input.args);
   const target = input.target;
   // A Pot named by its owner needs one: no Kitchen call deploys a Pot of the zero address.
   if ("owner" in target) requirePotOwner(target.owner);
-  const pot =
-    "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
+  const pot = resolvePotTarget(chain.id, target);
   const named = "owner" in target ? getAddress(target.owner) : undefined;
   if (signer !== undefined && named !== undefined && getAddress(signer.address) !== named) {
     throw new UsageError(
@@ -207,8 +188,12 @@ export async function signCommand(
 
   // The Pot, the fee and the time, where the command reaches the chain.
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
+  if (client === undefined) {
+    throw new CliError(
+      "Signing requires an RPC endpoint and an authenticated deployed Pot; offline predictions cannot authorize a cook",
+    );
+  }
   let owner = named;
-  let deployPot: { chainId: number; to: Address; data: Hex; value: Hex } | undefined;
   let read: { fee: bigint; balance: bigint; now: bigint } | undefined;
   if (client !== undefined) {
     const deployed = await hasCode(client, pot);
@@ -219,23 +204,14 @@ export async function signCommand(
       );
     }
     await requirePot(client, chain, { ...target, pot, deployed });
-    if (deployed) {
-      owner = await signedCookOwner(client, pot);
-    } else if ("owner" in target) {
-      deployPot = {
-        chainId: chain.id,
-        to: kitchenAddress(),
-        data: v12Kitchen.encodeDeployPot(target.owner, target.salt),
-        value: hexQuantity(0n),
-      };
-    }
+    owner = await signedCookOwner(client, pot);
     if (signer !== undefined && owner !== undefined && getAddress(signer.address) !== owner) {
       throw new CliError(
         `${signer.address} does not own Pot ${pot}: only its owner, ${owner}, signs the cooks it runs`,
       );
     }
     const [fee, balance, block] = await Promise.all([
-      kitchenFee(client, chain),
+      kitchenFee(client, chain, executionBinding(chain.id, pot)!.kitchen),
       client.getBalance({ address: pot }),
       client.getBlock({ blockTag: "latest" }),
     ]).catch((error: unknown) => {
@@ -244,6 +220,9 @@ export async function signCommand(
     });
     read = { fee, balance, now: block.timestamp };
   }
+  const engine = executionEngine(chain.id, pot);
+  const compiled = compileProgram(input, files);
+  const program = payloadOf(compiled, input.args);
 
   const now = read?.now ?? BigInt(Math.floor(Date.now() / 1000));
   const deadline = input.deadline ?? now + (input.within ?? DEFAULT_WITHIN);
@@ -259,8 +238,9 @@ export async function signCommand(
   const execution: SignedCookExecution = {
     chainId: chain.id,
     pot,
-    engine: getAddress(v12EngineAddress()),
+    engine,
     program,
+    compiler: executionBinding(chain.id, pot)!.compiler,
     value,
     maxExecutionFee,
     nonce,
@@ -317,18 +297,11 @@ export async function signCommand(
       : {
           cook: { chainId: chain.id, to: call.to, data: call.data, value: hexQuantity(call.value) },
         }),
-    ...(deployPot === undefined ? {} : { deployPot }),
   };
   const who = submitter === zeroAddress ? "Anyone" : `Only ${submitter}`;
   const notes = [
     `Pot ${pot}${owner === undefined ? "" : `, owned by ${owner}`}: ${who} may submit this cook, ` +
       `once (nonce ${nonce}), until ${when(deadline)}, unix seconds, inclusive.`,
-    ...(deployPot === undefined
-      ? []
-      : [
-          `Pot ${pot} has no code yet: send deployPot first (Kitchen.deployPot; any account may ` +
-            "send it, and the Pot is its owner's either way), then the cook.",
-        ]),
     call === undefined
       ? "No signer was given: sign typedData with the Pot's owner (eth_signTypedData_v4), then " +
         "build the cook with that signature (--signature <hex>), or sign here with --wallet, " +
@@ -348,10 +321,7 @@ export async function signCommand(
       ? [
           `warning: the Pot's balance and the cook's value (${read.balance + value} wei) do not ` +
             "cover the Kitchen's fee: " +
-            (deployPot === undefined
-              ? "fund the Pot before the cook is submitted"
-              : "send deployPot, then fund the Pot before the cook is submitted (not its address " +
-                "before it is deployed: a Kitchen upgrade that changes the Pot's code moves it)") +
+            "fund the verified Pot before the cook is submitted" +
             ", or it reverts with FeeNotPaid.",
         ]
       : []),
@@ -411,8 +381,7 @@ export async function cancelCommand(
   // The zero owner's Pot is a Shared Pot, which runs no signed cook and refuses its own
   // invalidateNonces from every sender: there is no nonce of it to cancel.
   if ("owner" in target) requirePotOwner(target.owner);
-  const pot =
-    "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
+  const pot = resolvePotTarget(chain.id, target);
   const named = "owner" in target ? getAddress(target.owner) : undefined;
   if (signer !== undefined && named !== undefined && getAddress(signer.address) !== named) {
     throw new UsageError(
@@ -445,6 +414,7 @@ export async function cancelCommand(
     if (!(await hasCode(client, pot))) {
       throw new CliError(`Pot ${pot} has no code on ${chain.slug}: it has no nonce to cancel`);
     }
+    await requirePot(client, chain, { ...target, pot, deployed: true });
     owner = await signedCookOwner(client, pot);
     if (signer !== undefined && getAddress(signer.address) !== owner) {
       throw new CliError(

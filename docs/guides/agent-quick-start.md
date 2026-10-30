@@ -13,8 +13,9 @@ minutes.
 
 ## You will need
 
-- No funds, no wallet and no account with an RPC provider: nothing is signed or sent, and this page
-  never asks for a key.
+- An already-deployed, authenticated Base Pot and its trusted persisted binding, prepared in the
+  [Quick start](quick-start.md) or by your operator. Deployment is separately authorized and costs
+  gas; this tutorial only simulates and never asks for a signing key.
 - [Node.js](https://nodejs.org) 24 or newer (`node --version` tells you).
 - [Claude Code](https://code.claude.com), signed in. Another agent works too: add the server to it
   by the [agent's own steps](mcp.md#add-the-server-to-your-agent), then carry on from step 3.
@@ -86,8 +87,9 @@ Ask:
 ```text
 Using the Sauce tools, write a program for Base that pays USDC from the Pot. Take the recipient
 and the amount as main's arguments, and first require that the Pot holds at least the amount, with
-the message "not enough USDC". Compile it, then simulate paying 1 USDC to
-0x000000000000000000000000000000000000dEaD with 5 USDC in the Pot.
+the message "not enough USDC". Compile it, then use my existing authenticated Base Pot binding
+to simulate paying 1 USDC to 0x000000000000000000000000000000000000dEaD with 5 USDC assumed in the
+Pot. Do not deploy a Pot or guess a binding; ask me for the prepared binding if it is not available.
 ```
 
 Claude Code may ask your leave before it first calls each tool. Say yes: none of the tools used
@@ -101,8 +103,9 @@ ones to look for:
    the Pot's USDC with `require`, and calls `USDC.transfer`.
 4. It calls `sauce_compile`. If the compiler finds a mistake, the agent reads the message and fixes
    the line it names.
-5. It calls `sauce_simulate` with the two arguments in `args` and `assumeBalance: ["USDC:5"]`,
-   which pretends the Pot holds 5 USDC for this one simulation.
+5. It calls `sauce_simulate` with your verified `potBinding` (or the record in the stdio server's
+   configured store), the two arguments in `args` and `assumeBalance: ["USDC:5"]`, which pretends
+   the already authenticated Pot holds 5 USDC for this one simulation.
 
 Its own words differ from run to run. The end of it should say the cook succeeds, that 1 USDC moved
 from the Pot to the address, and that 4 USDC are left in the Pot. The server reads Base through a
@@ -131,9 +134,10 @@ Save the program as pay.sauce.ts. In its header, put the sauce simulate command 
 first simulation, with --assume-balance USDC:5 and the same --args.
 ```
 
-Run that `sauce simulate` line yourself in a terminal, with any address as `--owner` if it asks for
-one. It prints the same outcome the tool gave the agent: the cook succeeds, 1 USDC moves, and 4
-USDC are left in the Pot. That is because the server calls the very functions the command does.
+Run that `sauce simulate` line yourself in a terminal, using the same owner and authenticated Pot
+store/binding, not an arbitrary address. It prints the same outcome the tool gave the agent:
+the cook succeeds, 1 USDC moves, and 4 USDC are left in the Pot. That is because the server calls
+the very functions the command does.
 The program the agent wrote is an ordinary file, and everything the agent did, you can do by hand.
 
 ## What just happened

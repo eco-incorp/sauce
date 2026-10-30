@@ -70,9 +70,10 @@ sauce tx: building the cook transaction is refused: it involves optimism (Optimi
 the testnets Arc Testnet, Base Sepolia, Ethereum Sepolia, Solana Devnet and Solana Testnet. Every
 other chain is a preview chain, where it builds and sends none.
 
-**Fix.** Compile, read and simulate there freely (simulate runs wherever the release is deployed), and send on a supported chain. To ask for the chain,
-follow the two links the message prints: the first finds an existing request, the second opens a
-new one. No flag lifts the refusal ([Supported and preview chains](cli.md#supported-and-preview-chains)).
+**Fix.** Compile and read there, or simulate with the required contracts and an authenticated
+deployed Pot binding on EVM; send on a supported chain. To ask for the chain, follow the two links
+the message prints: the first finds an existing request, the second opens a new one. No flag
+lifts the refusal ([Supported and preview chains](cli.md#supported-and-preview-chains)).
 
 ### `the released engine … is not deployed on <chain>`
 
@@ -131,45 +132,32 @@ which `Kitchen.deploySharedPot(salt)` deploys: see
 
 ### `this SDK does not match the deployed Kitchen`
 
-```text
-sauce tx: the Kitchen 0x1984… on base puts the Pot of owner 0xYou and salt 0x00…00 at 0x8a…, but this SDK has it at 0x3c…: this SDK does not match the deployed Kitchen, and a cook it sends goes where the Kitchen puts no Pot. The Kitchen 0x1984… on base mints Pots under init-code hash 0x5d…, which no release this SDK knows records: the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update). Under its release, compiler … (v12-evm …, kitchen-evm …), this SDK deploys the Pot of owner 0xYou and salt 0x00…00 at 0x3c…. Nothing was simulated, built or sent.
-The Pot store /home/you/.sauce/pots holds 1 other Pot of 0xYou on base:
-  0x7e…  private, salt 0x00…01: compiler … (v12-evm …, kitchen-evm …), @eco-incorp/sauce …
-```
+**Cause.** The selected factory/SDK derivation or release profile does not match the chain.
+New Pot prediction is CREATE3 only; stale CREATE2 callers must stop or update.
+A matching address is still not code authentication. `potInitCodeHash()` describes historical
+creation/introspection data, not the CREATE3 code profile.
 
-**Cause.** The Kitchen on the chain mints Pots of another release than your copy of the SDK pins,
-and it derives Pot addresses differently. Before the command simulates, builds or sends a cook, a
-Pot deployment or a signed cook on a Pot not deployed yet, it asks the Kitchen where it puts your
-Pot (`predictPot`, or `predictSharedPot` for the deployment of a Shared Pot that `sauce send` is
-given). A cook sent to the SDK's address would land on an address with no code: it
-would succeed, run nothing, and leave its value at that address. The message says which release
-the Kitchen mints, from its `potInitCodeHash()`. Where the command keeps the Pot store, it lists
-your other Pots on the chain, each with its release.
-
-**Fix.** When the Kitchen is newer than the SDK, upgrade the package (`sauce update`, or
-`npm i @eco-incorp/sauce@latest` in a project), then run the command again. When the message names
-an older release instead (`mints Pots of compiler …, which @eco-incorp/sauce … pair with`), the
-chain's Kitchen has not been upgraded yet: use one of the SDK versions it names on that chain. A
-listed Pot of your SDK's release still cooks: name it with `--pot <address>`.
+**Fix.** Stop before funding or signing. Select the exact qualified SDK/compiler/engine artifacts
+and verify the deployed binding. For an already deployed historical Pot, retain its explicit
+original pairing; do not repredict or redeploy it through the current factory. Unknown profiles
+and missing expected code fail closed. See [Kitchen compatibility](kitchen-compatibility.md).
 
 ### `… is a Pot of compiler …, which @eco-incorp/sauce … pair with`
 
-**Cause.** The Pot you named was minted by another release. Its release is told from the chain:
-its owner, salt and Kitchen are read off it, and its address is that Kitchen's under the release's
-Pot init-code hash. Its engine runs only that release's compiler output, never this SDK's.
+**Cause.** The selected compiler/engine pair does not match the Pot's verified release binding.
+Historical CREATE2 provenance and new CREATE3 runtime profiles are distinct authentication paths.
 
-**Fix.** Cook on it with an SDK version the message names, or cook on a Pot of your SDK's release:
-the message says where the SDK deploys the owner's Pot.
+**Fix.** Use the deployed Pot's exact original compiler/engine pair for ordinary new work,
+or explicitly opt into a separately deployed and verified new Pot. Do not silently repin.
 
 ### `… has code, but no release this SDK knows minted a Pot there`
 
-**Cause.** The contract at the Pot's address reports an owner, salt and Kitchen that no release the
-SDK records derives this address from. It is a Pot of a release newer than the SDK, or not a Pot.
-A contract that does not answer a Pot's `owner()`, `userSalt()` and `kitchen()` is refused as `…
-has code, but is not a Pot`.
+**Cause.** The code/identity does not match trusted release provenance, or the required profile
+is unknown. Plausible `owner()`, `userSalt()` and `kitchen()` answers alone do not prove identity.
 
-**Fix.** If the message says the Kitchen is newer than this SDK, upgrade the package. Otherwise
-check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it.
+**Fix.** Check the explicit Pot and artifact pair. Refuse funding, approvals and signing until
+binding verification succeeds. An incompatible occupied target needs an explicit new salt;
+never increment it automatically or treat the occupant as the new requested release.
 
 ## The command cannot reach the chain
 
@@ -293,11 +281,12 @@ that others can write is refused too: `chmod 600` it.
 **Cause.** A `require` in your program failed: here, the Pot holds less USDC than the program
 spends. In the quick start's program that is the check doing its job.
 
-**Fix.** Put tokens in your Pot: once it is deployed, send them to its address (`sauce pot --chain
-<chain> --wallet me` prints it; `--deploy` creates it first), or add `--fund USDC:<amount>` to pull
-them from your wallet in the same cook, after the Pot's deployment
-([Put tokens in your Pot](cli-run.md#put-tokens-in-your-pot)). To simulate before funding, pass
-`--assume-balance USDC:<amount>`.
+**Fix.** For a new EVM Pot, explicitly deploy with a trusted qualified descriptor, authenticate
+its actual binding and persist it before funding. Send tokens to that verified address or add
+`--fund USDC:<amount>` to pull them from your wallet before the cook. A missing saved Pot is a
+failure, not permission to deploy a replacement
+([Put tokens in your Pot](cli-run.md#put-tokens-in-your-pot)). To simulate before funding the
+already authenticated Pot, pass `--assume-balance USDC:<amount>`.
 
 ### `ERC20InsufficientBalance` or `STF`
 
@@ -319,8 +308,8 @@ read with `--block` ([Look things up](cli-lookup.md)).
 
 **Cause.** A simulation gives the owner the cook's value and says so: `the owner holds … ETH: the
 cook's value; it holds 0, and a real cook needs the value and gas`. A real run sends from your
-wallet, which must hold the gas and the Kitchen's fee. The first run also pays for the Pot's
-creation, a few hundred thousand gas, which its question estimates.
+wallet, which must hold the gas and the Kitchen's fee. A new EVM Pot's creation is a separate,
+explicit deployment paid before simulation, funding or signing; `run` does not create it.
 
 **Fix.** Send your wallet a little ETH on Base or Ethereum. [Costs](../concepts/costs.md) says what
 each part costs.

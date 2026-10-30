@@ -27,7 +27,6 @@ import { assumeTokenBalance, findBalanceSlot } from "../src/cli/assume.js";
 import { mergeOverrides } from "../src/evm/balance-slot.js";
 import { revertReason } from "../src/cli/chain.js";
 import { effectLines, effectsJson, effectsOf, flowLines, type RawLog } from "../src/evm/effects.js";
-import { POT_ROUTER_SLOT } from "../src/cli/rehearse.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { assumedBalances } from "../src/cli/inputs.js";
 import { potBalances } from "../src/cli/simulate.js";
@@ -187,12 +186,6 @@ describe("state overrides", () => {
       },
       { address: HOLDER, balance: 5n, code: "0x00", nonce: 1 },
     ]);
-  });
-
-  it("puts the Pot's Router where Pot.sol's ERC-7201 namespace says", () => {
-    expect(POT_ROUTER_SLOT).toBe(
-      "0x5dcf1afeb37fe4804d4db2aa42e07f76a76c328b0f50beb6b52ea4daec1f5f00",
-    );
   });
 });
 

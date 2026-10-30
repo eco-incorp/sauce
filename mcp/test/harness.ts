@@ -8,6 +8,9 @@ import { readFileSync, statSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { encodeFunctionData, getAddress, parseAbi, zeroHash, type Address, type Hex } from "viem";
+import type { EvmPotBinding } from "../../sdk/dist/evm/engine.js";
+import type { LocalChain } from "../../sdk/test/cli-anvil.js";
 
 import { NO_ENDPOINTS, readEndpoints, type Endpoints } from "../src/config.js";
 import type { RpcGuard } from "../src/guard.js";
@@ -144,4 +147,41 @@ export function failed(result: CallToolResult): string {
   assert.equal(result.isError, true, `expected an error, got: ${textOf(result)}`);
 
   return textOf(result);
+}
+
+/**
+ * Explicit test setup, never a tool fallback: deploy using the selected local fixture's factory,
+ * then authenticate with that fixture's trusted release artifacts before asking MCP to execute.
+ */
+export async function deployedPotBinding(
+  local: LocalChain,
+  owner: Address,
+  salt: Hex = zeroHash,
+): Promise<EvmPotBinding> {
+  const { kitchen } = await local.bindingOf(local.seedPot);
+  const abi = parseAbi([
+    "function predictPot(address owner, bytes32 salt) view returns (address)",
+    "function deployPot(address owner, bytes32 salt) returns (address)",
+  ]);
+  const pot = getAddress(
+    await local.publicClient.readContract({
+      address: kitchen,
+      abi,
+      functionName: "predictPot",
+      args: [owner, salt],
+    }),
+  );
+  if ((await local.publicClient.getCode({ address: pot })) === undefined) {
+    await local.send(
+      local.deployer,
+      kitchen,
+      encodeFunctionData({
+        abi,
+        functionName: "deployPot",
+        args: [owner, salt],
+      }),
+    );
+  }
+
+  return local.bindingOf(pot);
 }

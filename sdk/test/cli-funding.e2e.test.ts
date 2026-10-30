@@ -12,9 +12,9 @@
  *   - PUSDT: USDT's shape with EIP-2612 `permit` (`fixtures/cli/PullTokens.sol`);
  *   - FALSE: EIP-2612, honest except that `transferFrom` answers `false` and moves nothing.
  *
- * Every pull is a SafeERC20 `safeTransferFrom`: the USDT-shaped tokens succeed in every mode, and a
- * `false` pull reverts the whole run. Permit2 refuses an expired signature and a spent nonce. No key
- * is ever printed.
+ * Every funded cook uses an explicitly deployed authenticated Pot. Pulls use SafeERC20:
+ * USDT-shaped tokens succeed in every mode, and a `false` pull reverts the whole run. Permit2
+ * refuses an expired signature and a spent nonce. No key is ever printed.
  */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,7 +38,9 @@ import { parseFund, permit2On, planFunding } from "../src/cli/funding.js";
 import { fundingFor } from "../src/cli/inputs.js";
 import { simulateCommand } from "../src/cli/simulate.js";
 import { nodeIo, type CliIo } from "../src/cli/run.js";
-import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
+import { potSalt } from "../src/deployments/pot.js";
+import { withPotBinding } from "../src/cli/pot-binding.js";
+import { keeping } from "../src/cli/keep.js";
 import { addressOn, getDescriptor } from "../src/descriptors/query.js";
 import {
   CLI_FIXTURES,
@@ -272,36 +274,38 @@ describeEvm(
       }, 60_000);
 
       /** A cook funded by Permit2 with `nonce` and `deadline` set, as `sauce run` would send it. */
-      const fundedCook = (amount: bigint, nonce: bigint, deadline?: bigint) =>
-        runCommand(
-          {
-            file: program,
-            text: PAYS,
-            chain: local.chain,
-            defines: {},
-            target: { pot },
-            args: { from: "--args", values: [usdc, RECIPIENT, amount.toString()] },
-            rpcUrl: local.rpcUrl,
-            account: OWNER,
-            approver: asking(unasked),
-            fund: ((client, at, owner) =>
-              planFunding({
-                chain: local.chain,
-                client,
-                rpcUrl: local.rpcUrl,
-                owner,
-                pot: at,
-                mode: "permit2",
-                requests: [parseFund(`USDC:${amount}n`, local.chain)],
-                sweep: false,
-                account: OWNER,
-                nonce,
-                ...(deadline === undefined ? {} : { deadline }),
-                send: true,
-                approver: asking(unasked),
-              })) satisfies CookInput["fund"],
-          },
-          nodeIo(),
+      const fundedCook = async (amount: bigint, nonce: bigint, deadline?: bigint) =>
+        withPotBinding(await local.bindingOf(pot), () =>
+          runCommand(
+            {
+              file: program,
+              text: PAYS,
+              chain: local.chain,
+              defines: {},
+              target: { pot },
+              args: { from: "--args", values: [usdc, RECIPIENT, amount.toString()] },
+              rpcUrl: local.rpcUrl,
+              account: OWNER,
+              approver: asking(unasked),
+              fund: ((client, at, owner) =>
+                planFunding({
+                  chain: local.chain,
+                  client,
+                  rpcUrl: local.rpcUrl,
+                  owner,
+                  pot: at,
+                  mode: "permit2",
+                  requests: [parseFund(`USDC:${amount}n`, local.chain)],
+                  sweep: false,
+                  account: OWNER,
+                  nonce,
+                  ...(deadline === undefined ? {} : { deadline }),
+                  send: true,
+                  approver: asking(unasked),
+                })) satisfies CookInput["fund"],
+            },
+            nodeIo(),
+          ),
         );
 
       it("refuses a spent nonce: Permit2 reverts InvalidNonce, and nothing is sent", async () => {
@@ -774,7 +778,7 @@ describeEvm(
         ]);
       }, 60_000);
 
-      /** A signer of its own, with no Pot and no approval of Permit2, holding `tokens`. */
+      /** A signer of its own, with tokens and no approval of Permit2. Tests deploy its Pot explicitly. */
       const freshSigner = async (...tokens: Address[]) => {
         const key = generatePrivateKey();
         const account = privateKeyToAccount(key);
@@ -793,7 +797,7 @@ describeEvm(
 
       it("with a key, runs the Permit2 approval sauce run would ask for first, and says so", async () => {
         const { key, account } = await freshSigner(usdc);
-        const signerPot = v12PredictPot(account.address, potSalt("simulated")) as Address;
+        const signerPot = await deployPot(local, account.address, potSalt("simulated"));
         const rehearse = (...flags: string[]) =>
           sauce(
             ...["simulate", program, "--rpc-url", local.rpcUrl, "--private-key", key],
@@ -808,13 +812,12 @@ describeEvm(
           transfers: Array<{ from: Address; to: Address; amount: string }>;
         };
         expect(out.ok).toBe(true);
-        // The Pot's deployment, the approval sauce run asks for, then the cook, in one block.
+        // Only the approval and cook are simulated; the authenticated Pot already exists.
         expect(stepsOf(done)).toEqual([
-          ["deployPot", null],
           ["fund", "approve Permit2 for USDC"],
           ["cook", null],
         ]);
-        expect(out.transactions[1]).toMatchObject({
+        expect(out.transactions[0]).toMatchObject({
           from: account.address,
           to: usdc,
           data: approve(permit2, maxUint256),
@@ -831,16 +834,16 @@ describeEvm(
         );
         // A rehearsal: nothing landed.
         expect(await allowanceOf(usdc, account.address, permit2)).toBe(0n);
-        expect(await local.publicClient.getCode({ address: signerPot })).toBeUndefined();
+        expect(await local.publicClient.getCode({ address: signerPot })).not.toBeUndefined();
         // For a person, each transaction with its own gas, the cook's in the headline.
         const text = await rehearse();
         expect(text.code).toBe(0);
         expect(text.stdout).toMatch(
-          /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+ for the cook, after what it needs sent first \(1\. to 2\. below\), returns 0x/,
+          /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+ for the cook, after what it needs sent first \(1\. below\), returns 0x/,
         );
         expect(text.stdout).toMatch(
           new RegExp(
-            `^ {2}2\\. approve Permit2 for USDC, from the owner ${account.address}, gas used \\d+: ` +
+            `^ {2}1\\. approve Permit2 for USDC, from the owner ${account.address}, gas used \\d+: ` +
               "sauce run sends this before the cook$",
             "m",
           ),
@@ -849,6 +852,7 @@ describeEvm(
 
       it("resets a smaller standing approval first, as for a USDT-shaped token run does", async () => {
         const { key, account } = await freshSigner(tether);
+        await deployPot(local, account.address, potSalt("standing"));
         // Nonzero to nonzero is refused by this token: the rehearsal must reset it first.
         const wallet = createWalletClient({ account, transport: http(local.rpcUrl) });
         await local.send(wallet, tether, approve(permit2, 1n));
@@ -861,7 +865,6 @@ describeEvm(
         );
         expect(done.code).toBe(0);
         expect(stepsOf(done)).toEqual([
-          ["deployPot", null],
           ["fund", `reset ${tether}'s allowance to ${permit2}`],
           ["fund", `approve Permit2 for ${tether}`],
           ["cook", null],
@@ -908,12 +911,14 @@ describeEvm(
     const PASSWORD = readFileSync(join(CLI_FIXTURES, "anvil-2.password"), "utf8").trim();
 
     it("piped in with no terminal, names every approval it needs and sends nothing until approved", async () => {
-      // A signer of its own: no Pot, and USDC never approved to Permit2.
+      // A signer of its own, with explicitly deployed Pots and no approval of Permit2.
       const key = generatePrivateKey();
-      const signer = privateKeyToAccount(key).address;
+      const account = privateKeyToAccount(key);
+      const signer = account.address;
       await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
       await local.mint(usdc, signer, 10_000_000n);
-      const pot = v12PredictPot(signer, potSalt("piped")) as Address;
+      const pot = await deployPot(local, signer, potSalt("piped"));
+      await deployPot(local, signer, potSalt("piped-at-a-terminal"));
       const permit2 = permit2On(local.chain);
       // The program comes from stdin, so no question can be asked there: with no terminal either.
       const piped = (overrides: Partial<CliIo>, ...flags: string[]) =>
@@ -923,23 +928,37 @@ describeEvm(
           ...[flags[0] ?? "piped", "--fund", "USDC:2", ...flags.slice(1)],
           ...["--args", usdc, RECIPIENT, "1000000"],
         ).then(record);
+      const beforeRefusal = {
+        nonce: await local.publicClient.getTransactionCount({ address: signer }),
+        held: await balance(usdc, signer),
+        paid: await balance(usdc, RECIPIENT),
+      };
       const stopped = await piped({});
       expect(stopped.code).toBe(1);
-      expect(stopped.stderr).toContain(
-        "nothing was sent: this run needs approvals, and there is no terminal to ask on:\n" +
-          `  deploy Pot ${pot}\n  approve Permit2 for USDC\nPass --yes (-y) to approve them`,
+      expect(stopped.stderr).toContain("approve Permit2 for USDC");
+      expect(await local.publicClient.getTransactionCount({ address: signer })).toBe(
+        beforeRefusal.nonce,
       );
-      expect(await local.publicClient.getCode({ address: pot })).toBeUndefined();
+      expect(await balance(usdc, signer)).toBe(beforeRefusal.held);
+      expect(await balance(usdc, RECIPIENT)).toBe(beforeRefusal.paid);
+      expect(await local.publicClient.getCode({ address: pot })).not.toBeUndefined();
       expect(await allowance(usdc, permit2)).toBe(0n);
 
       const approved = await piped({}, "piped", "--auto-approve");
       expect(approved.code).toBe(0);
-      expect(approved.stderr).toContain(`auto-approved: deploy Pot ${pot}`);
       expect(approved.stderr).toContain("auto-approved: approve Permit2 for USDC");
       expect(await balance(usdc, signer)).toBe(8_000_000n);
 
-      // Piped in from a terminal session: the questions go to the terminal, and only what is
-      // needed is asked — Permit2 is approved now, the Pot for this salt is not deployed.
+      // Reset the standing funding approval so the terminal path must ask for it again.
+      await local.send(
+        createWalletClient({ account, transport: http(local.rpcUrl) }),
+        usdc,
+        encodeFunctionData({
+          abi: parseAbi(["function approve(address, uint256) returns (bool)"]),
+          functionName: "approve",
+          args: [permit2, 0n],
+        }),
+      );
       const questions: string[] = [];
       const asked = await piped(
         {
@@ -954,9 +973,8 @@ describeEvm(
       );
       expect(asked.code).toBe(0);
       expect(questions).toEqual([
-        expect.stringMatching(
-          /^Your Pot 0x[0-9a-fA-F]{40} on ethereum isn't deployed yet\. Deploy it now \(one transaction, about [\d,]+ gas, ~[\d.]+ ETH\), then run\? \[deploy\/cancel\] $/,
-        ),
+        `Permit2 (${permit2}) may move 0 of your USDC (base units), and this run needs 2000000. ` +
+          "Approve Permit2 for USDC now? [y/N] ",
       ]);
 
       async function allowance(token: Address, spender: Address): Promise<bigint> {
@@ -969,9 +987,10 @@ describeEvm(
       }
     }, 120_000);
 
-    it("signs with a keystore: deploys its Pot, approves Permit2 and funds the cook with --auto-approve", async () => {
+    it("signs with a keystore: approves Permit2 and funds its deployed Pot with --auto-approve", async () => {
       const signer = privateKeyToAccount(KEYSTORE_KEY).address;
       await local.mint(usdc, signer, 10_000_000n);
+      await deployPot(local, signer, potSalt("funded"));
       const before = await balance(usdc, RECIPIENT);
       const done = record(
         await sauce(
@@ -1005,8 +1024,8 @@ describeEvm(
       );
       expect(
         sent.filter((line) => !line.startsWith("  ")).map((line) => line.split(" 0x")[0]),
-      ).toEqual(["deployed Pot", "approve USDC to", "cook"]);
-      expect(sent.filter((line) => line.startsWith("  trace "))).toHaveLength(3);
+      ).toEqual(["approve USDC to", "cook"]);
+      expect(sent.filter((line) => line.startsWith("  trace "))).toHaveLength(2);
       expect(done.stdout).toMatch(
         /^cost [\d.]+ ETH: gas \d+ at \d+ wei = [\d.]+ ETH, value [\d.]+ ETH/m,
       );
@@ -1022,9 +1041,7 @@ describeEvm(
       // Answers every call with the owner's address: owner() is the signer, and the salt and the
       // Kitchen it names put no Pot here.
       const spoof = getAddress("0x5900000000000000000000000000000000000001");
-      // The Pot guard (`chain.ts#requirePot`) refuses it before funding reads it: no release this
-      // SDK knows minted a Pot there, whatever its owner() says.
-      const refusal = `${spoof} on ethereum has code, but no release this SDK knows minted a Pot there`;
+      // An owner getter is not release provenance: refuse before funding reads or signatures.
       const AUTO: Approver = { auto: true, canAsk: false, approve: async () => true };
       const MODES = ["permit2", "permit", "allowance", "transfer"] as const;
       /** The token each mode funds (`permit` needs EIP-2612), once the suite has planted them. */
@@ -1093,8 +1110,10 @@ describeEvm(
           const held = await balance(token, OWNER.address);
           const nonce = await local.publicClient.getTransactionCount({ address: OWNER.address });
           await expect(
-            runCommand({ ...cookOn(mode, account, true), account, approver: AUTO }, nodeIo()),
-          ).rejects.toThrow(refusal);
+            keeping({ stores: { pots: local.pots }, say: () => {} }, () =>
+              runCommand({ ...cookOn(mode, account, true), account, approver: AUTO }, nodeIo()),
+            ),
+          ).rejects.toThrow();
           expect(calls).toEqual([]);
           expect(
             String(await local.publicClient.getTransactionCount({ address: OWNER.address })),
@@ -1109,10 +1128,18 @@ describeEvm(
         "sauce simulate --fund-mode %s refuses it before the signer signs anything",
         async (mode) => {
           const { account, calls } = recording();
+          const nonce = await local.publicClient.getTransactionCount({ address: OWNER.address });
+          const held = await balance(tokens[mode], OWNER.address);
           await expect(
-            simulateCommand({ ...cookOn(mode, account, false), assume: [] }, nodeIo()),
-          ).rejects.toThrow(refusal);
+            keeping({ stores: { pots: local.pots }, say: () => {} }, () =>
+              simulateCommand({ ...cookOn(mode, account, false), assume: [] }, nodeIo()),
+            ),
+          ).rejects.toThrow();
           expect(calls).toEqual([]);
+          expect(await local.publicClient.getTransactionCount({ address: OWNER.address })).toBe(
+            nonce,
+          );
+          expect(await balance(tokens[mode], OWNER.address)).toBe(held);
         },
         60_000,
       );
@@ -1129,7 +1156,6 @@ describeEvm(
             ),
           );
           expect(refused.code).toBe(1);
-          expect(refused.stderr).toContain(refusal);
           expect(
             String(await local.publicClient.getTransactionCount({ address: OWNER.address })),
           ).toBe(String(nonce));

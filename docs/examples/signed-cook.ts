@@ -1,80 +1,72 @@
-// A cook the Pot's owner signs and another account sends: pay.sauce.ts, compiled for Base, signed
-// as EIP-712 typed data, checked, and encoded as the Pot's `cookSigned` call. Then the call that
-// cancels the same signature. `sauce sign pay.sauce.ts --chain base --wallet <name> --args …`
-// builds the same.
-//
-// Everything here is offline: a throwaway key signs, and nothing is sent. Before signing for a real
-// Pot, `checkSignedCookPot(client, pot)` reads whether it takes signed cooks (a Pot created before
-// signed cooks, or a Shared Pot, does not).
+// Sign pay.sauce.ts only for an already deployed, verified and persisted service binding.
+// This module performs no RPC or signing on import. Supply the binding's Base client and owner.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { routes, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+import { routes } from "@eco-incorp/sauce";
+import { v12ReleaseSet } from "@eco-incorp/sauce/deployments";
 import {
+  checkSignedCookPot,
   cookNonceMasks,
-  cookNonceWordBit,
   encodeCookSigned,
   encodeInvalidateNonces,
   randomCookNonce,
   signedCookTypedData,
+  verifyPotBinding,
   verifySignedCook,
+  type EvmPotBindingInput,
   type SignedCookExecution,
 } from "@eco-incorp/sauce/evm/engine";
-import { bytesToHex, concatHex, getAddress } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { bytesToHex, concatHex, getAddress, type PrivateKeyAccount, type PublicClient } from "viem";
 
-const owner = privateKeyToAccount(generatePrivateKey());
-
-// The program and its arguments are signed together: pay 1 USDC (6 decimals) to the recipient.
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "pay.sauce.ts"), "utf8");
-const pay = routes.compileSauceProgram("base", source);
-const recipient = "0x4444444444444444444444444444444444444444";
-const program = concatHex([
-  bytesToHex(pay.bytecode),
-  bytesToHex(routes.encodeEntryArguments(pay, [recipient, 1_000_000n])),
-]);
 
-const cook: SignedCookExecution = {
-  chainId: 8453,
-  pot: v12PredictPot(owner.address),
-  engine: getAddress(v12EngineAddress()),
-  program,
-  // What the sender must send with it; the Pot pays the Kitchen's fee from its own balance.
-  value: 0n,
-  // The most of the Kitchen's fee the Pot pays. Read the Kitchen's executionFee() and sign at or
-  // above it; this round number is a fixture.
-  maxExecutionFee: 10_000_000_000_000n,
-  // A random nonce never collides with another signature you have out.
-  nonce: randomCookNonce(),
-  // Ten minutes from now, inclusive. Keep deadlines short.
-  deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
-  // Left out, anyone may send it; name an address to let only that account send it.
-};
+export async function signPayCook(
+  client: PublicClient,
+  input: EvmPotBindingInput,
+  owner: PrivateKeyAccount,
+  maxExecutionFee: bigint,
+) {
+  const binding = await verifyPotBinding(client, input);
+  if (binding.chainId !== 8453 || binding.compiler !== v12ReleaseSet().compiler) {
+    throw new Error("Use this example's exact Base compiler/engine pair");
+  }
+  if (getAddress(owner.address) !== getAddress(binding.owner)) {
+    throw new Error("The signer must own the verified Pot");
+  }
+  const check = await checkSignedCookPot(client, binding.pot, binding);
+  if (!check.ok) throw new Error(check.reason);
 
-const signature = await owner.signTypedData(signedCookTypedData(cook));
-if (!(await verifySignedCook({ ...cook, signature, owner: owner.address }))) {
-  throw new Error("The owner's signature does not verify");
+  const pay = routes.compileSauceProgram("base", source);
+  const program = concatHex([
+    bytesToHex(pay.bytecode),
+    bytesToHex(routes.encodeEntryArguments(pay, [binding.owner, 1_000_000n])),
+  ]);
+  const cook: SignedCookExecution = {
+    chainId: binding.chainId,
+    pot: binding.pot,
+    engine: binding.engine,
+    compiler: binding.compiler,
+    program,
+    value: 0n,
+    maxExecutionFee,
+    nonce: randomCookNonce(),
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 600),
+  };
+  const signature = await owner.signTypedData(signedCookTypedData(cook));
+  if (!(await verifySignedCook({ ...cook, signature, owner: binding.owner }, client))) {
+    throw new Error("The owner's signature does not verify");
+  }
+  if (await verifySignedCook({ ...cook, value: 1n, signature, owner: binding.owner }, client)) {
+    throw new Error("A signature verified for a value it does not cover");
+  }
+
+  const transaction = encodeCookSigned({ ...cook, signature });
+  const cancellations = cookNonceMasks([cook.nonce]).map(({ word, mask }) => ({
+    to: binding.pot,
+    data: encodeInvalidateNonces(word, mask),
+  }));
+
+  return { binding, cook, signature, transaction, cancellations };
 }
-// Another value is another cook: the same signature does not cover it.
-if (await verifySignedCook({ ...cook, value: 1n, signature, owner: owner.address })) {
-  throw new Error("A signature verified for a value it does not cover");
-}
-
-// Any account sends this, with exactly `value`, and pays the gas.
-const transaction = encodeCookSigned({ ...cook, signature });
-if (transaction.to !== cook.pot || transaction.value !== 0n) {
-  throw new Error("cookSigned goes to the Pot with the signed value");
-}
-
-// The owner cancels it by setting its nonce's bit: one invalidateNonces call per word.
-const { word, bit } = cookNonceWordBit(cook.nonce);
-const [cancel] = cookNonceMasks([cook.nonce]);
-if (cancel === undefined || cancel.word !== word || cancel.mask !== 1n << BigInt(bit)) {
-  throw new Error("A nonce's word and mask");
-}
-const cancellation = { to: cook.pot, data: encodeInvalidateNonces(cancel.word, cancel.mask) };
-
-console.log(`signed cook for ${cook.pot}: ${transaction.data.length / 2 - 1} bytes of calldata`);
-console.log(`cancel nonce word ${word}, bit ${bit}: ${cancellation.data.slice(0, 10)}`);

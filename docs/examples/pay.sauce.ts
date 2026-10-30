@@ -1,6 +1,9 @@
 // Pays `amount` of USDC from your Pot to `to`, and stops if the Pot holds less.
 // The same file runs on Base and on Solana.
 //
+// On Base, first deploy with `sauce pot --deploy --chain base --wallet me --pot-binding <descriptor.json>`.
+// Continue only after it authenticates and persists the binding. Fund that Pot before the real run.
+//
 // Try it on a copy of the chain first: no password, no money, nothing sent.
 //
 //   sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args <recipient> 1000000

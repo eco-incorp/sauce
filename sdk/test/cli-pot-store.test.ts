@@ -51,6 +51,28 @@ const SOLANA: PotRecord = {
   recordedAt: "2026-10-15T00:00:01.000Z",
 };
 
+// Persistence fixtures only; real Router authentication is covered by CLI local-chain tests.
+const BINDING = {
+  pot: RECORD.pot,
+  owner: RECORD.owner,
+  kitchen: RECORD.kitchen,
+  userSalt: RECORD.salt,
+  kind: RECORD.kind,
+  chainId: RECORD.chainId,
+  compiler: RECORD.release!.compiler,
+  engine: RECORD.engine,
+  release: RECORD.release,
+  codeHash: `0x${"01".repeat(32)}`,
+  engineCodeHash: `0x${"02".repeat(32)}`,
+  router: "0x1111111111111111111111111111111111111111",
+  routerCodeHash: `0x${"03".repeat(32)}`,
+  scheme: "create2",
+  routerPolicy: "owner-controlled",
+  wireProfile: "compiler:2.5.0",
+  storageProfile: "sauce.storage.Pot",
+  originalChainId: "8453",
+} as NonNullable<PotRecord["binding"]>;
+
 /** Runs two writers of `record` at once against `dir`, returning what each printed. */
 async function together(dir: string, record: PotRecord): Promise<string[]> {
   mkdirSync(dir, { recursive: true });
@@ -176,6 +198,140 @@ describe("the Pot store", () => {
       /holds a different Pot under the same address/,
     );
     expect(readFileSync(path, "utf8")).toBe(before);
+  });
+
+  it("refuses to replace a persisted release or engine pin under the same Pot", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    expect(() =>
+      store.save({ ...RECORD, engine: "0x1111111111111111111111111111111111111111" }),
+    ).toThrow(/binding/);
+    expect(() =>
+      store.save({ ...RECORD, release: { ...RECORD.release, compiler: "99.0.0" } }),
+    ).toThrow(/binding/);
+    expect(store.recordsOf(RECORD.chainId, RECORD.pot)).toEqual([RECORD]);
+  });
+
+  it("keeps SVM compiler history when an unchanged engine is reimported by a newer SDK", () => {
+    const store = new PotStore(dir);
+    const original = {
+      ...SOLANA,
+      engine: "BeefBeefBeefBeefBeefBeefBeefBeefBeefBeefBeef",
+      release: { compiler: "2.6.0", "v12-svm": "1.2.0", "kitchen-svm": "1.2.0" },
+    };
+    store.save(original);
+    expect(store.save({ ...original, release: { ...original.release, compiler: "2.6.1" } })).toBe(
+      "exists",
+    );
+    expect(store.recordsOf(original.chainId, original.pot)).toEqual([original]);
+  });
+
+  it("appends only an explicit Router update and keeps every historical binding immutable", () => {
+    const store = new PotStore(dir);
+    const original = { ...RECORD, binding: BINDING };
+    store.save(original);
+    const path = join(dir, "8453", `${RECORD.pot.toLowerCase()}.json`);
+    const bytes = readFileSync(path, "utf8");
+    const updated = {
+      ...original,
+      binding: {
+        ...BINDING,
+        router: "0x2222222222222222222222222222222222222222" as const,
+        routerCodeHash: `0x${"04".repeat(32)}` as const,
+      },
+    };
+    expect(() => store.save(updated)).toThrow(/binding/);
+    expect(store.saveRouterUpdate(updated, BINDING)).toBe("beside");
+    expect(readFileSync(path, "utf8")).toBe(bytes);
+    expect(store.recordsOf(RECORD.chainId, RECORD.pot)).toEqual([original, updated]);
+    expect(store.save(updated)).toBe("exists");
+    expect(() => store.save(original)).toThrow(/binding/);
+    expect(() => store.saveRouterUpdate(original, BINDING)).toThrow(/changed|binding/);
+  });
+
+  it.each([
+    "engine",
+    "compiler",
+    "wireProfile",
+    "storageProfile",
+    "codeHash",
+    "profileHash",
+    "profile",
+    "compatibilityProbe",
+    "release",
+  ] as const)("refuses a Router update that also changes %s", (field) => {
+    const store = new PotStore(dir);
+    const original = { ...RECORD, binding: BINDING };
+    store.save(original);
+    const binding = {
+      ...BINDING,
+      router: "0x2222222222222222222222222222222222222222" as const,
+      [field]: field === "release" ? { ...BINDING.release, compiler: "different" } : "different",
+    };
+    expect(() => store.saveRouterUpdate({ ...original, binding } as PotRecord, BINDING)).toThrow(
+      /Router-only|binding/,
+    );
+    expect(store.recordsOf(RECORD.chainId, RECORD.pot)).toEqual([original]);
+  });
+
+  it.each(["private-fixed-router", "shared"] as const)(
+    "refuses explicit Router updates for %s Pots",
+    (kind) => {
+      const store = new PotStore(dir);
+      const original = {
+        ...RECORD,
+        kind,
+        binding: { ...BINDING, kind, routerPolicy: "fixed" as const },
+      };
+      store.save(original);
+      expect(() =>
+        store.saveRouterUpdate(
+          {
+            ...original,
+            binding: { ...original.binding, router: "0x2222222222222222222222222222222222222222" },
+          },
+          original.binding,
+        ),
+      ).toThrow(/private|Router/);
+      expect(store.recordsOf(RECORD.chainId, RECORD.pot)).toEqual([original]);
+    },
+  );
+
+  it("adds verified binding provenance beside an immutable historical record without repinning it", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    const path = join(dir, "8453", `${RECORD.pot.toLowerCase()}.json`);
+    const before = readFileSync(path, "utf8");
+    // Store behavior only; runtime authentication is covered by real-artifact integration tests.
+    const binding = {
+      pot: RECORD.pot,
+      owner: RECORD.owner,
+      kitchen: RECORD.kitchen,
+      userSalt: RECORD.salt,
+      kind: RECORD.kind,
+      chainId: RECORD.chainId,
+      compiler: RECORD.release!.compiler,
+      engine: RECORD.engine,
+      release: RECORD.release,
+      codeHash: `0x${"01".repeat(32)}`,
+      engineCodeHash: `0x${"02".repeat(32)}`,
+      router: "0x1111111111111111111111111111111111111111",
+      routerCodeHash: `0x${"03".repeat(32)}`,
+      scheme: "create2",
+      routerPolicy: "owner-controlled",
+      wireProfile: "compiler:2.5.0",
+      storageProfile: "sauce.storage.Pot",
+      originalChainId: "8453",
+    } as NonNullable<PotRecord["binding"]>;
+    expect(store.save({ ...RECORD, binding })).toBe("beside");
+    expect(store.save({ ...RECORD, binding })).toBe("exists");
+    expect(readFileSync(path, "utf8")).toBe(before);
+    expect(
+      store.recordsOf(RECORD.chainId, RECORD.pot).find((record) => record.binding)?.binding,
+    ).toEqual(binding);
+    expect(() =>
+      store.save({ ...RECORD, binding: { ...binding, wireProfile: "different" } }),
+    ).toThrow(/binding/);
   });
 
   it("refuses what is not a record or not a Pot address", () => {

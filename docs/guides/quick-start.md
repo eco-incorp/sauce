@@ -13,11 +13,14 @@ picture first, in five minutes, if you want it. The tutorial takes about ten min
 
 ## You will need
 
-- **For the last step only, real funds on Base:** about 0.001 ETH for the network's fees, and
-  1 USDC for the program to pay. Send them from an exchange or another wallet. Every step before
-  step 5 is free.
+- **Real funds on Base:** about 0.001 ETH for deployment and cook fees, and 1 USDC for the
+  program to pay. Send them from an exchange or another wallet. Step 4 deploys your Pot before
+  simulating; the simulation itself sends no transaction and spends no funds.
 - [Node.js](https://nodejs.org) 24 or newer (`node --version` tells you), and a terminal.
 - An address on Base to pay. Your own works: step 2 makes one.
+- For live CREATE3 creation, a trusted qualified Pot binding descriptor and matching activated
+  factory/engine artifacts. This tutorial does not establish rollout readiness; see
+  [Kitchen compatibility](kitchen-compatibility.md).
 
 ## You will have
 
@@ -66,6 +69,9 @@ Save this as `pay.sauce.ts`:
 // Pays `amount` of USDC from your Pot to `to`, and stops if the Pot holds less.
 // The same file runs on Base and on Solana.
 //
+// On Base, first deploy with `sauce pot --deploy --chain base --wallet me --pot-binding <descriptor.json>`.
+// Continue only after it authenticates and persists the binding. Fund that Pot before the real run.
+//
 // Try it on a copy of the chain first: no password, no money, nothing sent.
 //
 //   sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 --args <recipient> 1000000
@@ -113,12 +119,27 @@ It prints the compiled program, the **bytecode**, as one long line of hex:
 That is what runs on chain: there is no contract to write or deploy. A mistake in the file prints
 an error with its line and column instead.
 
-## 4. Try it for free
+## 4. Create your Pot, then try the program
 
-You will now **simulate** the program: run it on a copy of Base as it is right now, with nothing
-signed or sent. The transaction that runs a program on your Pot is called a **cook**, and the
-**Kitchen** is the contract that makes Pots and charges a small fee for each cook. The simulation
-shows both.
+The transaction that runs a program on your Pot is called a **cook**, and the **Kitchen** is the
+contract that makes Pots and charges a small fee for each cook. Before simulating on Base,
+explicitly deploy your Pot, authenticate its actual binding and persist it.
+
+Send 0.001 ETH on Base to your wallet's address (`sauce wallet address me`) for deployment and
+later cook fees. Use the trusted qualified descriptor supplied by your release/operator, here
+named `pot-binding.json`; do not construct one from a predicted address or assume this tutorial
+authorizes a release or live deployment.
+
+```sh
+sauce pot --chain base --wallet me --deploy --pot-binding pot-binding.json
+```
+
+This asks for your password and sends a deployment transaction. Continue only after verification
+and recording succeed. Keep the verified Pot address it reports; do not fund an unverified
+prediction. Existing services must keep their original verified binding, not create a replacement.
+
+Now **simulate** the program on a copy of Base using that deployed Pot. The simulation itself
+signs and sends nothing, needs no password and can assume tokens the Pot does not yet hold.
 
 ```sh
 sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
@@ -134,7 +155,7 @@ sauce simulate pay.sauce.ts --chain base --wallet me --assume-balance USDC:5 \
 It prints what would happen:
 
 ```text
-The cook succeeds from 0x2b89…71cc: gas used 94721 for the cook, after the Pot's deploy (1. below), returns 0x
+The cook succeeds from 0x2b89…71cc: gas used 94721 for the cook, returns 0x
 Left in the Pot, not in the owner's wallet:
   4 USDC (it held 5 USDC before)
 …
@@ -150,8 +171,6 @@ Your addresses and numbers will differ. Read it from the bottom:
 - **[2]** your Pot paid the Kitchen its fee;
 - **[1]** your wallet sent the fee to the Pot, as the cook's value;
 - **gas used** is the network's charge for the cook, paid by your wallet in ETH;
-- **after the Pot's deploy**: your Pot does not exist yet, so the simulation creates it first, in
-  the copy only; in step 5 you create it for real, before you put tokens in it;
 - **Left in the Pot**: 4 of the 5 assumed USDC stay in the Pot, not in your wallet.
 
 Now ask for more than the Pot holds. Run the same command with `--assume-balance USDC:0.5`:
@@ -164,29 +183,11 @@ That is your `require` doing its job: the cook would fail whole, and nothing wou
 
 ## 5. Run it on Base
 
-This step spends real money: about 0.001 ETH covers the fees, and the program pays 1 USDC.
+This step spends real money on the cook and pays 1 USDC. Your Pot was already deployed,
+authenticated and recorded in step 4; `sauce run` will not deploy it or replace a missing binding.
 
-From an exchange or another wallet, send 0.001 ETH on Base to your wallet's address
-(`sauce wallet address me`).
-
-Then create your Pot, before you put tokens in it. Its address is known before it exists, but
-tokens sent there early stay at that address if a Kitchen release with new Pot code moves your Pot
-elsewhere. Deploy it:
-
-```sh
-sauce pot --chain base --wallet me --deploy
-```
-
-It asks for your password, sends the deployment and waits for it. It prints the address as `"pot"`:
-
-```text
-{
-  "chainId": 8453,
-  "pot": "0x95A8…F2E5",
-…
-```
-
-Send 1 USDC on Base to that address. Then run:
+Send 1 USDC on Base to that verified Pot address. Keep enough ETH in your wallet for the cook's
+gas and Kitchen fee. Then run:
 
 ```sh
 sauce run pay.sauce.ts --chain base --wallet me --args <recipient> 1000000
@@ -207,9 +208,10 @@ Open the explorer link to see the transaction on Basescan, Base's block explorer
 
 ## What just happened
 
-You wrote a program, and Sauce compiled it for Base. Your wallet sent one transaction, a cook, to
-your Pot. The Pot ran the program: it checked its USDC, paid the recipient and paid the Kitchen's
-fee. Had the check failed, nothing at all would have moved, and only the gas would have been spent.
+You wrote a program, and Sauce compiled it for Base. After explicitly deploying and authenticating
+your Pot, your wallet sent a cook to it. The Pot ran the program: it checked its USDC, paid the
+recipient and paid the Kitchen's fee. Had the check failed, nothing in that cook would have moved,
+and only its gas would have been spent.
 
 What the Pot holds stays there until a program moves it. It is yours, but your wallet app will not
 show it.

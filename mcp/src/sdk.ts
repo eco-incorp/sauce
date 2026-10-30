@@ -75,6 +75,8 @@ export {
 } from "../../sdk/dist/cli/price.js";
 export { potImportCommand, potListCommand } from "../../sdk/dist/cli/pot-commands.js";
 export { PotStore } from "../../sdk/dist/cli/pot-store.js";
+export { getVerifiedPotBinding, withPotBinding } from "../../sdk/dist/cli/pot-binding.js";
+export type { EvmPotBindingInput } from "../../sdk/dist/evm/engine.js";
 export { publicEndpoints, type PublicEndpoints } from "../../sdk/dist/cli/public-endpoints.js";
 export { reclaimCommand, TABLES_PER_RUN } from "../../sdk/dist/cli/reclaim.js";
 export { sendCommand, signedChain } from "../../sdk/dist/cli/send.js";

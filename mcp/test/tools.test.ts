@@ -1,7 +1,7 @@
 /**
- * Every tool, in process over an in-memory transport, with no endpoint configured — so nothing
- * here reaches a network — and each held to what the `sauce` command computes for the same input:
- * the tools are the command's functions, and a tool that drifted from its command would show here.
+ * Tools in process over an in-memory transport, without an endpoint. Pure compilation and parsing
+ * stay offline; EVM execution must fail closed rather than authorize a predicted Pot. Tool results
+ * are held to the corresponding `sauce` command and pure payload APIs.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -12,6 +12,7 @@ import { after, before, describe, it } from "node:test";
 
 import {
   decodeFunctionData,
+  encodeFunctionData,
   getAddress,
   numberToHex,
   zeroAddress,
@@ -26,7 +27,7 @@ import {
   v12SvmKitchenProgramId,
 } from "../../sdk/dist/deployments/index.js";
 import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { signedCookTypedData, v12PotAbi } from "../../sdk/dist/evm/engine.js";
+import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
 import {
   SETTLE_REJECTIONS,
   SETTLE_VECTORS,
@@ -35,6 +36,9 @@ import {
 } from "../../sdk/dist/verify/index.js";
 import { SEND_TOOL_NAMES } from "../src/send.js";
 import { SKILL_TOOL_NAMES } from "../src/skilltools.js";
+import { requireChain } from "../../sdk/dist/chains/canonical.js";
+import { compileProgram, payloadOf } from "../../sdk/dist/cli/commands.js";
+import { actionsProgram } from "../../sdk/dist/cli/actions.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { FLAG_INPUTS, flagInputLines, LISTED_FLAG_INPUTS } from "../src/terms.js";
 import { signedCookCall, simulateSummary, TOOL_NAMES } from "../src/tools.js";
@@ -55,6 +59,16 @@ const PAY = [
   "}",
   "",
 ].join("\n");
+
+/** Pure payload construction does not authorize execution or claim a deployed Pot. */
+function payload(source: string, values?: readonly unknown[]): Hex {
+  const program = compileProgram(
+    { file: "program.sauce.ts", text: source, chain: requireChain("base"), defines: {} },
+    { readText: () => source, readModule: () => undefined },
+  );
+
+  return payloadOf(program, values === undefined ? undefined : { from: "--args-json", values });
+}
 
 const SVM_PAY = [
   "function main(",
@@ -950,17 +964,19 @@ describe("sauce_compile", () => {
         assert.equal(byPath.bytecode, bySource.bytecode);
         assert.equal(byPath.sourceSha256, sha256(program));
         assert.equal(byPath.sourceSha256, bySource.sourceSha256);
-        // The cook from the same file, tied to it the same way.
-        const tx = ok(
-          await local.call("sauce_tx", {
-            path,
-            chain: "base",
-            owner: OWNER,
-            value: 0,
-            args: [RECIPIENT, "1"],
-          }),
+        // A readable file still cannot authorize an offline EVM cook.
+        assert.match(
+          failed(
+            await local.call("sauce_tx", {
+              path,
+              chain: "base",
+              owner: OWNER,
+              value: 0,
+              args: [RECIPIENT, "1"],
+            }),
+          ),
+          /requires an RPC endpoint and an authenticated deployed Pot/,
         );
-        assert.equal(tx.sourceSha256, sha256(program));
         // A rehearsal reads the file before it needs an endpoint.
         assert.match(
           failed(
@@ -1066,21 +1082,30 @@ describe("sauce_actions", () => {
     assert.notEqual(ethereum.bytecode, out.bytecode);
   });
 
-  it("builds the unsigned cook for a Pot, with the argument actions as main's arguments", async () => {
-    const out = ok(
-      await mcp.call("sauce_actions", {
-        program: DOCUMENT,
-        chain: "base",
-        owner: OWNER,
-        value: "0",
-        args: ["1000"],
-      }),
-    ) as Report & { transaction: { to: string; data: string; value: string } };
-    assert.equal(out.transaction.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
-    assert.equal(out.transaction.value, "0x0");
-    const cook = decodeFunctionData({ abi: v12PotAbi, data: out.transaction.data as Hex });
-    assert.ok((cook.args[1] as string).startsWith(out.bytecode));
-    assert.ok((cook.args[1] as string).endsWith((1000).toString(16).padStart(64, "0")));
+  it("refuses an offline cook while retaining its argument payload in source-only compilation", async () => {
+    const input = await actionsProgram({
+      file: "actions.json",
+      text: JSON.stringify(DOCUMENT),
+      chain: "base",
+    });
+    const compiled = compileProgram(input, { readText: () => "", readModule: () => undefined });
+    assert.ok(
+      payloadOf(compiled, { from: "--args-json", values: ["1000"] }).endsWith(
+        (1000).toString(16).padStart(64, "0"),
+      ),
+    );
+    assert.match(
+      failed(
+        await mcp.call("sauce_actions", {
+          program: DOCUMENT,
+          chain: "base",
+          owner: OWNER,
+          value: "0",
+          args: ["1000"],
+        }),
+      ),
+      /requires an RPC endpoint and an authenticated deployed Pot/,
+    );
   });
 
   it("names each problem: a missing chain, a name the chain lacks, a field, bad JSON", async () => {
@@ -1116,49 +1141,33 @@ describe("sauce_actions", () => {
 });
 
 describe("sauce_tx", () => {
-  it("builds the unsigned EVM cook on the owner's Pot, with main's arguments", async () => {
-    const out = ok(
-      await mcp.call("sauce_tx", {
-        source: PAY,
-        chain: "base",
-        owner: OWNER,
-        value: 0,
-        args: [RECIPIENT, "1000000"],
-      }),
+  it("refuses an offline EVM cook, even with explicit value and valid arguments", async () => {
+    assert.match(
+      failed(
+        await mcp.call("sauce_tx", {
+          source: PAY,
+          chain: "base",
+          owner: OWNER,
+          value: 0,
+          args: [RECIPIENT, "1000000"],
+        }),
+      ),
+      /requires an RPC endpoint and an authenticated deployed Pot/,
     );
-    assert.equal(out.chainId, 8453);
-    assert.equal(out.to, v12PredictPot(OWNER, `0x${"00".repeat(32)}`));
-    assert.equal(out.value, "0x0");
-    const cook = decodeFunctionData({ abi: v12PotAbi, data: out.data as Hex });
-    assert.equal(cook.functionName, "cook");
-    assert.equal(getAddress(cook.args[0] as string), getAddress(v12EngineAddress()));
+    const program = payload(PAY, [RECIPIENT, "1000000"]);
     const compiled = ok(await mcp.call("sauce_compile", { source: PAY, chain: "base" }));
-    assert.ok((cook.args[1] as string).startsWith(compiled.bytecode as string));
-    assert.ok((cook.args[1] as string).includes(RECIPIENT.slice(2).toLowerCase()));
-    assert.ok((out.notes as string[]).some((note) => /cook\(\) is onlyOwner/.test(note)));
-    // Who signs it; the fee as given, since no endpoint read it; and that it is not a rehearsal.
-    assert.equal(out.from, OWNER);
-    assert.equal(out.kitchenFee, null);
-    assert.ok(
-      (out.notes as string[]).some((note) => /fee was not read \(no endpoint\)/.test(note)),
-    );
-    assert.ok((out.notes as string[]).some((note) => /run sauce_simulate/.test(note)));
+    assert.ok(program.startsWith(compiled.bytecode as string));
+    assert.ok(program.includes(RECIPIENT.slice(2).toLowerCase()));
   });
 
   it("takes a negative Int256 argument as a number or a string, as args says", async () => {
     const source = "function main(x: Int256): Int256 {\n  return x;\n}\n";
     const minusFive = numberToHex(BigInt.asUintN(256, -5n), { size: 32 }).slice(2);
     for (const value of [-5, "-5"]) {
-      const out = ok(
-        await mcp.call("sauce_tx", {
-          source,
-          chain: "base",
-          owner: OWNER,
-          value: 0,
-          args: [value],
-        }),
+      assert.ok(
+        payload(source, [value]).includes(minusFive),
+        `${value} as its two's-complement word`,
       );
-      assert.ok((out.data as string).includes(minusFive), `${value} as its two's-complement word`);
     }
     const { tools } = await mcp.client.listTools();
     const args = tools.find((tool) => tool.name === "sauce_tx")!.inputSchema.properties!.args as {
@@ -1167,60 +1176,28 @@ describe("sauce_tx", () => {
     assert.match(args.description, /negative for an Int256 parameter/);
   });
 
-  it("derives a named Pot from its salt label, or takes the Pot by address", async () => {
-    const named = ok(
-      await mcp.call("sauce_tx", {
-        source: PAY,
-        chain: "base",
-        owner: OWNER,
-        salt: "treasury",
-        value: "0",
-        args: [RECIPIENT, 1],
-      }),
-    );
-    assert.equal(named.to, v12PredictPot(OWNER, potSalt("treasury")));
-    const byAddress = ok(
-      await mcp.call("sauce_tx", {
-        source: PAY,
-        chain: "base",
-        pot: named.to,
-        value: "0",
-        args: [RECIPIENT, 1],
-      }),
-    );
-    assert.equal(byAddress.data, named.data);
-    assert.equal(byAddress.from, null, "a Pot's owner is read from the chain, and none was given");
-  });
-
-  it("says plainly what it needs that a server without an endpoint cannot give", async () => {
-    const noValue = failed(
-      await mcp.call("sauce_tx", {
-        source: PAY,
-        chain: "base",
-        owner: OWNER,
-        args: [RECIPIENT, 1],
-      }),
-    );
-    assert.match(noValue, /missing value/);
-    assert.match(noValue, /no endpoint for base/);
-    const solana = failed(
-      await mcp.call("sauce_tx", {
-        source: SVM_PAY,
-        chain: "solana",
-        owner: SOLANA_OWNER,
-        defines: { MINT },
-        args: [1],
-      }),
-    );
-    assert.match(solana, /needs an RPC endpoint for solana/);
-    assert.match(solana, /Pass rpcUrl with the call/);
+  it("refuses offline execution by owner/salt and by explicit Pot address", async () => {
+    for (const target of [
+      { owner: OWNER, salt: "treasury" },
+      { pot: v12PredictPot(OWNER, potSalt("treasury")) },
+    ]) {
+      assert.match(
+        failed(
+          await mcp.call("sauce_tx", {
+            source: PAY,
+            chain: "base",
+            ...target,
+            value: "0",
+            args: [RECIPIENT, 1],
+          }),
+        ),
+        /requires an RPC endpoint and an authenticated deployed Pot/,
+      );
+    }
   });
 
   it("refuses arguments main does not take, and the wrong kind of Pot input", async () => {
-    assert.match(
-      failed(await mcp.call("sauce_tx", { source: PAY, chain: "base", owner: OWNER, value: 0 })),
-      /takes 2 arguments/,
-    );
+    assert.throws(() => payload(PAY), /takes 2 arguments/);
     assert.match(
       failed(
         await mcp.call("sauce_tx", {
@@ -1254,89 +1231,20 @@ describe("sauce_signed_cook", () => {
   };
   const ARGS = [RECIPIENT, "1000000"];
 
-  /** `sauce sign` of the same program with the same fields, offline: what the tool must return. */
-  async function command(...extra: string[]): Promise<Record<string, unknown>> {
-    const dir = mkdtempSync(join(tmpdir(), "sauce-mcp-sign-"));
-    try {
-      const file = join(dir, "pay.sauce.ts");
-      writeFileSync(file, PAY);
-      let stdout = "";
-      const io = { ...nodeIo(), stdout: (text: string) => void (stdout += text), stderr: () => {} };
-      const code = await runCli(
-        [
-          ...["sign", file, "--chain", "base", "--owner", owner.address, "--offline", "--json"],
-          ...["--max-fee", "1234", "--nonce", "7", "--deadline", "2000000000"],
-          ...["--submitter", RECIPIENT, ...extra, "--args", ...ARGS],
-        ],
-        io,
+  it("refuses offline typed data and signature submission instead of trusting predictions", async () => {
+    for (const signature of [undefined, `0x${"11".repeat(65)}`]) {
+      assert.match(
+        failed(
+          await mcp.call("sauce_signed_cook", {
+            source: PAY,
+            ...fields,
+            args: ARGS,
+            ...(signature === undefined ? {} : { signature }),
+          }),
+        ),
+        /Signing requires an RPC endpoint and an authenticated deployed Pot/,
       );
-      assert.equal(code, 0);
-
-      return JSON.parse(stdout) as Record<string, unknown>;
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
     }
-  }
-
-  it("returns what sauce sign prints: the typed data, and from the owner's signature the cook", async () => {
-    const typed = ok(await mcp.call("sauce_signed_cook", { source: PAY, ...fields, args: ARGS }));
-    const expected = await command();
-    for (const key of [
-      ...["chainId", "pot", "owner", "engine", "program", "value", "maxExecutionFee"],
-      ...["nonce", "deadline", "submitter", "typedData", "digest"],
-    ]) {
-      assert.deepEqual(typed[key], expected[key], key);
-    }
-    assert.equal(typed.cook, undefined);
-    assert.ok(
-      (typed.notes as string[]).some((note) => note.includes(`Only ${getAddress(RECIPIENT)} may`)),
-    );
-
-    // The owner signs elsewhere; the tool checks it and builds the cook the command builds.
-    const execution = {
-      chainId: 8453,
-      pot: typed.pot as Address,
-      engine: typed.engine as Address,
-      program: typed.program as Hex,
-      maxExecutionFee: 1234n,
-      nonce: 7n,
-      deadline: 2_000_000_000n,
-      submitter: getAddress(RECIPIENT),
-    };
-    const signature = await owner.signTypedData(signedCookTypedData(execution));
-    const built = ok(
-      await mcp.call("sauce_signed_cook", { source: PAY, ...fields, args: ARGS, signature }),
-    );
-    assert.deepEqual(built.cook, (await command("--signature", signature)).cook);
-    const cook = built.cook as { to: Address; data: Hex; value: string };
-    assert.deepEqual([cook.to, cook.value], [execution.pot, "0x0"]);
-    const call = decodeFunctionData({ abi: v12PotAbi, data: cook.data });
-    assert.equal(call.functionName, "cookSigned");
-    assert.deepEqual(call.args, [
-      execution.engine,
-      execution.program,
-      1234n,
-      7n,
-      2_000_000_000n,
-      execution.submitter,
-      signature,
-    ]);
-
-    // Anyone else's signature is refused, and no cook is built.
-    const stranger = await privateKeyToAccount(generatePrivateKey()).signTypedData(
-      signedCookTypedData(execution),
-    );
-    assert.match(
-      failed(
-        await mcp.call("sauce_signed_cook", {
-          source: PAY,
-          ...fields,
-          args: ARGS,
-          signature: stranger,
-        }),
-      ),
-      new RegExp(`the signature given is not ${owner.address}'s over this cook`),
-    );
   });
 
   it("returns the owner's invalidateNonces for cancel, one per nonce word, as one batch", async () => {
@@ -1544,10 +1452,8 @@ describe("a private Pot of owner zero, with no endpoint", () => {
   ];
 
   for (const [tool] of calls(ZERO)) {
-    it(`${tool} refuses it before any plan, where the same call for a real owner builds one`, async () => {
-      const [, real] = calls(OWNER).find(([name]) => name === tool)!;
+    it(`${tool} refuses owner zero before any offline execution plan`, async () => {
       const [, zero] = calls(ZERO).find(([name]) => name === tool)!;
-      ok(await mcp.call(tool, real));
       assert.match(failed(await mcp.call(tool, zero)), refusal);
     });
   }
@@ -1612,17 +1518,13 @@ describe("sauce_simulate", () => {
 });
 
 describe("sauce_inspect", () => {
-  it("takes the cook sauce_tx built back apart, checked against its source", async () => {
-    const tx = ok(
-      await mcp.call("sauce_tx", {
-        source: PAY,
-        chain: "base",
-        owner: OWNER,
-        value: 0,
-        args: [RECIPIENT, "1000000"],
-      }),
-    );
-    const out = ok(await mcp.call("sauce_inspect", { hex: tx.data, chain: "base", source: PAY }));
+  it("takes pure cook calldata apart, checked against its source, without authorizing execution", async () => {
+    const data = encodeFunctionData({
+      abi: v12PotAbi,
+      functionName: "cook",
+      args: [getAddress(v12EngineAddress()), payload(PAY, [RECIPIENT, "1000000"])],
+    });
+    const out = ok(await mcp.call("sauce_inspect", { hex: data, chain: "base", source: PAY }));
     assert.equal(out.call, "Pot.cook");
     assert.deepEqual(out.engine, { address: getAddress(v12EngineAddress()), released: true });
     const program = out.program as {

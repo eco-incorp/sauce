@@ -20,10 +20,12 @@ import {
   requireSupported,
 } from "../src/cli/support.js";
 import { privateKeyToAccount } from "viem/accounts";
+import { deployPot, RUNTIME_HEX_PATH, sauce as deployedSauce, startChain } from "./cli-anvil.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const OWNER_KEY = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
 const RECIPIENT = "0x6666666666666666666666666666666666666666";
+const itDeployed = RUNTIME_HEX_PATH ? it : it.skip;
 
 /** An endpoint that answers the reads a rehearsal starts with, and counts every request. */
 interface Recorder {
@@ -207,30 +209,74 @@ describe("refused on a preview chain, before any network call", () => {
     expect(recorded()).toEqual([]);
   });
 
-  it("a cook, by its own chain only", async () => {
+  it("gates a cook by its own preview chain", async () => {
     const pay = file("pay.sauce.ts", PAY);
     const flags = ["--owner", OWNER, "--define", `RECIPIENT=${RECIPIENT}`, "--value", "0"];
     expectRefused(await sauce("tx", pay, "--chain", "arbitrum", ...flags), "arbitrum");
-    const base = await sauce("tx", pay, "--chain", "base", ...flags);
-    expect(base.stderr).not.toMatch(/is refused/);
-    expect(base.code).toBe(0);
-    expect(JSON.parse(base.stdout)).toMatchObject({ chainId: 8453 });
   });
 
-  it("builds a cook on each EVM testnet the release is deployed on", async () => {
-    const pay = file("pay.sauce.ts", PAY);
-    const flags = ["--owner", OWNER, "--define", `RECIPIENT=${RECIPIENT}`, "--value", "0"];
-    for (const [slug, chainId] of [
-      ["arc-testnet", 5042002],
-      ["base-sepolia", 84532],
-      ["sepolia", 11155111],
-    ] as const) {
-      const run = await sauce("tx", pay, "--chain", slug, ...flags);
-      expect([slug, run.stderr]).not.toEqual([slug, expect.stringMatching(/is refused/)]);
-      expect([slug, run.code]).toEqual([slug, 0]);
-      expect(JSON.parse(run.stdout)).toMatchObject({ chainId });
-    }
-  });
+  itDeployed(
+    "builds a cook on a supported chain with an authenticated deployed Pot",
+    async () => {
+      const local = await startChain("base");
+      try {
+        const pot = await deployPot(local);
+        const run = await deployedSauce(
+          "tx",
+          file("pay.sauce.ts", PAY),
+          "--chain",
+          "base",
+          "--pot",
+          pot,
+          "--rpc-url",
+          local.rpcUrl,
+          "--define",
+          `RECIPIENT=${RECIPIENT}`,
+        );
+        expect(run.stderr).not.toMatch(/is refused/);
+        expect(run.code).toBe(0);
+        expect(JSON.parse(run.stdout)).toMatchObject({ chainId: 8453, to: pot });
+      } finally {
+        await local.stop();
+      }
+    },
+    120_000,
+  );
+
+  itDeployed(
+    "builds a cook on each supported EVM testnet with an authenticated deployed Pot",
+    async () => {
+      const pay = file("pay.sauce.ts", PAY);
+      for (const [slug, chainId] of [
+        ["arc-testnet", 5042002],
+        ["base-sepolia", 84532],
+        ["sepolia", 11155111],
+      ] as const) {
+        const local = await startChain(slug);
+        try {
+          const pot = await deployPot(local);
+          const run = await deployedSauce(
+            "tx",
+            pay,
+            "--chain",
+            slug,
+            "--pot",
+            pot,
+            "--rpc-url",
+            local.rpcUrl,
+            "--define",
+            `RECIPIENT=${RECIPIENT}`,
+          );
+          expect([slug, run.stderr]).not.toEqual([slug, expect.stringMatching(/is refused/)]);
+          expect([slug, run.code]).toEqual([slug, 0]);
+          expect(JSON.parse(run.stdout)).toMatchObject({ chainId, to: pot });
+        } finally {
+          await local.stop();
+        }
+      }
+    },
+    120_000,
+  );
 
   it("sauce pot --deploy, and a pot's deployment as a cast line", async () => {
     const { config, recorded } = await endpoints(42161);

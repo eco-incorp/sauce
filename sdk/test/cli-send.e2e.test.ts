@@ -2,15 +2,10 @@
  * `sauce send`: what `sauce tx` built, signed by a signer the command never sees — a throwaway key
  * standing in for a KMS or a hardware wallet — then broadcast, confirmed and reported.
  *
- * Ethereum, on an anvil running the released gated stack (`cli-anvil.ts`): `sauce tx`'s plan for an
- * owner with no Pot yet (Kitchen.deployPot, then the cook). Built before the Pot is funded, the cook
- * comes with no gas and a note saying why; built after, each transaction comes with the gas to sign
- * it with, the cook's as if the deployment had landed. Signed with those limits and consecutive
- * nonces and sent in order, both land: the recipient paid, what moved and what stayed in the Pot
- * reported. Without the plan's gas, the cook signed with the signer's own estimate (taken while
- * the Pot has no code) is refused, unsent, as before. A cook signed short of gas is refused; signed
- * again with room it lands, and sent twice it is read back, not resent. A cook that would revert is refused before it is
- * broadcast. A transaction the chain had, pending, then dropped is said to be gone, not waited out.
+ * Ethereum, on a local anvil: explicitly deploy and authenticate the external signer's Pot first.
+ * Build funding transfers and a cook, sign their suggested gas limits, then send them in order.
+ * Short-gas, missing-code and reverting cooks fail without sending. Repeated sends read receipts
+ * rather than broadcasting again. A dropped pending transaction is reported, not waited out.
  *
  * Solana, on the released Kitchen and engine in LiteSVM (`svm/rpc-shim.ts`, which checks every
  * signature it is sent): `sauce tx`'s one-transaction cook, the Pot created in it, signed by the
@@ -55,6 +50,7 @@ import { decodeCursor } from "../src/cli/svm-plan.js";
 import { buildExecuteTransaction, deriveProgramDataPda, derivePotPda } from "../src/svm/index.js";
 import {
   CLI_FIXTURES,
+  deployPot,
   describeEvm,
   fixture,
   jsonOf,
@@ -117,12 +113,13 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
       maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
     });
   };
-  /** `sauce tx`'s plan for the signer's Pot of `salt`, which has no code yet, and its notes. */
+  /** Funding plan for the external signer's already authenticated Pot. */
   const planFor = async (...salt: string[]) => {
     const built = await sauce(
       ...["tx", PAY, "--chain", "ethereum", "--owner", signer.address, ...salt],
       ...["--args-json", JSON.stringify([RECIPIENT, AMOUNT.toString()])],
       ...["--rpc-url", ethereum.rpcUrl],
+      ...["--fund", "USDC:10", "--fund", "USDT:10"],
     );
 
     return { plan: jsonOf(built) as unknown as typeof plan, notes: built.stderr };
@@ -170,111 +167,67 @@ describeEvm("sauce send: sauce tx's plan, signed elsewhere, on an EVM chain", ()
     expect(run.stderr).toMatch(/is not signed: sign it with your wallet or signer first/);
   });
 
-  it("gives each transaction of the plan its gas, the cook's as if the Pot were there", async () => {
-    const build = () => planFor();
-    // Unfunded, the cook would revert after the deployment: it is given no gas, and told why.
-    const unfunded = await build();
-    expect(unfunded.plan.transactions).toHaveLength(2);
-    expect(unfunded.plan.transactions[1]!.gas).toBeUndefined();
-    expect(unfunded.notes).toMatch(/The cook is given no gas: simulated after the deployment/);
-    expect(unfunded.notes).toContain(
-      "The Pot has no code yet: deploy it first (`sauce pot --deploy` with the signer, or " +
-        "`sauce run --fund`, which deploys before it funds), and do not send tokens to its " +
-        "address before it is deployed, as a Kitchen upgrade that changes the Pot's code moves " +
-        "the address and strands them. Then build the plan again for its gas",
-    );
-    expect(unfunded.notes).not.toContain("takes tokens before it is deployed");
-    // Funded at the address here only to give the rehearsal a cook that succeeds; the plan's
-    // deployment and cook below are then sent and land.
-    for (const token of [usdc, usdt]) await ethereum.mint(token, unfunded.plan.pot, FUNDED);
-
-    const funded = await build();
+  it("gives funding transfers and the cook gas on an explicitly deployed Pot", async () => {
+    const pot = await deployPot(ethereum, signer.address);
+    for (const token of [usdc, usdt]) await ethereum.mint(token, signer.address, FUNDED);
+    const funded = await planFor();
     plan = funded.plan;
-    const [deploy, cook] = plan.transactions as [Unsigned, Unsigned];
-    expect(BigInt(deploy.gas!)).toBeGreaterThan(0n);
-    expect(funded.notes).toMatch(
-      new RegExp(`the cook's, ${BigInt(cook.gas!)}, is estimated as if the deployment had landed`),
-    );
-    // The signer's own estimate of the cook, while the Pot has no code, is far below it.
-    const ownEstimate = await ethereum.publicClient.estimateGas({
-      account: signer.address,
-      to: cook.to,
-      data: cook.data,
-      value: BigInt(cook.value),
-    });
-    expect(BigInt(cook.gas!)).toBeGreaterThan(ownEstimate * 2n);
-
-    // Signed with the limits the plan gives, sent together in order: both land.
+    expect(plan.pot).toBe(pot);
+    expect(plan.transactions).toHaveLength(3);
+    for (const tx of plan.transactions) expect(BigInt(tx.gas!)).toBeGreaterThan(0n);
     const first = await nonce();
-    const signed = [
-      await sign(deploy, first, BigInt(deploy.gas!)),
-      await sign(cook, first + 1, BigInt(cook.gas!)),
-    ];
+    const signed = await Promise.all(
+      plan.transactions.map((tx, index) => sign(tx, first + index, BigInt(tx.gas!))),
+    );
     const run = await sauce("send", ...signed, "--rpc-url", ethereum.rpcUrl, "--json");
-
     const out = jsonOf(run) as {
       ok: boolean;
       sent: Array<Record<string, unknown>>;
     };
     expect(out.ok).toBe(true);
-    expect(out.sent[0]).toMatchObject({
-      status: "success",
-      what: expect.stringMatching(/deployPot/),
-    });
-    expect(out.sent[1]).toMatchObject({
-      what: `cook on Pot ${plan.pot}`,
-      status: "success",
+    expect(out.sent).toHaveLength(3);
+    expect(out.sent.every((tx) => tx.status === "success")).toBe(true);
+    expect(out.sent[2]).toMatchObject({
+      what: `cook on Pot ${pot}`,
       from: signer.address,
+      moves: expect.arrayContaining([expect.any(Object)]),
+      leftInPot: expect.any(Array),
     });
-    expect(out.sent[1]!.moves).toEqual(expect.arrayContaining([expect.any(Object)]));
-    expect(out.sent[1]!.leftInPot).toEqual(expect.any(Array));
-    expect(await ethereum.publicClient.getCode({ address: plan.pot })).toMatch(/^0x[0-9a-f]{2,}/);
-    expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(AMOUNT);
-    expect(await ethereum.balanceOf(usdt, RECIPIENT)).toBe(AMOUNT);
+    expect(await nonce()).toBe(first + 3);
+    for (const token of [usdc, usdt]) {
+      expect(await ethereum.balanceOf(token, RECIPIENT)).toBe(AMOUNT);
+      expect(await ethereum.balanceOf(token, pot)).toBe(FUNDED - AMOUNT);
+    }
     expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
   }, 120_000);
 
-  it("refuses the cook signed with the signer's own estimate instead, as before", async () => {
-    const salt = ["--salt", "own-estimate"];
-    const { pot } = (await planFor(...salt)).plan;
-    for (const token of [usdc, usdt]) await ethereum.mint(token, pot, FUNDED);
-    const [deploy, cook] = (await planFor(...salt)).plan.transactions as [Unsigned, Unsigned];
-    // Estimated by the signer while the Pot has no code: a call to an empty address.
-    const ownEstimate = await ethereum.publicClient.estimateGas({
-      account: signer.address,
-      to: cook.to,
-      data: cook.data,
-      value: BigInt(cook.value),
-    });
-    const first = await nonce();
-    const paid = [
-      await ethereum.balanceOf(usdc, RECIPIENT),
-      await ethereum.balanceOf(usdt, RECIPIENT),
-    ];
-    const run = await sauce(
-      ...["send", await sign(deploy, first, BigInt(deploy.gas!))],
-      ...[await sign(cook, first + 1, ownEstimate), "--rpc-url", ethereum.rpcUrl, "--json"],
-    );
-
-    expect(run.code).toBe(1);
-    const out = JSON.parse(run.stdout) as {
-      sent: Array<{ what: string; status: string; hash: string; reason?: string }>;
+  it("refuses a signed cook when its persisted Pot loses code, without sending or repinning", async () => {
+    const pot = plan.pot;
+    const cook = await cookFor(AMOUNT);
+    const code = await ethereum.publicClient.getCode({ address: pot });
+    const before = {
+      nonce: await nonce(),
+      balance: await ethereum.publicClient.getBalance({ address: signer.address }),
+      tokens: await ethereum.balanceOf(usdc, pot),
+      recipient: await ethereum.balanceOf(usdc, RECIPIENT),
+      records: ethereum.pots.list(),
     };
-    expect(out.sent[0]).toMatchObject({
-      status: "success",
-      what: expect.stringMatching(/deployPot/),
-    });
-    expect(out.sent[1]).toMatchObject({ status: "failed", hash: "" });
-    expect(out.sent[1]!.reason).toMatch(
-      new RegExp(`signed with a gas limit of ${ownEstimate}, and the simulation used`),
-    );
-    expect(await nonce()).toBe(first + 1);
-    // The cook never went out: nothing reached the recipient, and the Pot holds what it was given.
-    expect([
-      await ethereum.balanceOf(usdc, RECIPIENT),
-      await ethereum.balanceOf(usdt, RECIPIENT),
-    ]).toEqual(paid);
-    expect(await ethereum.balanceOf(usdc, pot)).toBe(FUNDED);
+    const signed = await sign(cook, before.nonce, 1_000_000n);
+    await ethereum.testClient.setCode({ address: pot, bytecode: "0x" });
+    try {
+      const run = await sauce("send", signed, "--rpc-url", ethereum.rpcUrl, "--json");
+      expect(run.code).toBe(1);
+      expect(await nonce()).toBe(before.nonce);
+      expect(await ethereum.publicClient.getBalance({ address: signer.address })).toBe(
+        before.balance,
+      );
+      expect(await ethereum.balanceOf(usdc, pot)).toBe(before.tokens);
+      expect(await ethereum.balanceOf(usdc, RECIPIENT)).toBe(before.recipient);
+      expect(ethereum.pots.list()).toEqual(before.records);
+      expect(await ethereum.publicClient.getCode({ address: pot })).toBeUndefined();
+    } finally {
+      await ethereum.testClient.setCode({ address: pot, bytecode: code! });
+    }
   }, 120_000);
 
   it("refuses a cook signed short of gas, and sends it signed again with room", async () => {

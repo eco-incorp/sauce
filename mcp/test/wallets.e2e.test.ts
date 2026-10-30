@@ -1,8 +1,8 @@
 /**
  * The wallet tools sending for real: a server with wallets (as `sauce mcp --wallets` over stdio
- * serves one) creates a wallet, lists it, and sends what its own tools built — `sauce_pot`'s
- * deployment and `sauce_tx`'s cook, passed to `sauce_wallet_send` whole — on a local anvil running
- * the released gated stack (`sdk/test/cli-anvil.ts`); a cook that would revert, and one above the
+ * serves one) creates a wallet, lists it, and sends `sauce_tx`'s cook whole to sauce_wallet_send,
+ * against a Pot explicitly deployed and authenticated during fixture setup on local anvil.
+ * A cook that would revert, and one above the
  * wallet's policy, are refused with nothing sent. And on Solana, in LiteSVM behind the shim that
  * checks every signature (`sdk/test/svm/rpc-shim.ts`): a transfer built for a Solana wallet as its
  * fee payer, signed and landed by the server, and one above its policy refused.
@@ -35,8 +35,6 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { PotStore } from "../../sdk/dist/cli/pot-store.js";
 import { decryptKeystoreBytes } from "../../sdk/dist/cli/signer.js";
-import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
-import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import {
   fixture,
   registered,
@@ -50,7 +48,15 @@ import {
   type LiteSVM,
   type SolanaShim,
 } from "../../sdk/test/svm/rpc-shim.js";
-import { connect, endpointsFor, failed, ok, type Connected, walletsAt } from "./harness.js";
+import {
+  connect,
+  deployedPotBinding,
+  endpointsFor,
+  failed,
+  ok,
+  type Connected,
+  walletsAt,
+} from "./harness.js";
 
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
 const PAY = [
@@ -59,7 +65,6 @@ const PAY = [
   "}",
   "",
 ].join("\n");
-const ZERO_SALT = `0x${"00".repeat(32)}` as Hex;
 
 /** A throwaway password, as the client config would pass one from an agent's .env. */
 const PASSWORD = `throwaway-${process.pid}-${Date.now()}`;
@@ -71,6 +76,7 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
   let mcp: Connected;
   let wallet: Address;
   let pot: Address;
+  let binding: Awaited<ReturnType<typeof deployedPotBinding>>;
 
   before(async () => {
     base = await startChain("base");
@@ -98,11 +104,12 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
         source: PAY,
         chain: "base",
         owner: wallet,
+        potBinding: binding,
         args: [RECIPIENT, amount.toString()],
       }),
     );
 
-  it("creates and lists a wallet, then sends sauce_pot's deployment from it", async () => {
+  it("creates and lists a wallet, then sends a cook on its explicitly deployed Pot", async () => {
     const created = ok(await mcp.call("sauce_wallet_create", { name: "agent" }));
     wallet = getAddress(String(created.address));
     const listed = ok(await mcp.call("sauce_wallet_list")) as {
@@ -114,12 +121,16 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     );
     await base.send(base.deployer, wallet, "0x", parseEther("1"));
 
-    const deployment = ok(await mcp.call("sauce_pot", { chain: "base", owner: wallet }));
-    pot = getAddress(String(deployment.pot));
-    assert.equal(pot, v12PredictPot(wallet, ZERO_SALT));
-    assert.equal(deployment.deployed, false);
+    binding = await deployedPotBinding(base, wallet);
+    pot = binding.pot;
+    const imported = ok(
+      await mcp.call("sauce_pot_import", { chain: "base", pot, potBinding: binding }),
+    );
+    assert.ok(
+      (imported.notes as string[]).includes(`recorded Pot ${pot} on base in ${join(dir, "pots")}`),
+    );
     const sent = ok(
-      await mcp.call("sauce_wallet_send", { wallet: "agent", transaction: deployment }),
+      await mcp.call("sauce_wallet_send", { wallet: "agent", transaction: await cookOf(0n) }),
     ) as { ok: boolean; from: string; sent: Array<{ hash: Hex; status: string }> };
     assert.equal(sent.ok, true);
     assert.equal(sent.from, wallet);
@@ -140,22 +151,12 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     const receipt = await base.publicClient.getTransactionReceipt({ hash });
     assert.equal(getAddress(receipt.from), wallet);
     assert.notEqual(await base.publicClient.getCode({ address: pot }), undefined);
-    // The Pot it deployed, as the sauce command records it, for the caller to keep.
-    const pots = (sent.sent[0] as { pots?: Array<Record<string, unknown>> }).pots;
+    // Only explicit import records provenance; cooking must not rewrite the authenticated record.
     assert.deepEqual(
-      pots?.map((one) => [one.pot, one.owner, one.chain, one.origin]),
-      [[pot, wallet, "base", "deployed"]],
-    );
-    // And, the server keeping the command's Pot store, recorded there as the command records it.
-    assert.ok(
-      ((sent as { notes?: string[] }).notes ?? []).includes(
-        `recorded Pot ${pot} on base in ${join(dir, "pots")}`,
-      ),
-      JSON.stringify((sent as { notes?: string[] }).notes),
-    );
-    assert.deepEqual(
-      new PotStore(join(dir, "pots")).list().pots.map((one) => [one.pot, one.owner, one.chain]),
-      [[pot, wallet, "base"]],
+      new PotStore(join(dir, "pots"))
+        .list()
+        .pots.map((one) => [one.pot, one.owner, one.chain, one.origin, one.binding]),
+      [[pot, wallet, "base", "imported", binding]],
     );
     assert.ok(
       ((sent as { notes?: string[] }).notes ?? []).some((note) => /no limits are set/.test(note)),
@@ -254,42 +255,52 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.equal(await base.balanceOf(usdc, RECIPIENT), 7_000_000n);
   });
 
-  it("sends sauce_tx's plan for a Pot with no code, the deploy and then the cook, within `to`", async () => {
+  it("never auto-deploys, then sends an explicitly deployed Pot's cook within `to`", async () => {
     const created = ok(await mcp.call("sauce_wallet_create", { name: "planner" }));
     const planner = getAddress(String(created.address));
-    const plannerPot = getAddress(v12PredictPot(planner, ZERO_SALT) as Address);
     await base.send(base.deployer, planner, "0x", parseEther("1"));
+    failed(
+      await mcp.call("sauce_tx", {
+        source: PAY,
+        chain: "base",
+        owner: planner,
+        args: [RECIPIENT, "500000"],
+      }),
+    );
+    assert.equal(await base.publicClient.getTransactionCount({ address: planner }), 0);
+    const plannerBinding = await deployedPotBinding(base, planner);
+    const plannerPot = plannerBinding.pot;
+    ok(
+      await mcp.call("sauce_pot_import", {
+        chain: "base",
+        pot: plannerPot,
+        potBinding: plannerBinding,
+      }),
+    );
     await base.mint(usdc, plannerPot, 1_000_000n);
     const planOf = async () =>
       ok(
         await mcp.call("sauce_tx", {
           source: PAY,
           chain: "base",
-          owner: planner,
+          pot: plannerPot,
+          potBinding: plannerBinding,
           args: [RECIPIENT, "500000"],
         }),
       );
     const plan = await planOf();
-    const steps = plan.transactions as Array<{ deploysPot?: string; to: string }>;
-    assert.deepEqual(
-      steps.map((step) => [step.deploysPot ?? null, getAddress(step.to)]),
-      [
-        [plannerPot, getAddress(v12KitchenAddress())],
-        [null, plannerPot],
-      ],
-    );
-    // A policy whose `to` is some other address: the deploy is refused, naming the Pot to add.
+    assert.equal(getAddress(String(plan.to)), plannerPot);
+    assert.equal(plan.transactions, undefined);
+    assert.deepEqual(plan.potBinding, plannerBinding);
     const policy = join(dir, "wallets", "planner.policy.json");
     writeFileSync(policy, JSON.stringify({ to: [RECIPIENT] }), { mode: 0o600 });
     const refusal = failed(
       await mcp.call("sauce_wallet_send", { wallet: "planner", transaction: plan }),
     );
-    assert.match(
-      refusal,
-      new RegExp(`deploys the wallet's Pot ${plannerPot}, which is not one of them: add it to to`),
-    );
+    assert.match(refusal, /refused by the policy of wallet planner.*this transaction goes to/);
+    assert.ok(refusal.toLowerCase().includes(plannerPot.toLowerCase()));
     assert.equal(await base.publicClient.getTransactionCount({ address: planner }), 0);
-    // With the Pot in `to`, its own deploy is allowed too: both are sent, in order.
+    assert.equal(await base.balanceOf(usdc, plannerPot), 1_000_000n);
     writeFileSync(policy, JSON.stringify({ to: [plannerPot] }), { mode: 0o600 });
     const sent = ok(
       await mcp.call("sauce_wallet_send", { wallet: "planner", transaction: await planOf() }),
@@ -297,9 +308,8 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
     assert.equal(sent.ok, true);
     assert.deepEqual(
       sent.sent.map((each) => each.status),
-      ["success", "success"],
+      ["success"],
     );
-    assert.notEqual(await base.publicClient.getCode({ address: plannerPot }), undefined);
     assert.equal(await base.balanceOf(usdc, plannerPot), 500_000n);
   });
 
@@ -323,27 +333,42 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
       undefined,
       walletsAt(join(agentDir, "wallets"), { env: { SAUCE_TEST_AGENT: passwords.env } }),
     );
-    /** Funds `name`'s address and sends its Pot's deployment from it, as sauce_pot builds it. */
-    const deployFrom = async (name: string, address: string) => {
-      await base.send(base.deployer, getAddress(address), "0x", parseEther("1"));
-      const deployment = ok(await agent.call("sauce_pot", { chain: "base", owner: address }));
-      const sent = ok(
-        await agent.call("sauce_wallet_send", { wallet: name, transaction: deployment }),
-      ) as { ok: boolean; sent: Array<{ status: string }> };
-      assert.equal(sent.ok, true, name);
-      assert.notEqual(
-        await base.publicClient.getCode({ address: getAddress(String(deployment.pot)) }),
-        undefined,
+    /** Funds `name` and sends a cook on its explicitly deployed, authenticated fixture Pot. */
+    const cookFrom = async (name: string, address: string) => {
+      const owner = getAddress(address);
+      await base.send(base.deployer, owner, "0x", parseEther("1"));
+      const potBinding = await deployedPotBinding(base, owner);
+      const transaction = ok(
+        await agent.call("sauce_tx", {
+          source: PAY,
+          chain: "base",
+          pot: potBinding.pot,
+          potBinding,
+          args: [RECIPIENT, "0"],
+        }),
       );
+      assert.deepEqual(transaction.potBinding, potBinding);
+      const before = await base.publicClient.getTransactionCount({ address: owner });
+      assert.match(
+        failed(await agent.call("sauce_wallet_send", { wallet: name, transaction })),
+        /provide an explicit matching request binding/,
+      );
+      assert.equal(await base.publicClient.getTransactionCount({ address: owner }), before);
+      const sent = ok(
+        await agent.call("sauce_wallet_send", { wallet: name, transaction, potBinding }),
+      ) as { ok: boolean; sent: Array<{ status: string }>; potBinding?: unknown };
+      assert.equal(sent.ok, true, name);
+      assert.equal(sent.sent[0]!.status, "success");
+      assert.deepEqual(sent.potBinding, potBinding);
     };
     try {
       ok(await agent.call("sauce_wallet_enable", { env: "SAUCE_TEST_AGENT" }));
       const byEnv = ok(await agent.call("sauce_wallet_create", { name: "by-env" }));
-      await deployFrom("by-env", String(byEnv.address));
+      await cookFrom("by-env", String(byEnv.address));
 
       ok(await agent.call("sauce_wallet_enable", { file }));
       const byFile = ok(await agent.call("sauce_wallet_create", { name: "by-file" }));
-      await deployFrom("by-file", String(byFile.address));
+      await cookFrom("by-file", String(byFile.address));
       // The source before is gone: its wallet no longer opens.
       assert.match(
         failed(
@@ -360,11 +385,11 @@ describe("the wallet tools, sending on a chain", { skip: RUNTIME_HEX_PATH === un
         await agent.call("sauce_wallet_import", { name: "imported", path: keyFile }),
       );
       assert.equal(imported.address, privateKeyToAccount(rawKey).address);
-      await deployFrom("imported", String(imported.address));
+      await cookFrom("imported", String(imported.address));
 
       const generated = ok(await agent.call("sauce_wallet_enable", { generate: true }));
       const byGenerate = ok(await agent.call("sauce_wallet_create", { name: "by-generate" }));
-      await deployFrom("by-generate", String(byGenerate.address));
+      await cookFrom("by-generate", String(byGenerate.address));
       const generatedPassword = readFileSync(String(generated.passwordFile), "utf8").trim();
       for (const text of agent.received) {
         for (const password of [...Object.values(passwords), generatedPassword]) {

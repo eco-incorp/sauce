@@ -19,16 +19,23 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getAbiItem, toFunctionSelector, type Abi, type AbiFunction } from "viem";
+import {
+  encodeFunctionData,
+  getAbiItem,
+  toFunctionSelector,
+  type Abi,
+  type AbiFunction,
+} from "viem";
 import { formatAbiItem } from "viem/utils";
 import { v12Pot, v12PotAbi, v12Kitchen, v12KitchenAbi } from "../../src/evm/engine.js";
+import { v12ReleaseSet } from "../../src/deployments/releases.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS = resolve(HERE, "../../src/artifacts");
 
 /** Read the vendored artifact JSON and return its `abi` array (the compiler/forge output shape). */
-const loadArtifactAbi = (name: string): Abi =>
-  JSON.parse(readFileSync(resolve(ARTIFACTS, `${name}.json`), "utf8")).abi as Abi;
+const loadArtifactAbi = (name: string, directory = ARTIFACTS): Abi =>
+  JSON.parse(readFileSync(resolve(directory, `${name}.json`), "utf8")).abi as Abi;
 
 type Item = Abi[number];
 
@@ -60,9 +67,19 @@ describe("evm/engine ABI drift guard", () => {
     ["V12Kitchen", v12KitchenAbi],
   ] as const) {
     describe(artifact, () => {
-      const released = loadArtifactAbi(artifact).filter(named);
+      const historicalPot =
+        artifact === "V12Pot" && v12ReleaseSet()["kitchen-evm"].scheme !== "create3";
+      const comparable = (abi: Abi): Abi =>
+        historicalPot
+          ? abi.filter(
+              (item) =>
+                item.type !== "constructor" &&
+                !(item.type === "error" && item.name === "WrongDeployer"),
+            )
+          : abi;
+      const released = comparable(loadArtifactAbi(artifact)).filter(named);
 
-      for (const item of (exportedAbi as Abi).filter(named)) {
+      for (const item of comparable(exportedAbi as Abi).filter(named)) {
         it(`${item.type} ${item.name}: matches the released ${artifact}.json entry`, () => {
           const counterpart = released.filter((r) => r.type === item.type && r.name === item.name);
           // A mirrored entry the release no longer carries is drift too.
@@ -70,12 +87,33 @@ describe("evm/engine ABI drift guard", () => {
         });
       }
 
-      it(`exports every entry of the released ${artifact}.json, and nothing else`, () => {
-        const all = loadArtifactAbi(artifact);
-        expect([...(exportedAbi as Abi)].map(key).sort()).toEqual(all.map(key).sort());
+      it(`exports every runtime entry of the released ${artifact}.json, and nothing else`, () => {
+        expect(
+          comparable(exportedAbi as Abi)
+            .map(key)
+            .sort(),
+        ).toEqual(comparable(loadArtifactAbi(artifact)).map(key).sort());
       });
+
+      if (historicalPot) {
+        it("limits the historical ABI exception to its known constructor and missing CREATE3 error", () => {
+          const all = loadArtifactAbi(artifact);
+          expect(all.filter((item) => item.type === "constructor").map(shape)).toEqual([
+            { type: "constructor", signature: "constructor()", stateMutability: "nonpayable" },
+          ]);
+          expect(all.some((item) => item.type === "error" && item.name === "WrongDeployer")).toBe(
+            false,
+          );
+        });
+      }
     });
   }
+
+  const candidatePath = process.env.SAUCE_LOCAL_CANDIDATE;
+  (candidatePath ? it : it.skip)("matches the complete actual CREATE3 Pot artifact ABI", () => {
+    const actual = loadArtifactAbi("V12Pot", dirname(resolve(candidatePath!)));
+    expect([...v12PotAbi].map(key).sort()).toEqual(actual.map(key).sort());
+  });
 
   it("v12KitchenAbi carries the Kitchen's administration: initialize, setRouter, setExecutionFee", () => {
     const names = (v12KitchenAbi as Abi).filter(named).map((i) => `${i.type} ${i.name}`);
@@ -119,6 +157,15 @@ describe("evm/engine ABI drift guard", () => {
 const selectorOf = (calldata: string): string => calldata.slice(0, 10);
 
 describe("evm/engine load-bearing shapes", () => {
+  it("retains an explicit historical compiler for ordinary new work", () => {
+    const historical = v12ReleaseSet("2.3.0");
+    const engine = historical["v12-evm"].engine as `0x${string}`;
+    expect(() => v12Pot.encodeCook(engine, "0x01")).toThrow(/compiler/);
+    expect(v12Pot.encodeCook(engine, "0x01", historical.compiler)).toBe(
+      encodeFunctionData({ abi: v12PotAbi, functionName: "cook", args: [engine, "0x01"] }),
+    );
+  });
+
   it("v12KitchenAbi deployPot inputs are exactly [address, bytes32] (canonical form)", () => {
     const deployPot = getAbiItem({ abi: v12KitchenAbi, name: "deployPot" }) as AbiFunction;
     expect(deployPot.inputs.map((i) => i.type)).toEqual(["address", "bytes32"]);

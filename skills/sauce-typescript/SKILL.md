@@ -62,40 +62,42 @@ bytes32.
 
 ```ts
 import { readFileSync } from "node:fs";
-import { DEFAULT_POT_SALT, kitchenExecutionFee, routes, v12PredictPot } from "@eco-incorp/sauce";
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
-import { v12Pot } from "@eco-incorp/sauce/evm/engine";
-import { bytesToHex, concatHex, getAddress, type PublicClient } from "viem";
-
-type Address = `0x${string}`;
+import { kitchenExecutionFee, routes } from "@eco-incorp/sauce";
+import { sdkCompilerVersion } from "@eco-incorp/sauce/deployments";
+import { verifyPotBinding, v12Pot, type EvmPotBindingInput } from "@eco-incorp/sauce/evm/engine";
+import { bytesToHex, concatHex, type PublicClient } from "viem";
 
 export async function cookTransactions(
   client: PublicClient, // the chain's: the program is compiled for it and the fee read from it
   file: string,
   chain: string,
-  owner: Address,
+  input: EvmPotBindingInput, // trusted persisted binding, not current SDK defaults
   args: readonly (bigint | string | boolean)[],
 ) {
-  const salt = DEFAULT_POT_SALT; // every owner's default Pot salt: zero
-  const pot = v12PredictPot(owner, salt); // the owner's Pot, derived through the released Kitchen
-  const deploy = routes.sauceEvmDeployPotCall({ owner, salt }); // once, through the Kitchen
+  const binding = await verifyPotBinding(client, input);
+  if (
+    binding.compiler !== sdkCompilerVersion() ||
+    binding.chainId !== (await client.getChainId())
+  ) {
+    throw new Error("Use the service's exact compiler and chain");
+  }
   const program = routes.compileSauceProgram(chain, readFileSync(file, "utf8"));
   const encoded = routes.encodeEntryArguments(program, args); // checked against main's types
-  const engine = getAddress(v12EngineAddress());
+  const engine = binding.engine;
   const payload = concatHex([bytesToHex(program.bytecode), bytesToHex(encoded)]);
   // The cook's value is the Kitchen's executionFee(), read just before sending: a cook paying
   // less reverts.
-  const fee = kitchenExecutionFee();
+  const fee = kitchenExecutionFee(binding.kitchen);
   const { data: answer } = await client.call({ to: fee.to, data: fee.data });
   if (answer === undefined) throw new Error("the Kitchen did not answer executionFee()");
   const cook = {
-    chainId: await client.getChainId(),
-    to: pot,
-    data: v12Pot.encodeCook(engine, payload),
+    chainId: binding.chainId,
+    to: binding.pot,
+    data: v12Pot.encodeCook(engine, payload, binding.compiler),
     value: fee.decode(answer),
   };
 
-  return { deploy, cook }; // cook is what `sauce tx` prints: { chainId, to, data, value }
+  return { binding, cook };
 }
 ```
 
@@ -103,12 +105,12 @@ export async function cookTransactions(
   send it as an `eth_call` just before the cook.
 - `routes.sauceEvmDeployPotCall` and `routes.buildSauceEvmCall` return `{ to, data, value }` to send
   as a transaction (and `target`, the same contract as `to`).
-- `v12EngineAddress()` and `v12KitchenAddress()` are recorded release addresses, and the deploy call
-  goes to the Kitchen unless you pass `kitchen`: check the chain has code at them, and deploy the Pot
-  only where it has no code yet.
-- A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
-pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
-  when the Kitchen has a newer one.
+- Load the saved binding and verify actual deployed code/profile and engine/compiler/Router
+  identity before funding or signing. Missing expected code fails; never deploy a replacement.
+- New EVM creation is CREATE3 only: explicit deploy → verify → persist → fund/sign.
+  Prediction is arithmetic, not authentication, and SDK updates do not repin existing services.
+- Only after explicit owner opt-in, `potRouterUpdate(client, pot, binding)` verifies the binding
+  and proposes a Router update. Fixed/Shared Pots retain their authenticated release Router.
 
 ## A cook the owner signs and another account sends
 
@@ -120,7 +122,7 @@ it (zero, the default: anyone). The Pot pays the fee from its balance, which inc
 sender sends exactly the signed value. It is what `sauce sign` builds.
 
 ```ts
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+// program must be compiled with input.compiler, from the service's persisted binding.
 import {
   checkSignedCookPot,
   cookNonceMasks,
@@ -129,24 +131,28 @@ import {
   randomCookNonce,
   signedCookTypedData,
   verifySignedCook,
+  verifyPotBinding,
   type SignedCookExecution,
+  type EvmPotBindingInput,
 } from "@eco-incorp/sauce/evm/engine";
-import { getAddress, type Address, type Hex, type PublicClient, type WalletClient } from "viem";
+import { type Hex, type PublicClient, type WalletClient } from "viem";
 
 export async function signCook(
   client: PublicClient, // the chain's
   wallet: WalletClient, // the Pot owner's
-  owner: Address,
-  pot: Address,
+  input: EvmPotBindingInput,
   program: Hex, // the bytecode with main's arguments appended
   maxExecutionFee: bigint, // at least the Kitchen's executionFee() now
 ) {
-  const check = await checkSignedCookPot(client, pot);
+  const binding = await verifyPotBinding(client, input);
+  if (binding.chainId !== (await client.getChainId())) throw new Error("Wrong service chain");
+  const check = await checkSignedCookPot(client, binding.pot, binding);
   if (!check.ok) throw new Error(check.reason); // no code, not a Pot, Shared, or too old
   const cook: SignedCookExecution = {
-    chainId: await client.getChainId(),
-    pot,
-    engine: getAddress(v12EngineAddress()),
+    chainId: binding.chainId,
+    pot: binding.pot,
+    engine: binding.engine,
+    compiler: binding.compiler,
     program,
     value: 0n, // what the sender sends; the Pot pays the Kitchen's fee from its balance
     maxExecutionFee,
@@ -154,13 +160,16 @@ export async function signCook(
     deadline: (await client.getBlock()).timestamp + 600n, // inclusive
     // submitter left out: anyone may send it
   };
-  const signature = await wallet.signTypedData({ account: owner, ...signedCookTypedData(cook) });
+  const signature = await wallet.signTypedData({
+    account: binding.owner,
+    ...signedCookTypedData(cook),
+  });
   if (!(await verifySignedCook({ ...cook, signature, owner: check.owner }, client))) {
     throw new Error("not the Pot owner's signature");
   }
   const send = encodeCookSigned({ ...cook, signature }); // { to, data, value }, for any account
   const cancel = cookNonceMasks([cook.nonce]).map(({ word, mask }) => ({
-    to: pot,
+    to: binding.pot,
     data: encodeInvalidateNonces(word, mask), // from the owner
     value: 0n,
   }));

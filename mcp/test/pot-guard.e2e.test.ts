@@ -1,13 +1,9 @@
 /**
- * The tools refuse a cook whose Pot the deployed Kitchen does not put where the SDK predicts it, as
- * the `sauce` command does (`sdk/test/cli-pot-guard.e2e.test.ts`), naming the release the Kitchen
- * mints. A server that keeps the `sauce` command's Pot store (`McpStores.pots`, over stdio) lists
- * the owner's other Pots from it, each with its release; one that keeps none (over HTTP) refuses
- * without the list.
- *
- * On a local anvil with the released gated stack (`sdk/test/cli-anvil.ts`), the Kitchen proxy
- * pointed at `MispredictingKitchen` (`sdk/test/evm/kitchen-releases.ts`) for a while; pointed back
- * at the release, the same calls succeed.
+ * Execution requires a deployed Pot authenticated against explicit fixture provenance. HTTP
+ * supplies that binding per request; stdio may reuse its authenticated Pot store. Missing code,
+ * mismatched identity and changed engine code fail closed, without deploying or repinning.
+ * Retained legacy metadata remains listable but cannot select a different compiler implicitly.
+ * Wallet plans still check every cook before sending any earlier transaction.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI (the harness throws on import there).
@@ -18,40 +14,28 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
-import { encodeFunctionData, getAddress, parseEther, type Address, type Hex } from "viem";
+import { encodeFunctionData, getAddress, parseEther, zeroHash, type Address } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { PotStore } from "../../sdk/dist/cli/pot-store.js";
-import { v12EngineAddress } from "../../sdk/dist/deployments/index.js";
-import { potSalt, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
+import { potSalt } from "../../sdk/dist/deployments/pot.js";
+import { v12PotAbi, type EvmPotBinding } from "../../sdk/dist/evm/engine.js";
 import {
-  laggingEndpoint,
+  deployPot,
   RUNTIME_HEX_PATH,
   startChain,
   type LocalChain,
 } from "../../sdk/test/cli-anvil.js";
-import {
-  ELSEWHERE,
-  mintOldReleasePot,
-  OLD_RELEASE,
-  plantMispredictingKitchen,
-  UNKNOWN_POT_HASH,
-  withKitchenImplementation,
-} from "../../sdk/test/evm/kitchen-releases.js";
+import { ELSEWHERE, mintOldReleasePot, OLD_RELEASE } from "../../sdk/test/evm/kitchen-releases.js";
 import { createRpcGuard } from "../src/guard.js";
 import { connect, endpointsFor, failed, ok, walletsAt, type Connected } from "./harness.js";
 
-/** An owner with no Pot of this release. */
+/** A fixture owner without a signing key. */
 const NOBODY: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const PROGRAM = "function main(x: Uint256): Uint256 {\n  return x + 1;\n}\n";
-/** kitchen-evm 1.2.0's release, as a refusal names it. */
-const OLD =
-  `compiler ${OLD_RELEASE.compiler} (v12-evm ${OLD_RELEASE["v12-evm"].version}, ` +
-  `kitchen-evm ${OLD_RELEASE["kitchen-evm"].version})`;
 
 describe(
-  "the tools check the Pot against the deployed Kitchen",
+  "the tools authenticate deployed Pot bindings",
   { skip: RUNTIME_HEX_PATH === undefined },
   () => {
     let local: LocalChain;
@@ -61,16 +45,17 @@ describe(
     /** As over stdio: the `sauce` command's Pot store. */
     let stdio: Connected;
     let store: PotStore;
-    let newer: Address;
+    let binding: EvmPotBinding;
+    let pot: Address;
     let old: Address;
-    const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
     const cook = { source: PROGRAM, chain: "ethereum", owner: NOBODY, args: ["41"] };
 
     before(async () => {
       local = await startChain("ethereum");
       dir = mkdtempSync(join(tmpdir(), "sauce-mcp-pot-guard-"));
-      store = new PotStore(join(dir, "pots"));
-      newer = await plantMispredictingKitchen(local, UNKNOWN_POT_HASH);
+      store = new PotStore(local.pots.dir);
+      pot = await deployPot(local, NOBODY);
+      binding = await local.bindingOf(pot);
       old = await mintOldReleasePot(local, NOBODY, potSalt("another release"));
       const endpoints = endpointsFor({ [String(local.chain.id)]: local.rpcUrl });
       http = await connect(endpoints, createRpcGuard({ allowPrivate: true }));
@@ -84,69 +69,90 @@ describe(
       if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
     });
 
-    it("over HTTP, refuses sauce_tx and sauce_simulate while the Kitchen is newer, listing nothing", async () => {
-      await withKitchenImplementation(local, newer, async () => {
+    it("over HTTP, refuses missing deployed code before building or rehearsing a cook", async () => {
+      const code = await local.publicClient.getCode({ address: pot });
+      assert.ok(code);
+      await local.testClient.setCode({ address: pot, bytecode: "0x" });
+      try {
         for (const tool of ["sauce_tx", "sauce_simulate"]) {
-          const said = failed(await http.call(tool, cook));
-          assert.match(said, /this SDK does not match the deployed Kitchen/, tool);
-          assert.match(said, /the Kitchen is newer than this SDK/, tool);
-          assert.match(said, /Upgrade @eco-incorp\/sauce \(sauce update\)/, tool);
-          assert.ok(said.includes(pot) && said.includes(ELSEWHERE), `${tool}: ${said}`);
+          const said = failed(await http.call(tool, { ...cook, potBinding: binding }));
+          assert.match(said, /not deployed|has no code/, tool);
           assert.doesNotMatch(said, /The Pot store/, tool);
         }
-      });
-      assert.equal(await local.publicClient.getCode({ address: pot }), undefined);
+        assert.equal(await local.publicClient.getCode({ address: pot }), undefined);
+      } finally {
+        await local.testClient.setCode({ address: pot, bytecode: code });
+      }
     });
 
-    it("over stdio, lists the owner's other Pots from the store, each with the release the chain says", async () => {
-      // Recorded by sauce_pot_import, its release told from the chain.
-      const imported = ok(await stdio.call("sauce_pot_import", { chain: "ethereum", pot: old }));
-      assert.deepEqual(
-        (imported.pots as Array<{ pot: string; release?: Record<string, string> }>).map(
-          (record) => [record.pot, record.release],
-        ),
-        [
-          [
-            old,
-            {
-              compiler: OLD_RELEASE.compiler,
-              "v12-evm": OLD_RELEASE["v12-evm"].version,
-              "kitchen-evm": OLD_RELEASE["kitchen-evm"].version,
-            },
-          ],
-        ],
-      );
-      await withKitchenImplementation(local, newer, async () => {
-        for (const tool of ["sauce_tx", "sauce_simulate", "sauce_pot"]) {
-          const said = failed(
-            await stdio.call(
-              tool,
-              tool === "sauce_pot" ? { chain: "ethereum", owner: NOBODY } : cook,
-            ),
-          );
-          assert.match(said, /the Kitchen is newer than this SDK/, tool);
-          assert.ok(
-            said.includes(`The Pot store ${store.dir} holds 1 other Pot of ${NOBODY} on ethereum:`),
-            `${tool}: ${said}`,
-          );
-          const line = said.split("\n").find((one) => one.startsWith(`  ${old} `));
-          assert.ok(
-            line?.includes(`: ${OLD}, @eco-incorp/sauce 0.99.9 to 0.99.15`),
-            `${tool}: ${said}`,
-          );
-        }
+    it("over stdio, lists retained metadata but refuses another compiler without repinning", async () => {
+      // A legacy record has release metadata, not authenticated execution provenance.
+      store.save({
+        schema: "sauce.pot/1",
+        chain: "ethereum",
+        chainId: local.chain.id,
+        pot: old,
+        owner: NOBODY,
+        salt: potSalt("another release"),
+        kind: "private",
+        kitchen: getAddress(OLD_RELEASE["kitchen-evm"].kitchen!),
+        engine: getAddress(OLD_RELEASE["v12-evm"].engine!),
+        release: {
+          compiler: OLD_RELEASE.compiler,
+          "v12-evm": OLD_RELEASE["v12-evm"].version,
+          "kitchen-evm": OLD_RELEASE["kitchen-evm"].version,
+        },
+        sdk: "test",
+        origin: "imported",
+        recordedAt: "2026-10-31T00:00:00.000Z",
       });
-      // A Pot of another release, named by its address: refused for its release, read from the chain.
-      const said = failed(await stdio.call("sauce_tx", { ...cook, owner: undefined, pot: old }));
-      assert.ok(said.includes(`${old} on ethereum is a Pot of ${OLD}`), said);
+      const listed = ok(await stdio.call("sauce_pot_list", { chain: "ethereum", owner: NOBODY }));
+      const pots = listed.pots as Array<{ pot: string; release?: Record<string, string> }>;
+      assert.deepEqual(pots.find((record) => getAddress(record.pot) === getAddress(old))?.release, {
+        compiler: OLD_RELEASE.compiler,
+        "v12-evm": OLD_RELEASE["v12-evm"].version,
+        "kitchen-evm": OLD_RELEASE["kitchen-evm"].version,
+      });
+      for (const tool of ["sauce_tx", "sauce_simulate"]) {
+        const said = failed(await stdio.call(tool, { ...cook, owner: undefined, pot: old }));
+        assert.ok(said.includes(old), said);
+        assert.match(said, /requires pinned compiler 2\.5\.0/, tool);
+      }
+      assert.equal(store.recordsOf(local.chain.id, old)[0]!.binding, undefined);
     });
 
-    it("builds and rehearses as ever on the released Kitchen", async () => {
+    it("refuses a binding whose identity or engine code differs from the deployed fixture", async () => {
+      for (const tool of ["sauce_tx", "sauce_simulate"]) {
+        const identity = failed(
+          await http.call(tool, {
+            ...cook,
+            owner: undefined,
+            pot,
+            potBinding: { ...binding, owner: ELSEWHERE },
+          }),
+        );
+        assert.match(identity, /immutable|identity|historical creation commitment/, tool);
+        const engine = failed(
+          await http.call(tool, {
+            ...cook,
+            potBinding: { ...binding, engineCodeHash: zeroHash },
+          }),
+        );
+        assert.match(engine, /engine code does not match the pinned release/, tool);
+      }
+    });
+
+    it("builds and rehearses on the deployed fixture over HTTP and authenticated stdio", async () => {
       for (const mcp of [http, stdio]) {
-        const tx = ok(await mcp.call("sauce_tx", cook));
-        assert.equal(tx.pot, pot);
-        const simulated = ok(await mcp.call("sauce_simulate", cook));
+        const input = mcp === http ? { ...cook, potBinding: binding } : cook;
+        const tx = ok(await mcp.call("sauce_tx", input));
+        assert.equal(tx.to, pot);
+        assert.equal(tx.transactions, undefined);
+        assert.deepEqual(tx.potBinding, binding);
+        const simulated = ok(await mcp.call("sauce_simulate", input));
         assert.equal(simulated.ok, true);
+        assert.equal(simulated.returned, "42");
+        assert.deepEqual(simulated.potBinding, binding);
       }
     });
 
@@ -171,18 +177,18 @@ describe(
       const { server, wallet } = await walletServer("whole-plan", local.rpcUrl);
       try {
         const recipient = privateKeyToAccount(generatePrivateKey()).address;
-        const noPot = getAddress(v12PredictPot(wallet, potSalt("never deployed")) as Address);
+        const noPot = ELSEWHERE;
         const cookData = encodeFunctionData({
           abi: v12PotAbi,
           functionName: "cook",
-          args: [getAddress(v12EngineAddress()), "0x00"],
+          args: [binding.engine, "0x00"],
         });
         const said = failed(
           await server.call("sauce_wallet_send", {
             wallet: "whole-plan",
             transaction: [
               { chainId: local.chain.id, to: recipient, data: "0x", value: "1000" },
-              { chainId: local.chain.id, to: noPot, data: cookData as Hex, value: "0" },
+              { chainId: local.chain.id, to: noPot, data: cookData, value: "0" },
             ],
           }),
         );
@@ -195,11 +201,41 @@ describe(
       }
     });
 
-    it("sauce_wallet_send waits for the Pot its plan's deployment made, on an endpoint that lags", async () => {
-      // Its first answers to eth_getCode after a transaction are a node's that has not seen the block.
-      const lagging = await laggingEndpoint(local.rpcUrl, 2);
-      const { server, wallet } = await walletServer("lagging", lagging.url);
+    it("sauce_wallet_send rejects a later cook with a mismatched engine before sending anything", async () => {
+      const { server, wallet } = await walletServer("wrong-engine", local.rpcUrl);
       try {
+        const pot = await deployPot(local, wallet);
+        const potBinding = await local.bindingOf(pot);
+        const recipient = privateKeyToAccount(generatePrivateKey()).address;
+        const data = encodeFunctionData({
+          abi: v12PotAbi,
+          functionName: "cook",
+          args: [ELSEWHERE, "0x00"],
+        });
+        const said = failed(
+          await server.call("sauce_wallet_send", {
+            wallet: "wrong-engine",
+            transaction: [
+              { chainId: local.chain.id, to: recipient, data: "0x", value: "1000" },
+              { chainId: local.chain.id, to: potBinding.pot, data, value: "0" },
+            ],
+          }),
+        );
+        assert.ok(said.includes("(2 of 2)"), said);
+        assert.match(said, /cook engine differs from Pot/);
+        assert.equal(await local.publicClient.getTransactionCount({ address: wallet }), 0);
+        assert.equal(await local.publicClient.getBalance({ address: recipient }), 0n);
+      } finally {
+        await server.close();
+      }
+    });
+
+    it("sauce_wallet_send executes a plan only after explicit fixture deployment and authentication", async () => {
+      const { server, wallet } = await walletServer("deployed", local.rpcUrl);
+      try {
+        const pot = await deployPot(local, wallet);
+        const potBinding = await local.bindingOf(pot);
+        const recipient = privateKeyToAccount(generatePrivateKey()).address;
         const plan = ok(
           await server.call("sauce_tx", {
             source: PROGRAM,
@@ -208,18 +244,26 @@ describe(
             args: ["41"],
           }),
         );
+        assert.equal(plan.to, potBinding.pot);
+        assert.equal(plan.transactions, undefined);
         const sent = ok(
-          await server.call("sauce_wallet_send", { wallet: "lagging", transaction: plan }),
+          await server.call("sauce_wallet_send", {
+            wallet: "deployed",
+            transaction: [
+              { chainId: local.chain.id, to: recipient, data: "0x", value: "1000" },
+              plan,
+            ],
+          }),
         ) as { ok: boolean; sent: Array<{ status: string; reason?: string }> };
         assert.equal(sent.ok, true, JSON.stringify(sent.sent));
         assert.deepEqual(
           sent.sent.map((entry) => entry.status),
           ["success", "success"],
         );
-        assert.ok(lagging.served() > 0);
+        assert.equal(await local.publicClient.getTransactionCount({ address: wallet }), 2);
+        assert.equal(await local.publicClient.getBalance({ address: recipient }), 1000n);
       } finally {
         await server.close();
-        await lagging.stop();
       }
     });
   },

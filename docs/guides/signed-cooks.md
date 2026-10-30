@@ -34,10 +34,10 @@ The command compiles the program, appends `main`'s arguments, reads the chain, a
   or longer one, `--deadline <unix seconds>` an exact one; give one or the other.
 - **The submitter** is anyone. `--submitter <address>` lets only that account send it.
 
-Before signing, the command checks that the Pot takes signed cooks. If the Pot has no code yet, it
-still signs, and adds the Pot's deployment for the sender to send first. A Pot named only by
-`--pot` with no code, a Pot created before signed cooks, and a Shared Pot are refused, with the
-reason. `--offline` reads nothing, so it then needs `--max-fee`.
+Before signing, require a deployed, verified Pot binding that supports signed cooks.
+For a new CREATE3 Pot, deploy → verify → persist first; a prediction or planned deployment is
+not enough. Missing code, unknown profiles, mismatched identity and Shared Pots must be refused.
+Offline encoding does not authenticate a live Pot or authorize signing for an undeployed one.
 
 ### What it prints
 
@@ -58,14 +58,14 @@ fee warning among them (abbreviated here):
 }
 ```
 
-| Field                                                                                             | What it is                                                                            |
-| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `pot`, `owner`, `engine`, `program`, `value`, `maxExecutionFee`, `nonce`, `deadline`, `submitter` | What was signed. The amounts, the nonce and the deadline are decimal strings.         |
-| `typedData`                                                                                       | The EIP-712 typed data, as `eth_signTypedData_v4` takes it                            |
-| `digest`                                                                                          | The 32-byte hash the signature is over                                                |
-| `signature`                                                                                       | The owner's signature                                                                 |
-| `cook`                                                                                            | The transaction the sender sends: to the Pot, `cookSigned(…)`, with exactly `value`   |
-| `deployPot`                                                                                       | Only while the Pot has no code: its deployment, for any account to send before `cook` |
+| Field                                                                                             | What it is                                                                                                 |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `pot`, `owner`, `engine`, `program`, `value`, `maxExecutionFee`, `nonce`, `deadline`, `submitter` | What was signed. The amounts, the nonce and the deadline are decimal strings.                              |
+| `typedData`                                                                                       | The EIP-712 typed data, as `eth_signTypedData_v4` takes it                                                 |
+| `digest`                                                                                          | The 32-byte hash the signature is over                                                                     |
+| `signature`                                                                                       | The owner's signature                                                                                      |
+| `cook`                                                                                            | The transaction the sender sends: to the Pot, `cookSigned(…)`, with exactly `value`                        |
+| `deployPot`                                                                                       | A deployment plan is not signing authorization; deploy, verify and persist before requesting a signed cook |
 
 The notes say who may send it and until when, the Kitchen's fee now beside the ceiling and what
 the Pot holds to pay it, and how to cancel it. Anyone who holds the output can send `cook` until the
@@ -81,12 +81,12 @@ The sender does not pay the Kitchen's fee: the Pot pays it from its own balance,
 value sent. A Pot that holds no native coin needs a signed value that covers the fee, and a note
 warns when the balance and the value together are below the fee now.
 
-When `deployPot` is there, send it first; any account may. To sign the transactions with a key kept
-elsewhere, send what the signer returns with `sauce send`, which simulates each, sends it and
+Deployment must already be complete and its binding verified before the owner signs.
+To send a transaction signed with a key kept elsewhere, use `sauce send`, which simulates it and
 reports what it did:
 
 ```sh
-sauce send 0x02f8…deploy 0x02f8…cook --rpc-url <url>
+sauce send 0x02f8…cook --rpc-url <url>
 ```
 
 A cook that reverts leaves the signature unused: send it again, before the deadline.
@@ -135,11 +135,12 @@ cancellations. On a local server with wallets, `sauce_sign` signs with one of th
 
 ## In TypeScript
 
-`@eco-incorp/sauce/evm/engine` builds each piece; your wallet signs. With a viem wallet client
-`wallet` and public client `client` for Base:
+`@eco-incorp/sauce/evm/engine` builds each piece; your wallet signs. Load `input`, the service's
+trusted persisted `EvmPotBindingInput`, and the program compiled with its exact compiler.
+Use a viem wallet client `wallet` and public client `client` for the binding's chain:
 
 ```ts
-import { v12EngineAddress } from "@eco-incorp/sauce/deployments";
+// input is the service's persisted EvmPotBindingInput, not a prediction.
 import {
   checkSignedCookPot,
   cookNonceMasks,
@@ -148,16 +149,18 @@ import {
   randomCookNonce,
   signedCookTypedData,
   verifySignedCook,
+  verifyPotBinding,
 } from "@eco-incorp/sauce/evm/engine";
-import { getAddress } from "viem";
+const binding = await verifyPotBinding(client, input);
 
-const check = await checkSignedCookPot(client, pot);
+const check = await checkSignedCookPot(client, binding.pot, binding);
 if (!check.ok) throw new Error(check.reason); // not a Pot, Shared, or created before signed cooks
 
 const cook = {
-  chainId: 8453,
-  pot,
-  engine: getAddress(v12EngineAddress()),
+  chainId: binding.chainId,
+  pot: binding.pot,
+  engine: binding.engine,
+  compiler: binding.compiler,
   program, // the bytecode with main's arguments appended
   value: 0n,
   maxExecutionFee, // at least the Kitchen's executionFee() now
@@ -166,7 +169,10 @@ const cook = {
 };
 
 // The owner signs.
-const signature = await wallet.signTypedData({ account: owner, ...signedCookTypedData(cook) });
+const signature = await wallet.signTypedData({
+  account: binding.owner,
+  ...signedCookTypedData(cook),
+});
 if (!(await verifySignedCook({ ...cook, signature, owner: check.owner }, client))) {
   throw new Error("not the owner's signature");
 }
@@ -176,7 +182,7 @@ const { to, data, value } = encodeCookSigned({ ...cook, signature });
 
 // The owner cancels it: one call per word of nonces.
 const cancellations = cookNonceMasks([cook.nonce]).map(({ word, mask }) => ({
-  to: pot,
+  to: binding.pot,
   data: encodeInvalidateNonces(word, mask),
 }));
 ```
@@ -184,8 +190,8 @@ const cancellations = cookNonceMasks([cook.nonce]).map(({ word, mask }) => ({
 `signedCookTypedDataJson` gives the same typed data as JSON, for a wallet that is not viem, and
 `signedCookDigest` the hash. `cookNonceWordBit(nonce)` says which word and bit a nonce sets, and
 `cookNonceUsed(client, pot, nonce)` reads whether it is spent. The runnable
-[signed-cook.ts](../examples/signed-cook.ts) signs `pay.sauce.ts` with a throwaway key, verifies
-the signature and encodes both calls, offline.
+[signed-cook.ts](../examples/signed-cook.ts) exports a binding-checked Base signing helper.
+It performs no RPC or signing on import; supply the persisted binding, its chain client and owner.
 
 ## Stay safe
 

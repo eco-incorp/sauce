@@ -29,10 +29,14 @@ export interface V12EvmContractRef {
   note?: string;
 }
 
-/** How a Pot address is derived — `CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`. */
+/** Published Pot provenance; historical CREATE2 hashes are not current factory inputs. */
 export interface V12PotDerivation {
   deployer: string;
-  initCodeHash: string;
+  scheme?: "create2" | "create3";
+  initCodeHash?: string;
+  helperInitCodeHash?: string;
+  potProfileHash?: string;
+  fixedRouter?: string;
   saltFormula: string;
   derivation?: string;
 }
@@ -113,7 +117,7 @@ export const v12KitchenAddress = (): string => v12DeployedAddresses().evm.contra
 export const v12KitchenImplementationAddress = (): string =>
   v12DeployedAddresses().evm.contracts.kitchenImplementation.address;
 
-/** How a Pot address is derived from `(owner, salt)` under the current Kitchen. */
+/** The cached release's historical creation metadata, not the active new-Pot prediction formula. */
 export const v12PotDerivation = (): V12PotDerivation => v12DeployedAddresses().evm.pot;
 
 /** The current SVM engine program id — pass as `programId` to `createSauceSvmClient`. */

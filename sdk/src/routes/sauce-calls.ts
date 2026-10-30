@@ -74,14 +74,14 @@ import type { AddressInput, CallInput } from "./types.js";
 // ---------------------------------------------------------------------------
 
 export interface SauceEvmCallParams {
-  /** The Pot contract to `cook()` on — a per-owner CREATE2 address, always caller-supplied (never
-   *  defaulted). Derive it with `v12Kitchen.encodePredictPot(owner, salt)` if you only know the
-   *  owner + salt. */
+  /** Already-deployed, authenticated Pot address. Prediction alone is not code authentication. */
   pot: AddressInput;
   /** The interpreter this cook runs on — named per call, since a Pot holds no engine. */
   engine: AddressInput;
   /** One compiled Sauce bytecode blob — a cook runs exactly one program. */
   program: Hex;
+  /** Exact compiler that produced this program, retained with an existing service binding. */
+  compiler?: string;
   value?: bigint | number | string;
 }
 
@@ -113,7 +113,11 @@ const evmCall = (target: AddressInput, data: Hex, value: bigint): SauceEvmCall =
 export function buildSauceEvmCall(params: SauceEvmCallParams): SauceEvmCall {
   return evmCall(
     toUniversalAddress(params.pot),
-    v12Pot.encodeCook(denormalizeToEvm(toUniversalAddress(params.engine)), params.program),
+    v12Pot.encodeCook(
+      denormalizeToEvm(toUniversalAddress(params.engine)),
+      params.program,
+      params.compiler,
+    ),
     toBigInt(params.value ?? 0n),
   );
 }
@@ -124,28 +128,35 @@ export interface SauceEvmCallsParams {
   /** One `cook()` per element, execution order preserved (e.g. the swap half then the settle half —
    *  the shape a Pot-based solver leg uses: two `cook()`s on the SAME Pot). */
   cooks: readonly Hex[];
+  compiler?: string;
   value?: bigint | number | string;
 }
 
 /** One `Call` per element of `cooks`, in the given order, all targeting the same `pot`. */
 export function buildSauceEvmCalls(params: SauceEvmCallsParams): SauceEvmCall[] {
   return params.cooks.map((program) =>
-    buildSauceEvmCall({ pot: params.pot, engine: params.engine, program, value: params.value }),
+    buildSauceEvmCall({
+      pot: params.pot,
+      engine: params.engine,
+      program,
+      value: params.value,
+      compiler: params.compiler,
+    }),
   );
 }
 
 export interface SauceEvmDeployPotCallParams {
-  /** Bakes into the Pot's CREATE2 address; `cook()` on the resulting Pot is `onlyOwner`. */
+  /** Owner of the new CREATE3 Pot; authenticate deployed code before sending funds or signatures. */
   owner: AddressInput;
   salt: Hex;
+  routerFixed?: boolean;
   /** The Kitchen to deploy through. Defaults to the pinned release's Kitchen proxy,
    *  `v12KitchenAddress()` — one CREATE3 address on every chain it is deployed to. */
   kitchen?: AddressInput;
 }
 
 /**
- * The `deployPot(owner, salt)` call that creates a Pot, sent before the first `cook()` on a Pot that
- * may not exist yet.
+ * Encode the explicit new-Pot deployment step. Verify and persist the returned code before cooking.
  *
  * The Kitchen defaults to the pinned release's. This helper reads no chain, so it does not know
  * whether that Kitchen has code where the call is sent: check the chain first.
@@ -156,7 +167,11 @@ export interface SauceEvmDeployPotCallParams {
 export function sauceEvmDeployPotCall(params: SauceEvmDeployPotCallParams): SauceEvmCall {
   const kitchen: AddressInput = params.kitchen ?? (v12KitchenAddress() as Hex);
   const ownerAddress = denormalizeToEvm(toUniversalAddress(params.owner));
-  return evmCall(kitchen, v12Kitchen.encodeDeployPot(ownerAddress, params.salt), 0n);
+  return evmCall(
+    kitchen,
+    v12Kitchen.encodeDeployPot(ownerAddress, params.salt, params.routerFixed),
+    0n,
+  );
 }
 
 // ---------------------------------------------------------------------------

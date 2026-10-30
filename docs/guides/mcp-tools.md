@@ -19,15 +19,20 @@ An agent writing and running a program on Base goes like this:
 sauce_skills    → which skill teaches what
 sauce_globals   { chain: "base" }                           → the tokens and protocols it can name
 sauce_compile   { source, chain: "base" }                   → the bytecode, or the compile error
-sauce_simulate  { source, chain: "base", owner, args, assumeBalance: ["USDC:5"] }  → what would move
-sauce_tx        { source, chain: "base", owner, args }      → the transaction, unsigned
+sauce_simulate  { source, chain: "base", pot, potBinding, args, assumeBalance: ["USDC:5"] }  → what would move
+sauce_tx        { source, chain: "base", pot, potBinding, args }  → the transaction, unsigned
                   … the user's signer signs it …
-sauce_send      { transactions: ["0x02f8…"] }               → sent, and what it did
+sauce_send      { transactions: ["0x02f8…"], potBinding }   → sent, and what it did
 ```
 
 `assumeBalance` gives the Pot balances for the simulation only, as `--assume-balance` does for
 `sauce simulate`. On a local server with wallets, `sauce_wallet_send` takes `sauce_tx`'s result and
 signs and sends it instead ([What a local server keeps](mcp-local.md)).
+
+For EVM, `potBinding` is the caller's trusted release binding for an already-deployed Pot, not an
+address prediction. Deploy and authenticate the Pot separately before this session. A stateless
+server needs the binding on every execution call; a stdio server may use its configured Pot store.
+See [EVM Pot provenance](#evm-pot-provenance) for the input and persistence rules.
 
 ## Every tool
 
@@ -55,7 +60,7 @@ How many tools a server has depends on how it runs:
 | `sauce_pools`          | `sauce pools`          | A pair's price-limit pools on the chain at one `block`, deepest first, each with its price both ways and its depth; `empty`, the pools with no liquidity ([Prices and pools](#prices-and-pools))                                                                                                                                                        |
 | `sauce_compile`        | `sauce compile`        | `bytecode`, `size`, `entryParams`, `entryEncoding` (`abi-v1`), defines and their provenance, called `contracts`, `compiler`, `engine`, SVM `manifest`; with `args`, the `payload`                                                                                                                                                                       |
 | `sauce_actions`        | `sauce actions`        | An actions document (JSON) compiled for a chain: `sauce_compile`'s report with the generated `source`, its `parameters` and bindings, and, given a Pot, the unsigned cook `transaction` (on a preview chain, `refused` instead)                                                                                                                         |
-| `sauce_tx`             | `sauce tx`             | The unsigned cook on the Pot, with who signs it and the Kitchen's fee; while the Pot has no code, its deployment first. On Solana a base64 transaction, or the first step of a plan ([What it returns](#what-sauce_tx-returns))                                                                                                                         |
+| `sauce_tx`             | `sauce tx`             | The unsigned cook on an already-deployed, verified EVM Pot, with its binding, who signs it and the Kitchen's fee. On Solana a base64 transaction, or the first step of a plan ([What it returns](#what-sauce_tx-returns))                                                                                                                               |
 | `sauce_signed_cook`    | `sauce sign`           | Signs nothing: the cook for the Pot's owner to sign, as `typedData` (`eth_signTypedData_v4`) and its `digest`, with what it binds; given a `signature`, checked against the owner, the `cook` any account sends; with `cancel`, the owner's unsigned `invalidateNonces` calls ([A signed cook](#a-signed-cook))                                         |
 | `sauce_pot`            | `sauce pot`            | The Pot's address, its unsigned deployment (EVM `Kitchen.deployPot`; Solana `create_pot`; on a preview chain, `refused` instead), `deployed` (null with no endpoint), and with an endpoint what it holds and the Kitchen's fee                                                                                                                          |
 | `sauce_reclaim`        | `sauce reclaim`        | Solana: an owner's open code buffers and Sauce lookup tables, the rent they hold, and the unsigned `transactions` that close the ones not in use                                                                                                                                                                                                        |
@@ -95,6 +100,7 @@ it, as the server's instructions also list:
 | `--salt-hex`              | `saltHex`         |
 | `--salt`                  | `salt`            |
 | `--owner`                 | `owner`           |
+| `--pot-binding`           | `potBinding`      |
 | `--pot`                   | `pot`             |
 | `--value`                 | `value`           |
 | `--account`, `--accounts` | `accounts`        |
@@ -165,6 +171,8 @@ A cook (`sauce_tx`, `sauce_simulate`, `sauce_actions`) adds these inputs:
 
 - the Pot: `owner` and `salt` (a label, hashed) or `saltHex` (the salt itself). On an EVM chain the
   Pot can be named by its address as `pot` instead.
+- `potBinding`, on EVM: the explicit release/profile binding described below. Without it, only
+  a stdio server with a configured, authenticated Pot record can build an EVM cook.
 - `value` in wei, on an EVM chain. The default is the Kitchen's fee, read from the chain.
 - `args`: `main`'s arguments as JSON values, in order. Integers are in base units, as decimal
   strings.
@@ -187,9 +195,9 @@ amount)`, `Orca.Whirlpool.swap(pool, …)`), and those a program writes where it
 - `rpcUrl`.
 
 `sauce_tx` also takes `fund`, such as `["USDC:100"]` (EVM): the owner's transfer of each token into
-the Pot, planned after its deployment and before the cook, each with its gas when an endpoint is
-given; `ETH:<amount>` is added to the cook's value instead. With `sendCalls`, a smart wallet
-deploys the Pot, funds it and cooks with one approval.
+the already-deployed and verified Pot before the cook, each with its gas;
+`ETH:<amount>` is added to the cook's value instead. These execution tools never deploy or replace
+an EVM Pot to repair missing code or provenance.
 
 `sauce_simulate` also takes:
 
@@ -222,6 +230,61 @@ deploys the Pot, funds it and cooks with one approval.
 check and build `cook`; and `cancel`, a list of nonces, for the owner's `invalidateNonces` calls
 instead of a cook. `sauce_sign` takes `wallet`, the owner's, and signs. Both are refused on a
 preview chain and on Solana.
+
+For EVM signing, require a deployed, verified Pot binding first. Pass it explicitly, or use the
+authenticated record in the stdio server's configured Pot store. A predicted address, unsigned
+deployment or successful simulation is not authentication. Historical deployed Pots retain their
+exact compiler/engine/Router binding; unknown profiles and missing expected code must fail.
+See [Kitchen compatibility](kitchen-compatibility.md).
+
+### EVM Pot provenance
+
+`sauce_tx`, `sauce_signed_cook`, `sauce_sign`, `sauce_simulate`, and `sauce_actions` when building a
+cook accept `potBinding` as a JSON object matching the SDK's `EvmPotBindingInput`
+(`@eco-incorp/sauce/evm/engine`). `sauce_send` and `sauce_wallet_send` also take it for EVM cooks,
+as a top-level request input, not implicitly from nested transaction metadata. Plain compilation
+and source-only actions need none. Solana still uses its existing owner, salt, accounts and
+transaction format; `potBinding` is EVM-only.
+
+Supply the full binding from the service's trusted deployment/release record:
+
+- identity: `chainId`, `pot`, `kitchen`, `owner`, `userSalt`, `kind` and `router`;
+- exact `compiler`, `engine`, `engineCodeHash`, `routerCodeHash`, `wireProfile`, `storageProfile`
+  and `release` provenance, including both EVM component releases and their compiler;
+- the authenticated CREATE3 runtime `profile`, when applicable, and the saved `codeHash`,
+  `scheme`, `routerPolicy`, `profileHash` and `originalChainId` when present;
+- `compatibilityProbe`, when retained with the SDK binding, unchanged: its exact `compiler`,
+  `compilerWasmSha256` (64 lowercase hexadecimal SHA-256 characters, without `0x`) and `program`.
+  CREATE3 verification returns this compiler provenance with the verified binding.
+
+`tools/list` gives the full shape and bounds. The server checks the shape at the input boundary,
+then the SDK verifies the actual RPC chain, deployed code, identity and compiler/profile pair.
+Caller-provided fields are not proof by themselves. Getters alone, SDK defaults and a guessed
+latest release cannot establish a binding. A missing or mismatched binding, unknown profile or
+missing code refuses the execution; no signature, deployment or funding transaction repairs it.
+An explicitly supplied request binding takes precedence over SDK defaults and must still verify.
+
+After actual verification, the result's top-level `potBinding` carries the verified binding for
+caller persistence, including simulation summaries and requests with scenarios. For `sauce_actions`,
+it sits beside the nested `transaction`. A refusal before verification returns no binding proof.
+This is verification against the selected RPC, not independent release authentication: use trusted
+release artifacts and a trusted chain endpoint. Do not derive provenance from untrusted getters.
+
+HTTP remains stateless: it accepts no wallets, disk paths or Pot-store configuration, signs
+nothing, and saves no binding. The caller must persist the returned binding in its own service
+record and send it again on every subsequent execution request. Requests do not share bindings.
+Over stdio, existing configured stores and wallet policy remain in force; this input creates no
+hidden store and changes no wallet authorization.
+
+One stateless request binds one EVM Pot. Send cooks for different Pots as separate requests with
+their respective bindings, or use a stdio server whose configured store holds every authenticated
+record. Native transfers and other non-Pot transactions do not need a Pot binding.
+
+`sauce_pot` can take `potBinding` to authenticate inspection of an existing retained Pot. Without
+one it remains a prediction/read, not proof that the target is safe to fund or cook on.
+Over stdio, `sauce_pot_import` accepts the same object alongside an explicit `pot` address and
+verifies it before persistence. Owner/salt discovery of known historical Pots remains available;
+it cannot invent trusted provenance for an unknown release.
 
 ### Token amounts
 
@@ -278,10 +341,10 @@ user: what stays in the Pot is not in the owner's wallet
 
 ### What `sauce_tx` returns
 
-- **On an EVM chain:** `{ chainId, to, data, value }`, the cook on the Pot, with `from` (who signs)
-  and the `kitchenFee` read. While the Pot has no code, `{ chainId, pot, transactions }`: its
-  deployment (marked `deploysPot`), then the cook. Each comes with `gas`, the limit to sign it with,
-  and `sendCalls` holds them all for a smart wallet.
+- **On an EVM chain:** `{ chainId, to, data, value }`, the cook on the already-deployed Pot, with
+  `from` (who signs), the `kitchenFee` read and verified `potBinding`. A missing Pot or binding
+  refuses instead of producing a deployment. Transactions carry `gas` when estimation succeeds;
+  `sendCalls` holds the funding and cook for a smart wallet.
 - **On Solana:** `{ chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction,
 cursor }`, a base64 transaction signed by no one. A cook of several transactions comes as the
   first step of its plan instead: `{ step, plan, transactions, cursor }`.
@@ -314,12 +377,13 @@ still works:
 
 - compiling a program or an action document;
 - a chain's names and a price conversion;
-- the EVM cook, given its `value`, on a supported chain;
 - the Pot's address, and on a supported chain its deployment;
 - taking calldata apart, and reading the skills.
 
-What needs an endpoint: `sauce_simulate`, anything given a transaction hash, a Solana cook (its
-blockhash and fee), and reading the Kitchen's fee or whether a Pot exists.
+What needs an endpoint: all EVM execution tools, even with an explicit `value` or fee ceiling,
+because actual chain, code and binding verification cannot run offline; `sauce_simulate`, anything
+given a transaction hash, a Solana cook (its blockhash and fee), and reading the Kitchen's fee
+or whether a Pot exists.
 [Use your own endpoints](mcp.md#use-your-own-endpoints) says where the server finds one.
 
 ## Supported and preview chains
@@ -332,8 +396,8 @@ chain. `sauce_chains` gives each chain's `support`, `"supported"` or `"preview"`
 On a preview chain these work as they do everywhere: `sauce_compile`, `sauce_actions`' report,
 `sauce_globals`, `sauce_price`, `sauce_pools`, `sauce_inspect`, `sauce_verify` and `sauce_pot`'s
 prediction and reads. So an agent can write a program for any protocol on any chain.
-`sauce_simulate` does not depend on the label: it runs wherever the release is deployed on the
-chain, and returns an error naming the missing contract where it is not.
+`sauce_simulate` does not depend on the label, but on EVM it still requires the deployed Pot's
+authenticated binding and exact engine/compiler pair; a release address alone does not suffice.
 
 `sauce_tx`, `sauce_signed_cook` and `sauce_sign` are refused there, before any endpoint is reached.
 

@@ -1,10 +1,9 @@
 /**
  * The tools against a chain: a local anvil running the released gated stack (`sdk/test/cli-anvil.ts`,
  * the harness the `sauce` command's own chain suites use), reached only through a `--config`-style
- * endpoint. The server reads the Kitchen's fee and the Pot, rehearses the cook through the
- * simulate machinery — and the one transaction that lands here
- * is signed by the test, with a key the server never sees, from the unsigned transaction the
- * server built: the remote-compile, local-sign split the server exists for.
+ * endpoint. Explicit setup deploys and authenticates each Pot before execution. The server reads
+ * the Kitchen's fee and rehearses cooks without changing chain state; a transaction signed outside
+ * the server exercises the remote-compile, local-sign split.
  *
  * GATED on SAUCE_V12_RUNTIME_CREATION_HEX like every EVM execution suite, and a hard failure
  * without it in CI (the harness throws on import there).
@@ -13,7 +12,16 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { after, before, describe, it } from "node:test";
 
-import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
+import {
+  encodeFunctionData,
+  formatUnits,
+  getAddress,
+  parseAbi,
+  toFunctionSelector,
+  zeroHash,
+  type Address,
+  type Hex,
+} from "viem";
 
 import {
   FEE,
@@ -24,16 +32,23 @@ import {
   startChain,
   type LocalChain,
 } from "../../sdk/test/cli-anvil.js";
-import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
-import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
-import { connect, endpointsFor, erred, failed, ok, type Connected } from "./harness.js";
+import type { EvmPotBinding } from "../../sdk/dist/evm/engine.js";
+import {
+  connect,
+  deployedPotBinding,
+  endpointsFor,
+  erred,
+  failed,
+  ok,
+  type Connected,
+} from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 
-/** An owner nobody holds the key of, with nothing: no Pot, no native currency, no tokens. */
+/** A fixture owner nobody holds the key of, with no wallet funds. */
 const NOBODY: Address = "0x5a0Ce0000000000000000000000000000000Beef";
 const RECIPIENT: Address = "0x6666666666666666666666666666666666666666";
-/** An owner whose Pot, not deployed, holds USDC: for reading balances, apart from NOBODY's. */
+/** Another fixture owner, whose deployed Pot holds USDC. */
 const HOLDER: Address = "0x7777777777777777777777777777777777777777";
 const PAY = [
   "function main(recipient: Address, amount: Uint256) {",
@@ -79,10 +94,16 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
   let local: LocalChain;
   let mcp: Connected;
   let usdc: Address;
+  let potBinding: EvmPotBinding;
+  let pot: Address;
+  let pay: { source: string; chain: string; args: string[]; potBinding: EvmPotBinding };
 
   before(async () => {
     local = await startChain("ethereum");
     usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
+    potBinding = await deployedPotBinding(local, NOBODY);
+    pot = potBinding.pot;
+    pay = { source: PAY, chain: "ethereum", args: [RECIPIENT, "1500000"], potBinding };
     mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
   });
 
@@ -93,40 +114,33 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.ok(!mcp.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
   });
 
-  const pot = getAddress(v12PredictPot(NOBODY, `0x${"00".repeat(32)}`) as Address);
-  const pay = { source: PAY, chain: "ethereum", args: [RECIPIENT, "1500000"] };
-
-  it("reads the Kitchen's fee for the cook, and plans the Pot's deploy first", async () => {
+  it("reads the Kitchen's fee and builds only the cook on the deployed Pot", async () => {
     const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: NOBODY }));
-    // The Pot has no code: its deployment first, then the cook on it.
-    assert.equal(tx.pot, pot);
-    assert.equal(tx.to, undefined);
-    const [deploy, cook] = tx.transactions as Array<Record<string, string>>;
-    assert.equal(deploy!.deploysPot, pot);
-    assert.equal(getAddress(deploy!.to!), getAddress(v12KitchenAddress()));
-    assert.equal(deploy!.value, "0x0");
-    assert.equal(cook!.to, pot);
-    assert.equal(cook!.value, `0x${FEE.toString(16)}`);
+    assert.equal(tx.to, pot);
+    assert.equal(tx.transactions, undefined, "no implicit deployment");
+    assert.equal(tx.value, `0x${FEE.toString(16)}`);
     assert.equal(tx.from, NOBODY, "who signs it");
+    assert.deepEqual(tx.potBinding, potBinding);
     assert.deepEqual(tx.kitchenFee, {
       wei: FEE.toString(),
       native: formatUnits(FEE, 18),
       readFrom: "ethereum",
     });
-    assert.ok(
-      (tx.notes as string[]).some((note) =>
-        /isn't deployed yet: the first transaction deploys it/.test(note),
-      ),
-    );
+    assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
     assert.ok(!(tx.notes as string[]).some((note) => /--|sauce pot/.test(note)), "no flags");
-    const predicted = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: NOBODY }));
-    assert.equal(predicted.pot, pot);
-    assert.equal(predicted.deployed, false);
-    assert.equal((predicted.kitchenFee as { wei: string }).wei, FEE.toString());
+    const deployed = ok(
+      await mcp.call("sauce_pot", { chain: "ethereum", owner: NOBODY, potBinding }),
+    );
+    assert.equal(deployed.pot, pot);
+    assert.equal(deployed.deployed, true);
+    const kitchenFee = deployed.kitchenFee;
+    assert.ok(kitchenFee !== null && typeof kitchenFee === "object" && "wei" in kitchenFee);
+    assert.equal(kitchenFee.wei, FEE.toString());
   });
 
   it("reads what the Pot holds: native, and each token the chain registers", async () => {
-    const holderPot = getAddress(v12PredictPot(HOLDER, `0x${"00".repeat(32)}`) as Address);
+    const holderBinding = await deployedPotBinding(local, HOLDER);
+    const holderPot = holderBinding.pot;
     await local.mint(usdc, holderPot, 2_500_000n);
     type Held = {
       native: { wei: string };
@@ -137,7 +151,13 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         formatted: string | null;
       }>;
     };
-    const out = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: HOLDER }));
+    const out = ok(
+      await mcp.call("sauce_pot", {
+        chain: "ethereum",
+        owner: HOLDER,
+        potBinding: holderBinding,
+      }),
+    );
     assert.equal(out.pot, holderPot);
     const held = out.balances as Held;
     assert.equal(held.native.wei, "0");
@@ -149,13 +169,18 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     // A registered token with no code on this chain reads as unknown, not as zero.
     assert.ok(held.tokens.some((token) => token.symbol !== "USDC" && token.balance === null));
     const bare = ok(
-      await mcp.call("sauce_pot", { chain: "ethereum", owner: HOLDER, balances: false }),
+      await mcp.call("sauce_pot", {
+        chain: "ethereum",
+        owner: HOLDER,
+        potBinding: holderBinding,
+        balances: false,
+      }),
     );
     assert.equal(bare.balances, undefined);
-    assert.equal(bare.deployed, false, "still says whether it is deployed");
+    assert.equal(bare.deployed, true, "still says whether it is deployed");
   });
 
-  it("rehearses the cook on a Pot not deployed yet, holding an assumed balance", async () => {
+  it("rehearses a cook on a deployed Pot, holding an assumed balance", async () => {
     const out = ok(
       await mcp.call("sauce_simulate", { ...pay, owner: NOBODY, assumeBalance: ["USDC:2"] }),
     ) as Record<string, unknown> & {
@@ -163,11 +188,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     };
     assert.equal(out.ok, true);
     assert.equal(out.path, "eth_simulateV1");
-    assert.deepEqual(out.deployPot, {
-      kitchen: getAddress(v12KitchenAddress()),
-      owner: NOBODY,
-      salt: `0x${"00".repeat(32)}`,
-    });
+    assert.equal(out.deployPot, undefined, "simulation never deploys a Pot");
+    assert.deepEqual(out.potBinding, potBinding);
     assert.ok(
       out.transfers.some(
         (transfer) =>
@@ -206,7 +228,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.deepEqual(spent.leftInPot, []);
     assert.ok(!((spent.notes ?? []) as string[]).some((note) => note.includes("leftInPot")));
     // A rehearsal: nothing landed.
-    assert.equal(await local.publicClient.getCode({ address: pot }), undefined);
+    assert.ok(await local.publicClient.getCode({ address: pot }));
     assert.equal(await local.balanceOf(usdc, RECIPIENT), 0n);
   });
 
@@ -235,6 +257,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
       }),
     );
     assert.deepEqual(Object.keys(reverts).slice(0, 2), ["reverted", "error"]);
@@ -248,6 +271,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
         expectRevert: "not today",
       }),
     );
@@ -267,6 +291,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
         scenarios: [{}, { expectRevert: "not today" }],
       }),
     ) as { ok: boolean; scenarios: Array<Record<string, unknown>> };
@@ -299,9 +324,9 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     };
     assert.deepEqual(
       out.transactions.map((each) => each.step),
-      ["deployPot", "cook"],
+      ["cook"],
     );
-    assert.equal(out.transactions[1]!.gas, out.gas);
+    assert.equal(out.transactions[0]!.gas, out.gas);
     assert.ok(BigInt(out.transactions[0]!.gas) > 21_000n);
     assert.equal(out.sourceSha256, sha256(PAY));
     // The latest block, past viem's cache of it: an older one may predate the released stack.
@@ -344,6 +369,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
       "nativeTransfers",
       "notes",
       "ok",
+      "potBinding",
       // main declares no return type: its raw return data, empty here.
       "returns",
       "sourceSha256",
@@ -370,6 +396,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: 'function main() {\n  throw "not today";\n}\n',
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
         summary: true,
       }),
     );
@@ -382,6 +409,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: "function main(): Uint256 {\n  return 42n;\n}\n",
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
         summary: true,
       }),
     );
@@ -432,6 +460,7 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         source: "function main(): Uint256 {\n  return LIMIT;\n}\n",
         chain: "ethereum",
         owner: NOBODY,
+        potBinding,
         defines: { LIMIT: 7 },
         summary: true,
         scenarios: [{}, { defines: { LIMIT: 9 } }],
@@ -443,28 +472,69 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     );
   });
 
-  it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(unsigned.deployed, false);
-    // Signed and sent here, outside the server, with a key it never saw.
-    await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
-    const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(after.deployed, true);
-    assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
-    const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
+  it("builds a cook the owner's wallet signs and resolves the owner from its Pot", async () => {
+    const ownerBinding = await deployedPotBinding(local, OWNER.address);
+    const deployed = ok(
+      await mcp.call("sauce_pot", {
+        chain: "ethereum",
+        owner: OWNER.address,
+        potBinding: ownerBinding,
+      }),
+    );
+    assert.equal(deployed.deployed, true);
+    assert.ok((deployed.notes as string[]).some((note) => /do not send the deployment/.test(note)));
+    await local.mint(usdc, ownerBinding.pot, 1_500_000n);
+    const tx = ok(
+      await mcp.call("sauce_tx", {
+        ...pay,
+        owner: OWNER.address,
+        potBinding: ownerBinding,
+      }),
+    );
     assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
     // Named by its address alone, the Pot's owner is read from the chain: who signs.
-    const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
-    assert.equal(byPot.to, after.pot);
+    const byPot = ok(
+      await mcp.call("sauce_tx", {
+        ...pay,
+        pot: ownerBinding.pot,
+        potBinding: ownerBinding,
+      }),
+    );
+    assert.equal(byPot.to, ownerBinding.pot);
     assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
+    // Signed outside the server, with a key it never saw.
+    await local.send(
+      local.owner,
+      byPot.to as Address,
+      byPot.data as Hex,
+      BigInt(byPot.value as string),
+    );
+    assert.equal(await local.balanceOf(usdc, RECIPIENT), 1_500_000n);
   });
 
   it("fetches a transaction by hash and takes it apart", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: RECIPIENT }));
-    const hash = await local.send(local.deployer, unsigned.to as Address, unsigned.data as Hex);
+    const abi = parseAbi([
+      "function predictPot(address owner, bytes32 salt) view returns (address)",
+      "function deployPot(address owner, bytes32 salt) returns (address)",
+    ]);
+    const predicted = await local.publicClient.readContract({
+      address: potBinding.kitchen,
+      abi,
+      functionName: "predictPot",
+      args: [RECIPIENT, zeroHash],
+    });
+    const hash = await local.send(
+      local.deployer,
+      potBinding.kitchen,
+      encodeFunctionData({
+        abi,
+        functionName: "deployPot",
+        args: [RECIPIENT, zeroHash],
+      }),
+    );
     const out = ok(await mcp.call("sauce_inspect", { hex: hash, chain: "ethereum" }));
     assert.match(JSON.stringify(out), /deployPot/);
-    assert.match(JSON.stringify(out), new RegExp(unsigned.pot as string, "i"));
+    assert.match(JSON.stringify(out), new RegExp(predicted, "i"));
   });
 
   it("reaches the chain through the call's rpcUrl, over a server's own endpoint or with none", async () => {
@@ -479,10 +549,11 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
           await caller.call("sauce_pot", {
             chain: "ethereum",
             owner: NOBODY,
+            potBinding,
             rpcUrl: local.rpcUrl,
           }),
         );
-        assert.equal(pot.deployed, false);
+        assert.equal(pot.deployed, true);
         const rehearsal = ok(
           await caller.call("sauce_simulate", {
             ...pay,
@@ -495,9 +566,8 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
         const tx = ok(
           await caller.call("sauce_tx", { ...pay, owner: NOBODY, rpcUrl: local.rpcUrl }),
         );
-        // NOBODY's Pot has no code, so the cook is the plan's second transaction.
-        const [, cook] = tx.transactions as Array<{ value: string }>;
-        assert.equal(BigInt(cook!.value), FEE, "the fee read through the call's endpoint");
+        assert.equal(tx.to, potBinding.pot);
+        assert.equal(BigInt(tx.value as string), FEE, "the fee read through the call's endpoint");
         assert.ok(!caller.received.join("\n").includes(local.rpcUrl.replace("http://", "")));
       } finally {
         await caller.close();

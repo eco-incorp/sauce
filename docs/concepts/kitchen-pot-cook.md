@@ -18,28 +18,26 @@ at work. What they cost is on [Costs](costs.md), and what to check before you si
 | **Cook**    | The transaction that runs a program: `cook(engine, program)`, sent to your Pot  | Runs one compiled program, reverts on uncaught failure, and pays the Kitchen's fee          |
 | **Kitchen** | The contract that creates Pots, at the same address on every EVM chain it is on | Gives your Pot an address known before it exists, and sets the fee each cook pays           |
 
-The fourth piece is the **engine**, the interpreter that executes Sauce bytecode. A cook names the
-engine, and on an EVM chain the engine runs only inside a Pot its Kitchen created, so a cook is the
-only way to reach it. You never call the engine yourself: the SDK and the `sauce` command name the
-released one.
+The fourth piece is the **engine**, the interpreter that executes Sauce bytecode. An EVM cook names
+the engine qualified for its Pot and compiler. A service keeps that explicit release binding;
+upgrading the SDK does not select a new engine for an already deployed Pot.
 
 Up to [On Solana](#on-solana), this page describes an EVM chain, such as Ethereum or Base. Solana
 has the same three roles, and that section says what differs.
 
 ## A Pot's life
 
-1. **Its address comes first.** For an EVM Kitchen release, a Pot's address follows from the
-   Kitchen, its Pot init-code hash, its owner and a salt (zero by default). It is known before
-   deployment and fixed once deployed. A release with new Pot code derives a different address
-   for the same owner and salt; it does not move an existing Pot or its balances.
-2. **It is deployed once.** The Kitchen's `deployPot(owner, salt)` creates it. Anyone may send that
-   transaction, and the Pot is the owner's whoever sends it; sending it again returns the Pot
-   already there. You need not do it as a step of your own: the `sauce` command deploys your Pot
-   the first time a run needs it.
-3. **It is funded like any address, once it is deployed.** Send it tokens or native coin from any
-   wallet, or let a run pull them from your wallet in the same transaction, after the Pot's
-   deployment ([Run a program](../guides/cli-run.md)). Tokens sent to the address before then stay
-   there if a release with new Pot code derives the Pot elsewhere.
+1. **Its address comes first.** New EVM Pots use CREATE3 under Kitchen, from the owner, salt
+   (zero by default) and Pot kind. Pot bytecode no longer determines that address. A new release
+   cannot replace code at an occupied target; a different target needs an explicitly chosen salt.
+2. **It is deployed once and verified.** Kitchen's existing factory calls create the Pot for its
+   owner, whoever sends them. Prediction and nonempty code alone do not authenticate it: verify
+   the deployed identity and its qualified engine/compiler and Router binding, then save it.
+   A mismatched occupant is a failure, not an implicit upgrade.
+3. **It is funded only after verification.** Send tokens or native coin from a wallet, or let a
+   run pull tokens into an already verified Pot ([Run a program](../guides/cli-run.md)).
+   Never fund or sign for a prediction alone. See the required
+   [creation order](../guides/kitchen-compatibility.md#create-a-new-pot-safely).
 4. **Its owner authorizes programs on it.** Normally the owner sends a `cook` transaction to the
    Pot. Newly created Pots also support [signed cooks](#signed-cooks).
 5. **What it holds leaves only through a cook.** A Pot has no withdraw function: a program moves

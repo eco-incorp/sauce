@@ -1,7 +1,7 @@
 /**
- * `sauce simulate` on an EVM chain: the cook rehearsed from the Pot's owner with no key and nothing
- * sent — on a Pot that need not be deployed yet, holding what `--assume-balance` gives it — and what
- * it did, read back from its logs.
+ * `sauce simulate` on an EVM chain: an authenticated deployed Pot's cook rehearsed from its owner,
+ * with no key and nothing sent. `--assume-balance` supplies simulation-only balances; effects are
+ * read back from the cook's logs.
  *
  * `rehearse.ts` runs it (`eth_simulateV1`, else `eth_call`), `assume.ts` finds where a token keeps
  * the Pot's balance, and `effects.ts` decodes the logs. This file decides what to rehearse and
@@ -18,7 +18,6 @@ import {
 } from "viem";
 
 import { nativeErc20 } from "../chains/index.js";
-import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
 import { entryReturnType } from "../routes/entry.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
@@ -30,7 +29,6 @@ import {
   type CommandOutput,
   type CookInput,
   cookOf,
-  kitchenAddress,
   priceLimitNotes,
   revertedFirst,
   valueOf,
@@ -51,6 +49,7 @@ import {
 import { baseUnits, type BeforeCook, type Funding, type FundRequest } from "./funding.js";
 import { rehearse, type Rehearsal } from "./rehearse.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
+import { executionBinding } from "./pot-binding.js";
 
 export interface SimulateInput extends CookInput, ChainAccess {
   /** `--assume-balance`: what the Pot holds, for this rehearsal only. */
@@ -192,28 +191,14 @@ const gasText = (gas: bigint | undefined, kind: "used" | "estimated"): string =>
 /** How the rehearsal ran, for a person: each transaction, with its own gas once it succeeded. */
 function routeLines(
   rehearsal: Rehearsal,
-  chain: string,
   block: bigint,
   owner: Address,
-  pot: Address,
-  deploy: { readonly salt: Hex } | undefined,
   before: readonly BeforeCook[],
   signed: boolean,
 ): string[] {
   const gas = (used: bigint | undefined): string =>
     rehearsal.ok ? `, ${gasText(used, rehearsal.gasKind)}` : "";
   const steps = [
-    ...(deploy === undefined
-      ? []
-      : [
-          `Kitchen.deployPot(${owner}, ${deploy.salt})${gas(rehearsal.ok ? rehearsal.deployGas : undefined)}: ` +
-            `Pot ${pot} is not deployed on ${chain} yet, so the simulation deploys it first, as ` +
-            "sauce run does (asking, or with --yes) and sauce tx plans. Any account may send it; " +
-            "the Pot is the owner's either way." +
-            (rehearsal.path === "eth_call"
-              ? " The Pot it deploys is put in place by state override."
-              : ""),
-        ]),
     ...before.map(
       (each, index) =>
         `${each.what}, from the owner ${owner}` +
@@ -248,24 +233,22 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const cook = cookOf(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);
-  const fee = await requireCookContracts(client, input.chain);
+  const fee = await requireCookContracts(client, input.chain, cook.pot);
   const state = await potState(client, cook.pot);
   const target = input.target;
-  if (!state.deployed && !("owner" in target)) {
+  if (!state.deployed || state.owner === undefined) {
     throw new CliError(
-      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it is: ` +
-        "give its --owner (and --salt) instead, and the simulation deploys it first",
+      `Pot ${cook.pot} is not deployed on ${input.chain.slug}: explicitly deploy, verify and ` +
+        "persist it before simulation, funding or cooking",
     );
   }
-  await requirePot(client, input.chain, { ...target, pot: cook.pot, deployed: state.deployed });
-  const owner = state.deployed ? state.owner! : (target as { readonly owner: Address }).owner;
-  const deploy = state.deployed ? undefined : { salt: (target as { readonly salt: Hex }).salt };
-  const kitchen = kitchenAddress();
+  await requirePot(client, input.chain, { ...target, pot: cook.pot, deployed: true });
+  const owner = state.owner;
+  const binding = executionBinding(input.chain.id, cook.pot);
+  if (binding === undefined) throw new CliError("Simulation requires an authenticated Pot binding");
+  const kitchen = binding.kitchen;
 
-  const funding =
-    input.fund === undefined
-      ? undefined
-      : await input.fund(client, cook.pot, owner, { deploySalt: deploy?.salt });
+  const funding = input.fund === undefined ? undefined : await input.fund(client, cook.pot, owner);
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
@@ -296,15 +279,13 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const rehearsal = await rehearse(client, {
     owner,
     pot: cook.pot,
-    kitchen,
-    ...(deploy === undefined ? {} : { deploy }),
     ...(before.length === 0 ? {} : { before }),
     cook: { to: cook.pot, data: funded.data, value },
     overrides: mergeOverrides(overrides),
   });
   const labels = addressLabels(input.chain, [
     [kitchen, "Kitchen"],
-    [getAddress(v12EngineAddress()), "engine"],
+    [cook.engine, "engine"],
     [owner, "owner"],
     [cook.pot, "the Pot"],
   ]);
@@ -333,16 +314,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
           return before;
         });
 
-  const how = routeLines(
-    rehearsal,
-    input.chain.slug,
-    block,
-    owner,
-    cook.pot,
-    deploy,
-    before,
-    funding?.signed === true,
-  );
+  const how = routeLines(rehearsal, block, owner, before, funding?.signed === true);
   const assumedLines =
     assumed.length === 0
       ? []
@@ -375,7 +347,6 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
     value: value.toString(),
     path: rehearsal.path,
     ...(rehearsal.fallback === undefined ? {} : { fallback: rehearsal.fallback }),
-    deployPot: deploy === undefined ? null : { kitchen, owner, salt: deploy.salt },
     assumed: assumed.map((balance) => ({
       holder: balance.holder,
       token: balance.token,
@@ -391,21 +362,10 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
     })),
     ...(rehearsal.ok
       ? {
-          // The cook's own gas; with the Pot deployed first, `transactions` gives each one's.
+          // The cook's own gas; `transactions` also lists each preceding transfer.
           gas: rehearsal.gas === undefined ? null : rehearsal.gas.toString(),
           gasKind: rehearsal.gasKind,
           transactions: [
-            ...(deploy === undefined
-              ? []
-              : [
-                  {
-                    step: "deployPot",
-                    from: owner,
-                    to: kitchen,
-                    gas: rehearsal.deployGas === undefined ? null : rehearsal.deployGas.toString(),
-                    gasKind: rehearsal.gasKind,
-                  },
-                ]),
             // What `sauce run` sends before the cook: each one a transaction of its own to send.
             ...before.map((each, index) => ({
               step: "fund",
@@ -449,11 +409,11 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   if (!rehearsal.ok) {
     return {
       text: [
-        rehearsal.stage === "deploy"
-          ? `Deploying the Pot reverts: ${rehearsal.reason}`
-          : rehearsal.stage === "before"
-            ? `${rehearsal.what}, which sauce run sends before the cook, fails: ${rehearsal.reason}`
-            : `The cook reverts: ${rehearsal.reason}`,
+        rehearsal.stage === "before"
+          ? `${rehearsal.what}, which sauce run sends before the cook, fails: ${rehearsal.reason}`
+          : rehearsal.stage === "cook"
+            ? `The cook reverts: ${rehearsal.reason}`
+            : `Rehearsal refused: ${rehearsal.reason}`,
         ...how,
         ...assumedLines,
       ].join("\n"),
@@ -464,13 +424,11 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   }
   const gas = gasText(rehearsal.gas, rehearsal.gasKind);
   // The transactions before the cook, numbered as the route below lists them.
-  const first = before.length + (deploy === undefined ? 0 : 1);
+  const first = before.length;
   const after =
     first === 0
       ? ""
-      : before.length === 0
-        ? " for the cook, after the Pot's deploy (1. below)"
-        : ` for the cook, after what it needs sent first (${first === 1 ? "1." : `1. to ${first}.`} below)`;
+      : ` for the cook, after what it needs sent first (${first === 1 ? "1." : `1. to ${first}.`} below)`;
 
   return {
     text: [

@@ -19,16 +19,14 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
-  encodeAbiParameters,
-  getCreate2Address,
   http,
-  keccak256,
   type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { DEFAULT_POT_SALT } from "../src/testing/chain.js";
 import { setUpStack } from "../src/testing/stack.js";
+import { v12PredictPot, verifyPotBinding } from "../src/testing/sdk.js";
 
 /** Anvil's first dev account: the Pot's owner. */
 export const OWNER_KEY =
@@ -49,7 +47,7 @@ export interface Deployment {
 
 export async function deploy(
   rpcUrl: string,
-  options: { zeroFee?: boolean } = {},
+  options: { zeroFee?: boolean; candidatePath?: string } = {},
 ): Promise<Deployment> {
   const transport = http(rpcUrl);
   const chainId = await createPublicClient({ transport }).getChainId();
@@ -82,13 +80,7 @@ export async function deploy(
   );
 
   // The owner's Pot under the default salt, which `sauce` finds with no --salt.
-  const pot = getCreate2Address({
-    bytecodeHash: stack.potInitCodeHash,
-    from: stack.kitchen,
-    salt: keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, DEFAULT_POT_SALT]),
-    ),
-  });
+  const pot = v12PredictPot(owner, DEFAULT_POT_SALT, stack.kitchen) as Address;
   if (((await publicClient.getCode({ address: pot })) ?? "0x") === "0x") {
     const hash = await walletClient.writeContract({
       abi: stack.kitchenAbi,
@@ -99,6 +91,14 @@ export async function deploy(
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
     if (receipt.status !== "success") throw new Error(`deploying the Pot ${pot} failed`);
   }
+  await verifyPotBinding(publicClient, {
+    ...stack.binding,
+    pot,
+    owner,
+    userSalt: DEFAULT_POT_SALT,
+    kind: "private",
+    chainId,
+  });
 
   const executionFee = (await publicClient.readContract({
     abi: stack.kitchenAbi,
@@ -125,7 +125,10 @@ async function main() {
     console.error("Usage: npx tsx scripts/deploy.ts <rpc-url> [--zero-fee]");
     process.exit(1);
   }
-  const deployment = await deploy(rpcUrl, { zeroFee: flags.includes("--zero-fee") });
+  const deployment = await deploy(rpcUrl, {
+    zeroFee: flags.includes("--zero-fee"),
+    candidatePath: process.env.SAUCE_LOCAL_CANDIDATE,
+  });
   console.log(`SAUCE_DEPLOYMENT=${JSON.stringify(deployment)}`);
 }
 

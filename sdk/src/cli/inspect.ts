@@ -22,8 +22,9 @@ import {
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js";
-import { v12PredictPot } from "../deployments/pot.js";
+import { v12PredictPot, v12PredictSharedPot } from "../deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi, verifySignedCook } from "../evm/engine.js";
+import { selectedKitchen } from "./pot-binding.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { decodeEntryArguments, type EntryValue } from "../routes/entry.js";
 import type { CompiledSauceProgram } from "../routes/sauce-route.js";
@@ -278,12 +279,23 @@ export function describeData(data: Hex, context: InspectContext): Part {
   try {
     const kitchen = decodeFunctionData({ abi: v12KitchenAbi, data });
     if (kitchen.functionName === "deployPot") {
-      const [owner, salt] = kitchen.args as readonly [Address, Hex];
-      const pot = v12PredictPot(owner, salt);
+      const [owner, salt, fixed = false] = kitchen.args as readonly [Address, Hex, boolean?];
+      const pot = v12PredictPot(owner, salt, selectedKitchen(), fixed);
 
       return {
         json: { call: "Kitchen.deployPot", owner, salt, pot },
         lines: [`Kitchen.deployPot: the Pot ${pot}, owner ${owner}, salt ${salt}`],
+      };
+    }
+    if (kitchen.functionName === "deploySharedPot") {
+      const [salt] = kitchen.args;
+      const pot = v12PredictSharedPot(salt, selectedKitchen());
+
+      return {
+        json: { call: "Kitchen.deploySharedPot", salt, pot },
+        lines: [
+          `Kitchen.deploySharedPot: CREATE3 candidate ${pot}, salt ${salt}; code is not authenticated`,
+        ],
       };
     }
   } catch {

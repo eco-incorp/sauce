@@ -72,34 +72,18 @@ Every Sauce tool that builds a transaction (`sauce_tx`, `sauce_pot`, `sauce_acti
 - `sendCalls` is everything to send, in order, exactly as Coinbase's `send_calls` takes it: a
   batch a smart wallet approves once and runs all together, or not at all.
 
+For an already-deployed, verified EVM Pot, the cook has this shape (addresses and calldata
+abbreviated):
+
 ```json
 {
   "chainId": 8453,
-  "pot": "0xDAbd…0417",
-  "transactions": [
-    {
-      "what": "Kitchen.deployPot(…)",
-      "chainId": 8453,
-      "to": "0x…",
-      "data": "0x…",
-      "value": "0x0",
-      "gas": "0x3d090"
-    },
-    {
-      "what": "cook on Pot 0xDAbd…0417",
-      "chainId": 8453,
-      "to": "0xDAbd…0417",
-      "data": "0x…",
-      "value": "0x4d2",
-      "gas": "0x16378"
-    }
-  ],
+  "to": "0xDAbd…0417",
+  "data": "0x…",
+  "value": "0x4d2",
   "sendCalls": {
     "chain": "base",
-    "calls": [
-      { "to": "0x…", "value": "0x0", "data": "0x…" },
-      { "to": "0xDAbd…0417", "value": "0x4d2", "data": "0x…" }
-    ]
+    "calls": [{ "to": "0xDAbd…0417", "value": "0x4d2", "data": "0x…" }]
   }
 }
 ```
@@ -109,8 +93,9 @@ On Solana each `transaction` is already what Phantom's `solana_send` takes.
 ## On Base or Ethereum, with Coinbase
 
 1. Your agent asks the wallet for your address.
-2. It builds for that address, with your wallet as the owner: `sauce_tx` with `owner` set to it.
-3. It simulates the same program (`sauce_simulate`) and shows you what will happen.
+2. It uses the already-deployed, authenticated Pot for that owner, passing the verified `potBinding`
+   or loading it from the stdio server's configured store when calling `sauce_tx`.
+3. It simulates the same program with that binding (`sauce_simulate`) and shows you what will happen.
 4. It calls `send_calls` with `sendCalls`. You get a link: open it, check, and approve in your
    wallet.
 5. It asks `get_request_status` until the wallet says it landed.
@@ -118,14 +103,13 @@ On Solana each `transaction` is already what Phantom's `solana_send` takes.
 Check it worked: the request's status gives the transaction hash. Ask your agent for the explorer
 link, or have it read the Pot back with `sauce_pot`, which shows what the Pot now holds.
 
-Your Pot does not need to exist first. When it doesn't, the plan creates it and then runs your
-program, and one approval does both. If the program fails, nothing happens at all: no half-made Pot
-is left behind.
+For EVM, the Pot must already exist and its actual binding must be authenticated and persisted.
+Deployment is separately authorized; neither a single wallet approval nor a smart-wallet batch
+replaces post-deployment verification. A missing expected Pot must fail, not be replaced.
 
-The program usually spends tokens, which have to be in the Pot when it runs. Ask for them with
-`fund` (`--fund` on the command line), such as `fund: ["USDC:100"]`. The plan then moves them from
-your wallet into the Pot, right before the program runs. Creating the Pot, filling it and running
-the program are then one approval, and either all three happen or none does.
+The program usually spends tokens, which have to be in the verified Pot when it runs. Ask for
+them with `fund` (`--fund` on the command line), such as `fund: ["USDC:100"]`. The funding and cook
+can be in one wallet batch after authentication. That batch never implicitly creates the Pot.
 
 ## On Solana, with Phantom
 
@@ -156,13 +140,11 @@ A hardware wallet, or a key kept in a company vault (a KMS), signs too, with the
 agent. The signer hands back signed bytes, and `sauce_send` sends them:
 
 ```text
-sauce_tx   { source, chain: "base", owner: "0xYou", args: [...] }
-  → { pot, transactions: [ { what: "Kitchen.deployPot(…)", to, data, value },
-                           { what: "cook on Pot 0x8a…", to, data, value } ] }
-           the signer signs both, nonces n and n + 1
-sauce_send { transactions: ["0x02f8…", "0x02f8…"] }
-  → { ok: true, sent: [ { what: "Kitchen.deployPot at 0x…", hash, status: "success", … },
-                        { what: "cook on Pot 0x8a…", hash, status: "success", moves, leftInPot } ] }
+sauce_tx   { source, chain: "base", owner: "0xYou", potBinding: verifiedBinding, args: [...] }
+  → { to: pot, data, value, gas, potBinding, … }
+           the owner signs the cook, after separate deployment and binding verification
+sauce_send { transactions: ["0x02f8…"], potBinding: verifiedBinding }
+  → { ok: true, sent: [ { what: "cook on Pot 0x8a…", hash, status: "success", moves, leftInPot } ] }
 ```
 
 [mcp-external-signer.ts](../examples/mcp-external-signer.ts) is that flow as code, for any MCP
@@ -172,17 +154,14 @@ that would fail, sends them in order, and stops at the first that does not succe
 
 ### Send them in the right order
 
-- **A new Pot, then its cook.** While the Pot has no code, `sauce_tx` returns its deployment as the
-  first entry of `transactions` (marked `deploysPot`), then the cook. Any account may send the
-  first, only the owner the second. Each comes with `gas`, the limit to sign it with: the cook's is
-  estimated as if the deployment had landed, with 30% room, because a signer's own estimate, taken
-  while the Pot has no code, is far too low. Where the endpoint does not report the deployment's
-  gas apart, the deployment carries none, and the signer estimates it right.
-- **A cook that would revert** after the deployment (a Pot not funded yet) comes with no `gas`, and
-  a note saying why: deploy the Pot first (`sauce_pot`'s deployment), fund it, and call `sauce_tx`
-  again, or pass `fund` so the plan moves the tokens in after the deployment. Do not send tokens to
-  the address before the Pot is deployed.
-- `sauce_pot`'s deployment, by hand, can be sent from any account.
+- **A new EVM Pot requires a separate lifecycle.** Explicitly deploy using a trusted qualified
+  descriptor, verify the actual code/profile and exact engine/compiler/Router binding, and
+  persist it before funding or requesting a cook. `sauce_tx` refuses an undeployed or
+  unauthenticated Pot instead of returning deployment and cook transactions to sign together.
+- **An unfunded verified Pot** can be funded after authentication, or use `fund` so tokens move
+  into it before the cook. Prediction alone never authorizes a transfer or allowance.
+- Each cook must retain the service's verified binding. Missing expected code, identity
+  mismatches or unknown profiles stop the flow; do not replace the Pot or repin it.
 - On Solana, each transaction is signed by its `feePayer`, the owner the call named, and
   `sauce_tx`'s `transaction` goes to `sauce_send` with its `cursor`, which also reads back what
   `main` returned. Its blockhash expires in about a minute: one signed later is refused, to build
@@ -204,10 +183,10 @@ sauce_signed_cook { …the same inputs, nonce, deadline, maxExecutionFee, signat
 
 Give the second call the `nonce`, `deadline` and `maxExecutionFee` the first returned, so it
 checks the signature over the same cook. `cook` is an ordinary transaction for whichever wallet
-sends it, `evm_send` included, and a signer's signed bytes go to `sauce_send`. While the Pot has no
-code, `deployPot` comes first, for any account to send. On a local server with wallets,
-`sauce_sign` signs with one of them, and `sauce_wallet_send` sends `cook` from any wallet
-([What a local server keeps](mcp-local.md#signed-cooks)).
+sends it, `evm_send` included, and a signer's signed bytes go to `sauce_send`. Deploy and authenticate
+an EVM Pot separately before requesting typed data; pass its verified `potBinding` to these calls.
+On a local server with wallets, `sauce_sign` signs with one of them, and `sauce_wallet_send` sends
+`cook` from any wallet ([What a local server keeps](mcp-local.md#signed-cooks)).
 
 ## A Solana cook of several transactions
 

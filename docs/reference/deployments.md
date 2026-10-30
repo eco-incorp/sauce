@@ -48,14 +48,15 @@ version, in both directions:
 
 ### Pots
 
-The Kitchen deploys an owner's Pot under a 32-byte salt, zero unless another is chosen, at
-`CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`, with the Pot init-code
-hash:
+New Pots use CREATE3 under Kitchen, with a 32-byte user salt, zero unless another is chosen.
+Dynamic Private Pots hash `abi.encode(owner, salt)`; fixed Private and Shared Pots hash
+`abi.encode(owner, salt, true)`, with owner zero for Shared Pots. The fixed helper creates
+the Pot at nonce 1. Pot creation/runtime bytecode does not enter prediction.
 
-`0xe8e1f54a0a3c700fedc0e0019c5a7dc7ca08e676862db576b864e744186cd7f2`
-
-`v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula
-and the hash, and `sauce pot --owner <address>` prints an owner's Pot.
+`v12PredictPot(owner, salt, kitchen?, routerFixed?)` and `v12PredictSharedPot(salt, kitchen?)`
+compute new addresses. `v12PotDerivation()` returns the CREATE3 scheme and helper hash.
+Deploy, verify the explicit release binding, persist it, then fund or sign. Prediction alone
+does not authenticate a Pot or select a historical release.
 
 ## Solana
 

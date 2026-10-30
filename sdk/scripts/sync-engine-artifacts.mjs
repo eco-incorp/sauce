@@ -51,10 +51,36 @@ import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { keccak256, toBytes } from "viem";
+import { syncLocalCandidate } from "./lib/local-candidate-artifacts.mjs";
+import { validateCreate3Release } from "./lib/evm-release-profile.mjs";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const SDK_DIR = resolve(SCRIPT_DIR, "..");
 const REPO_ROOT = resolve(SDK_DIR, "..");
+
+// LOCAL candidates are opt-in build evidence, never published-release replacements.
+if (process.argv.includes("--local-candidate")) {
+  const path = process.argv[process.argv.indexOf("--local-candidate") + 1];
+  if (
+    !path ||
+    path.startsWith("--") ||
+    process.argv.includes("--report") ||
+    process.argv.includes("--fetch-v12-engines") ||
+    process.env.SAUCE_ARTIFACT_SOURCE
+  ) {
+    throw new Error(
+      "--local-candidate <manifest.json> cannot mix with release-source/report/engine-fetch modes",
+    );
+  }
+  const candidate = syncLocalCandidate(resolve(path), [
+    resolve(SDK_DIR, "src/artifacts"),
+    resolve(SDK_DIR, "dist/artifacts"),
+  ]);
+  console.log(
+    `[sync-engine-artifacts] wrote LOCAL CREATE3 candidate ${candidate.binding.engine}; published releases and SVM unchanged`,
+  );
+  process.exit(0);
+}
 
 // ---------------------------------------------------------------------------
 // Release-sourced v12 assets, from FOUR independently-released components:
@@ -155,6 +181,7 @@ const ASSET_FORMATS = {
     hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
   },
   "abis.json": { manifestKey: "abis.sha256", hash: sha256 },
+  "pot-profile.json": { manifestKey: "potProfile.sha256", hash: sha256 },
 };
 // `manifestKey: null` means the manifest lists its artifacts as `[{ name, sha256 }]` and the digest
 // is found by asset name — the shape v12-svm and kitchen-svm moved to once they shipped several.
@@ -184,6 +211,10 @@ const V12_ENGINE_WIRE_MAINNET = pin("v12-svm", "engine-wire-mainnet.json");
 // a superset: `IERC20` is the ERC-20 standard (OpenZeppelin's, never v12's) and `IUniswapV3Pool` is
 // Uniswap's, so neither appears here and neither should — see ARTIFACTS below.
 const V12_EVM_ABIS = pin("kitchen-evm", "abis.json");
+const CREATE3 = SET["kitchen-evm"].scheme === "create3";
+const POT_PROFILES = CREATE3
+  ? [pin("v12-evm", "pot-profile.json"), pin("kitchen-evm", "pot-profile.json")]
+  : [];
 // The current execution Router only swaps; generation 3 remains the token-free quote service.
 const QUOTE_ROUTER_ABIS = {
   tag: `kitchen-evm-v${RELEASE_TABLE.quoteRouter.version}`,
@@ -217,6 +248,7 @@ const PINS = [
   V12_ENGINE_WIRE_MAINNET,
   V12_KITCHEN,
   V12_KITCHEN_IDL,
+  ...POT_PROFILES,
 ];
 
 // Every asset the row names must be one this script fetches, and the other way round: a digest
@@ -457,12 +489,18 @@ const ENGINE_IDENTITY = {
   "v12-svm": (addresses) => addresses.programs?.engine?.programId,
 };
 
-/** What the EVM Kitchen's release says every Pot it mints is CREATE2 under: the Kitchen proxy and
- *  the Pot's init-code hash. The `sauce` command tells which release minted a Pot from them. */
-const POT_FAMILY = {
-  kitchen: (addresses) => addresses.contracts?.kitchen?.address,
-  potInitCodeHash: (addresses) => addresses.pot?.initCodeHash,
-};
+/** Fields committed by each published address scheme; historical pins stay byte-for-byte unchanged. */
+const POT_FAMILY = CREATE3
+  ? {
+      kitchen: (addresses) => addresses.contracts?.kitchen?.address,
+      helperInitCodeHash: (addresses) => addresses.pot?.helperInitCodeHash,
+      potProfileHash: (addresses) => addresses.pot?.potProfileHash,
+      fixedRouter: (addresses) => addresses.pot?.fixedRouter,
+    }
+  : {
+      kitchen: (addresses) => addresses.contracts?.kitchen?.address,
+      potInitCodeHash: (addresses) => addresses.pot?.initCodeHash,
+    };
 
 // ---------------------------------------------------------------------------
 // A ROW THAT IS NOT RELEASED YET: report what to paste, and write nothing. An unpinned engine is not
@@ -801,6 +839,10 @@ function syncFromPublicPackage() {
       V12_KITCHEN_IDL,
     ].map((p) => [p, artifact(`svm/${p.asset}`)]),
   ]);
+  if (CREATE3) {
+    carried.set(POT_PROFILES[0], artifact("V12EnginePotProfile.json"));
+    carried.set(POT_PROFILES[1], artifact("V12PotProfile.json"));
+  }
   for (const p of PINS.filter((pin) => pin !== V12_EVM_ABIS)) {
     if (!carried.has(p)) refuse(`is not read for ${p.tag}/${p.asset}: this script needs updating`);
     const actual = p.hash(carried.get(p));
@@ -816,6 +858,9 @@ function syncFromPublicPackage() {
     "V12RuntimeBytecode",
     "V12EngineGate",
     "V12Deployments",
+    ...(CREATE3
+      ? ["V12PotProfile", "V12EnginePotProfile", "V12EvmReleaseEvidence", "V12ReleaseAbis"]
+      : []),
   ];
   const derived = Object.fromEntries(names.map((name) => [name, artifact(`${name}.json`)]));
   const deployments = parse(derived.V12Deployments);
@@ -838,9 +883,12 @@ function syncFromPublicPackage() {
     Kitchen:
       same(contracts.kitchen?.address, kitchenPin.kitchen) &&
       same(gate.kitchen, kitchenPin.kitchen),
-    "Pot init-code hash":
-      same(deployments.evm?.pot?.initCodeHash, kitchenPin.potInitCodeHash) &&
-      same(gate.potInitCodeHash, kitchenPin.potInitCodeHash),
+    "Pot creation identity": CREATE3
+      ? same(deployments.evm?.pot?.potProfileHash, kitchenPin.potProfileHash) &&
+        same(gate.potProfileHash, kitchenPin.potProfileHash) &&
+        gate.scheme === "create3"
+      : same(deployments.evm?.pot?.initCodeHash, kitchenPin.potInitCodeHash) &&
+        same(gate.potInitCodeHash, kitchenPin.potInitCodeHash),
     "Router, Kitchen implementation, SVM Kitchen": Boolean(
       contracts.router?.address &&
       contracts.kitchenImplementation?.address &&
@@ -856,6 +904,34 @@ function syncFromPublicPackage() {
   const disagree = Object.keys(held).filter((what) => !held[what]);
   if (disagree.length > 0) {
     refuse(`disagrees with releases.json's ${COMPILER} row on: ${disagree.join(", ")}`);
+  }
+  if (CREATE3) {
+    const evidence = parse(derived.V12EvmReleaseEvidence);
+    const validated = validateCreate3Release({
+      ...evidence,
+      pin: kitchenPin,
+      enginePin: SET["v12-evm"],
+      profileBytes: derived.V12PotProfile,
+      engineProfileBytes: derived.V12EnginePotProfile,
+      abisBytes: derived.V12ReleaseAbis,
+      runtimeCreationCode: runtime,
+    });
+    if (
+      !isDeepStrictEqual(gate, validated.gate) ||
+      !isDeepStrictEqual(deployments.evm.pot, evidence.kitchenAddresses.pot)
+    ) {
+      refuse("CREATE3 derived gate or deployment profile mismatch");
+    }
+    for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
+      const emitted = parse(derived[name]);
+      const authenticated = validated.contracts[contract];
+      if (
+        !isDeepStrictEqual(emitted.abi, authenticated.abi) ||
+        emitted.bytecode !== authenticated.bytecode
+      ) {
+        refuse(`CREATE3 derived ${name} differs from its pinned ABI asset`);
+      }
+    }
   }
 
   // Verified: only now is anything written, byte for byte what the private path writes.
@@ -977,25 +1053,51 @@ try {
 // ---------------------------------------------------------------------------
 // The GATE ANCHORS, which a test harness cannot work without.
 //
-// The released engine runs only when `CREATE2(KITCHEN, gateSalt(potId), POT_INITCODEHASH)` lands on
-// its caller, and both constants are baked into the artifact at release time. A harness therefore
-// has to stand up a Kitchen at exactly that address, minting Pots whose init code hashes to exactly
-// that hash — so it needs both of these, and neither can be guessed.
-//
-// Both come from the engine release's own manifest (`gate`), already fetched and cross-checked
-// above. The Router is NOT an anchor: a Pot reads its Router from the Kitchen's storage, so no Pot
-// hash and no gate derives from it (it lives in `V12Deployments.json` with the other addresses).
-// The harness asserts the deployed Kitchen's live `potInitCodeHash()` against the pinned one.
+// Historical gates keep their creation commitment. CREATE3 authenticates the paired compiled
+// profile and fixed Router instead, corroborated independently against both release assets.
+let create3Evidence;
 try {
   const manifest = JSON.parse(
     readFileSync(resolve(CACHE_ROOT, V12_EVM.tag, "manifest.json"), "utf8"),
   );
-  const gate = {
-    kitchen: manifest.gate?.kitchen,
-    potInitCodeHash: manifest.gate?.potInitCodeHash,
-  };
-  if (Object.values(gate).some((value) => value === undefined)) {
-    throw new Error(`incomplete gate anchors: ${JSON.stringify(gate)}`);
+  let gate;
+  if (CREATE3) {
+    const kitchenManifest = JSON.parse(
+      readFileSync(resolve(CACHE_ROOT, V12_EVM_ABIS.tag, "manifest.json"), "utf8"),
+    );
+    const profileBytes = readFileSync(fetchReleaseAsset(POT_PROFILES[1]));
+    const engineProfileBytes = readFileSync(fetchReleaseAsset(POT_PROFILES[0]));
+    const abisBytes = readFileSync(fetchReleaseAsset(V12_EVM_ABIS));
+    create3Evidence = {
+      kitchenManifest,
+      engineManifest: manifest,
+      kitchenAddresses: releaseAddresses(V12_EVM_ABIS.tag),
+      engineAddresses: releaseAddresses(V12_EVM.tag),
+    };
+    const validated = validateCreate3Release({
+      ...create3Evidence,
+      pin: SET["kitchen-evm"],
+      enginePin: SET["v12-evm"],
+      profileBytes,
+      engineProfileBytes,
+      abisBytes,
+      runtimeCreationCode: readFileSync(runtimeCreationPath, "utf8").trim(),
+    });
+    gate = validated.gate;
+    for (const dest of DESTS) {
+      writeFileSync(resolve(dest, "V12PotProfile.json"), profileBytes);
+      writeFileSync(
+        resolve(dest, "V12EvmReleaseEvidence.json"),
+        `${JSON.stringify(create3Evidence, null, 2)}\n`,
+      );
+      writeFileSync(resolve(dest, "V12EnginePotProfile.json"), engineProfileBytes);
+      writeFileSync(resolve(dest, "V12ReleaseAbis.json"), abisBytes);
+    }
+  } else {
+    gate = { kitchen: manifest.gate?.kitchen, potInitCodeHash: manifest.gate?.potInitCodeHash };
+    if (Object.values(gate).some((value) => value === undefined)) {
+      throw new Error(`incomplete historical gate anchors: ${JSON.stringify(gate)}`);
+    }
   }
   const json = `${JSON.stringify(gate, null, 2)}\n`;
   for (const dest of DESTS) writeFileSync(resolve(dest, GATE_DEST), json);
@@ -1092,7 +1194,9 @@ try {
     "evm.contracts.router": deployments.evm.contracts.router?.address,
     "evm.contracts.kitchen": deployments.evm.contracts.kitchen?.address,
     "evm.contracts.kitchenImplementation": deployments.evm.contracts.kitchenImplementation?.address,
-    "evm.pot.initCodeHash": deployments.evm.pot?.initCodeHash,
+    ...(CREATE3
+      ? { "evm.pot.potProfileHash": deployments.evm.pot?.potProfileHash }
+      : { "evm.pot.initCodeHash": deployments.evm.pot?.initCodeHash }),
     "svm.programs.engine": deployments.svm.programs.engine?.programId,
     "svm.programs.kitchen": deployments.svm.programs.kitchen?.programId,
   };
@@ -1106,18 +1210,17 @@ try {
     readFileSync(resolve(CACHE_ROOT, V12_EVM.tag, "manifest.json"), "utf8"),
   );
   const gateKitchen = engineManifest.gate?.kitchen;
-  if (gateKitchen && deployments.evm.contracts.kitchen.address !== gateKitchen) {
-    throw new Error(
-      `kitchen-evm Kitchen ${deployments.evm.contracts.kitchen.address} != engine gate Kitchen ${gateKitchen}`,
-    );
+  if (
+    gateKitchen &&
+    deployments.evm.contracts.kitchen.address.toLowerCase() !== gateKitchen.toLowerCase()
+  ) {
+    throw new Error("Kitchen release address does not match the engine gate Kitchen");
   }
-  // …and the Pot init-code hash the kitchen release mints under must be the one the engine gates on:
-  // a Kitchen upgrade that moves it orphans every Pot it mints from this engine.
-  const gateHash = engineManifest.gate?.potInitCodeHash;
-  if (gateHash && deployments.evm.pot.initCodeHash !== gateHash) {
-    throw new Error(
-      `kitchen-evm Pot initCodeHash ${deployments.evm.pot.initCodeHash} != engine gate hash ${gateHash}`,
-    );
+  if (!CREATE3) {
+    const gateHash = engineManifest.gate?.potInitCodeHash;
+    if (gateHash && deployments.evm.pot.initCodeHash !== gateHash) {
+      throw new Error("historical Kitchen Pot initCodeHash does not match the engine gate");
+    }
   }
   // The engine identities releases.json records are what `deployments/releases.ts` refuses other
   // compilers' programs on, so they must be the ones these releases actually publish.
