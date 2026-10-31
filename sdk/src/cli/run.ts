@@ -107,6 +107,7 @@ import {
 } from "./sign.js";
 import { simulateCommand } from "./simulate.js";
 import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
+import { unitsCommand } from "./units.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -2702,6 +2703,55 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         stocks: args.values.stocks === true,
         ...(protocol === undefined ? {} : { protocol }),
         ...(search === undefined ? {} : { search }),
+      });
+    },
+  },
+  units: {
+    usage: "sauce units --chain <slug|id> <amount> <token> [--base] [--decimals <n>] [--json]",
+    summary: "Turn an amount in whole tokens into the smallest unit main takes, or back",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain whose token it is" },
+      base: {
+        type: "boolean",
+        help: "The amount is in the smallest unit: print it in whole tokens",
+      },
+      decimals: {
+        type: "string",
+        value: "<n>",
+        help: "The token's decimals, for a token the chain has no symbol for",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so",
+      "1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile",
+      "resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An",
+      "amount with more decimal places than the token has is refused, never rounded. A token",
+      "the chain has no symbol for is named by its address, with --decimals.",
+      "",
+      "Examples:",
+      "  sauce units --chain base 1.5 USDC",
+      "  sauce units --chain base --base 1500000 USDC",
+      "  sauce units --chain solana 0.25 WSOL --json",
+      "  sauce units --chain base 2 0x… --decimals 18",
+    ].join("\n"),
+    run: (args) => {
+      if (args.positionals.length !== 2) {
+        throw new UsageError("give the amount and the token: sauce units --chain base 1.5 USDC");
+      }
+      const [amount, token] = args.positionals as [string, string];
+      const decimals = stringFlag(args, "decimals");
+      if (decimals !== undefined && !/^\d{1,2}$/.test(decimals)) {
+        throw new UsageError(`--decimals: ${decimals} is not a number of decimals`);
+      }
+
+      return unitsCommand({
+        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
+        amount,
+        token,
+        base: args.values.base === true,
+        ...(decimals === undefined ? {} : { decimals: Number(decimals) }),
       });
     },
   },

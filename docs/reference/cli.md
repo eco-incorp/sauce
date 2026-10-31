@@ -37,6 +37,7 @@ transaction for another wallet to sign.
   - `sauce pot list`: List the Pots you deployed or imported, each with the release it was minted under
   - `sauce pot import`: Record a Pot deployed elsewhere, read from the chain with the release that minted it
 - [`sauce globals`](#sauce-globals): List the tokens, protocols and other names a program on a chain can use
+- [`sauce units`](#sauce-units): Turn an amount in whole tokens into the smallest unit main takes, or back
 - [`sauce price`](#sauce-price): Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
 - [`sauce pools`](#sauce-pools): List a pair's price-limit pools on a chain, deepest first, with their prices
 - [`sauce inspect`](#sauce-inspect): Take a cook, a Kitchen call, a program or a file apart
@@ -67,6 +68,7 @@ Commands:
   reclaim   List the code buffers and lookup tables a Solana owner left open, and close them
   pot       Predict a Pot's address, deploy it, and list the Pots you deployed
   globals   List the tokens, protocols and other names a program on a chain can use
+  units     Turn an amount in whole tokens into the smallest unit main takes, or back
   price     Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
   pools     List a pair's price-limit pools on a chain, deepest first, with their prices
   inspect   Take a cook, a Kitchen call, a program or a file apart
@@ -1083,6 +1085,34 @@ Examples:
   sauce globals --chain base
   sauce globals --chain base --protocol UniswapV3 --json
   sauce globals --chain base --search spacex
+```
+
+## `sauce units`
+
+```text
+Turn an amount in whole tokens into the smallest unit main takes, or back.
+
+Usage: sauce units --chain <slug|id> <amount> <token> [--base] [--decimals <n>] [--json]
+
+Options:
+      --chain <slug|id>  The chain whose token it is
+      --base             The amount is in the smallest unit: print it in whole tokens
+      --decimals <n>     The token's decimals, for a token the chain has no symbol for
+      --json             Print one JSON object instead
+  -h, --help             Show this help
+      --no-update-check  No notice of a newer sauce, and no registry read for one
+
+A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so
+1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile
+resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An
+amount with more decimal places than the token has is refused, never rounded. A token
+the chain has no symbol for is named by its address, with --decimals.
+
+Examples:
+  sauce units --chain base 1.5 USDC
+  sauce units --chain base --base 1500000 USDC
+  sauce units --chain solana 0.25 WSOL --json
+  sauce units --chain base 2 0x… --decimals 18
 ```
 
 ## `sauce price`
