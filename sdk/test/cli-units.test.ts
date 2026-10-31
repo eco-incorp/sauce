@@ -4,7 +4,8 @@
  */
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
-import { unitsCommand } from "../src/cli/units.js";
+import { findToken, unitsCommand } from "../src/cli/units.js";
+import type { SourceToken } from "../src/routes/source-globals.js";
 
 const base = requireChain("base");
 const solana = requireChain("solana");
@@ -62,5 +63,20 @@ describe("sauce units", () => {
     expect(() =>
       unitsCommand({ chain: base, amount: "1", token: "USDC", base: false, decimals: 18 }),
     ).toThrow(/USDC on base has 6/);
+  });
+
+  it("refuses a symbol that matches two tokens in different cases, unless the case is exact", () => {
+    const tokens: SourceToken[] = [
+      { symbol: "uSDC", address: "0x0000000000000000000000000000000000000001", decimals: 6 },
+      { symbol: "Usdc", address: "0x0000000000000000000000000000000000000002", decimals: 18 },
+    ];
+    expect(() => findToken(tokens, "USDC", "Base")).toThrow(UsageError);
+    expect(() => findToken(tokens, "USDC", "Base")).toThrow(
+      /2 tokens named USDC in different cases/,
+    );
+    expect(findToken(tokens, "Usdc", "Base")?.decimals).toBe(18);
+    expect(findToken(tokens, "0x0000000000000000000000000000000000000001", "Base")?.symbol).toBe(
+      "uSDC",
+    );
   });
 });

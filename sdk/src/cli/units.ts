@@ -23,14 +23,36 @@ export interface UnitsInput {
   readonly decimals?: number;
 }
 
+/**
+ * The token a name means on one chain: an exact symbol first, then a symbol in another case, then
+ * an address or mint. Two tokens whose symbols differ only in case are refused rather than guessed.
+ */
+export function findToken(
+  tokens: readonly SourceToken[],
+  name: string,
+  chainName: string,
+): SourceToken | undefined {
+  const exact = tokens.find((token) => token.symbol === name);
+  if (exact !== undefined) return exact;
+  const wanted = name.toLowerCase();
+  const anyCase = tokens.filter((token) => token.symbol.toLowerCase() === wanted);
+  if (anyCase.length > 1) {
+    throw new UsageError(
+      `${chainName} has ${anyCase.length} tokens named ${name} in different cases ` +
+        `(${anyCase.map((token) => `${token.symbol} ${token.mint ?? token.address}`).join(", ")}): ` +
+        "name it with the exact case or by address",
+    );
+  }
+  return (
+    anyCase[0] ??
+    tokens.find((token) => token.address.toLowerCase() === wanted || token.mint === name)
+  );
+}
+
 /** The token named, from the chain's registries, or a bare one with the decimals given. */
 function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimals: number } {
   const { tokens } = sourceGlobals(input.chain);
-  const wanted = input.token.toLowerCase();
-  const found: SourceToken | undefined =
-    tokens.find((token) => token.symbol === input.token) ??
-    tokens.find((token) => token.symbol.toLowerCase() === wanted) ??
-    tokens.find((token) => token.address.toLowerCase() === wanted || token.mint === input.token);
+  const found = findToken(tokens, input.token, input.chain.name);
   if (found !== undefined) {
     if (input.decimals !== undefined && input.decimals !== found.decimals) {
       throw new UsageError(
