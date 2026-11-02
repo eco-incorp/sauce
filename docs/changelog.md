@@ -95,6 +95,16 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## Unreleased
+
+### The `sauce` command and the MCP server
+
+- **Changed: `sauce globals --json` lists methods only for the namespace or interface `--protocol`
+  names**, as the text output does. Every other contract and interface keeps its name, address and
+  the rest. On Base the whole listing was 1.6 MB, most of it methods, and is now 49 KB; on Ethereum
+  it was 3.0 MB and is now 191 KB. `sauce_globals` drops an interface's methods the same way unless
+  `protocol` names it, as it already dropped a contract's: 33 KB on Base, from 322 KB.
+
 ## SDK 1.0.0 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.18:

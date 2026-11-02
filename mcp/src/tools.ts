@@ -1392,7 +1392,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Lists the names a program on one chain may use without declaring them — use it before " +
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
-        "address (with `protocol`, also its methods), on Solana the venue namespaces " +
+        "address, the interfaces a program binds to an address (with `protocol`, the methods of " +
+        "the namespace or interface it names), on Solana the venue namespaces " +
         "(`venues`: Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut) " +
         "and eight more, the pool found by key where the venue finds pools by key " +
         "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
@@ -1450,8 +1451,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(args.search === undefined ? {} : { search: args.search }),
         }),
       );
-      const protocols = output.json.protocols as
-        Array<{ contracts?: Array<Record<string, unknown>> }> | undefined;
+      // The command lists methods only for the namespace or interface `protocol` names: every
+      // namespace's and interface's together are over a megabyte on Base.
       const tokens = output.json.tokens as unknown[] | undefined;
       // A page of tokens: `stocks` on Ethereum is over a thousand.
       const offset = args.offset ?? 0;
@@ -1470,24 +1471,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                   }
                 : {}),
             };
-      // Every namespace's methods are tens of kilobytes: they come with `protocol`, for one.
-      return {
-        ...output,
-        json: {
-          ...output.json,
-          ...page,
-          ...(protocols === undefined
-            ? {}
-            : {
-                protocols: protocols.map((namespace) => ({
-                  ...namespace,
-                  contracts: (namespace.contracts ?? []).map(
-                    ({ methods: _methods, ...contract }) => contract,
-                  ),
-                })),
-              }),
-        },
-      };
+      return { ...output, json: { ...output.json, ...page } };
     },
   );
 
