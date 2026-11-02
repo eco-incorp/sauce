@@ -48,7 +48,9 @@ of it fails to compile, naming the chain and listing the chains that have it; in
 `.available` answers, and building a call on an absent contract fails.
 
 Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
-and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the
+and is the contract's full verified ABI, less what the SDK cannot expose (a second overload taking
+as many arguments, a name the SDK reads as its own); a contract's view on one chain also leaves out
+what that chain's deployment does not run. A `coverage.caveats` entry records a deployment the
 evidence shows differs from its ABI — a bridged token without the L1 token's functions, a function
 whose selector is checked but whose source is not verified. The compile option
 `accessors.allowWidenedSelectors` lets a program use a contract whose ABI's selectors do not match

@@ -42,7 +42,7 @@ function main() {
 
 ### `LiFiDiamondABI`
 
-`import LiFiDiamondABI from "./protocols/lifi/LiFiDiamondABI.json";` Speaks for: lifiDiamond.
+`import LiFiDiamondABI from "./protocols/lifi/LiFiDiamondABI.json";` Speaks for: lifiDiamond. The import is the contract's full ABI across every deployment; call it through the `Lifi` namespace to have a function a chain's deployment does not run refused.
 
 - `ACROSS_CHAIN_ID_SOLANA() view returns (uint256)`
 - `addDex(address _dex)`

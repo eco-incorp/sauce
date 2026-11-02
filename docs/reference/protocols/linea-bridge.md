@@ -51,7 +51,7 @@ function main() {
 
 ### `LineaL1MessageServiceABI`
 
-`import LineaL1MessageServiceABI from "./protocols/linea-bridge/LineaL1MessageServiceABI.json";` Speaks for: l1MessageService.
+`import LineaL1MessageServiceABI from "./protocols/linea-bridge/LineaL1MessageServiceABI.json";` Speaks for: l1MessageService. The import is the contract's full ABI across every deployment; call it through the `LineaBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `addressFilter() view returns (address)`
 - `blobShnarfExists(bytes32 _shnarf) view returns (uint256 shnarfExists)`

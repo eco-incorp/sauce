@@ -53,7 +53,7 @@ function main() {
 
 ### `ArrakisRouterABI`
 
-`import ArrakisRouterABI from "./protocols/arrakis/ArrakisRouterABI.json";` Speaks for: router.
+`import ArrakisRouterABI from "./protocols/arrakis/ArrakisRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Arrakis` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity((uint256 amount0Max, uint256 amount1Max, uint256 amount0Min, uint256 amount1Min, uint256 amountSharesMin, address vault, address receiver, address gauge) params) payable returns (uint256 amount0, uint256 amount1, uint256 sharesReceived)`
 - `addLiquidityPermit2(((uint256 amount0Max, uint256 amount1Max, uint256 amount0Min, uint256 amount1Min, uint256 amountSharesMin, address vault, address receiver, address gauge) addData, ((address token, uint256 amount)[] permitted, uint256 nonce, uint256 deadline) permit, bytes signature) params_) payable returns (uint256 amount0, uint256 amount1, uint256 sharesReceived)`

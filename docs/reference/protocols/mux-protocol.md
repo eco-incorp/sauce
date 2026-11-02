@@ -54,7 +54,7 @@ function main() {
 
 ### `LiquidityPoolABI`
 
-`import LiquidityPoolABI from "./protocols/mux-protocol/LiquidityPoolABI.json";` Speaks for: liquidityPool.
+`import LiquidityPoolABI from "./protocols/mux-protocol/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the contract's full ABI across every deployment; call it through the `MuxProtocol` namespace to have a function a chain's deployment does not run refused.
 
 - `closePosition(bytes32 subAccountId, uint96 amount, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice) returns (uint96)`
 - `depositCollateral(bytes32 subAccountId, uint256 rawAmount)`
@@ -77,7 +77,7 @@ function main() {
 
 ### `OrderBookABI`
 
-`import OrderBookABI from "./protocols/mux-protocol/OrderBookABI.json";` Speaks for: orderBook.
+`import OrderBookABI from "./protocols/mux-protocol/OrderBookABI.json";` Speaks for: orderBook. The import is the contract's full ABI across every deployment; call it through the `MuxProtocol` namespace to have a function a chain's deployment does not run refused.
 
 - `addBroker(address newBroker)`
 - `addRebalancer(address newRebalancer)`

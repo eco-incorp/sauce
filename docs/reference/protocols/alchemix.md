@@ -57,7 +57,7 @@ function main() {
 
 ### `AlchemistABI`
 
-`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH.
+`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH. The import is the contract's full ABI across every deployment; call it through the `Alchemix` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `accounts(address owner) view returns (int256 debt, address[] depositedTokens)`

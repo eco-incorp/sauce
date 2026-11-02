@@ -43,7 +43,7 @@ functions, and its writes are SafeERC20.
 
 ### `LBFactoryABI`
 
-`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory.
+`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addQuoteAsset(address quoteAsset)`
@@ -139,9 +139,11 @@ Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0
 - `symbol() view returns (string)`
 - `totalSupply(uint256 id) view returns (uint256)`
 
+Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.
+
 ### `LBRouterABI`
 
-`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter.
+`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`
 - `addLiquidityNATIVE((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) payable returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`

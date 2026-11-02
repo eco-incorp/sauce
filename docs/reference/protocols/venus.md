@@ -48,7 +48,7 @@ function main() {
 
 ### `VBNBABI`
 
-`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB.
+`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
 
 - `_acceptAdmin() returns (uint256)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
@@ -177,7 +177,7 @@ function main() {
 
 ### `VenusComptrollerABI`
 
-`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller.
+`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
 
 - `_become(address unitroller)`
 - `_grantXVS(address recipient, uint256 amount)`

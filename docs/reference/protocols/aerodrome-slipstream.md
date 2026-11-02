@@ -62,7 +62,7 @@ functions, and its writes are SafeERC20.
 
 ### `AeroMetarouterABI`
 
-`import AeroMetarouterABI from "./protocols/aerodrome-slipstream/AeroMetarouterABI.json";` Speaks for: metarouter.
+`import AeroMetarouterABI from "./protocols/aerodrome-slipstream/AeroMetarouterABI.json";` Speaks for: metarouter. The import is the contract's full ABI across every deployment; call it through the `AerodromeSlipstream` namespace to have a function a chain's deployment does not run refused.
 
 - `EMISSION_TOKEN() view returns (address)`
 - `execute(bytes _commands, bytes[] _inputs, uint256 _deadline) payable`
@@ -131,7 +131,7 @@ functions, and its writes are SafeERC20.
 
 ### `SlipstreamCLFactoryABI`
 
-`import SlipstreamCLFactoryABI from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";` Speaks for: clFactory, clFactoryGaugeCaps, clFactoryGaugesV3.
+`import SlipstreamCLFactoryABI from "./protocols/aerodrome-slipstream/SlipstreamCLFactoryABI.json";` Speaks for: clFactory, clFactoryGaugeCaps, clFactoryGaugesV3. The import is the contract's full ABI across every deployment; call it through the `AerodromeSlipstream` namespace to have a function a chain's deployment does not run refused.
 
 - `allPools(uint256) view returns (address)`
 - `allPoolsLength() view returns (uint256)`
@@ -197,7 +197,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SlipstreamPositionManagerABI`
 
-`import SlipstreamPositionManagerABI from "./protocols/aerodrome-slipstream/SlipstreamPositionManagerABI.json";` Speaks for: nonfungiblePositionManager, nonfungiblePositionManagerGaugeCaps, nonfungiblePositionManagerGaugesV3.
+`import SlipstreamPositionManagerABI from "./protocols/aerodrome-slipstream/SlipstreamPositionManagerABI.json";` Speaks for: nonfungiblePositionManager, nonfungiblePositionManagerGaugeCaps, nonfungiblePositionManagerGaugesV3. The import is the contract's full ABI across every deployment; call it through the `AerodromeSlipstream` namespace to have a function a chain's deployment does not run refused.
 
 - `approve(address to, uint256 tokenId)`
 - `balanceOf(address owner) view returns (uint256)`

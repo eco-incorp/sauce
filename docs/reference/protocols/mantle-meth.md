@@ -52,7 +52,7 @@ function main() {
 
 ### `METHABI`
 
-`import METHABI from "./protocols/mantle-meth/METHABI.json";` Speaks for: mETH.
+`import METHABI from "./protocols/mantle-meth/METHABI.json";` Speaks for: mETH. The import is the contract's full ABI across every deployment; call it through the `MantleMeth` namespace to have a function a chain's deployment does not run refused.
 
 - `ADD_BLOCK_LIST_CONTRACT_ROLE() view returns (bytes32)`
 - `addBlockListContract(address blockListAddress)`
@@ -96,7 +96,7 @@ function main() {
 
 ### `METHStakingABI`
 
-`import METHStakingABI from "./protocols/mantle-meth/METHStakingABI.json";` Speaks for: staking.
+`import METHStakingABI from "./protocols/mantle-meth/METHStakingABI.json";` Speaks for: staking. The import is the contract's full ABI across every deployment; call it through the `MantleMeth` namespace to have a function a chain's deployment does not run refused.
 
 - `allocatedETHForDeposits() view returns (uint256)`
 - `allocateETH(uint256 allocateToUnstakeRequestsManager, uint256 allocateToDeposits, uint256 allocateToLiquidityBuffer)`

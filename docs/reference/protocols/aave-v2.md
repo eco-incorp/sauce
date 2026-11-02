@@ -74,7 +74,7 @@ function main() {
 
 ### `LendingPoolABI`
 
-`import LendingPoolABI from "./protocols/aave-v2/LendingPoolABI.json";` Speaks for: lendingPool.
+`import LendingPoolABI from "./protocols/aave-v2/LendingPoolABI.json";` Speaks for: lendingPool. The import is the contract's full ABI across every deployment; call it through the `AaveV2` namespace to have a function a chain's deployment does not run refused.
 
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`

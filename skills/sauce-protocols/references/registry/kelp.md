@@ -34,7 +34,7 @@ function main() {
 
 ### `LRTDepositPoolABI`
 
-`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool.
+`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool. The import is the contract's full ABI across every deployment; call it through the `Kelp` namespace to have a function a chain's deployment does not run refused.
 
 - `addNodeDelegatorContractToQueue(address[] nodeDelegatorContracts)`
 - `depositAsset(address asset, uint256 depositAmount, uint256 minRSETHAmountExpected, string referralId)`
@@ -77,7 +77,7 @@ function main() {
 
 ### `RsETHABI`
 
-`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH.
+`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH. The import is the contract's full ABI across every deployment; call it through the `Kelp` namespace to have a function a chain's deployment does not run refused.
 
 - `addPermanentExemptions(address[] accounts)`
 - `allowance(address owner, address spender) view returns (uint256)`

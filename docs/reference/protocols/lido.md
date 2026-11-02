@@ -55,7 +55,7 @@ function main() {
 
 ### `LidoABI`
 
-`import LidoABI from "./protocols/lido/LidoABI.json";` Speaks for: stETH.
+`import LidoABI from "./protocols/lido/LidoABI.json";` Speaks for: stETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address _owner, address _spender) view returns (uint256)`
 - `allowRecoverability(address token) view returns (bool)`
@@ -146,7 +146,7 @@ function main() {
 
 ### `WstETHABI`
 
-`import WstETHABI from "./protocols/lido/WstETHABI.json";` Speaks for: wstETH.
+`import WstETHABI from "./protocols/lido/WstETHABI.json";` Speaks for: wstETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -172,7 +172,7 @@ function main() {
 
 ### `WstETHBridgedABI`
 
-`import WstETHBridgedABI from "./protocols/lido/WstETHBridgedABI.json";` Speaks for: wstETH.
+`import WstETHBridgedABI from "./protocols/lido/WstETHBridgedABI.json";` Speaks for: wstETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

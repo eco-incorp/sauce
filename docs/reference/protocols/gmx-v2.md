@@ -59,7 +59,7 @@ function main() {
 
 ### `ExchangeRouterABI`
 
-`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter.
+`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter. The import is the contract's full ABI across every deployment; call it through the `GmxV2` namespace to have a function a chain's deployment does not run refused.
 
 - `cancelDeposit(bytes32 key) payable`
 - `cancelOrder(bytes32 key) payable`

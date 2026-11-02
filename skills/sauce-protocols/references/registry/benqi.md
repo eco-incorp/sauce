@@ -33,7 +33,7 @@ function main() {
 
 ### `BenqiComptrollerABI`
 
-`import BenqiComptrollerABI from "./protocols/benqi/BenqiComptrollerABI.json";` Speaks for: comptroller.
+`import BenqiComptrollerABI from "./protocols/benqi/BenqiComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Benqi` namespace to have a function a chain's deployment does not run refused.
 
 - `_become(address unitroller)`
 - `_borrowGuardianPaused() view returns (bool)`

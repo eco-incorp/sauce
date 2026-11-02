@@ -53,7 +53,7 @@ function main() {
 
 ### `ZkSyncDiamondProxyABI`
 
-`import ZkSyncDiamondProxyABI from "./protocols/zksync-bridge/ZkSyncDiamondProxyABI.json";` Speaks for: diamondProxy.
+`import ZkSyncDiamondProxyABI from "./protocols/zksync-bridge/ZkSyncDiamondProxyABI.json";` Speaks for: diamondProxy. The import is the contract's full ABI across every deployment; call it through the `ZksyncBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `allowEvmEmulation() returns (bytes32 canonicalTxHash)`

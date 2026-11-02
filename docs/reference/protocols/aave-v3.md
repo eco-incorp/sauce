@@ -165,7 +165,7 @@ functions, and its writes are SafeERC20.
 
 ### `AaveOracleABI`
 
-`import AaveOracleABI from "./protocols/aave-v3/AaveOracleABI.json";` Speaks for: oracle.
+`import AaveOracleABI from "./protocols/aave-v3/AaveOracleABI.json";` Speaks for: oracle. The import is the contract's full ABI across every deployment; call it through the `AaveV3` namespace to have a function a chain's deployment does not run refused.
 
 - `ADDRESSES_PROVIDER() view returns (address)`
 - `BASE_CURRENCY() view returns (address)`
@@ -179,7 +179,7 @@ functions, and its writes are SafeERC20.
 
 ### `PoolABI`
 
-`import PoolABI from "./protocols/aave-v3/PoolABI.json";` Speaks for: pool.
+`import PoolABI from "./protocols/aave-v3/PoolABI.json";` Speaks for: pool. The import is the contract's full ABI across every deployment; call it through the `AaveV3` namespace to have a function a chain's deployment does not run refused.
 
 - `ADDRESSES_PROVIDER() view returns (address)`
 - `approvePositionManager(address positionManager, bool approve)`
@@ -292,7 +292,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `PoolAddressesProviderABI`
 
-`import PoolAddressesProviderABI from "./protocols/aave-v3/PoolAddressesProviderABI.json";` Speaks for: poolAddressesProvider.
+`import PoolAddressesProviderABI from "./protocols/aave-v3/PoolAddressesProviderABI.json";` Speaks for: poolAddressesProvider. The import is the contract's full ABI across every deployment; call it through the `AaveV3` namespace to have a function a chain's deployment does not run refused.
 
 - `getACLAdmin() view returns (address)`
 - `getACLManager() view returns (address)`

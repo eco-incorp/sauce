@@ -51,7 +51,7 @@ function main() {
 
 ### `EzETHABI`
 
-`import EzETHABI from "./protocols/renzo/EzETHABI.json";` Speaks for: ezETH.
+`import EzETHABI from "./protocols/renzo/EzETHABI.json";` Speaks for: ezETH. The import is the contract's full ABI across every deployment; call it through the `Renzo` namespace to have a function a chain's deployment does not run refused.
 
 - `_deprecated_paused() view returns (bool)`
 - `allowance(address owner, address spender) view returns (uint256)`
@@ -72,7 +72,7 @@ function main() {
 
 ### `RestakeManagerABI`
 
-`import RestakeManagerABI from "./protocols/renzo/RestakeManagerABI.json";` Speaks for: restakeManager.
+`import RestakeManagerABI from "./protocols/renzo/RestakeManagerABI.json";` Speaks for: restakeManager. The import is the contract's full ABI across every deployment; call it through the `Renzo` namespace to have a function a chain's deployment does not run refused.
 
 - `_deprecated_maxDepositTVL() view returns (uint256)`
 - `addCollateralToken(address _newCollateralToken)`

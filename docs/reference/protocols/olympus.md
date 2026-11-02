@@ -49,7 +49,7 @@ function main() {
 
 ### `StakingABI`
 
-`import StakingABI from "./protocols/olympus/StakingABI.json";` Speaks for: staking.
+`import StakingABI from "./protocols/olympus/StakingABI.json";` Speaks for: staking. The import is the contract's full ABI across every deployment; call it through the `Olympus` namespace to have a function a chain's deployment does not run refused.
 
 - `authority() view returns (address)`
 - `claim(address to, bool rebasing) returns (uint256)`

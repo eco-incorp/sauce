@@ -53,7 +53,7 @@ function main() {
 
 ### `EverclearSpokeABI`
 
-`import EverclearSpokeABI from "./protocols/connext/EverclearSpokeABI.json";` Speaks for: everclearSpoke.
+`import EverclearSpokeABI from "./protocols/connext/EverclearSpokeABI.json";` Speaks for: everclearSpoke. The import is the contract's full ABI across every deployment; call it through the `Connext` namespace to have a function a chain's deployment does not run refused.
 
 - `balances(bytes32 _asset, bytes32 _user) view returns (uint256 _amount)`
 - `BATCH_FILL_INTENT_TYPEHASH() view returns (bytes32)`

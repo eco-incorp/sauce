@@ -37,7 +37,7 @@ function main() {
 
 ### `DelegationManagerABI`
 
-`import DelegationManagerABI from "./protocols/eigenlayer/DelegationManagerABI.json";` Speaks for: delegationManager.
+`import DelegationManagerABI from "./protocols/eigenlayer/DelegationManagerABI.json";` Speaks for: delegationManager. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
 
 - `allocationManager() view returns (address)`
 - `beaconChainETHStrategy() view returns (address)`
@@ -91,7 +91,7 @@ function main() {
 
 ### `StrategyABI`
 
-`import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";` Speaks for: stETHStrategy, rETHStrategy, cbETHStrategy.
+`import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";` Speaks for: stETHStrategy, rETHStrategy, cbETHStrategy. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
 
 - `beforeAddShares(address, uint256)`
 - `beforeRemoveShares(address, uint256)`
@@ -123,7 +123,7 @@ function main() {
 
 ### `StrategyManagerABI`
 
-`import StrategyManagerABI from "./protocols/eigenlayer/StrategyManagerABI.json";` Speaks for: strategyManager.
+`import StrategyManagerABI from "./protocols/eigenlayer/StrategyManagerABI.json";` Speaks for: strategyManager. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
 
 - `addShares(address staker, address strategy, uint256 shares) returns (uint256, uint256)`
 - `addStrategiesToDepositWhitelist(address[] strategiesToWhitelist)`

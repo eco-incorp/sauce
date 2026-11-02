@@ -52,7 +52,7 @@ function main() {
 
 ### `ScrollL1GatewayRouterABI`
 
-`import ScrollL1GatewayRouterABI from "./protocols/scroll-bridge/ScrollL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter.
+`import ScrollL1GatewayRouterABI from "./protocols/scroll-bridge/ScrollL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter. The import is the contract's full ABI across every deployment; call it through the `ScrollBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `defaultERC20Gateway() view returns (address)`
 - `depositERC20(address _token, uint256 _amount, uint256 _gasLimit) payable`
@@ -79,7 +79,7 @@ function main() {
 
 ### `ScrollL1MessengerABI`
 
-`import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger.
+`import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger. The import is the contract's full ABI across every deployment; call it through the `ScrollBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `counterpart() view returns (address)`
 - `enforcedTxGateway() view returns (address)`

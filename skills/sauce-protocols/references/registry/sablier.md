@@ -33,7 +33,7 @@ function main() {
 
 ### `LockupLinearABI`
 
-`import LockupLinearABI from "./protocols/sablier/LockupLinearABI.json";` Speaks for: lockupLinear.
+`import LockupLinearABI from "./protocols/sablier/LockupLinearABI.json";` Speaks for: lockupLinear. The import is the contract's full ABI across every deployment; call it through the `Sablier` namespace to have a function a chain's deployment does not run refused.
 
 - `admin() view returns (address)`
 - `approve(address to, uint256 tokenId)`

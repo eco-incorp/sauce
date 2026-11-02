@@ -51,7 +51,7 @@ function main() {
 
 ### `LiquidityPoolABI`
 
-`import LiquidityPoolABI from "./protocols/level-finance/LiquidityPoolABI.json";` Speaks for: liquidityPool.
+`import LiquidityPoolABI from "./protocols/level-finance/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the contract's full ABI across every deployment; call it through the `LevelFinance` namespace to have a function a chain's deployment does not run refused.
 
 - `accrualInterval() view returns (uint256)`
 - `accrueInterest(address _token) returns (uint256)`

@@ -34,7 +34,7 @@ function main() {
 
 ### `DODOV2ProxyABI`
 
-`import DODOV2ProxyABI from "./protocols/dodo/DODOV2ProxyABI.json";` Speaks for: dodoV2Proxy.
+`import DODOV2ProxyABI from "./protocols/dodo/DODOV2ProxyABI.json";` Speaks for: dodoV2Proxy. The import is the contract's full ABI across every deployment; call it through the `Dodo` namespace to have a function a chain's deployment does not run refused.
 
 - `_CHI_TOKEN_() view returns (address)`
 - `_CP_FACTORY_() view returns (address)`

@@ -104,7 +104,7 @@ function main() {
 
 ### `MoonwellComptrollerABI`
 
-`import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";` Speaks for: comptroller.
+`import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Moonwell` namespace to have a function a chain's deployment does not run refused.
 
 - `_become(address unitroller)`
 - `_rescueFunds(address _tokenAddress, uint256 _amount)`

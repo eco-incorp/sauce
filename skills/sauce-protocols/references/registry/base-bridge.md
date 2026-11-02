@@ -34,7 +34,7 @@ function main() {
 
 ### `BaseL1StandardBridgeABI`
 
-`import BaseL1StandardBridgeABI from "./protocols/base-bridge/BaseL1StandardBridgeABI.json";` Speaks for: l1StandardBridge.
+`import BaseL1StandardBridgeABI from "./protocols/base-bridge/BaseL1StandardBridgeABI.json";` Speaks for: l1StandardBridge. The import is the contract's full ABI across every deployment; call it through the `BaseBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `bridgeERC20(address _localToken, address _remoteToken, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
 - `bridgeERC20To(address _localToken, address _remoteToken, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`

@@ -54,7 +54,7 @@ function main() {
 
 ### `StakedUSDeABI`
 
-`import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";` Speaks for: susde.
+`import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";` Speaks for: susde. The import is the contract's full ABI across every deployment; call it through the `Ethena` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `addToBlacklist(address target, bool isFullBlacklisting)`
@@ -116,7 +116,7 @@ function main() {
 
 ### `USDeABI`
 
-`import USDeABI from "./protocols/ethena/USDeABI.json";` Speaks for: usde.
+`import USDeABI from "./protocols/ethena/USDeABI.json";` Speaks for: usde. The import is the contract's full ABI across every deployment; call it through the `Ethena` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `allowance(address owner, address spender) view returns (uint256)`

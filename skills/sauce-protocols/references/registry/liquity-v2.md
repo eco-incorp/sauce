@@ -33,7 +33,7 @@ function main() {
 
 ### `BoldTokenABI`
 
-`import BoldTokenABI from "./protocols/liquity-v2/BoldTokenABI.json";` Speaks for: bold.
+`import BoldTokenABI from "./protocols/liquity-v2/BoldTokenABI.json";` Speaks for: bold. The import is the contract's full ABI across every deployment; call it through the `LiquityV2` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

@@ -39,7 +39,13 @@ export interface MethodReturn {
 export interface ContractCoverage {
   /** Always "sdk-registry" in v1 — the SDK's own vendored data, never an external ABI source. */
   readonly abiSource: "sdk-registry";
-  /** Every vendored ABI is a curated subset; never "full" in v1. */
+  /**
+   * "partial": the registry ABI is its deployments' full verified ABI less what cannot be exposed
+   * (each export's omissions, with why, are `test/fixtures/registry-abi/omitted.json`); a `standard`
+   * or `common` interface is only what every instance runs; and a chain's `descriptorOn` view also
+   * drops what that chain's deployment does not run (`withheldOn`). No shipped record says which
+   * exports omit nothing, so none is claimed "full".
+   */
   readonly completeness: "partial" | "unknown";
   /** "widened" means the selectors computed here will NOT match the deployed contract's real selectors. */
   readonly typeFidelity: "exact" | "widened";

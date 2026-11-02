@@ -73,7 +73,7 @@ function main() {
 
 ### `KyberSwapElasticRouterABI`
 
-`import KyberSwapElasticRouterABI from "./protocols/kyberswap/KyberSwapElasticRouterABI.json";` Speaks for: elasticRouter.
+`import KyberSwapElasticRouterABI from "./protocols/kyberswap/KyberSwapElasticRouterABI.json";` Speaks for: elasticRouter. The import is the contract's full ABI across every deployment; call it through the `Kyberswap` namespace to have a function a chain's deployment does not run refused.
 
 - `factory() view returns (address)`
 - `multicall(bytes[] data) payable returns (bytes[] results)`
@@ -91,7 +91,7 @@ function main() {
 
 ### `KyberSwapMetaAggregationRouterABI`
 
-`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouterV2.
+`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouterV2. The import is the contract's full ABI across every deployment; call it through the `Kyberswap` namespace to have a function a chain's deployment does not run refused.
 
 - `isWhitelist(address) view returns (bool)`
 - `owner() view returns (address)`

@@ -34,7 +34,7 @@ function main() {
 
 ### `ClearinghouseABI`
 
-`import ClearinghouseABI from "./protocols/vertex/ClearinghouseABI.json";` Speaks for: clearinghouse.
+`import ClearinghouseABI from "./protocols/vertex/ClearinghouseABI.json";` Speaks for: clearinghouse. The import is the contract's full ABI across every deployment; call it through the `Vertex` namespace to have a function a chain's deployment does not run refused.
 
 - `_isAboveInitial(bytes32 subaccount) view returns (bool)`
 - `_isUnderInitial(bytes32 subaccount) view returns (bool)`
@@ -75,7 +75,7 @@ function main() {
 
 ### `EndpointABI`
 
-`import EndpointABI from "./protocols/vertex/EndpointABI.json";` Speaks for: endpoint.
+`import EndpointABI from "./protocols/vertex/EndpointABI.json";` Speaks for: endpoint. The import is the contract's full ABI across every deployment; call it through the `Vertex` namespace to have a function a chain's deployment does not run refused.
 
 - `clearinghouse() view returns (address)`
 - `depositCollateral(bytes12 subaccountName, uint32 productId, uint128 amount)`

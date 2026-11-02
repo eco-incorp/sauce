@@ -52,7 +52,7 @@ function main() {
 
 ### `FrxETHMinterABI`
 
-`import FrxETHMinterABI from "./protocols/frax-ether/FrxETHMinterABI.json";` Speaks for: frxETHMinter.
+`import FrxETHMinterABI from "./protocols/frax-ether/FrxETHMinterABI.json";` Speaks for: frxETHMinter. The import is the contract's full ABI across every deployment; call it through the `FraxEther` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `activeValidators(bytes) view returns (bool)`
@@ -93,7 +93,7 @@ function main() {
 
 ### `SfrxETHABI`
 
-`import SfrxETHABI from "./protocols/frax-ether/SfrxETHABI.json";` Speaks for: sfrxETH.
+`import SfrxETHABI from "./protocols/frax-ether/SfrxETHABI.json";` Speaks for: sfrxETH. The import is the contract's full ABI across every deployment; call it through the `FraxEther` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address, address) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

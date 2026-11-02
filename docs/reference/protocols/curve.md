@@ -72,7 +72,7 @@ function main() {
 
 ### `CurveAddressProviderABI`
 
-`import CurveAddressProviderABI from "./protocols/curve/CurveAddressProviderABI.json";` Speaks for: addressProvider.
+`import CurveAddressProviderABI from "./protocols/curve/CurveAddressProviderABI.json";` Speaks for: addressProvider. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
 
 - `add_new_id(address _address, string _description) returns (uint256)`
 - `admin() view returns (address)`
@@ -90,7 +90,7 @@ function main() {
 
 ### `CurveRouterNGABI`
 
-`import CurveRouterNGABI from "./protocols/curve/CurveRouterNGABI.json";` Speaks for: routerNG.
+`import CurveRouterNGABI from "./protocols/curve/CurveRouterNGABI.json";` Speaks for: routerNG. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
 
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy) payable returns (uint256)`
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools) payable returns (uint256)`
@@ -175,9 +175,11 @@ function main() {
 - `version() view returns (string)`
 - `withdraw_admin_fees()`
 
+Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.
+
 ### `CurveThreePoolABI`
 
-`import CurveThreePoolABI from "./protocols/curve/CurveThreePoolABI.json";` Speaks for: threePool.
+`import CurveThreePoolABI from "./protocols/curve/CurveThreePoolABI.json";` Speaks for: threePool. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
 
 - `A() view returns (uint256)`
 - `add_liquidity(uint256[3] amounts, uint256 min_mint_amount)`

@@ -39,7 +39,7 @@ function main() {
 
 ### `SocketGatewayABI`
 
-`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway.
+`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway. The import is the contract's full ABI across every deployment; call it through the `Socket` namespace to have a function a chain's deployment does not run refused.
 
 - `addController(address controllerAddress) returns (uint32)`
 - `addressAt(uint32 routeId) view returns (address)`

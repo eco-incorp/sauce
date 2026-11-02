@@ -40,7 +40,7 @@ function main() {
 
 ### `SafeABI`
 
-`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130.
+`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130. The import is the contract's full ABI across every deployment; call it through the `Safe` namespace to have a function a chain's deployment does not run refused.
 
 - `addOwnerWithThreshold(address owner, uint256 _threshold)`
 - `approvedHashes(address, bytes32) view returns (uint256)`

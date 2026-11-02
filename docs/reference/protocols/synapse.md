@@ -54,7 +54,7 @@ function main() {
 
 ### `SynapseBridgeABI`
 
-`import SynapseBridgeABI from "./protocols/synapse/SynapseBridgeABI.json";` Speaks for: synapseBridge.
+`import SynapseBridgeABI from "./protocols/synapse/SynapseBridgeABI.json";` Speaks for: synapseBridge. The import is the contract's full ABI across every deployment; call it through the `Synapse` namespace to have a function a chain's deployment does not run refused.
 
 - `addKappas(bytes32[] kappas)`
 - `bridgeVersion() view returns (uint256)`

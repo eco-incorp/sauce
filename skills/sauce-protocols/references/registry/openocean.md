@@ -39,7 +39,7 @@ function main() {
 
 ### `OpenOceanExchangeV2ABI`
 
-`import OpenOceanExchangeV2ABI from "./protocols/openocean/OpenOceanExchangeV2ABI.json";` Speaks for: exchangeV2.
+`import OpenOceanExchangeV2ABI from "./protocols/openocean/OpenOceanExchangeV2ABI.json";` Speaks for: exchangeV2. The import is the contract's full ABI across every deployment; call it through the `Openocean` namespace to have a function a chain's deployment does not run refused.
 
 - `callUniswap(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools) payable returns (uint256 returnAmount)`
 - `callUniswapTo(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools, address recipient) payable returns (uint256 returnAmount)`

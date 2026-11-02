@@ -53,7 +53,7 @@ function main() {
 
 ### `HopL1BridgeABI`
 
-`import HopL1BridgeABI from "./protocols/hop/HopL1BridgeABI.json";` Speaks for: l1EthBridge, l1UsdcBridge.
+`import HopL1BridgeABI from "./protocols/hop/HopL1BridgeABI.json";` Speaks for: l1EthBridge, l1UsdcBridge. The import is the contract's full ABI across every deployment; call it through the `Hop` namespace to have a function a chain's deployment does not run refused.
 
 - `addBonder(address bonder)`
 - `bondTransferRoot(bytes32 rootHash, uint256 destinationChainId, uint256 totalAmount)`
@@ -111,7 +111,7 @@ Not on Ethereum's l1UsdcBridge (`0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a`), w
 
 ### `HopL2AmmWrapperABI`
 
-`import HopL2AmmWrapperABI from "./protocols/hop/HopL2AmmWrapperABI.json";` Speaks for: l2AmmWrapper.
+`import HopL2AmmWrapperABI from "./protocols/hop/HopL2AmmWrapperABI.json";` Speaks for: l2AmmWrapper. The import is the contract's full ABI across every deployment; call it through the `Hop` namespace to have a function a chain's deployment does not run refused.
 
 - `attemptSwap(address recipient, uint256 amount, uint256 amountOutMin, uint256 deadline)`
 - `bridge() view returns (address)`

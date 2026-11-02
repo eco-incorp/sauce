@@ -36,7 +36,7 @@ function main() {
 
 ### `PolygonRootChainManagerABI`
 
-`import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";` Speaks for: rootChainManager.
+`import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";` Speaks for: rootChainManager. The import is the contract's full ABI across every deployment; call it through the `PolygonBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `checkpointManagerAddress() view returns (address)`
 - `childChainManagerAddress() view returns (address)`

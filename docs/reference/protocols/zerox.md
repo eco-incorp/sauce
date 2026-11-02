@@ -58,7 +58,7 @@ function main() {
 
 ### `ExchangeProxyABI`
 
-`import ExchangeProxyABI from "./protocols/zerox/ExchangeProxyABI.json";` Speaks for: exchangeProxy.
+`import ExchangeProxyABI from "./protocols/zerox/ExchangeProxyABI.json";` Speaks for: exchangeProxy. The import is the contract's full ABI across every deployment; call it through the `Zerox` namespace to have a function a chain's deployment does not run refused.
 
 - `_transformERC20((address taker, address inputToken, address outputToken, uint256 inputTokenAmount, uint256 minOutputTokenAmount, (uint32 deploymentNonce, bytes data)[] transformations, bool useSelfBalance, address recipient) args) payable returns (uint256 outputTokenAmount)`
 - `createTransformWallet() returns (address wallet)`

@@ -667,7 +667,13 @@ does not dispatch the selector, or its verified ABI declares the function otherw
 names module imports that view's ABI, and a program compiled for the chain that calls one is
 refused, naming the chains that run it (`AaveV3.Pool`'s L2-only `supply(bytes32)` on Ethereum,
 `CbETH.exchangeRate()` on Base). An interface (a by-address contract) has no chain to filter by: it
-is its representative instances' union.
+is its representative instances' union. Withholding applies to NAMESPACE names only. An explicit
+twin import (`import X from "./protocols/<slug>/<Export>.json"`) and a caller's `contracts` stay the
+raw, unfiltered ABI, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin
+is bound to is matched against a deployment, and none is to be added. The registry documents say
+so beside each twin's import line, and say of an interface whose captured instances do not all
+dispatch the same selectors that not every contract it reaches runs every function listed
+(`gen-skills-references.mjs`, reading `evidence.json` at generation time).
 
 `test/registry-abi.test.ts` checks each function, event and custom error of each export against the
 evidence: some deployment must dispatch each function's selector (after resolving EIP-1167 clones,

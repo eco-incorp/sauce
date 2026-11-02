@@ -61,7 +61,7 @@ function main() {
 
 ### `AxelarGasServiceABI`
 
-`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService.
+`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addExpressGas(bytes32 txHash, uint256 logIndex, address gasToken, uint256 gasFeeAmount, address refundAddress)`
@@ -95,7 +95,7 @@ function main() {
 
 ### `AxelarGatewayABI`
 
-`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway.
+`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
 
 - `allTokensFrozen() pure returns (bool)`
 - `approveContractCall(bytes params, bytes32 commandId)`
@@ -137,7 +137,7 @@ function main() {
 
 ### `AxelarITSABI`
 
-`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its.
+`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOperatorship(address fromOperator)`
 - `acceptOwnership()`

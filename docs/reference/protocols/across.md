@@ -63,7 +63,7 @@ functions, and its writes are SafeERC20.
 
 ### `AcrossHubPoolABI`
 
-`import AcrossHubPoolABI from "./protocols/across/AcrossHubPoolABI.json";` Speaks for: hubPool.
+`import AcrossHubPoolABI from "./protocols/across/AcrossHubPoolABI.json";` Speaks for: hubPool. The import is the contract's full ABI across every deployment; call it through the `Across` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address l1Token, uint256 l1TokenAmount) payable`
 - `bondAmount() view returns (uint256)`
@@ -115,7 +115,7 @@ functions, and its writes are SafeERC20.
 
 ### `AcrossSpokePoolABI`
 
-`import AcrossSpokePoolABI from "./protocols/across/AcrossSpokePoolABI.json";` Speaks for: spokePool.
+`import AcrossSpokePoolABI from "./protocols/across/AcrossSpokePoolABI.json";` Speaks for: spokePool. The import is the contract's full ABI across every deployment; call it through the `Across` namespace to have a function a chain's deployment does not run refused.
 
 - `__OvmSpokePool_init(uint32 _initialDepositId, address _crossDomainAdmin, address _withdrawalRecipient, address _l2Eth)`
 - `__SpokePool_init(uint32 _initialDepositId, address _crossDomainAdmin, address _withdrawalRecipient)`

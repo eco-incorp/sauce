@@ -34,7 +34,7 @@ function main() {
 
 ### `SparkPoolABI`
 
-`import SparkPoolABI from "./protocols/spark/SparkPoolABI.json";` Speaks for: pool.
+`import SparkPoolABI from "./protocols/spark/SparkPoolABI.json";` Speaks for: pool. The import is the contract's full ABI across every deployment; call it through the `Spark` namespace to have a function a chain's deployment does not run refused.
 
 - `ADDRESSES_PROVIDER() view returns (address)`
 - `backUnbacked(address asset, uint256 amount, uint256 fee) returns (uint256)`

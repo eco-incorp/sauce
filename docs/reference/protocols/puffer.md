@@ -51,7 +51,7 @@ function main() {
 
 ### `PufferVaultABI`
 
-`import PufferVaultABI from "./protocols/puffer/PufferVaultABI.json";` Speaks for: pufferVault.
+`import PufferVaultABI from "./protocols/puffer/PufferVaultABI.json";` Speaks for: pufferVault. The import is the contract's full ABI across every deployment; call it through the `Puffer` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 value) returns (bool)`

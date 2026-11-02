@@ -64,7 +64,7 @@ function main() {
 
 ### `AugustusV5ABI`
 
-`import AugustusV5ABI from "./protocols/paraswap/AugustusV5ABI.json";` Speaks for: augustusV5.
+`import AugustusV5ABI from "./protocols/paraswap/AugustusV5ABI.json";` Speaks for: augustusV5. The import is the contract's full ABI across every deployment; call it through the `Paraswap` namespace to have a function a chain's deployment does not run refused.
 
 - `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
 - `getAdapterData(bytes32 key) view returns (bytes)`

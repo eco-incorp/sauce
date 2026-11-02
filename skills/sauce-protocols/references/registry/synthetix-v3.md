@@ -34,7 +34,7 @@ function main() {
 
 ### `CoreProxyABI`
 
-`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy.
+`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `acceptPoolOwnership(uint128 poolId)`
@@ -178,7 +178,7 @@ function main() {
 
 ### `PerpsMarketProxyABI`
 
-`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy.
+`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addSettlementStrategy(uint128 marketId, (uint8 strategyType, uint256 settlementDelay, uint256 settlementWindowDuration, address priceVerificationContract, bytes32 feedId, uint256 settlementReward, bool disabled, uint256 commitmentPriceDelay) strategy) returns (uint256 strategyId)`

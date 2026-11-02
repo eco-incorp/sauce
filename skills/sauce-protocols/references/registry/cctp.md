@@ -46,7 +46,7 @@ function main() {
 
 ### `TokenMessengerABI`
 
-`import TokenMessengerABI from "./protocols/cctp/TokenMessengerABI.json";` Speaks for: tokenMessenger.
+`import TokenMessengerABI from "./protocols/cctp/TokenMessengerABI.json";` Speaks for: tokenMessenger. The import is the contract's full ABI across every deployment; call it through the `Cctp` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addLocalMinter(address newLocalMinter)`

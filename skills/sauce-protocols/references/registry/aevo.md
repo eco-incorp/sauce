@@ -33,7 +33,7 @@ function main() {
 
 ### `DepositContractABI`
 
-`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract.
+`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract. The import is the contract's full ABI across every deployment; call it through the `Aevo` namespace to have a function a chain's deployment does not run refused.
 
 - `bridgeERC20(address _localToken, address _remoteToken, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
 - `bridgeERC20To(address _localToken, address _remoteToken, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`

@@ -39,7 +39,7 @@ function main() {
 
 ### `AggregationRouterV6ABI`
 
-`import AggregationRouterV6ABI from "./protocols/oneinch/AggregationRouterV6ABI.json";` Speaks for: aggregationRouterV6.
+`import AggregationRouterV6ABI from "./protocols/oneinch/AggregationRouterV6ABI.json";` Speaks for: aggregationRouterV6. The import is the contract's full ABI across every deployment; call it through the `Oneinch` namespace to have a function a chain's deployment does not run refused.
 
 - `advanceEpoch(uint96 series, uint256 amount)`
 - `and(uint256 offsets, bytes data) view returns (bool)`

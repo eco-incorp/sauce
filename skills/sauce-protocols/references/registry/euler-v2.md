@@ -33,7 +33,7 @@ function main() {
 
 ### `EVCABI`
 
-`import EVCABI from "./protocols/euler-v2/EVCABI.json";` Speaks for: ethereumVaultConnector.
+`import EVCABI from "./protocols/euler-v2/EVCABI.json";` Speaks for: ethereumVaultConnector. The import is the contract's full ABI across every deployment; call it through the `EulerV2` namespace to have a function a chain's deployment does not run refused.
 
 - `areChecksDeferred() view returns (bool)`
 - `areChecksInProgress() view returns (bool)`

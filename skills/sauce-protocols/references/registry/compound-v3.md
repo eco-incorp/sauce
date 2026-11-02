@@ -48,7 +48,7 @@ function main() {
 
 ### `CometABI`
 
-`import CometABI from "./protocols/compound-v3/CometABI.json";` Speaks for: cUSDCv3, cWETHv3, cUSDTv3.
+`import CometABI from "./protocols/compound-v3/CometABI.json";` Speaks for: cUSDCv3, cWETHv3, cUSDTv3. The import is the contract's full ABI across every deployment; call it through the `CompoundV3` namespace to have a function a chain's deployment does not run refused.
 
 - `absorb(address absorber, address[] accounts)`
 - `accrueAccount(address account)`
@@ -174,7 +174,7 @@ Not on Ethereum's cWETHv3 (`0xA17581A9E3356d9A858b789D68B4d866e593aE94`), whose 
 
 ### `CometRewardsABI`
 
-`import CometRewardsABI from "./protocols/compound-v3/CometRewardsABI.json";` Speaks for: cometRewards.
+`import CometRewardsABI from "./protocols/compound-v3/CometRewardsABI.json";` Speaks for: cometRewards. The import is the contract's full ABI across every deployment; call it through the `CompoundV3` namespace to have a function a chain's deployment does not run refused.
 
 - `claim(address comet, address src, bool shouldAccrue)`
 - `claimTo(address comet, address src, address to, bool shouldAccrue)`

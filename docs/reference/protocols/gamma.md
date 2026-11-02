@@ -105,14 +105,14 @@ function main() {
 
 ### `UniProxyABI`
 
-`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy.
+`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
 
 - `deposit(uint256 deposit0, uint256 deposit1, address to, address pos, uint256[4] minIn) returns (uint256 shares)`
 - `getDepositAmount(address pos, address token, uint256 _deposit) view returns (uint256 amountStart, uint256 amountEnd)`
 
 ### `UniProxyLegacyABI`
 
-`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy.
+`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
 
 - `addPosition(address pos, uint8 version)`
 - `appendList(address pos, address[] listed)`

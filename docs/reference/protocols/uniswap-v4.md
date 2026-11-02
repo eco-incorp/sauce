@@ -152,7 +152,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV4PoolManagerABI`
 
-`import UniswapV4PoolManagerABI from "./protocols/uniswap-v4/UniswapV4PoolManagerABI.json";` Speaks for: poolManager.
+`import UniswapV4PoolManagerABI from "./protocols/uniswap-v4/UniswapV4PoolManagerABI.json";` Speaks for: poolManager. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender, uint256 id) view returns (uint256 amount)`
 - `approve(address spender, uint256 id, uint256 amount) returns (bool)`
@@ -193,7 +193,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `UniswapV4PositionManagerABI`
 
-`import UniswapV4PositionManagerABI from "./protocols/uniswap-v4/UniswapV4PositionManagerABI.json";` Speaks for: positionManager.
+`import UniswapV4PositionManagerABI from "./protocols/uniswap-v4/UniswapV4PositionManagerABI.json";` Speaks for: positionManager. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
 
 - `approve(address spender, uint256 id)`
 - `balanceOf(address owner) view returns (uint256)`
@@ -237,7 +237,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `UniswapV4StateViewABI`
 
-`import UniswapV4StateViewABI from "./protocols/uniswap-v4/UniswapV4StateViewABI.json";` Speaks for: stateView.
+`import UniswapV4StateViewABI from "./protocols/uniswap-v4/UniswapV4StateViewABI.json";` Speaks for: stateView. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
 
 - `getFeeGrowthGlobals(bytes32 poolId) view returns (uint256 feeGrowthGlobal0, uint256 feeGrowthGlobal1)`
 - `getFeeGrowthInside(bytes32 poolId, int24 tickLower, int24 tickUpper) view returns (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128)`
@@ -254,7 +254,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `UniswapV4UniversalRouterABI`
 
-`import UniswapV4UniversalRouterABI from "./protocols/uniswap-v4/UniswapV4UniversalRouterABI.json";` Speaks for: universalRouter.
+`import UniswapV4UniversalRouterABI from "./protocols/uniswap-v4/UniswapV4UniversalRouterABI.json";` Speaks for: universalRouter. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
 
 - `execute(bytes commands, bytes[] inputs) payable`
 - `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`

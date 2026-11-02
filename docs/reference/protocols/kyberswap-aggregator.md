@@ -63,7 +63,7 @@ function main() {
 
 ### `KyberSwapMetaAggregationRouterABI`
 
-`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap-aggregator/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouter.
+`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap-aggregator/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouter. The import is the contract's full ABI across every deployment; call it through the `KyberswapAggregator` namespace to have a function a chain's deployment does not run refused.
 
 - `isWhitelist(address) view returns (bool)`
 - `owner() view returns (address)`

@@ -34,7 +34,7 @@ function main() {
 
 ### `HegicABI`
 
-`import HegicABI from "./protocols/hegic/HegicABI.json";` Speaks for: operationalTreasury.
+`import HegicABI from "./protocols/hegic/HegicABI.json";` Speaks for: operationalTreasury. The import is the contract's full ABI across every deployment; call it through the `Hegic` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptedStrategy(address) view returns (bool)`
 - `addStrategy(address s)`

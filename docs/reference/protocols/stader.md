@@ -49,7 +49,7 @@ function main() {
 
 ### `ETHxABI`
 
-`import ETHxABI from "./protocols/stader/ETHxABI.json";` Speaks for: ETHx.
+`import ETHxABI from "./protocols/stader/ETHxABI.json";` Speaks for: ETHx. The import is the contract's full ABI across every deployment; call it through the `Stader` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -82,7 +82,7 @@ function main() {
 
 ### `StakePoolManagerABI`
 
-`import StakePoolManagerABI from "./protocols/stader/StakePoolManagerABI.json";` Speaks for: stakePoolManager.
+`import StakePoolManagerABI from "./protocols/stader/StakePoolManagerABI.json";` Speaks for: stakePoolManager. The import is the contract's full ABI across every deployment; call it through the `Stader` namespace to have a function a chain's deployment does not run refused.
 
 - `convertToAssets(uint256 _shares) view returns (uint256)`
 - `convertToShares(uint256 _assets) view returns (uint256)`

@@ -55,7 +55,7 @@ function main() {
 
 ### `DiamondABI`
 
-`import DiamondABI from "./protocols/gains-network/DiamondABI.json";` Speaks for: diamond.
+`import DiamondABI from "./protocols/gains-network/DiamondABI.json";` Speaks for: diamond. The import is the contract's full ABI across every deployment; call it through the `GainsNetwork` namespace to have a function a chain's deployment does not run refused.
 
 - `addOtcCollateralBalance(uint8 _collateralIndex, uint256 _collateralAmount)`
 - `addPriceImpactOpenInterest(address _trader, uint32 _index, uint256 _oiDeltaCollateral, bool _open, bool _isPnlPositive)`

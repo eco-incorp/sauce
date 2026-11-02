@@ -38,7 +38,7 @@ function main() {
 
 ### `CCIPRouterABI`
 
-`import CCIPRouterABI from "./protocols/chainlink-ccip/CCIPRouterABI.json";` Speaks for: router.
+`import CCIPRouterABI from "./protocols/chainlink-ccip/CCIPRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `ChainlinkCcip` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `applyRampUpdates((uint64 destChainSelector, address onRamp)[] onRampUpdates, (uint64 sourceChainSelector, address offRamp)[] offRampRemoves, (uint64 sourceChainSelector, address offRamp)[] offRampAdds)`

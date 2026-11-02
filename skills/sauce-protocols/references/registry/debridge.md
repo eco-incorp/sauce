@@ -48,7 +48,7 @@ function main() {
 
 ### `DlnDestinationABI`
 
-`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination.
+`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`
@@ -94,7 +94,7 @@ function main() {
 
 ### `DlnSourceABI`
 
-`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource.
+`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`

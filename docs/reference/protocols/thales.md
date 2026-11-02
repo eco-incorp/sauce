@@ -96,7 +96,7 @@ function main() {
 
 ### `SpeedMarketsAMMABI`
 
-`import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";` Speaks for: speedMarketsAMM.
+`import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";` Speaks for: speedMarketsAMM. The import is the contract's full ABI across every deployment; call it through the `Thales` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `activeMarkets(uint256 index, uint256 pageSize) view returns (address[])`
@@ -163,7 +163,7 @@ function main() {
 
 ### `ThalesAMMABI`
 
-`import ThalesAMMABI from "./protocols/thales/ThalesAMMABI.json";` Speaks for: thalesAMM.
+`import ThalesAMMABI from "./protocols/thales/ThalesAMMABI.json";` Speaks for: thalesAMM. The import is the contract's full ABI across every deployment; call it through the `Thales` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `availableToBuyFromAMM(address market, uint8 position) view returns (uint256 _available)`

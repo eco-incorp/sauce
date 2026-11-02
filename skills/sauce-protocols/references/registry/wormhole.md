@@ -45,7 +45,7 @@ function main() {
 
 ### `WormholeCoreBridgeABI`
 
-`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge.
+`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
 
 - `chainId() view returns (uint16)`
 - `evmChainId() view returns (uint256)`
@@ -79,7 +79,7 @@ function main() {
 
 ### `WormholeTokenBridgeABI`
 
-`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge.
+`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
 
 - `_parseTransferCommon(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer)`
 - `attestToken(address tokenAddress, uint32 nonce) payable returns (uint64 sequence)`

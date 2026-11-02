@@ -78,7 +78,7 @@ function main() {
 
 ### `SiloRepositoryABI`
 
-`import SiloRepositoryABI from "./protocols/silo/SiloRepositoryABI.json";` Speaks for: siloRepository.
+`import SiloRepositoryABI from "./protocols/silo/SiloRepositoryABI.json";` Speaks for: siloRepository. The import is the contract's full ABI across every deployment; call it through the `Silo` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addBridgeAsset(address _newBridgeAsset)`

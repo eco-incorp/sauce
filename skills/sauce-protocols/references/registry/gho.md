@@ -33,7 +33,7 @@ function main() {
 
 ### `GhoTokenABI`
 
-`import GhoTokenABI from "./protocols/gho/GhoTokenABI.json";` Speaks for: gho.
+`import GhoTokenABI from "./protocols/gho/GhoTokenABI.json";` Speaks for: gho. The import is the contract's full ABI across every deployment; call it through the `Gho` namespace to have a function a chain's deployment does not run refused.
 
 - `addFacilitator(address facilitatorAddress, string facilitatorLabel, uint128 bucketCapacity)`
 - `allowance(address, address) view returns (uint256)`

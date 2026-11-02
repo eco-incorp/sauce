@@ -39,7 +39,7 @@ function main() {
 
 ### `StargatePoolABI`
 
-`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT.
+`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT. The import is the contract's full ABI across every deployment; call it through the `Stargate` namespace to have a function a chain's deployment does not run refused.
 
 - `addTreasuryFee(uint256 _amountLD) payable`
 - `allowBurn(address _burnAdmin, uint64 _burnAllowanceSD)`

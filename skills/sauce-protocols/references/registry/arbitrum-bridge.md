@@ -34,7 +34,7 @@ function main() {
 
 ### `ArbitrumL1GatewayRouterABI`
 
-`import ArbitrumL1GatewayRouterABI from "./protocols/arbitrum-bridge/ArbitrumL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter.
+`import ArbitrumL1GatewayRouterABI from "./protocols/arbitrum-bridge/ArbitrumL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter. The import is the contract's full ABI across every deployment; call it through the `ArbitrumBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `calculateL2TokenAddress(address l1ERC20) view returns (address)`
 - `counterpartGateway() view returns (address)`

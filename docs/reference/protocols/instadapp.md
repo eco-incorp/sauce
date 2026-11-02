@@ -51,7 +51,7 @@ function main() {
 
 ### `FlashAggregatorABI`
 
-`import FlashAggregatorABI from "./protocols/instadapp/FlashAggregatorABI.json";` Speaks for: flashloanAggregator.
+`import FlashAggregatorABI from "./protocols/instadapp/FlashAggregatorABI.json";` Speaks for: flashloanAggregator. The import is the contract's full ABI across every deployment; call it through the `Instadapp` namespace to have a function a chain's deployment does not run refused.
 
 - `aaveLending() view returns (address)`
 - `aaveLendingAddr() view returns (address)`

@@ -34,7 +34,7 @@ function main() {
 
 ### `RswETHABI`
 
-`import RswETHABI from "./protocols/swell/RswETHABI.json";` Speaks for: rswETH.
+`import RswETHABI from "./protocols/swell/RswETHABI.json";` Speaks for: rswETH. The import is the contract's full ABI across every deployment; call it through the `Swell` namespace to have a function a chain's deployment does not run refused.
 
 - `AccessControlManager() view returns (address)`
 - `addToWhitelist(address _address)`
@@ -82,7 +82,7 @@ function main() {
 
 ### `SwETHABI`
 
-`import SwETHABI from "./protocols/swell/SwETHABI.json";` Speaks for: swETH.
+`import SwETHABI from "./protocols/swell/SwETHABI.json";` Speaks for: swETH. The import is the contract's full ABI across every deployment; call it through the `Swell` namespace to have a function a chain's deployment does not run refused.
 
 - `AccessControlManager() view returns (address)`
 - `addToWhitelist(address _address)`

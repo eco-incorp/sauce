@@ -109,7 +109,7 @@ function main() {
 
 ### `GatewayMinterABI`
 
-`import GatewayMinterABI from "./protocols/circle-gateway/GatewayMinterABI.json";` Speaks for: gatewayMinter.
+`import GatewayMinterABI from "./protocols/circle-gateway/GatewayMinterABI.json";` Speaks for: gatewayMinter. The import is the contract's full ABI across every deployment; call it through the `CircleGateway` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addAttestationSigner(address signer)`
@@ -143,7 +143,7 @@ function main() {
 
 ### `GatewayWalletABI`
 
-`import GatewayWalletABI from "./protocols/circle-gateway/GatewayWalletABI.json";` Speaks for: gatewayWallet.
+`import GatewayWalletABI from "./protocols/circle-gateway/GatewayWalletABI.json";` Speaks for: gatewayWallet. The import is the contract's full ABI across every deployment; call it through the `CircleGateway` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addBatchSigner(address signer)`
