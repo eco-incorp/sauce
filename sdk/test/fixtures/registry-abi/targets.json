@@ -1,5 +1,5 @@
 {
-  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs and test/registry-abi.test.ts. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"); read by scripts/gen-source-globals.mjs.",
+  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs, scripts/gen-registry-abis.mjs, scripts/gen-source-globals.mjs and test/registry-abi.test.ts. An export's ABI is the union of its deployments' full verified ABIs (gen-registry-abis.mjs), and a role's deployment that does not run one of its functions as declared has it withheld on its chain (gen-source-globals.mjs), so a deployment that differs needs no entry here. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"). standard: on an interface whose instances are examples of an ERC or a protocol's interface, why: its ABI is its reference interface alone (reference/index.json), each function where every instance dispatches it; the instances' verified ABIs still check each declaration. common: on an interface whose instances run different implementations, why: its ABI is only what every instance dispatches and declares alike. overloads: signature -> why, the overload kept where several of one name take as many arguments (otherwise the registry's, then the most dispatched). default: on a role's export, why its contract is the one `<Protocol>.<method>(…)` calls where the protocol has several. delegates: getters whose answer a contract's fallback delegates to (Comet's extensionDelegate()), captured as a layer. logs: event signatures whose newest real log the capture records for the test to decode. exempt: an interface instance whose verified declaration legitimately differs; unverified: a function no verified ABI declares, with why the deployed bytecode is the evidence (a reference interface's function names its source); unverifiable: an export nothing on-chain can evidence; required: a signature a consumer binds; probes: signatures to ask a selector router about.",
   "protocols": {
     "aave-v2": {
       "LendingPoolABI": {
@@ -8,7 +8,72 @@
     },
     "aave-v3": {
       "PoolABI": {
-        "roles": ["pool"]
+        "roles": ["pool"],
+        "default": "the market's Pool: `AaveV3.<method>(…)` called it while it was the protocol's one contract with an ABI, and still does beside PoolAddressesProvider and Oracle",
+        "returns": {
+          "getReserveAToken(address)": "aave-v3/ATokenABI",
+          "getReserveVariableDebtToken(address)": "aave-v3/VariableDebtTokenABI",
+          "getReserveData(address).aTokenAddress": "aave-v3/ATokenABI",
+          "getReserveData(address).variableDebtTokenAddress": "aave-v3/VariableDebtTokenABI"
+        }
+      },
+      "PoolAddressesProviderABI": {
+        "roles": ["poolAddressesProvider"],
+        "returns": {
+          "getPool()": "aave-v3/PoolABI",
+          "getPriceOracle()": "aave-v3/AaveOracleABI"
+        }
+      },
+      "AaveOracleABI": {
+        "roles": ["oracle"]
+      },
+      "ATokenABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c",
+            "note": "aEthUSDC, pool.getReserveAToken(USDC)"
+          },
+          {
+            "chainId": 1,
+            "address": "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8",
+            "note": "aEthWETH, pool.getReserveAToken(WETH)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB",
+            "note": "aBasUSDC, pool.getReserveAToken(USDC)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7",
+            "note": "aBasWETH, pool.getReserveAToken(WETH)"
+          }
+        ]
+      },
+      "VariableDebtTokenABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x72E95b8931767C79bA4EeE721354d6E99a61D004",
+            "note": "variableDebtEthUSDC, pool.getReserveVariableDebtToken(USDC)"
+          },
+          {
+            "chainId": 1,
+            "address": "0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE",
+            "note": "variableDebtEthWETH, pool.getReserveVariableDebtToken(WETH)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x59dca05b6c26dbd64b5381374aAaC5CD05644C28",
+            "note": "variableDebtBasUSDC, pool.getReserveVariableDebtToken(USDC)"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
+            "note": "variableDebtBasWETH, pool.getReserveVariableDebtToken(WETH)"
+          }
+        ]
       }
     },
     "aave-v4": {
@@ -298,15 +363,7 @@
     },
     "cbeth": {
       "CbETHABI": {
-        "roles": ["cbETH"],
-        "exempt": {
-          "exchangeRate()": {
-            "8453:0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22": "Base cbETH is the bridged OptimismMintableERC20; the exchange rate lives only on the Ethereum StakedTokenV1"
-          },
-          "mint(address,uint256)": {
-            "8453:0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22": "Base cbETH's mint is the bridge's (returns nothing); the ABI describes the Ethereum token, whose mint returns bool"
-          }
-        }
+        "roles": ["cbETH"]
       }
     },
     "cctp": {
@@ -364,7 +421,11 @@
     },
     "compound-v3": {
       "CometABI": {
-        "roles": ["cUSDCv3", "cWETHv3", "cUSDTv3"]
+        "roles": ["cUSDCv3", "cWETHv3", "cUSDTv3"],
+        "delegates": ["extensionDelegate()"]
+      },
+      "CometRewardsABI": {
+        "roles": ["cometRewards"]
       }
     },
     "connext": {
@@ -423,12 +484,7 @@
             "address": "0x76Ae7A7DC125E4163a2137e650b7726231FdB917",
             "note": "a StableSwap-NG metapool (exchange_underlying), NG factory pool_list(5)"
           }
-        ],
-        "exempt": {
-          "exchange_underlying(int128,int128,uint256,uint256)": {
-            "1:0x36dfe783603522566c046ba1fa403c8c6f569220": "a plain pool: exchange_underlying exists on metapools only"
-          }
-        }
+        ]
       },
       "CurveThreePoolABI": {
         "roles": ["threePool"]
@@ -479,7 +535,9 @@
             "address": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
             "note": "DAI"
           }
-        ]
+        ],
+        "standard": "ERC-20 with its optional metadata (OpenZeppelin IERC20 and IERC20Metadata): USDC and DAI are examples of it, and their own functions are theirs, not every token's",
+        "logs": ["Approval(address,address,uint256)", "Transfer(address,address,uint256)"]
       }
     },
     "erc3156": {
@@ -490,7 +548,8 @@
             "address": "0x60744434d6339a6B27d73d9Eda62b6F66a0a04FA",
             "note": "Maker DssFlash, an ERC-3156 lender"
           }
-        ]
+        ],
+        "standard": "ERC-3156's lender (OpenZeppelin IERC3156FlashLender): Maker's DssFlash is an example of it"
       }
     },
     "erc4626": {
@@ -502,6 +561,7 @@
             "note": "sDAI, an ERC-4626 vault"
           }
         ],
+        "standard": "ERC-4626 (OpenZeppelin IERC4626, with the ERC-20 functions it extends): sDAI is an example of it, and its Maker functions are its own",
         "returns": {
           "asset()": "erc20/ERC20ABI"
         }
@@ -738,14 +798,7 @@
     },
     "lifi": {
       "LiFiDiamondABI": {
-        "roles": ["lifiDiamond"],
-        "exempt": {
-          "startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes))": {
-            "100:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector",
-            "250:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector",
-            "43114:0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae": "this chain's diamond has no Across V4 facet: facetAddress returns zero for the selector"
-          }
-        }
+        "roles": ["lifiDiamond"]
       }
     },
     "linea-bridge": {
@@ -794,7 +847,35 @@
           "lookup(address,address)"
         ],
         "unverified": {
-          "lookup(address,address,uint256,uint256)": "the MaverickV2Factory has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by the factory bytecode, and the address[] output is not verifiable"
+          "lookup(address,address,uint256,uint256)": "the MaverickV2Factory has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by the factory bytecode, and the address[] output is not verifiable",
+          "claimProtocolFeeForPool(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "claimProtocolFeeForPool(address,bool)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "create(uint64,uint16,uint32,address,address,int32,uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "create(uint64,uint64,uint16,uint32,address,address,int32,uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "createPermissioned(uint64,uint16,uint32,address,address,int32,uint8,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "createPermissioned(uint64,uint64,uint16,uint32,address,address,int32,uint8,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "createPermissioned(uint64,uint64,uint16,uint32,address,address,int32,uint8,address,bool,bool)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "deployParameters()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "isFactoryPool(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookup(uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookup(uint256,uint256,uint256,uint256,address,address,uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookupPermissioned(uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookupPermissioned(address,address,address,uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookupPermissioned(uint256,uint256,uint256,uint256,address,address,uint8,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "owner()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "poolByTokenCount(address,address,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "poolCount()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "poolPermissionedCount()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "protocolFeeRatioD3()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "protocolFeeReceiver()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "protocolLendingFeeRateD18()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "renounceOwnership()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "setProtocolFeeRatio(uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "setProtocolFeeReceiver(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "setProtocolLendingFeeRate(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "transferOwnership(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "updateProtocolFeeRatioForPool(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "updateProtocolLendingFeeRateForPool(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector"
         }
       },
       "MaverickV2RouterABI": {
@@ -818,7 +899,31 @@
           "fee(bool)": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
           "tickSpacing()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
           "tokenA()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
-          "tokenB()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode"
+          "tokenB()": "no Maverick V2 pool has verified source on Sourcify, Blockscout or Routescan; the fragment is IMaverickV2Pool's (maverickprotocol/v2-common), and the selector is proven by the pool bytecode",
+          "accessor()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "addLiquidity(address,uint256,(uint8,int32[],uint128[]),bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "adminAction(uint8,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2PoolAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "balanceOf(address,uint256,uint32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "binIdByTickKind(int32,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "flashLoan(address,uint256,uint256,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "getBin(uint32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "getCurrentTwa()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "getTick(int32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "kinds()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lendingFeeRateD18()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "lookback()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "migrateBinUpStack(uint32,uint32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "permissionedLiquidity()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "permissionedPool()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "permissionedSwap()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "protocolFeeA()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "protocolFeeB()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "removeLiquidity(address,uint256,(uint32[],uint128[]))": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "setFee(uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "swap(address,(uint256,bool,bool,int32),bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "tokenAScale()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector",
+          "tokenBScale()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)), and the deployed code dispatches its selector"
         },
         "returns": {
           "tokenA()": "erc20/ERC20ABI",
@@ -842,7 +947,27 @@
     },
     "morpho-blue": {
       "MorphoABI": {
-        "roles": ["morpho"]
+        "roles": ["morpho"],
+        "returns": {
+          "idToMarketParams(bytes32).loanToken": "erc20/ERC20ABI",
+          "idToMarketParams(bytes32).collateralToken": "erc20/ERC20ABI",
+          "idToMarketParams(bytes32).oracle": "morpho-blue/OracleABI"
+        }
+      },
+      "OracleABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x0F948CBa8231Db7898ef36A4212581Ad7b1B4580",
+            "note": "a MorphoChainlinkOracleV2, idToMarketParams(USDC/WETH 86% market).oracle"
+          },
+          {
+            "chainId": 8453,
+            "address": "0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9",
+            "note": "a MorphoChainlinkOracleV2, idToMarketParams(USDC/cbBTC 86% market).oracle"
+          }
+        ],
+        "standard": "Morpho Blue's IOracle (price()), which every market's oracle implements: these MorphoChainlinkOracleV2s are examples, and the older ChainlinkOracle and others declare different getters"
       }
     },
     "mux-protocol": {
@@ -918,7 +1043,10 @@
         "roles": ["nonfungiblePositionManager"]
       },
       "PancakeSwapV3SmartRouterABI": {
-        "roles": ["smartRouter"]
+        "roles": ["smartRouter"],
+        "overloads": {
+          "multicall(uint256,bytes[])": "the deadline form, over multicall(bytes32,bytes[])'s previous-blockhash check: a program bounds its calls in time, and knows no future block's parent"
+        }
       },
       "PancakeSwapV3PoolABI": {
         "instances": [
@@ -944,15 +1072,45 @@
         "roles": ["augustusV5"],
         "probes": [
           "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))"
-        ],
-        "exempt": {
-          "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))": {
-            "8453:0xdef171fe48cf0115b1d80b88dc8eab59176fee57": "Augustus V5 on Base has no SimpleSwap router registered: getImplementation returns zero for the selector"
-          }
-        }
+        ]
       }
     },
     "pendle": {
+      "PendleMarketABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0x34280882267ffa6383B363E278B027Be083bBe3b",
+            "note": "a PendleMarket: the stETH market expiring 30 Dec 2027 (marketFactory.isValidMarket)"
+          },
+          {
+            "chainId": 42161,
+            "address": "0xf86119a39f8654f38aCBbD5488Bd83F3f51983c8",
+            "note": "a PendleMarketV7: the sUSDai market expiring 25 Feb 2027 (marketFactory.isValidMarket)"
+          }
+        ],
+        "common": "markets run different PendleMarket generations (permit and scalarRoot on one, VERSION on another): only what every generation declares alike",
+        "returns": {
+          "readTokens()._SY": "pendle/PendleSYABI",
+          "readTokens()._PT": "erc20/ERC20ABI",
+          "readTokens()._YT": "erc20/ERC20ABI"
+        }
+      },
+      "PendleSYABI": {
+        "instances": [
+          {
+            "chainId": 1,
+            "address": "0xcbC72d92b2dc8187414F6734718563898740C0BC",
+            "note": "SY-stETH (PendleWstEthSY), readTokens()._SY of the stETH market"
+          },
+          {
+            "chainId": 42161,
+            "address": "0x30Ccf4Bbee313fCD19F3e295b3ba2920A24e2f62",
+            "note": "SY-sUSDai (a TransparentUpgradeableProxy to PendleERC4626NoRedeemWithAdapterSY), readTokens()._SY of the sUSDai market"
+          }
+        ],
+        "common": "every SY is its own contract over StandardizedYield: only what every one of them declares alike"
+      },
       "PendleRouterABI": {
         "roles": ["router"],
         "probes": [
@@ -1008,12 +1166,7 @@
           "getPrice(bytes32)",
           "getPriceUnsafe(bytes32)",
           "getPriceNoOlderThan(bytes32,uint256)"
-        ],
-        "unverified": {
-          "updatePriceFeeds(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
-          "getUpdateFee(bytes[])": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode",
-          "getPrice(bytes32)": "the Pyth implementation behind the proxy (0x3f38404a2e3cb949bcdfa19a5c3bdf3fe375feb0) has no verified source on Sourcify, Blockscout or Routescan; the selector is proven by its bytecode; the PythStructs.Price output types come from the Pyth SDK and are not verifiable"
-        }
+        ]
       }
     },
     "quickswap": {
@@ -1174,7 +1327,28 @@
         "unverified": {
           "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)",
           "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)",
-          "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)"
+          "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)": "the Fantom router has no verified source on Sourcify, and neither Blockscout nor Routescan serves Fantom keylessly; the selector is proven by the router bytecode (a UniswapV2Router02 fork: factory() and WETH() answer)",
+          "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "getAmountIn(uint256,uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "getAmountOut(uint256,uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "getAmountsIn(uint256,address[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "getAmountsOut(uint256,address[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "quote(uint256,uint256,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapETHForExactTokens(uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapExactETHForTokens(uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapExactTokensForETH(uint256,uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapTokensForExactETH(uint256,uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector",
+          "WETH()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json), and the deployed code dispatches its selector"
         }
       }
     },
@@ -1261,7 +1435,12 @@
         "roles": ["factory"],
         "unverified": {
           "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "createPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "enableFeeAmount(uint24,int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json), and the deployed code dispatches its selector",
+          "feeAmountTickSpacing(uint24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json), and the deployed code dispatches its selector",
+          "owner()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json), and the deployed code dispatches its selector",
+          "parameters()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json), and the deployed code dispatches its selector",
+          "setOwner(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json), and the deployed code dispatches its selector"
         },
         "returns": {
           "getPool(address,address,uint24)": "synthra-v3/SynthraV3PoolABI"
@@ -1269,17 +1448,58 @@
       },
       "SynthraV3SwapRouter02ABI": {
         "roles": ["swapRouter02"],
+        "overloads": {
+          "multicall(uint256,bytes[])": "the deadline form, as UniswapV3.SwapRouter02's"
+        },
         "unverified": {
           "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "exactInput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "exactOutput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "exactOutput((bytes,address,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "approveMax(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "approveMaxMinusOne(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "approveZeroThenMax(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "approveZeroThenMaxMinusOne(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "callPositionManager(bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "checkOracleSlippage(bytes,uint24,uint32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "checkOracleSlippage(bytes[],uint128[],uint24,uint32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "factoryV2()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "getApprovalType(address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "increaseLiquidity((address,address,uint256,uint256,uint256))": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "mint((address,address,uint24,int24,int24,uint256,uint256,address))": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "multicall(bytes[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "multicall(uint256,bytes[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "positionManager()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "pull(address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "refundETH()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "selfPermit(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "selfPermitAllowed(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "selfPermitAllowedIfNecessary(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "selfPermitIfNecessary(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "swapExactTokensForTokens(uint256,uint256,address[],address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "swapTokensForExactTokens(uint256,uint256,address[],address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "sweepToken(address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "sweepToken(address,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "sweepTokenWithFee(address,uint256,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "sweepTokenWithFee(address,uint256,address,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "unwrapWETH9(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "unwrapWETH9(uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "unwrapWETH9WithFee(uint256,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "unwrapWETH9WithFee(uint256,address,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "WETH9()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector",
+          "wrapETH(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json), and the deployed code dispatches its selector"
         }
       },
       "SynthraV3QuoterV2ABI": {
         "roles": ["quoterV2"],
         "unverified": {
-          "quoteExactInputSingle((address,address,uint256,uint24,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "quoteExactInputSingle((address,address,uint256,uint24,uint160))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json), and the deployed code dispatches its selector",
+          "quoteExactInput(bytes,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json), and the deployed code dispatches its selector",
+          "quoteExactOutput(bytes,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json), and the deployed code dispatches its selector",
+          "quoteExactOutputSingle((address,address,uint256,uint24,uint160))": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json), and the deployed code dispatches its selector",
+          "WETH9()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json), and the deployed code dispatches its selector"
         }
       },
       "SynthraV3NonfungiblePositionManagerABI": {
@@ -1288,7 +1508,40 @@
           "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
           "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
-          "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode"
+          "collect((uint256,address,uint128,uint128))": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge), nor on Robinhood Chain's; Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is Uniswap V3's, and the selector is proven by the bytecode",
+          "approve(address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "balanceOf(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "baseURI()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "burn(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "createAndInitializePoolIfNecessary(address,address,uint24,uint160)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "DOMAIN_SEPARATOR()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "getApproved(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "isApprovedForAll(address,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "multicall(bytes[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "name()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "ownerOf(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "permit(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "PERMIT_TYPEHASH()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "positions(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "refundETH()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "safeTransferFrom(address,address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "safeTransferFrom(address,address,uint256,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "selfPermit(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "selfPermitAllowed(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "selfPermitAllowedIfNecessary(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "selfPermitIfNecessary(address,uint256,uint256,uint8,bytes32,bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "setApprovalForAll(address,bool)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "supportsInterface(bytes4)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "sweepToken(address,uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "symbol()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "tokenByIndex(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "tokenOfOwnerByIndex(address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "tokenURI(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "totalSupply()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "transferFrom(address,address,uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "unwrapWETH9(uint256,address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector",
+          "WETH9()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json), and the deployed code dispatches its selector"
         }
       },
       "SynthraV3PoolABI": {
@@ -1310,7 +1563,27 @@
           "fee()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
           "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
           "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
-          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode"
+          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); Synthra V3 is a Uniswap V3 fork (renamed pool callbacks only), so the fragment is UniswapV3Pool's, and the selector is proven by the pool bytecode",
+          "burn(int24,int24,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "collect(address,int24,int24,uint128,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "collectProtocol(address,uint128,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "feeGrowthGlobal0X128()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "feeGrowthGlobal1X128()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "flash(address,uint256,uint256,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "increaseObservationCardinalityNext(uint16)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "initialize(uint160)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "maxLiquidityPerTick()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "mint(address,int24,int24,uint128,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "observations(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "observe(uint32[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "positions(bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "protocolFees()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "setFeeProtocol(uint8,uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "snapshotCumulativesInside(int24,int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "swap(address,bool,int256,uint160,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "tickBitmap(int16)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector",
+          "ticks(int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json), and the deployed code dispatches its selector"
         },
         "returns": {
           "token0()": "erc20/ERC20ABI",
@@ -1436,7 +1709,10 @@
         "roles": ["swapRouter"]
       },
       "UniswapV3SwapRouter02ABI": {
-        "roles": ["swapRouter02"]
+        "roles": ["swapRouter02"],
+        "overloads": {
+          "multicall(uint256,bytes[])": "the deadline form, over multicall(bytes32,bytes[])'s previous-blockhash check: a program bounds its calls in time, and knows no future block's parent"
+        }
       },
       "UniswapV3PoolABI": {
         "instances": [
@@ -1479,7 +1755,12 @@
         "roles": ["factory"],
         "unverified": {
           "getPool(address,address,uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode",
-          "feeAmountTickSpacing(uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode"
+          "feeAmountTickSpacing(uint24)": "the Arc deployment has no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Factory's (UnitFlow-Finance/UnitFlowV3-contract) and the selector is proven by the factory bytecode",
+          "createPool(address,address,uint24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "enableFeeAmount(uint24,int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "owner()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "parameters()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3PoolDeployer.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "setOwner(address)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector"
         },
         "returns": {
           "getPool(address,address,uint24)": "unitflow-v3/UnitFlowV3PoolABI"
@@ -1513,7 +1794,27 @@
           "fee()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
           "tickSpacing()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
           "token0()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
-          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode"
+          "token1()": "the Arc pools have no verified source on Sourcify, and Arc's explorer API is not served keylessly (Cloudflare challenge); the fragment is IUnitFlowV3Pool's (UnitFlow-Finance/UnitFlowV3-contract), and the selector is proven by the pool bytecode",
+          "burn(int24,int24,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "collect(address,int24,int24,uint128,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "collectProtocol(address,uint128,uint128)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "factory()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "feeGrowthGlobal0X128()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "feeGrowthGlobal1X128()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "flash(address,uint256,uint256,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "increaseObservationCardinalityNext(uint16)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "initialize(uint160)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "maxLiquidityPerTick()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "mint(address,int24,int24,uint128,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "observations(uint256)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "observe(uint32[])": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "positions(bytes32)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "protocolFees()": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "setFeeProtocol(uint8,uint8)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "snapshotCumulativesInside(int24,int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "swap(address,bool,int256,uint160,bytes)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "tickBitmap(int16)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector",
+          "ticks(int24)": "no keyless explorer has a verified source for this deployment; the function is the reference interface's (UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)), and the deployed code dispatches its selector"
         },
         "returns": {
           "token0()": "erc20/ERC20ABI",
@@ -1564,11 +1865,7 @@
         ]
       },
       "VenusComptrollerABI": {
-        "roles": ["comptroller"],
-        "unverified": {
-          "enterMarkets(address[])": "the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only",
-          "exitMarket(address)": "the Diamond routes it (facetAddress) to MarketFacet 0x21f8e1471b153f49be1d645a008e4a57434eed23, which has no verified source on Sourcify or Routescan; the selector is proven by the routing only"
-        }
+        "roles": ["comptroller"]
       }
     },
     "vertex": {

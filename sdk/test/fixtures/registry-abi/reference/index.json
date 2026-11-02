@@ -1,0 +1,118 @@
+{
+  "note": "Reference interface ABIs from upstream packages and repositories, for registry exports whose deployed contracts have no verified source on any keyless explorer; a function is adopted from them only where the capture proves the deployed code (a proxy layer or Diamond facet included) dispatches its selector.",
+  "exports": {
+    "erc20.ERC20ABI": [
+      {
+        "file": "openzeppelin-ierc20-metadata.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC20Metadata.json",
+        "sha256": "316b3892ffb95d78326cdcf041fb8fc11ebf1263ec50237d07963c415f9dabfd"
+      }
+    ],
+    "erc3156.FlashLenderABI": [
+      {
+        "file": "openzeppelin-ierc3156-flash-lender.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC3156FlashLender.json",
+        "sha256": "05559bddeb99c522ea9e60ee00df2e67d42b7d915f9a6c66b0191810e76e72ee"
+      }
+    ],
+    "erc4626.VaultABI": [
+      {
+        "file": "openzeppelin-ierc4626.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC4626.json",
+        "sha256": "3f07293a14f43dbc0606d67c3ddce8cf9f3115bbb243d3aa2c4b37a547f79921"
+      }
+    ],
+    "maverick.MaverickV2FactoryABI": [
+      {
+        "file": "maverick-v2-factory.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "524d4922f51d0d9f885accdcee3e6eaf2a2ba5c3c6a0468afef6f0fcab500eb3"
+      },
+      {
+        "file": "maverick-v2-factory-admin.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "b58a275b68fb687a1755e4ab6457ef8a8ce253bea3c157cce1196633f90e2b41"
+      }
+    ],
+    "maverick.MaverickV2PoolABI": [
+      {
+        "file": "maverick-v2-pool.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "a4937150b09dff981a80614d622e7595d746989f375fdf34ef3ea2a0be1ad042"
+      },
+      {
+        "file": "maverick-v2-pool-admin.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2PoolAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "bc9b5c1faa7f81dc751077e77e6079bc090d01504be78f2e62c7c2b68ea9dcbe"
+      }
+    ],
+    "morpho-blue.OracleABI": [
+      {
+        "file": "morpho-blue-ioracle.json",
+        "source": "@morpho-org/morpho-blue@1.0.0 src/interfaces/IOracle.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "26d86a8eda4ec222829cf51ff09c18cad92cb47b0659108538cf183e481cf125"
+      }
+    ],
+    "spookyswap.SpookySwapRouterABI": [
+      {
+        "file": "uniswap-v2-router02.json",
+        "source": "@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json",
+        "sha256": "690fd0f1bc279180964bf6956dc4a8d3e6e312aa1bf5f2371bf571edac4f2140"
+      }
+    ],
+    "synthra-v3.SynthraV3FactoryABI": [
+      {
+        "file": "uniswap-v3-factory.json",
+        "source": "@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json",
+        "sha256": "b90bc55bc8374b6a852424380c777eefe5ed0e872f40980f574a06feddea263d"
+      }
+    ],
+    "synthra-v3.SynthraV3NonfungiblePositionManagerABI": [
+      {
+        "file": "uniswap-v3-nonfungible-position-manager.json",
+        "source": "@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json",
+        "sha256": "093e5115751711b0c577a4c89546321666cd8c2805e4554f0e8840dab6e7aec7"
+      }
+    ],
+    "synthra-v3.SynthraV3PoolABI": [
+      {
+        "file": "uniswap-v3-pool.json",
+        "source": "@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json",
+        "sha256": "e196cb57c05ed1fbeb2c5032714f38049eff496ce67fc50f1311535f79ee9b88"
+      }
+    ],
+    "synthra-v3.SynthraV3QuoterV2ABI": [
+      {
+        "file": "uniswap-v3-quoter-v2.json",
+        "source": "@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json",
+        "sha256": "7b5afcbe93bf90d236550b5baf551b97f7b9de8bb1264091383ce40984c697dd"
+      }
+    ],
+    "synthra-v3.SynthraV3SwapRouter02ABI": [
+      {
+        "file": "uniswap-swap-router02.json",
+        "source": "@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json",
+        "sha256": "da6f17f29ea02fa25171b5d9f34cc81acb262a81b9534fccd6fd21f5abb104fb"
+      }
+    ],
+    "unitflow-v3.UnitFlowV3FactoryABI": [
+      {
+        "file": "unitflow-v3-factory.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "6e9d5d73831c9e3f0304709ee99c656946ae3fdcffce6b690543fb5ef89ec7a7"
+      },
+      {
+        "file": "unitflow-v3-pool-deployer.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3PoolDeployer.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "74393182cd3faac86a46c75973d2018e8720ef90cbe9643656d4ed7d52f79eb4"
+      }
+    ],
+    "unitflow-v3.UnitFlowV3PoolABI": [
+      {
+        "file": "unitflow-v3-pool.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "1ca5afa3feeaff6f584fb8c446babadd5f33d7dfc58669b06a059d0aa530875a"
+      }
+    ]
+  }
+}

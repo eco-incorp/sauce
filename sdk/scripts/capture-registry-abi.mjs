@@ -10,27 +10,32 @@
 // writes.
 //
 // For every contract instance in `test/fixtures/registry-abi/targets.json` it records:
-//   - which of the relevant selectors the deployed code dispatches, after resolving proxies
-//     (EIP-1167 clones, EIP-1967 implementation and beacon slots, the legacy zeppelinos, EIP-1822
-//     and Synthetix slots, `implementation()`-style getters) and selector routers (EIP-2535
-//     `facetAddress`, 0x's `getFunctionImplementation`, Paraswap's `getImplementation`, Pendle's
-//     `selectorToFacet`, Fluid's `getSigsImplementation`);
-//   - the verified ABI fragments, from Sourcify, then Blockscout, then a keyless Etherscan-compatible
-//     API, of every function the registry declares under that name (every overload, so a wrong one
-//     is visible).
-// "Relevant selectors" are the registry's own, every verified overload of the same name, and the
-// target's `probes`: signatures to ask a selector router about when the registry's are wrong.
+//   - which selectors the deployed code dispatches, after resolving proxies (EIP-1167 clones,
+//     EIP-1967 implementation and beacon slots, the legacy zeppelinos, EIP-1822 and Synthetix slots,
+//     `implementation()`-style getters) and selector routers (EIP-2535 `facets`/`facetAddress`, 0x's
+//     `getFunctionImplementation`, Paraswap's `getImplementation`, Pendle's `selectorToFacet`,
+//     Fluid's `getSigsImplementation`);
+//   - its FULL verified ABI, from Sourcify, then Blockscout, then a keyless Etherscan-compatible
+//     API: every function, event and custom error of the implementation layer(s) and of every facet
+//     a selector router reaches. Of a proxy layer that delegates to another (a wrapper), only what
+//     the registry already declares by name: a proxy's admin functions are not the contract's.
+// The candidate selectors are the same for every instance of one ABI export: the union of every
+// instance's verified functions, the registry's own, the target's `probes` (signatures to ask a
+// selector router about when the registry's are wrong), and the functions of the export's reference
+// interfaces (`reference/index.json`: a public interface for a contract with no verified source).
+// Dispatch is recorded for EVERY candidate on EVERY instance, because the registry's ABI is that
+// union and a program compiled for a chain may call only what that chain's deployment dispatches
+// (`gen-registry-abis.mjs` and `gen-source-globals.mjs` derive both from what this writes).
 //
-// For an export that declares events or errors, it also records:
-//   - which of their topics and selectors the deployed code carries: an event's topic is a PUSH32
-//     before its LOG, a custom error's selector a PUSH4 (or a left-aligned PUSH32) before its REVERT;
-//   - the verified ABI's events and errors of the same names, `indexed` flags included — a topic
-//     cannot tell an indexed parameter from one in the data, and a wrong flag decodes no log;
-//   - one real log of each event, from the newest blocks of the first deployment that emitted one,
-//     which the test decodes with the registry's own declaration.
+// Events and errors are the same union: for each, where the deployed code carries it (an event's
+// topic is a PUSH32 before its LOG, a custom error's selector a PUSH4, or a left-aligned PUSH32,
+// before its REVERT), or null; and one real log of each event a target lists under `logs`, from the
+// newest blocks of the first deployment that emitted one, which the test decodes with the
+// registry's own declaration.
 //
 // RPC endpoints come only from the file `--rpc-config` names: a JSON object mapping each chain id to
-// its URL, `{ "<chainId>": "<url>" }`. There is no default and no public fallback, and nothing is
+// its URL, or to a list of URLs a failed request moves along (`{ "<chainId>": "<url>" }`,
+// `{ "<chainId>": ["<url>", "<url>"] }`). There is no default and no public fallback, and nothing is
 // read from the environment. Keep yours at `sdk/rpc.config.json`, which is gitignored; copy
 // `sdk/rpc.config.example.json` to start. Before anything is fetched, the script fails listing every
 // chain id the selected deployments need that the file does not give. No URL is ever written to the
@@ -39,7 +44,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { keccak256, toEventSelector, toFunctionSelector } from "viem";
+import { decodeAbiParameters, keccak256, toEventSelector, toFunctionSelector } from "viem";
 
 const USAGE =
   "usage: node scripts/capture-registry-abi.mjs --recapture --rpc-config <path> " +
@@ -72,7 +77,7 @@ if (cli.values["rpc-config"] === undefined) {
   );
 }
 const RPC_CONFIG_PATH = cli.values["rpc-config"];
-/** chainId -> URL, exactly as the developer's config gives them. */
+/** chainId -> the URLs, in order, exactly as the developer's config gives them. */
 const RPC_URLS = readRpcConfig(RPC_CONFIG_PATH);
 const CHAINS_ONLY =
   cli.values.chains === undefined ? null : new Set(parseChainIds(cli.values.chains));
@@ -99,8 +104,10 @@ function readRpcConfig(path) {
   for (const [key, value] of Object.entries(parsed)) {
     if (!/^[1-9][0-9]*$/.test(key)) fail(`--rpc-config ${path}: "${key}" is not a chain id`);
     // A value still holding the example's `<…>` placeholder is not configured.
-    if (typeof value !== "string" || !/^https?:\/\//.test(value)) continue;
-    urls.set(Number(key), value);
+    const list = (Array.isArray(value) ? value : [value]).filter(
+      (url) => typeof url === "string" && /^https?:\/\//.test(url),
+    );
+    if (list.length > 0) urls.set(Number(key), list);
   }
   return urls;
 }
@@ -146,19 +153,21 @@ const ETHERSCAN_COMPATIBLE = {
 /** zkSync Era runs EraVM bytecode: no PUSH4 dispatcher to parse, so selectors are found by scan. */
 const ERAVM = new Set([324]);
 
-function rpcUrl(chainId) {
-  const url = RPC_URLS.get(chainId);
+/** The URL attempt `attempt` of a request to `chainId` goes to: the config's list, in turn. */
+function rpcUrl(chainId, attempt) {
+  const urls = RPC_URLS.get(chainId);
   // main() checks every chain up front, so this is only reachable through a bug there.
-  if (url === undefined) throw new Error(`no RPC configured for chain ${chainId}`);
-  return url;
+  if (urls === undefined) throw new Error(`no RPC configured for chain ${chainId}`);
+  return urls[attempt % urls.length];
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function rpc(chainId, method, params) {
+/** One request, retried along the config's URLs from the `first`th. */
+async function rpc(chainId, method, params, first = 0) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await fetch(rpcUrl(chainId), {
+      const res = await fetch(rpcUrl(chainId, first + attempt), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -167,17 +176,27 @@ async function rpc(chainId, method, params) {
       const body = await res.json();
       if (body.error) {
         // A revert is an answer, not a transport failure.
-        if (method === "eth_call") return null;
+        if (method === "eth_call" && isRevert(body.error)) return null;
         throw new Error(`${method}: ${JSON.stringify(body.error).slice(0, 200)}`);
       }
       return body.result;
     } catch (err) {
-      if (attempt >= 4) {
+      if (attempt >= Math.max(4, 2 * RPC_URLS.get(chainId).length)) {
         throw new Error(`chain ${chainId} ${method} failed: ${err.message}`, { cause: err });
       }
-      await sleep(1000 * 2 ** attempt);
+      await sleep(1000 * 2 ** Math.min(attempt, 4));
     }
   }
+}
+
+/**
+ * Whether a JSON-RPC error is the call's own revert, as nodes report one (code 3, or -32000/-32015
+ * with an execution message), rather than a node refusing or failing the request.
+ */
+function isRevert(error) {
+  const message = String(error?.message ?? "").toLowerCase();
+  if (error?.code === 3) return true;
+  return /revert|execution|invalid opcode|out of gas|stack underflow|bad instruction/.test(message);
 }
 
 /** Minimum spacing between requests to one host, so a free API's rate limit is not tripped. */
@@ -194,21 +213,28 @@ async function throttle(host) {
   if (at > Date.now()) await sleep(at - Date.now());
 }
 
-/** JSON body, `null` for "not here" (404 / not verified). Throws when the API could not answer. */
+/**
+ * JSON body, `null` for "not here" (404 / not verified). Throws when the API could not answer: a
+ * rate limit or a server error after retries, and at once a refusal (401/403: a key wall or a
+ * challenge page, which no retry passes), so a refused lookup is never recorded as "unverified".
+ */
 async function getJson(url) {
   const host = new URL(url).host;
   for (let attempt = 0; ; attempt++) {
+    let res;
     try {
       await throttle(host);
-      const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+      res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
       if (res.status === 404) return null;
       if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`);
-      if (!res.ok) return null;
-      return await res.json();
     } catch (err) {
       if (attempt >= 5) throw new Error(`${host}: ${err.message}`, { cause: err });
       await sleep(2000 * 2 ** attempt);
+      continue;
     }
+    if (res.status === 401 || res.status === 403) throw new Error(`${host}: HTTP ${res.status}`);
+    if (!res.ok) return null;
+    return await res.json();
   }
 }
 
@@ -230,19 +256,38 @@ function diskMemo(key, fn) {
       return JSON.parse(readFileSync(path, "utf-8")).value;
     }
     const value = await fn();
-    // "Nothing here" is not cached: an unverified contract may be verified by the next recapture.
-    if (value !== null) writeFileSync(path, JSON.stringify({ key, value }));
+    // "Nothing here" is not cached: an unverified contract may be verified by the next recapture,
+    // and an address with no code may have code by then.
+    if (value !== null && value !== "0x") writeFileSync(path, JSON.stringify({ key, value }));
     return value;
   });
 }
 
+/**
+ * An answer of nothing (no code, a zero word) is asked again of each other endpoint the config
+ * lists, and the first that has something wins: a node that lags or drops state answers empty, and
+ * an empty implementation slot would silently leave a proxy's implementation out of its layers.
+ */
+async function consensus(chainId, method, params, empty) {
+  let answer;
+  for (let first = 0; first < RPC_URLS.get(chainId).length; first++) {
+    answer = await rpc(chainId, method, params, first);
+    if (!empty(answer)) return answer;
+  }
+  return answer;
+}
 const getCode = (chainId, address) =>
   diskMemo(`code:${chainId}:${address.toLowerCase()}`, () =>
-    rpc(chainId, "eth_getCode", [address, "latest"]),
+    consensus(chainId, "eth_getCode", [address, "latest"], (code) => !code || code === "0x"),
   );
 const getSlot = (chainId, address, slot) =>
   memo(`slot:${chainId}:${address}:${slot}`, () =>
-    rpc(chainId, "eth_getStorageAt", [address, slot, "latest"]),
+    consensus(
+      chainId,
+      "eth_getStorageAt",
+      [address, slot, "latest"],
+      (word) => typeof word !== "string" || !/[1-9a-f]/i.test(word.slice(2)),
+    ),
   );
 const call = (chainId, to, data) =>
   memo(`call:${chainId}:${to}:${data}`, () => rpc(chainId, "eth_call", [{ to, data }, "latest"]));
@@ -355,6 +400,8 @@ async function resolveLayers(chainId, address, seen = new Set()) {
     if (inner.length > 0) inner[0].kind = kind;
     layers.push(...inner);
   }
+  // A layer that delegated to another is a wrapper: its own functions are its admin's.
+  layers[0].wrapper = layers.length > 1;
   return layers;
 }
 
@@ -396,29 +443,35 @@ function embeddedAddresses(code) {
   return [...out];
 }
 
-/** True when `code` dispatches `selector`: a PUSHn immediate or (EraVM, dense tables) a raw match. */
+/** True when `code` dispatches `selector`: a PUSH1..PUSH4 immediate of its value or (EraVM, dense
+ *  tables) a raw match. */
 function dispatches(code, selector, chainId) {
   const sel = selector.slice(2).toLowerCase();
-  const hex = code.slice(2).toLowerCase();
   if (!ERAVM.has(chainId)) {
-    const value = parseInt(sel, 16);
-    for (let i = 0; i < hex.length; i += 2) {
-      const op = parseInt(hex.slice(i, i + 2), 16);
-      if (op >= 0x60 && op <= 0x7f) {
-        const n = op - 0x5f;
-        if (n <= 4) {
-          const imm = hex.slice(i + 2, i + 2 + 2 * n);
-          if (imm.length === 2 * n && parseInt(imm, 16) === value) return true;
-        }
-        i += 2 * n;
-      }
+    // A dispatcher compares the selector as a number: a leading zero byte may be left out.
+    const found = immediates(code);
+    const value = sel.replace(/^(00)+/, "");
+    for (let n = Math.max(1, value.length / 2); n <= 4; n++) {
+      if (found.has(value.padStart(2 * n, "0"))) return true;
     }
   }
   // Byte-aligned raw match: EraVM constants, Vyper's data-section selector tables.
+  const hex = lowerHex(code);
   for (let at = hex.indexOf(sel); at !== -1; at = hex.indexOf(sel, at + 1)) {
     if (at % 2 === 0) return true;
   }
   return false;
+}
+
+/** `code` without `0x`, lowercase, memoized per code. */
+const lowerHexOf = new Map();
+function lowerHex(code) {
+  let hex = lowerHexOf.get(code);
+  if (hex === undefined) {
+    hex = code.slice(2).toLowerCase();
+    lowerHexOf.set(code, hex);
+  }
+  return hex;
 }
 
 /** Every PUSHn immediate `code` executes, lowercase hex without `0x`, memoized per code. */
@@ -427,12 +480,13 @@ function immediates(code) {
   let found = immediatesOf.get(code);
   if (found !== undefined) return found;
   found = new Set();
-  const hex = code.slice(2).toLowerCase();
+  const hex = lowerHex(code);
   for (let i = 0; i < hex.length; i += 2) {
     const op = parseInt(hex.slice(i, i + 2), 16);
     if (op >= 0x60 && op <= 0x7f) {
       const n = op - 0x5f;
-      found.add(hex.slice(i + 2, i + 2 + 2 * n));
+      const imm = hex.slice(i + 2, i + 2 + 2 * n);
+      if (imm.length === 2 * n) found.add(imm);
       i += 2 * n;
     }
   }
@@ -589,7 +643,38 @@ async function lookupAbi(chainId, address, result) {
   }
 }
 
-async function captureInstance(slug, abiExport, registryFns, target, registryMarks = []) {
+/** `facets()`, the EIP-2535 loupe's whole routing table: each facet with its selectors. */
+const FACETS = "0x7a0ed627";
+const FACETS_OUTPUT = [
+  {
+    type: "tuple[]",
+    components: [
+      { name: "facetAddress", type: "address" },
+      { name: "functionSelectors", type: "bytes4[]" },
+    ],
+  },
+];
+/** The table `facets()` answered, or null when the answer does not decode as one. */
+function decodeFacets(data) {
+  if (typeof data !== "string" || data.length < 130) return null;
+  try {
+    const [facets] = decodeAbiParameters(FACETS_OUTPUT, data);
+    return facets.map((f) => ({
+      facet: f.facetAddress.toLowerCase(),
+      selectors: f.functionSelectors.map((s) => s.toLowerCase()),
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One instance of an ABI export: its layers, its verified ABI, and where its code dispatches each
+ * of `seeds` (the export's candidate selectors, see the header) and carries each of `seedMarks`
+ * (topic or selector -> "event" | "error"), with its own verified ones added to both.
+ */
+async function captureInstance(job, target, seeds, seedMarks) {
+  const { slug, abiExport, registryFns, registryMarks } = job;
   const { chainId, address } = target;
   const names = new Set(registryFns.map((f) => f.name));
   // Events and errors, by `<type> <name>`: an event and an error may share a name.
@@ -605,6 +690,18 @@ async function captureInstance(slug, abiExport, registryFns, target, registryMar
   let layers;
   try {
     layers = await resolveLayers(chainId, address);
+    // A contract whose fallback delegates what it does not dispatch to a contract a getter names
+    // (Comet's `extensionDelegate()`): that contract's code runs as this one's, so it is a layer.
+    if (layers[0].kind !== "empty") {
+      for (const getter of target.delegates ?? []) {
+        const word = await call(chainId, result.address, toFunctionSelector(getter));
+        const delegate = typeof word === "string" ? wordToAddress(word.slice(0, 66)) : null;
+        if (!isAddress(delegate) || !(await hasCode(chainId, delegate))) continue;
+        const inner = await resolveLayers(chainId, delegate, new Set(layers.map((l) => l.address)));
+        if (inner.length > 0) inner[0].kind = getter;
+        layers.push(...inner);
+      }
+    }
   } catch (err) {
     return { ...result, error: err.message };
   }
@@ -619,48 +716,80 @@ async function captureInstance(slug, abiExport, registryFns, target, registryMar
     return result;
   }
 
-  // Verified ABIs of every layer; the implementation's usually carries the functions.
+  // The verified functions, events and errors, by selector or topic: all of an implementation's or
+  // a facet's, and of a wrapper's only the names the registry declares. An implementation's
+  // declaration of a selector wins over a wrapper's.
   const verified = {};
-  // The verified events and errors of the registry's names, by topic or selector.
   const verifiedMarks = {};
-  const collectMarks = (abi, from) => {
+  const take = (abi, from, wrapper) => {
     for (const item of abi) {
-      if (!markNames.has(`${item.type} ${item.name}`)) continue;
-      const frag = eventOrErrorFragment(item);
-      verifiedMarks[markOf(frag)] ??= { ...frag, from };
+      if (item.type === "function") {
+        if (wrapper && !names.has(item.name)) continue;
+        const frag = fragment(item);
+        verified[frag.selector] ??= { ...frag, from };
+      } else if (item.type === "event" || item.type === "error") {
+        if (wrapper && !markNames.has(`${item.type} ${item.name}`)) continue;
+        const frag = eventOrErrorFragment(item);
+        verifiedMarks[markOf(frag)] ??= { ...frag, from };
+      }
     }
   };
   const abiSources = [];
+  const layerAbis = [];
   for (const layer of layers) {
     if (!layer.code) continue;
     const v = await lookupAbi(chainId, layer.address, result);
     if (!v) continue;
     abiSources.push({ address: layer.address, source: v.source, contract: v.contract });
-    for (const item of v.abi) {
-      if (item.type !== "function" || !names.has(item.name)) continue;
-      const frag = fragment(item);
-      verified[frag.selector] ??= { ...frag, from: layer.address };
+    layerAbis.push([layer, v.abi]);
+  }
+  for (const [layer, abi] of layerAbis) if (!layer.wrapper) take(abi, layer.address, false);
+  for (const [layer, abi] of layerAbis) if (layer.wrapper) take(abi, layer.address, true);
+  // A source that verified a layer before and cannot answer now (an explorer behind a challenge
+  // page) does not unverify it, as long as nothing the previous capture's fragments came from has
+  // changed: the same layers with the same code, none reached through a router (whose facets are
+  // not layers, and may have moved). The deployment keeps what that capture recorded, and the
+  // source says when that was (`carried`).
+  const before = PREVIOUS.rows.get(`${slug}|${abiExport}|${chainId}|${result.address}`);
+  const codeOf = (list) => JSON.stringify((list ?? []).map((l) => [l.address, l.codeHash ?? null]));
+  if (
+    result.abiErrors !== undefined &&
+    before !== undefined &&
+    codeOf(before.layers) === codeOf(result.layers) &&
+    !Object.values(before.selectors ?? {}).some((v) => typeof v === "string")
+  ) {
+    const failed = new Set(result.abiErrors.map((e) => e.slice(0, 42)));
+    const carried = (before.abiSources ?? []).filter(
+      (s) =>
+        failed.has(s.address) &&
+        result.layers.some((l) => l.address === s.address) &&
+        !abiSources.some((x) => x.address === s.address),
+    );
+    for (const s of carried) abiSources.push({ ...s, carried: s.carried ?? PREVIOUS.capturedAt });
+    if (carried.length > 0) {
+      for (const frag of before.verified ?? []) {
+        if (frag.type === undefined) verified[frag.selector] ??= { ...frag, from: "carried" };
+        else verifiedMarks[markOf(frag)] ??= { ...frag, from: "carried" };
+      }
     }
-    collectMarks(v.abi, layer.address);
   }
 
-  // Every selector worth an answer: the registry's, the target's probes, and verified overloads.
-  const candidates = new Set(registryFns.map((f) => toFunctionSelector(signature(f))));
+  const candidates = new Set(seeds);
+  for (const f of registryFns) candidates.add(toFunctionSelector(signature(f)));
   for (const probe of target.probes ?? []) candidates.add(toFunctionSelector(probe));
   for (const sel of Object.keys(verified)) candidates.add(sel);
+  /** Every facet a router named, whether or not it has a verified ABI. */
+  const facets = new Set();
   const absorb = async (facet) => {
+    if (facets.has(facet)) return;
+    facets.add(facet);
     const v = await lookupAbi(chainId, facet, result);
     if (!v) return;
     if (!abiSources.some((s) => s.address === facet)) {
       abiSources.push({ address: facet, source: v.source, contract: v.contract });
     }
-    for (const item of v.abi) {
-      if (item.type !== "function" || !names.has(item.name)) continue;
-      const frag = fragment(item);
-      verified[frag.selector] ??= { ...frag, from: facet };
-      candidates.add(frag.selector);
-    }
-    collectMarks(v.abi, facet);
+    take(v.abi, facet, false);
+    for (const sel of Object.keys(verified)) candidates.add(sel);
   };
   const routed = {};
   // Routing tables live on the instance, or, for a thin proxy that asks an embedded diamond per
@@ -671,21 +800,47 @@ async function captureInstance(slug, abiExport, registryFns, target, registryMar
       if (embedded !== result.address && (await hasCode(chainId, embedded))) hosts.push(embedded);
     }
   }
+  const perSelector = [];
   for (const host of hosts) {
     const lookups = await routerLookups(chainId, host);
-    // An EIP-2535 loupe lists every facet: read each one's verified ABI for the relevant names.
+    let table = null;
+    // An EIP-2535 loupe: its whole table where it answers `facets()`, else its facet list.
     if (lookups.some(([lookup]) => lookup === "facetAddress(bytes4)")) {
-      const list = await call(chainId, host, FACET_ADDRESSES);
-      for (const facet of decodeAddressArray(list)) await absorb(facet);
+      table = decodeFacets(await call(chainId, host, FACETS));
+      if (table !== null && table.length > 0) {
+        for (const { facet, selectors } of table) {
+          if (!isAddress(facet)) continue;
+          for (const sel of selectors) routed[sel] ??= { via: "facets()", facet };
+          await absorb(facet);
+        }
+      } else {
+        table = null;
+        const list = await call(chainId, host, FACET_ADDRESSES);
+        for (const facet of decodeAddressArray(list)) await absorb(facet);
+      }
     }
     for (const [lookup, lsel] of lookups) {
-      for (const sel of [...candidates]) {
-        if (routed[sel]) continue;
+      if (table !== null && lookup === "facetAddress(bytes4)") continue;
+      perSelector.push([host, lookup, lsel]);
+    }
+  }
+  // A router that answers one selector at a time is asked about every candidate, and again about
+  // the functions of each facet it names, until no new candidate turns up.
+  const asked = new Set();
+  for (let more = true; more;) {
+    more = false;
+    for (const [host, lookup, lsel] of perSelector) {
+      for (const sel of [...candidates].sort()) {
+        const key = `${host}:${lsel}:${sel}`;
+        if (routed[sel] || asked.has(key)) continue;
+        asked.add(key);
         const word = await call(chainId, host, `${lsel}${sel.slice(2)}${"0".repeat(56)}`);
         const facet = typeof word === "string" ? wordToAddress(word.slice(0, 66)) : null;
         if (!isAddress(facet)) continue;
         routed[sel] = { via: lookup, facet };
+        const before = candidates.size;
         await absorb(facet);
+        if (candidates.size > before) more = true;
       }
     }
   }
@@ -700,34 +855,34 @@ async function captureInstance(slug, abiExport, registryFns, target, registryMar
     selectors[sel] = where >= 0 ? where : null;
   }
   result.selectors = selectors;
-  if (registryMarks.length > 0) {
-    // The registry's events and errors and the verified ones of the same names: where the code that
-    // runs carries each (a layer, or a facet the router named), or null.
-    const facets = [...new Set(Object.values(routed).map((r) => r.facet))];
-    const facetCode = {};
-    for (const facet of facets) facetCode[facet] = await getCode(chainId, facet);
-    const locate = (frag) => {
-      const carries = frag.type === "event" ? emits : reverts;
-      const where = layers.findIndex((l) => l.code && carries(l.code, markOf(frag), chainId));
-      if (where >= 0) return where;
-      const facet = facets.find(
-        (f) => facetCode[f] && carries(facetCode[f], markOf(frag), chainId),
-      );
-      return facet === undefined ? null : `routed:${facet}`;
-    };
-    const wanted = [
-      ...registryMarks.map((item) => eventOrErrorFragment(item)),
-      ...Object.values(verifiedMarks),
-    ];
-    for (const kind of ["event", "error"]) {
-      const marks = wanted.filter((frag) => frag.type === kind);
-      if (marks.length === 0) continue;
-      const located = {};
-      for (const frag of marks.sort((a, b) => markOf(a).localeCompare(markOf(b)))) {
-        located[markOf(frag)] ??= locate(frag);
-      }
-      result[kind === "event" ? "events" : "errors"] = located;
-    }
+
+  // Every event and error the export's deployments declare, and the registry's: where the code
+  // that runs carries each (a layer, or a facet a router named), or null.
+  const facetCode = {};
+  for (const facet of [...new Set([...facets, ...Object.values(routed).map((r) => r.facet)])]) {
+    facetCode[facet] = await getCode(chainId, facet);
+  }
+  const locate = (kind, mark) => {
+    const carries = kind === "event" ? emits : reverts;
+    const where = layers.findIndex((l) => l.code && carries(l.code, mark, chainId));
+    if (where >= 0) return where;
+    const facet = Object.keys(facetCode)
+      .sort()
+      .find((f) => facetCode[f] && facetCode[f] !== "0x" && carries(facetCode[f], mark, chainId));
+    return facet === undefined ? null : `routed:${facet}`;
+  };
+  const wanted = new Map(seedMarks);
+  for (const item of registryMarks) {
+    const frag = eventOrErrorFragment(item);
+    wanted.set(markOf(frag), frag.type);
+  }
+  for (const frag of Object.values(verifiedMarks)) wanted.set(markOf(frag), frag.type);
+  for (const kind of ["event", "error"]) {
+    const marks = [...wanted].filter(([, type]) => type === kind).map(([mark]) => mark);
+    if (marks.length === 0) continue;
+    const located = {};
+    for (const mark of marks.sort()) located[mark] = locate(kind, mark);
+    result[kind === "event" ? "events" : "errors"] = located;
   }
   result.abiSources = abiSources;
   result.verified = [
@@ -743,7 +898,7 @@ async function captureInstance(slug, abiExport, registryFns, target, registryMar
 async function rpcAnswer(chainId, method, params) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await fetch(rpcUrl(chainId), {
+      const res = await fetch(rpcUrl(chainId, attempt), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -791,24 +946,21 @@ async function newestLog(chainId, address, topic0) {
 }
 
 /**
- * One real log of every event `jobs` declares, from the first of its deployments that has one. The
- * log is stored as the node returned it, so the test decodes exactly the bytes the chain holds.
+ * One real log of every event a target lists under `logs`, from the first of its deployments that
+ * has one. The log is stored as the node returned it, so the test decodes exactly the bytes the
+ * chain holds.
  */
 async function captureLogs(jobs) {
   const wanted = new Map();
   for (const job of jobs) {
-    for (const item of job.registryMarks.filter((m) => m.type === "event")) {
-      const sig = signature(item);
-      const key = `${job.slug}\u0000${job.abiExport}\u0000${sig}`;
-      const entry = wanted.get(key) ?? {
+    for (const sig of job.logs) {
+      wanted.set(`${job.slug}\u0000${job.abiExport}\u0000${sig}`, {
         protocol: job.slug,
         abi: job.abiExport,
         event: sig,
         topic0: toEventSelector(sig),
-        instances: [],
-      };
-      entry.instances.push(job.inst);
-      wanted.set(key, entry);
+        instances: job.instances,
+      });
     }
   }
   const logs = await pool([...wanted.values()], 4, async (entry) => {
@@ -839,11 +991,34 @@ async function captureLogs(jobs) {
 
 const logKey = (log) => `${log.protocol}\u0000${log.abi}\u0000${log.event}`;
 
+/** The reference interfaces' functions, by `<slug>.<AbiExport>` (`reference/index.json`). */
+function readReference() {
+  const dir = join(FIXTURE_DIR, "reference");
+  const index = join(dir, "index.json");
+  const out = new Map();
+  if (!existsSync(index)) return out;
+  for (const [key, files] of Object.entries(JSON.parse(readFileSync(index, "utf-8")).exports)) {
+    const functions = files.flatMap(({ file }) =>
+      JSON.parse(readFileSync(join(dir, file), "utf-8")).filter((i) => i.type === "function"),
+    );
+    out.set(key, functions);
+  }
+  return out;
+}
+
+/** The fixture as this run found it: each deployment's row, and when it was captured. */
+const PREVIOUS = { rows: new Map(), capturedAt: undefined };
+
 async function main() {
   const only = new Set(cli.positionals);
-  const previous = existsSync(EVIDENCE_PATH)
-    ? expand(JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8")))
-    : { instances: [], logs: [] };
+  const stored = existsSync(EVIDENCE_PATH)
+    ? JSON.parse(readFileSync(EVIDENCE_PATH, "utf-8"))
+    : null;
+  const previous = stored === null ? { instances: [], logs: [] } : expand(stored);
+  PREVIOUS.capturedAt = stored?.capturedAt;
+  for (const row of previous.instances) {
+    PREVIOUS.rows.set(`${row.protocol}|${row.abi}|${row.chainId}|${row.address}`, row);
+  }
   // A target can name a protocol another branch adds: without its build output there is nothing to
   // capture, and its evidence is carried over untouched until the protocol lands.
   const present = (slug) => existsSync(join(SDK, "dist", "protocols", slug, "abis.js"));
@@ -853,6 +1028,7 @@ async function main() {
       !present(i.protocol) ||
       (CHAINS_ONLY !== null && !CHAINS_ONLY.has(i.chainId)),
   );
+  const reference = readReference();
   const jobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
     if (only.size > 0 && !only.has(slug)) continue;
@@ -879,19 +1055,44 @@ async function main() {
         }
       }
       for (const inst of spec.instances ?? []) instances.push(inst);
-      for (const inst of instances) if (spec.probes) inst.probes = spec.probes;
+      for (const inst of instances) {
+        if (spec.probes) inst.probes = spec.probes;
+        if (spec.delegates) inst.delegates = spec.delegates;
+      }
       if (instances.length === 0 && !spec.unverifiable) {
         throw new Error(`${slug}.${abiExport}: target names no instance`);
       }
-      for (const inst of instances) {
-        if (CHAINS_ONLY !== null && !CHAINS_ONLY.has(inst.chainId)) continue;
-        jobs.push({ slug, abiExport, registryFns, registryMarks, inst });
+      const selected = instances.filter(
+        (inst) => CHAINS_ONLY === null || CHAINS_ONLY.has(inst.chainId),
+      );
+      if (selected.length === 0) continue;
+      // The candidates start from the reference interfaces and from every instance this run keeps
+      // as captured, so a run narrowed to some chains still answers for the export's whole union.
+      const seeds = new Set(
+        (reference.get(`${slug}.${abiExport}`) ?? []).map((f) => toFunctionSelector(signature(f))),
+      );
+      const seedMarks = new Map();
+      for (const row of keep) {
+        if (row.protocol !== slug || row.abi !== abiExport) continue;
+        for (const sel of Object.keys(row.selectors ?? {})) seeds.add(sel);
+        for (const mark of Object.keys(row.events ?? {})) seedMarks.set(mark, "event");
+        for (const mark of Object.keys(row.errors ?? {})) seedMarks.set(mark, "error");
       }
+      jobs.push({
+        slug,
+        abiExport,
+        registryFns,
+        registryMarks,
+        logs: spec.logs ?? [],
+        instances: selected,
+        seeds,
+        seedMarks,
+      });
     }
   }
   // Every RPC the run needs, checked before the first request: a chain found missing mid-run would
   // leave its instances recorded as errors in the fixture.
-  const missing = [...new Set(jobs.map((job) => job.inst.chainId))]
+  const missing = [...new Set(jobs.flatMap((job) => job.instances.map((inst) => inst.chainId)))]
     .filter((chainId) => !RPC_URLS.has(chainId))
     .sort((a, b) => a - b);
   if (missing.length > 0) {
@@ -901,22 +1102,46 @@ async function main() {
         "entry for each, or narrow the run with --chains or protocol slugs.",
     );
   }
-  console.log(`capturing ${jobs.length} instances`);
-  const captured = await pool(jobs, 6, async (job, i) => {
-    const r = await captureInstance(
-      job.slug,
-      job.abiExport,
-      job.registryFns,
-      job.inst,
-      job.registryMarks,
-    );
-    const missing = Object.values(r.selectors ?? {}).filter((v) => v === null).length;
-    console.log(
-      `[${i + 1}/${jobs.length}] ${job.slug}.${job.abiExport} ${job.inst.chainId}:${job.inst.address}` +
-        (r.error ? ` ERROR ${r.error}` : ` verified=${r.verified.length} absent=${missing}`),
-    );
-    return r;
-  });
+  const total = jobs.reduce((n, job) => n + job.instances.length, 0);
+  console.log(`capturing ${total} instances of ${jobs.length} ABI exports`);
+  let done = 0;
+  // Each export's instances are captured with the candidates every one of them adds, again until a
+  // round adds none: what one deployment's verified ABI declares is asked of all of them.
+  const captured = (
+    await pool(jobs, 4, async (job) => {
+      let seeds = job.seeds;
+      let seedMarks = job.seedMarks;
+      for (let round = 1; ; round++) {
+        const rows = await pool(job.instances, 3, (inst) =>
+          captureInstance(job, inst, seeds, seedMarks),
+        );
+        const next = new Set(seeds);
+        const nextMarks = new Map(seedMarks);
+        for (const row of rows) {
+          for (const sel of Object.keys(row.selectors ?? {})) next.add(sel);
+          for (const mark of Object.keys(row.events ?? {})) nextMarks.set(mark, "event");
+          for (const mark of Object.keys(row.errors ?? {})) nextMarks.set(mark, "error");
+        }
+        const stable = next.size === seeds.size && nextMarks.size === seedMarks.size;
+        if (stable || round === 5) {
+          for (const r of rows) {
+            const absent = Object.values(r.selectors ?? {}).filter((v) => v === null).length;
+            console.log(
+              `[${++done}/${total}] ${job.slug}.${job.abiExport} ${r.chainId}:${r.address}` +
+                (r.error
+                  ? ` ERROR ${r.error}`
+                  : ` verified=${r.verified.length} candidates=${Object.keys(r.selectors).length} absent=${absent}`) +
+                (r.abiErrors ? ` abiErrors=${r.abiErrors.length}` : "") +
+                (stable ? "" : " (candidates still growing after 5 rounds)"),
+            );
+          }
+          return rows;
+        }
+        seeds = next;
+        seedMarks = nextMarks;
+      }
+    })
+  ).flat();
   const instances = [...keep, ...captured].sort(
     (a, b) =>
       a.protocol.localeCompare(b.protocol) ||
@@ -924,8 +1149,8 @@ async function main() {
       a.chainId - b.chainId ||
       a.address.localeCompare(b.address),
   );
-  // A log is a fact about the chain, so one this run did not find again is kept while the registry
-  // still declares its event; a run's new one replaces it.
+  // A log is a fact about the chain, so one this run did not find again is kept while its target
+  // still lists the event; a run's new one replaces it.
   const found = await captureLogs(jobs);
   const fresh = new Set(found.logs.map(logKey));
   const ran = new Set(jobs.map((job) => `${job.slug}\u0000${job.abiExport}`));
