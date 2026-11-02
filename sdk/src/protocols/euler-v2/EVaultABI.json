@@ -1,6 +1,406 @@
 {
   "abi": [
     {
+      "name": "accountLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "liquidation",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "collateralValue",
+          "type": "uint256"
+        },
+        {
+          "name": "liabilityValue",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "accountLiquidityFull",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "liquidation",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "collaterals",
+          "type": "address[]"
+        },
+        {
+          "name": "collateralValues",
+          "type": "uint256[]"
+        },
+        {
+          "name": "liabilityValue",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "accumulatedFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "accumulatedFeesAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "allowance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "asset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "balanceForwarderEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "balanceTrackerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "borrow",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "caps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "supplyCap",
+          "type": "uint16"
+        },
+        {
+          "name": "borrowCap",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "cash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "checkAccountStatus",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "collaterals",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "checkLiquidation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "violator",
+          "type": "address"
+        },
+        {
+          "name": "collateral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "maxRepay",
+          "type": "uint256"
+        },
+        {
+          "name": "maxYield",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "checkVaultStatus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "configFlags",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "convertFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "convertToAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "convertToShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "creator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "debtOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "debtOfExact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -20,6 +420,1020 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "disableBalanceForwarder",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "disableController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "dToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "enableBalanceForwarder",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "EVC",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeReceiver",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "flashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "governorAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "hookConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "proxyCreator",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "interestAccumulator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "interestFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "interestRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "interestRateModel",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "liquidate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "violator",
+          "type": "address"
+        },
+        {
+          "name": "collateral",
+          "type": "address"
+        },
+        {
+          "name": "repayAssets",
+          "type": "uint256"
+        },
+        {
+          "name": "minYieldBalance",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "liquidationCoolOffTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "LTVBorrow",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "LTVFull",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "borrowLTV",
+          "type": "uint16"
+        },
+        {
+          "name": "liquidationLTV",
+          "type": "uint16"
+        },
+        {
+          "name": "initialLiquidationLTV",
+          "type": "uint16"
+        },
+        {
+          "name": "targetTimestamp",
+          "type": "uint48"
+        },
+        {
+          "name": "rampDuration",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "LTVLiquidation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "LTVList",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "maxDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxLiquidationDiscount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "maxMint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_BALANCE_FORWARDER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_BORROWING",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_GOVERNANCE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_INITIALIZE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_LIQUIDATION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_RISKMANAGER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_TOKEN",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MODULE_VAULT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "permit2Address",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "previewDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewMint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "protocolConfigAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeReceiver",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pullDebt",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "redeem",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repayWithShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        },
+        {
+          "name": "debt",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "supplyCap",
+          "type": "uint16"
+        },
+        {
+          "name": "borrowCap",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setConfigFlags",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newConfigFlags",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeReceiver",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newFeeReceiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setGovernorAdmin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newGovernorAdmin",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setHookConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newHookTarget",
+          "type": "address"
+        },
+        {
+          "name": "newHookedOps",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setInterestFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newFee",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setInterestRateModel",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newModel",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLiquidationCoolOffTime",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCoolOffTime",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLTV",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address"
+        },
+        {
+          "name": "borrowLTV",
+          "type": "uint16"
+        },
+        {
+          "name": "liquidationLTV",
+          "type": "uint16"
+        },
+        {
+          "name": "rampDuration",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxLiquidationDiscount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDiscount",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "skim",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "totalAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalBorrows",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalBorrowsExact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "touch",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferFromMax",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "unitOfAccount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "viewDelegate",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
     },
     {
       "name": "withdraw",
@@ -47,71 +1461,718 @@
       ]
     },
     {
-      "name": "borrow",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "Approval",
+      "type": "event",
       "inputs": [
         {
-          "name": "amount",
-          "type": "uint256"
+          "name": "owner",
+          "type": "address",
+          "indexed": true
         },
         {
-          "name": "receiver",
-          "type": "address"
-        }
-      ],
-      "outputs": [
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
         {
-          "name": "shares",
-          "type": "uint256"
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     },
     {
-      "name": "repay",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "BalanceForwarderStatus",
+      "type": "event",
       "inputs": [
         {
-          "name": "amount",
-          "type": "uint256"
+          "name": "account",
+          "type": "address",
+          "indexed": true
         },
         {
-          "name": "receiver",
-          "type": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "shares",
-          "type": "uint256"
+          "name": "status",
+          "type": "bool",
+          "indexed": false
         }
       ]
     },
     {
-      "name": "redeem",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "Borrow",
+      "type": "event",
       "inputs": [
         {
-          "name": "shares",
-          "type": "uint256"
+          "name": "account",
+          "type": "address",
+          "indexed": true
         },
         {
-          "name": "receiver",
-          "type": "address"
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ConvertFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "protocolReceiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "governorReceiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "protocolShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "governorShares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DebtSocialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
         },
         {
           "name": "owner",
-          "type": "address"
-        }
-      ],
-      "outputs": [
+          "type": "address",
+          "indexed": true
+        },
         {
-          "name": "amount",
-          "type": "uint256"
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
         }
       ]
+    },
+    {
+      "name": "EVaultCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "creator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "dToken",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetCaps",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newSupplyCap",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "newBorrowCap",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetConfigFlags",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newConfigFlags",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetFeeReceiver",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newFeeReceiver",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "GovSetGovernorAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newGovernorAdmin",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "GovSetHookConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newHookTarget",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newHookedOps",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetInterestFee",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newFee",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetInterestRateModel",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newInterestRateModel",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetLiquidationCoolOffTime",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newCoolOffTime",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetLTV",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "borrowLTV",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "liquidationLTV",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "initialLiquidationLTV",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "targetTimestamp",
+          "type": "uint48",
+          "indexed": false
+        },
+        {
+          "name": "rampDuration",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovSetMaxLiquidationDiscount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newDiscount",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "InterestAccrued",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Liquidate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "liquidator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "violator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "collateral",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "repayAssets",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "yieldBalance",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PullDebt",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Repay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VaultStatus",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "totalShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBorrows",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "accumulatedFees",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "cash",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "interestAccumulator",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "interestRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Withdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "E_AccountLiquidity",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_AmountTooLargeToEncode",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadAssetReceiver",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadBorrowCap",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadCollateral",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadFee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadMaxLiquidationDiscount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadSharesOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadSharesReceiver",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BadSupplyCap",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_BorrowCapExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_CheckUnauthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_CollateralDisabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ConfigAmountTooLargeToEncode",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ControllerDisabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_DebtAmountTooLargeToEncode",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_EmptyError",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ExcessiveRepayAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_FlashLoanNotRepaid",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_Initialized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InsufficientAllowance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InsufficientAssets",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InsufficientBalance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InsufficientCash",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InsufficientDebt",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_InvalidLTVAsset",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_LiquidationCoolOff",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_LTVBorrow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_LTVLiquidation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_MinYield",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_NoLiability",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_NoPriceOracle",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_NotController",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_NotHookTarget",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_NotSupported",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_OperationDisabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_OutstandingDebt",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ProxyMetadata",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_Reentrancy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_RepayTooMuch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_SelfLiquidation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_SelfTransfer",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_SupplyCapExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_TransientState",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_Unauthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ViolatorLiquidityDeferred",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ZeroAssets",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "E_ZeroShares",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

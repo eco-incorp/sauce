@@ -1,6 +1,78 @@
 {
   "abi": [
     {
+      "name": "allTokensFrozen",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "approveContractCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        },
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "approveContractCallWithMint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        },
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "authModule",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "burnToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        },
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "callContract",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -49,6 +121,291 @@
       "outputs": []
     },
     {
+      "name": "contractId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "deployToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        },
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "execute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "input",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getBool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getBytes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "getInt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "getString",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "getUint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "governance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "isCommandExecuted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isContractCallAndMintApproved",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "contractAddress",
+          "type": "address"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isContractCallApproved",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "contractAddress",
+          "type": "address"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "mintLimiter",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "mintToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        },
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "sendToken",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -73,6 +430,34 @@
       "outputs": []
     },
     {
+      "name": "setTokenMintLimits",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "symbols",
+          "type": "string[]"
+        },
+        {
+          "name": "limits",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setup",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "tokenAddresses",
       "type": "function",
       "stateMutability": "view",
@@ -88,6 +473,648 @@
           "type": "address"
         }
       ]
+    },
+    {
+      "name": "tokenDeployer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tokenFrozen",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "tokenMintAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenMintLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferGovernance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newGovernance",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferMintLimiter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newMintLimiter",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOperatorship",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOperatorsData",
+          "type": "bytes"
+        },
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "newImplementationCodeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "setupParams",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "validateContractCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "validateContractCallAndMint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ContractCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationContractAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "payload",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ContractCallApproved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "contractAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceTxHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "sourceEventIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ContractCallApprovedWithMint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "contractAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sourceTxHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "sourceEventIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ContractCallExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractCallWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationContractAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "payload",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Executed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "GovernanceTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousGovernance",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newGovernance",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "MintLimiterTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousGovernance",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newGovernance",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OperatorshipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOperatorsData",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenDeployed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "tokenAddresses",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenMintLimitUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "limit",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenSent",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BurnFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "ExceedMintLimit",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "InvalidAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAuthModule",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidChainId",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCodeHash",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCommands",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidGovernance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidImplementation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidMintLimiter",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidSetMintLimitsParams",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidTokenDeployer",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MintFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "NotGovernance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotMintLimiter",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotProxy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotSelf",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SetupFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TokenAlreadyExists",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "TokenContractDoesNotExist",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "TokenDeployFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "TokenDoesNotExist",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "TokenTransferFailed",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

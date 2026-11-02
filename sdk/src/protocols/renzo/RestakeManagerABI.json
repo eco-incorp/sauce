@@ -1,6 +1,166 @@
 {
   "abi": [
     {
+      "name": "_deprecated_maxDepositTVL",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "addCollateralToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newCollateralToken",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addOperatorDelegator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newOperatorDelegator",
+          "type": "address"
+        },
+        {
+          "name": "_allocationBasisPoints",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "calculateTVLs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[][]"
+        },
+        {
+          "name": "",
+          "type": "uint256[]"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "chooseOperatorDelegatorForDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tvls",
+          "type": "uint256[]"
+        },
+        {
+          "name": "totalTVL",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "chooseOperatorDelegatorForWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "ezETHValue",
+          "type": "uint256"
+        },
+        {
+          "name": "operatorDelegatorTokenTVLs",
+          "type": "uint256[][]"
+        },
+        {
+          "name": "operatorDelegatorTVLs",
+          "type": "uint256[]"
+        },
+        {
+          "name": "totalTVL",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "collateralTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "collateralTokenTvlLimits",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "delegationManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -17,11 +177,628 @@
       "outputs": []
     },
     {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_referralId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "depositETH",
       "type": "function",
       "stateMutability": "payable",
       "inputs": [],
       "outputs": []
+    },
+    {
+      "name": "depositETH",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_referralId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "depositTokenRewardsFromProtocol",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ezETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getCollateralTokenIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getCollateralTokensLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getOperatorDelegatorsLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_roleManager",
+          "type": "address"
+        },
+        {
+          "name": "_ezETH",
+          "type": "address"
+        },
+        {
+          "name": "_renzoOracle",
+          "type": "address"
+        },
+        {
+          "name": "_strategyManager",
+          "type": "address"
+        },
+        {
+          "name": "_delegationManager",
+          "type": "address"
+        },
+        {
+          "name": "_depositQueue",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "operatorDelegatorAllocations",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "operatorDelegators",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pendingWithdrawals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ezETHToBurn",
+          "type": "uint256"
+        },
+        {
+          "name": "withdrawer",
+          "type": "address"
+        },
+        {
+          "name": "tokenToWithdraw",
+          "type": "address"
+        },
+        {
+          "name": "tokenAmountToWithdraw",
+          "type": "uint256"
+        },
+        {
+          "name": "operatorDelegator",
+          "type": "address"
+        },
+        {
+          "name": "completed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "removeCollateralToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateralTokenToRemove",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeOperatorDelegator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_operatorDelegatorToRemove",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renzoOracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "riskOracleMiddleware",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "roleManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setOperatorDelegatorAllocation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_operatorDelegator",
+          "type": "address"
+        },
+        {
+          "name": "_allocationBasisPoints",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_paused",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTokenTvlLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_limit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "stakeEthInOperatorDelegator",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "operatorDelegator",
+          "type": "address"
+        },
+        {
+          "name": "pubkey",
+          "type": "bytes"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "depositDataRoot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "strategyManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CollateralTokenAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollateralTokenRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollateralTokenTvlUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tvl",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ezETHMinted",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "referralId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OperatorDelegatorAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "od",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OperatorDelegatorAllocationUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "od",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "allocation",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OperatorDelegatorRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "od",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UserWithdrawCompleted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "withdrawalRoot",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "withdrawer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ezETHBurned",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UserWithdrawStarted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "withdrawalRoot",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "withdrawer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ezETHToBurn",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AlreadyAdded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidTokenDecimals",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint8"
+        },
+        {
+          "name": "actual",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "InvalidTVL",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidZeroInput",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaxTokenTVLReached",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotDepositQueue",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotDepositWithdrawPauser",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotFound",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotRestakeManagerAdmin",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OperatoDelegatorNotDelegated",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OverMaxBasisPoints",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

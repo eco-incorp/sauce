@@ -1,6 +1,1457 @@
 {
   "abi": [
     {
+      "name": "acceptAdmin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "allowEvmEmulation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "canonicalTxHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "baseTokenGasPriceMultiplierDenominator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "baseTokenGasPriceMultiplierNominator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "bridgehubRequestL2Transaction",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_request",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "contractL2",
+              "type": "address"
+            },
+            {
+              "name": "mintValue",
+              "type": "uint256"
+            },
+            {
+              "name": "l2Value",
+              "type": "uint256"
+            },
+            {
+              "name": "l2Calldata",
+              "type": "bytes"
+            },
+            {
+              "name": "l2GasLimit",
+              "type": "uint256"
+            },
+            {
+              "name": "l2GasPerPubdataByteLimit",
+              "type": "uint256"
+            },
+            {
+              "name": "factoryDeps",
+              "type": "bytes[]"
+            },
+            {
+              "name": "refundRecipient",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "canonicalTxHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "bridgehubRequestL2TransactionOnGateway",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_canonicalTxHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "_expirationTimestamp",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "changeFeeParams",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newFeeParams",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "pubdataPricingMode",
+              "type": "uint8"
+            },
+            {
+              "name": "batchOverheadL1Gas",
+              "type": "uint32"
+            },
+            {
+              "name": "maxPubdataPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "maxL2GasPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "priorityTxMaxPubdata",
+              "type": "uint32"
+            },
+            {
+              "name": "minimalL2GasPrice",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "commitBatchesSharedBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_processFrom",
+          "type": "uint256"
+        },
+        {
+          "name": "_processTo",
+          "type": "uint256"
+        },
+        {
+          "name": "_commitData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "executeBatchesSharedBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_processFrom",
+          "type": "uint256"
+        },
+        {
+          "name": "_processTo",
+          "type": "uint256"
+        },
+        {
+          "name": "_executeData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "executeUpgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_diamondCut",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "facetCuts",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "facet",
+                  "type": "address"
+                },
+                {
+                  "name": "action",
+                  "type": "uint8"
+                },
+                {
+                  "name": "isFreezable",
+                  "type": "bool"
+                },
+                {
+                  "name": "selectors",
+                  "type": "bytes4[]"
+                }
+              ]
+            },
+            {
+              "name": "initAddress",
+              "type": "address"
+            },
+            {
+              "name": "initCalldata",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "facetAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_selector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "facetAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "facetFunctionSelectors",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_facet",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4[]"
+        }
+      ]
+    },
+    {
+      "name": "facets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "addr",
+              "type": "address"
+            },
+            {
+              "name": "selectors",
+              "type": "bytes4[]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "finalizeEthWithdrawal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_l2BatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2MessageIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2TxNumberInBatch",
+          "type": "uint16"
+        },
+        {
+          "name": "_message",
+          "type": "bytes"
+        },
+        {
+          "name": "_merkleProof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "forwardedBridgeBurn",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_settlementLayer",
+          "type": "address"
+        },
+        {
+          "name": "_originalCaller",
+          "type": "address"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chainBridgeMintData",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "forwardedBridgeMint",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_data",
+          "type": "bytes"
+        },
+        {
+          "name": "_contractAlreadyDeployed",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "forwardedBridgeRecoverFailedTransfer",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_chainData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "freezeDiamond",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "genesisUpgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_l1GenesisUpgrade",
+          "type": "address"
+        },
+        {
+          "name": "_ctmDeployer",
+          "type": "address"
+        },
+        {
+          "name": "_forceDeploymentData",
+          "type": "bytes"
+        },
+        {
+          "name": "_factoryDeps",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getBaseToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getBaseTokenAssetId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getBridgehub",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getChainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getChainTypeManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getDAValidatorPair",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getFirstUnprocessedPriorityTx",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getL2BootloaderBytecodeHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getL2DefaultAccountBytecodeHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getL2EvmEmulatorBytecodeHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getL2SystemContractsUpgradeBatchNumber",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getL2SystemContractsUpgradeBlockNumber",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getL2SystemContractsUpgradeTxHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getPendingAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPriorityQueueSize",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPriorityTreeRoot",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getPriorityTreeStartIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPriorityTxMaxGasLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getProtocolVersion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPubdataPricingMode",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "getRollupDAManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSemverProtocolVersion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        },
+        {
+          "name": "",
+          "type": "uint32"
+        },
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "getSettlementLayer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBatchesCommitted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBatchesExecuted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBatchesVerified",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBlocksCommitted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBlocksExecuted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalBlocksVerified",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalPriorityTxs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTransactionFilterer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getVerifier",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getVerifierParams",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "recursionNodeLevelVkHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "recursionLeafLevelVkHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "recursionCircuitsSetVksHash",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "isDiamondStorageFrozen",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isEthWithdrawalFinalized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_l2BatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2MessageIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isFacetFreezable",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_facet",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isFreezable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isFunctionFreezable",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_selector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isPriorityQueueActive",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isValidator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "l2LogsRootHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "l2TransactionBaseCost",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_gasPrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2GasLimit",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2GasPerPubdataByteLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "makePermanentRollup",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "precommitSharedBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_precommitData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "prepareChainCommitment",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "commitment",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "totalBatchesExecuted",
+              "type": "uint256"
+            },
+            {
+              "name": "totalBatchesVerified",
+              "type": "uint256"
+            },
+            {
+              "name": "totalBatchesCommitted",
+              "type": "uint256"
+            },
+            {
+              "name": "l2SystemContractsUpgradeTxHash",
+              "type": "bytes32"
+            },
+            {
+              "name": "l2SystemContractsUpgradeBatchNumber",
+              "type": "uint256"
+            },
+            {
+              "name": "batchHashes",
+              "type": "bytes32[]"
+            },
+            {
+              "name": "priorityTree",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "nextLeafIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "startIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "unprocessedIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "sides",
+                  "type": "bytes32[]"
+                }
+              ]
+            },
+            {
+              "name": "isPermanentRollup",
+              "type": "bool"
+            },
+            {
+              "name": "precommitmentForTheLatestBatch",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "proveBatchesSharedBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_processBatchFrom",
+          "type": "uint256"
+        },
+        {
+          "name": "_processBatchTo",
+          "type": "uint256"
+        },
+        {
+          "name": "_proofData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "proveL1ToL2TransactionStatus",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_l2TxHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "_l2BatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2MessageIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "_l2TxNumberInBatch",
+          "type": "uint16"
+        },
+        {
+          "name": "_merkleProof",
+          "type": "bytes32[]"
+        },
+        {
+          "name": "_status",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2LeafInclusion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_leafProofMask",
+          "type": "uint256"
+        },
+        {
+          "name": "_leaf",
+          "type": "bytes32"
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2LeafInclusionShared",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "_blockOrBatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_leafProofMask",
+          "type": "uint256"
+        },
+        {
+          "name": "_leaf",
+          "type": "bytes32"
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2LogInclusion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_index",
+          "type": "uint256"
+        },
+        {
+          "name": "_log",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "l2ShardId",
+              "type": "uint8"
+            },
+            {
+              "name": "isService",
+              "type": "bool"
+            },
+            {
+              "name": "txNumberInBatch",
+              "type": "uint16"
+            },
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "key",
+              "type": "bytes32"
+            },
+            {
+              "name": "value",
+              "type": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2LogInclusionShared",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "_blockOrBatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_index",
+          "type": "uint256"
+        },
+        {
+          "name": "_log",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "l2ShardId",
+              "type": "uint8"
+            },
+            {
+              "name": "isService",
+              "type": "bool"
+            },
+            {
+              "name": "txNumberInBatch",
+              "type": "uint16"
+            },
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "key",
+              "type": "bytes32"
+            },
+            {
+              "name": "value",
+              "type": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2MessageInclusion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_index",
+          "type": "uint256"
+        },
+        {
+          "name": "_message",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "txNumberInBatch",
+              "type": "uint16"
+            },
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "proveL2MessageInclusionShared",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "_blockOrBatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "_index",
+          "type": "uint256"
+        },
+        {
+          "name": "_message",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "txNumberInBatch",
+              "type": "uint16"
+            },
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "requestL2ServiceTransaction",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_contractL2",
+          "type": "address"
+        },
+        {
+          "name": "_l2Calldata",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "canonicalTxHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "requestL2Transaction",
       "type": "function",
       "stateMutability": "payable",
@@ -42,26 +1493,1741 @@
       ]
     },
     {
-      "name": "l2TransactionBaseCost",
+      "name": "requestL2TransactionToGatewayMailbox",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "_canonicalTxHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "_expirationTimestamp",
+          "type": "uint64"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "canonicalTxHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "revertBatchesSharedBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "_newLastBatch",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDAValidatorPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_l1DAValidator",
+          "type": "address"
+        },
+        {
+          "name": "_l2DAValidator",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPendingAdmin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newPendingAdmin",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPorterAvailability",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_zkPorterIsAvailable",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriorityTxMaxGasLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newPriorityTxMaxGasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPubdataPricingMode",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_pricingMode",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTokenMultiplier",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_nominator",
+          "type": "uint128"
+        },
+        {
+          "name": "_denominator",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTransactionFilterer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_transactionFilterer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setValidator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_validator",
+          "type": "address"
+        },
+        {
+          "name": "_active",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "storedBatchHash",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "_gasPrice",
-          "type": "uint256"
-        },
-        {
-          "name": "_l2GasLimit",
-          "type": "uint256"
-        },
-        {
-          "name": "_l2GasPerPubdataByteLimit",
+          "name": "_batchNumber",
           "type": "uint256"
         }
       ],
       "outputs": [
         {
           "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "storedBlockHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_batchNumber",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "unfreezeDiamond",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "upgradeChainFromVersion",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_oldProtocolVersion",
+          "type": "uint256"
+        },
+        {
+          "name": "_diamondCut",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "facetCuts",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "facet",
+                  "type": "address"
+                },
+                {
+                  "name": "action",
+                  "type": "uint8"
+                },
+                {
+                  "name": "isFreezable",
+                  "type": "bool"
+                },
+                {
+                  "name": "selectors",
+                  "type": "bytes4[]"
+                }
+              ]
+            },
+            {
+              "name": "initAddress",
+              "type": "address"
+            },
+            {
+              "name": "initCalldata",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "BatchPrecommitmentSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "untrustedLastL2BlockNumberHint",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "precommitment",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BlockCommit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "batchHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BlockExecution",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "batchHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "commitment",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BlocksRevert",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "totalBatchesCommitted",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBatchesVerified",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBatchesExecuted",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BlocksVerification",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousLastVerifiedBatch",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "currentLastVerifiedBatch",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BridgeMint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DiamondCut",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "facetCuts",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "facet",
+              "type": "address"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "isFreezable",
+              "type": "bool"
+            },
+            {
+              "name": "selectors",
+              "type": "bytes4[]"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "initAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "initCalldata",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EnableEvmEmulator",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "ExecuteUpgrade",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "diamondCut",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "facetCuts",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "facet",
+                  "type": "address"
+                },
+                {
+                  "name": "action",
+                  "type": "uint8"
+                },
+                {
+                  "name": "isFreezable",
+                  "type": "bool"
+                },
+                {
+                  "name": "selectors",
+                  "type": "bytes4[]"
+                }
+              ]
+            },
+            {
+              "name": "initAddress",
+              "type": "address"
+            },
+            {
+              "name": "initCalldata",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Freeze",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "IsPorterAvailableStatusUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "isPorterAvailable",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MigrationComplete",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "NewAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAdmin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAdmin",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewBaseTokenMultiplier",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldNominator",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "oldDenominator",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "newNominator",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "newDenominator",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewFeeParams",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeParams",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "pubdataPricingMode",
+              "type": "uint8"
+            },
+            {
+              "name": "batchOverheadL1Gas",
+              "type": "uint32"
+            },
+            {
+              "name": "maxPubdataPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "maxL2GasPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "priorityTxMaxPubdata",
+              "type": "uint32"
+            },
+            {
+              "name": "minimalL2GasPrice",
+              "type": "uint64"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "newFeeParams",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "pubdataPricingMode",
+              "type": "uint8"
+            },
+            {
+              "name": "batchOverheadL1Gas",
+              "type": "uint32"
+            },
+            {
+              "name": "maxPubdataPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "maxL2GasPerBatch",
+              "type": "uint32"
+            },
+            {
+              "name": "priorityTxMaxPubdata",
+              "type": "uint32"
+            },
+            {
+              "name": "minimalL2GasPrice",
+              "type": "uint64"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewL1DAValidator",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldL1DAValidator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newL1DAValidator",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewL2DAValidator",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldL2DAValidator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newL2DAValidator",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewPendingAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPendingAdmin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newPendingAdmin",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewPriorityRequest",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "expirationTimestamp",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "transaction",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "txType",
+              "type": "uint256"
+            },
+            {
+              "name": "from",
+              "type": "uint256"
+            },
+            {
+              "name": "to",
+              "type": "uint256"
+            },
+            {
+              "name": "gasLimit",
+              "type": "uint256"
+            },
+            {
+              "name": "gasPerPubdataByteLimit",
+              "type": "uint256"
+            },
+            {
+              "name": "maxFeePerGas",
+              "type": "uint256"
+            },
+            {
+              "name": "maxPriorityFeePerGas",
+              "type": "uint256"
+            },
+            {
+              "name": "paymaster",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "reserved",
+              "type": "uint256[4]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "factoryDeps",
+              "type": "uint256[]"
+            },
+            {
+              "name": "paymasterInput",
+              "type": "bytes"
+            },
+            {
+              "name": "reservedDynamic",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "factoryDeps",
+          "type": "bytes[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPriorityRequestId",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewPriorityTxMaxGasLimit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPriorityTxMaxGasLimit",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newPriorityTxMaxGasLimit",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewRelayedPriorityTransaction",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "expirationTimestamp",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewTransactionFilterer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldTransactionFilterer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newTransactionFilterer",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PubdataPricingModeUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "validiumMode",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unfreeze",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "ValidatorStatusUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "validatorAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "isActive",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddressHasNoCode",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AlreadyMigrated",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "AlreadyPermanentRollup",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "BaseTokenGasPriceDenominatorNotSet",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "BatchHashMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "bytes32"
+        },
+        {
+          "name": "actual",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "BatchNotExecuted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "BatchNumberMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedBatchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "providedBatchNumber",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "CanOnlyProcessOneBatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CantExecuteUnprovenBatches",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CantRevertExecutedBatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CommitBasedInteropNotSupported",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractNotDeployed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DelegateCallFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "returnData",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "DenominatorIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DependencyRootsRollingHashMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_expected",
+          "type": "bytes32"
+        },
+        {
+          "name": "_actual",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "DiamondAlreadyFrozen",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DiamondNotFrozen",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EmptyData",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EmptyPrecommitData",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ExecutedIsNotConsistentWithVerified",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchesExecuted",
+          "type": "uint256"
+        },
+        {
+          "name": "batchesVerified",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "FacetExists",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "GasPerPubdataMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "HashedLogIsDefault",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "HashMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "bytes32"
+        },
+        {
+          "name": "actual",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "IncorrectBatchBounds",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "processFromExpected",
+          "type": "uint256"
+        },
+        {
+          "name": "processToExpected",
+          "type": "uint256"
+        },
+        {
+          "name": "processFromProvided",
+          "type": "uint256"
+        },
+        {
+          "name": "processToProvided",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidBatchesDataLength",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchesDataLength",
+          "type": "uint256"
+        },
+        {
+          "name": "priorityOpsDataLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidBatchNumber",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "provided",
+          "type": "uint256"
+        },
+        {
+          "name": "expected",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidChainId",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCommitment",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidDAForPermanentRollup",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidLogSender",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "logKey",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidMessageRoot",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedMessageRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "providedMessageRoot",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "InvalidNextLeafIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "treeNextLeafIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "commitmentNextLeafIndex",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidNumberOfBatchHashes",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchHashesLength",
+          "type": "uint256"
+        },
+        {
+          "name": "expected",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidNumberOfBlobs",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint256"
+        },
+        {
+          "name": "numCommitments",
+          "type": "uint256"
+        },
+        {
+          "name": "numHashes",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidPackedPrecommitmentLength",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidProof",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidProofLengthForFinalNode",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidProtocolVersion",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidPubdataPricingMode",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidStartIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "treeStartIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "commitmentStartIndex",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidSystemLogsLength",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidUnprocessedIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "treeUnprocessedIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "commitmentUnprocessedIndex",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "L1DAValidatorAddressIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "L2DAValidatorAddressIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "L2TimestampTooBig",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LengthIsNotDivisibleBy32",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LocalRootIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LocalRootMustBeZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LogAlreadyProcessed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "MalformedBytecode",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "MerkleIndexOrHeightMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MerkleIndexOutOfBounds",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MerkleNothingToProve",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MerklePathEmpty",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MerklePathLengthMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "pathLength",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MerklePathOutOfBounds",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MessageRootIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MismatchL2DAValidator",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MismatchNumberOfLayer1Txs",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "numberOfLayer1Txs",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MissingSystemLogs",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint256"
+        },
+        {
+          "name": "actual",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MsgValueTooLow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "required",
+          "type": "uint256"
+        },
+        {
+          "name": "provided",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "NoFunctionsForDiamondCut",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NonEmptyCalldata",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NonIncreasingTimestamp",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NonSequentialBatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAllBatchesExecuted",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAZKChain",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "NotChainAdmin",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "prevMsgSender",
+          "type": "address"
+        },
+        {
+          "name": "admin",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "NotEraChain",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotHistoricalRoot",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "NotHyperchain",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotInitializedReentrancyGuard",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotL1",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "blockChainId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "NotMigrated",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotSettlementLayer",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyEraSupported",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OutdatedProtocolVersion",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "protocolVersion",
+          "type": "uint256"
+        },
+        {
+          "name": "currentProtocolVersion",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PrecommitmentMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchNumber",
+          "type": "uint256"
+        },
+        {
+          "name": "expected",
+          "type": "bytes32"
+        },
+        {
+          "name": "found",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "PriorityOperationsRollingHashMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PriorityTxPubdataExceedsMaxPubDataPerBatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ProtocolIdMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedProtocolVersion",
+          "type": "uint256"
+        },
+        {
+          "name": "providedProtocolId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ProtocolIdNotGreater",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ProtocolVersionNotUpToDate",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currentProtocolVersion",
+          "type": "uint256"
+        },
+        {
+          "name": "protocolVersion",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PubdataGreaterThanLimit",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "limit",
+          "type": "uint256"
+        },
+        {
+          "name": "length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "Reentrancy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "RemoveFunctionFacetAddressNotZero",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "facet",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "RemoveFunctionFacetAddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReplaceFunctionFacetAddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "RevertedBatchNotAfterNewLastBatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SelectorsMustAllHaveSameFreezability",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SystemLogsSizeTooBig",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TimeNotReached",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedTimestamp",
+          "type": "uint256"
+        },
+        {
+          "name": "actualTimestamp",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TimestampError",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TooManyFactoryDeps",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TooMuchGas",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TransactionNotAllowed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TxHashMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TxnBodyGasLimitNotEnoughGas",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Unauthorized",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UndefinedDiamondCutAction",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnexpectedSystemLog",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "logKey",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedCommitBatchEncoding",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedExecuteBatchEncoding",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedProofBatchEncoding",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedProofMetadataVersion",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "metadataVersion",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UpgradeBatchNumberIsNotZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ValidateTxnNotEnoughGas",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ValueMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint256"
+        },
+        {
+          "name": "actual",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "VerifiedBatchesExceedsCommittedBatches",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "VerifiedIsNotConsistentWithCommitted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchesVerified",
+          "type": "uint256"
+        },
+        {
+          "name": "batchesCommitted",
           "type": "uint256"
         }
       ]

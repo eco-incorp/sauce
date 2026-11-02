@@ -1,6 +1,33 @@
 {
   "abi": [
     {
+      "name": "accrue",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "accrueInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "lastAccrued",
+          "type": "uint64"
+        },
+        {
+          "name": "feesEarned",
+          "type": "uint128"
+        },
+        {
+          "name": "INTEREST_PER_SECOND",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
       "name": "addCollateral",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -21,20 +48,33 @@
       "outputs": []
     },
     {
-      "name": "removeCollateral",
+      "name": "bentoBox",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "blacklistedCallees",
+      "type": "function",
+      "stateMutability": "view",
       "inputs": [
         {
-          "name": "to",
+          "name": "",
           "type": "address"
-        },
-        {
-          "name": "share",
-          "type": "uint256"
         }
       ],
-      "outputs": []
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
     },
     {
       "name": "borrow",
@@ -62,6 +102,296 @@
       ]
     },
     {
+      "name": "BORROW_OPENING_FEE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "total",
+          "type": "uint128"
+        },
+        {
+          "name": "borrowPartPerAddress",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "changeBorrowLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newBorrowLimit",
+          "type": "uint128"
+        },
+        {
+          "name": "perAddressPart",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "changeInterestRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newInterestRate",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "collateral",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "COLLATERIZATION_RATE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "cook",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "actions",
+          "type": "uint8[]"
+        },
+        {
+          "name": "values",
+          "type": "uint256[]"
+        },
+        {
+          "name": "datas",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "value1",
+          "type": "uint256"
+        },
+        {
+          "name": "value2",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "exchangeRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "feeTo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "init",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isSolvent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "liquidate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "users",
+          "type": "address[]"
+        },
+        {
+          "name": "maxBorrowParts",
+          "type": "uint256[]"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "swapper",
+          "type": "address"
+        },
+        {
+          "name": "swapperData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "LIQUIDATION_MULTIPLIER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "magicInternetMoney",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "masterContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "oracleData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "reduceSupply",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "share",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "repay",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -87,18 +417,121 @@
       ]
     },
     {
-      "name": "userCollateralShare",
+      "name": "setBlacklistedCallee",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "user",
+          "name": "callee",
+          "type": "address"
+        },
+        {
+          "name": "blacklisted",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setBorrowOpeningFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_borrowOpeningFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCollateralizationRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateralizationRate",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeTo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newFeeTo",
           "type": "address"
         }
       ],
+      "outputs": []
+    },
+    {
+      "name": "setLiquidationMultiplier",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_liquidationMultiplier",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "totalBorrow",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "elastic",
+          "type": "uint128"
+        },
+        {
+          "name": "base",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "totalCollateralShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateExchangeRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "updated",
+          "type": "bool"
+        },
+        {
+          "name": "rate",
           "type": "uint256"
         }
       ]
@@ -119,6 +552,331 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "userCollateralShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdrawFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "LogAccrue",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "accruedAmount",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogAddCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "share",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogBorrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "part",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogBorrowOpeningFeeChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "current",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogChangeBlacklistedCallee",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "blacklisted",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogChangeBorrowLimit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newLimit",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "perAddressPart",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogCollateralizationRateChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "current",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogExchangeRate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "rate",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogFeeTo",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newFeeTo",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogInterestChange",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldInterestRate",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "newInterestRate",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogLiquidation",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "collateralShare",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "borrowPart",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogLiquidationMultiplierChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previous",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "current",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogRemoveCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "share",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogRepay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "part",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogWithdrawFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "feeTo",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "feesEarnedFraction",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ErrNotClone",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrOverflow",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

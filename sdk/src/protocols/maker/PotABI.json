@@ -1,27 +1,10 @@
 {
   "abi": [
     {
-      "name": "join",
+      "name": "cage",
       "type": "function",
       "stateMutability": "nonpayable",
-      "inputs": [
-        {
-          "name": "wad",
-          "type": "uint256"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "exit",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
-          "name": "wad",
-          "type": "uint256"
-        }
-      ],
+      "inputs": [],
       "outputs": []
     },
     {
@@ -37,6 +20,30 @@
       ]
     },
     {
+      "name": "deny",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "guy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "drip",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tmp",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "dsr",
       "type": "function",
       "stateMutability": "view",
@@ -45,6 +52,183 @@
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "exit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "wad",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "file",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "what",
+          "type": "bytes32"
+        },
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "join",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "wad",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "live",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pie",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "Pie",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rely",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "guy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "rho",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "vat",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "vow",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "wards",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LogNote",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sig",
+          "type": "bytes4",
+          "indexed": true
+        },
+        {
+          "name": "usr",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "arg1",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "arg2",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "indexed": false
         }
       ]
     }

@@ -1,21 +1,68 @@
 {
   "abi": [
     {
-      "name": "deposit",
-      "type": "function",
-      "stateMutability": "payable",
-      "inputs": [],
-      "outputs": []
-    },
-    {
-      "name": "swETHToETHRate",
+      "name": "AccessControlManager",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "addToWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "allowance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
         }
       ]
     },
@@ -35,6 +82,891 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "batchAddToWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_addresses",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "batchRemoveFromWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_addresses",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "decreaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "subtractedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "depositWithReferral",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "referral",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "disableWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "enableWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "ethToSwETHRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "increaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "addedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_accessControlManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "lastRepriceETHReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lastRepriceUNIX",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maximumRepriceDifferencePercentage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maximumRepriceswETHDifferencePercentage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimumRepriceTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "nodeOperatorRewardPercentage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "removeFromWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "reprice",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_preRewardETHReserves",
+          "type": "uint256"
+        },
+        {
+          "name": "_newETHRewards",
+          "type": "uint256"
+        },
+        {
+          "name": "_swETHTotalSupply",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaximumRepriceDifferencePercentage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maximumRepriceDifferencePercentage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaximumRepriceswETHDifferencePercentage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maximumRepriceswETHDifferencePercentage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimumRepriceTime",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minimumRepriceTime",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setNodeOperatorRewardPercentage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newNodeOperatorRewardPercentage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSwellTreasuryRewardPercentage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newSwellTreasuryRewardPercentage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swellTreasuryRewardPercentage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "swETHToETHRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "totalETHDeposited",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "whitelistedAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "whitelistEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "withdrawERC20",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "AddedToWhitelist",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ETHDepositReceived",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swETHMinted",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newTotalETHDeposited",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "referral",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ETHWithdrawn",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "swETHBurned",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ethReturned",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MaximumRepriceDifferencePercentageUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldMaximumRepriceDifferencePercentage",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_newMaximumRepriceDifferencePercentage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MaximumRepriceswETHDifferencePercentageUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldMaximumRepriceswETHDifferencePercentage",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_newMaximumRepriceswETHDifferencePercentage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MinimumRepriceTimeUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldMinimumRepriceTime",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_newMinimumRepriceTime",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NodeOperatorRewardPercentageUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPercentage",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newPercentage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RemovedFromWhitelist",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Reprice",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newEthReserves",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newSwETHToETHRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "nodeOperatorRewards",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swellTreasuryRewards",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalETHDeposited",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SwellTreasuryRewardPercentageUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPercentage",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newPercentage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WhitelistDisabled",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "WhitelistEnabled",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "AddressAlreadyInWhitelist",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AddressMissingFromWhitelist",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CannotBeZeroAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CannotBurnZeroSwETH",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CannotReferSelf",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CannotRepriceWithZeroSwETHSupply",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CoreMethodsPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidETHDeposit",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidMethodCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidPreRewardETHReserves",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughTimeElapsedForReprice",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "remainingTime",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "NotInWhitelist",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NoTokensToWithdraw",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PRBMath_MulDiv_Overflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "uint256"
+        },
+        {
+          "name": "denominator",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PRBMath_MulDiv18_Overflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "RepriceDifferenceTooLarge",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "repriceDiff",
+          "type": "uint256"
+        },
+        {
+          "name": "maximumRepriceDiff",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "RepriceswETHDifferenceTooLarge",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "repriceswETHDiff",
+          "type": "uint256"
+        },
+        {
+          "name": "maximumswETHRepriceDiff",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "RewardPercentageTotalOverflow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WhitelistAlreadyDisabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WhitelistAlreadyEnabled",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

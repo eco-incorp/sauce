@@ -1,6 +1,453 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "addExpressGas",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addGas",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addNativeExpressGas",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addNativeGas",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "collectFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "contractId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "estimateGasFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "executionGasLimit",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "gasEstimate",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "gasCollector",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getGasInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "chain",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "gasEstimationType",
+              "type": "uint64"
+            },
+            {
+              "name": "l1FeeScalar",
+              "type": "uint64"
+            },
+            {
+              "name": "axelarBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeGasPrice",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeBlobBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "expressFee",
+              "type": "uint128"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "implementation_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "owner_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "payGas",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "executionGasLimit",
+          "type": "uint256"
+        },
+        {
+          "name": "estimateOnChain",
+          "type": "bool"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        },
+        {
+          "name": "params",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payGasForContractCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payGasForContractCallWithToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payGasForExpressCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payGasForExpressCallWithToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "gasToken",
+          "type": "address"
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "payNativeGasForContractCall",
       "type": "function",
       "stateMutability": "payable",
@@ -27,6 +474,926 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "payNativeGasForContractCallWithToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payNativeGasForExpressCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "payNativeGasForExpressCallWithToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "destinationChain",
+          "type": "string"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "refundAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "owner_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "proposeOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "refund",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "refund",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setup",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateGasInfo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "chains",
+          "type": "string[]"
+        },
+        {
+          "name": "gasUpdates",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "gasEstimationType",
+              "type": "uint64"
+            },
+            {
+              "name": "l1FeeScalar",
+              "type": "uint64"
+            },
+            {
+              "name": "axelarBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeGasPrice",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeBlobBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "expressFee",
+              "type": "uint128"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "newImplementationCodeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "params",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ExpressGasAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasInfoUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "chain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "info",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "gasEstimationType",
+              "type": "uint64"
+            },
+            {
+              "name": "l1FeeScalar",
+              "type": "uint64"
+            },
+            {
+              "name": "axelarBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeGasPrice",
+              "type": "uint128"
+            },
+            {
+              "name": "relativeBlobBaseFee",
+              "type": "uint128"
+            },
+            {
+              "name": "expressFee",
+              "type": "uint128"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasPaidForContractCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasPaidForContractCallWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasPaidForExpressCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GasPaidForExpressCallWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "gasToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeExpressGasAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeGasAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeGasPaidForContractCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeGasPaidForContractCallWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeGasPaidForExpressCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NativeGasPaidForExpressCallWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sourceAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "destinationAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "gasFeeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refundAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Refunded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "txHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "logIndex",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "InsufficientGasPayment",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "required",
+          "type": "uint256"
+        },
+        {
+          "name": "provided",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAmounts",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCodeHash",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidGasUpdates",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidImplementation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidOwnerAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidParams",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NativeTransferFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotCollector",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotProxy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SetupFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TokenTransferFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnsupportedEstimationType",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "gasEstimationType",
+          "type": "uint8"
+        }
+      ]
     }
   ]
 }

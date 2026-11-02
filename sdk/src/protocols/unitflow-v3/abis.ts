@@ -1,6 +1,34 @@
 // UnitFlowV3Factory — a Uniswap V3 factory fork; fragments from its source (UnitFlow-Finance/UnitFlowV3-contract, IUnitFlowV3Factory.sol). The Arc factory has no verified source.
 export const UnitFlowV3FactoryABI = [
   {
+    name: "createPool",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenA", type: "address" },
+      { name: "tokenB", type: "address" },
+      { name: "fee", type: "uint24" },
+    ],
+    outputs: [{ name: "pool", type: "address" }],
+  },
+  {
+    name: "enableFeeAmount",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "fee", type: "uint24" },
+      { name: "tickSpacing", type: "int24" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "feeAmountTickSpacing",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "fee", type: "uint24" }],
+    outputs: [{ name: "", type: "int24" }],
+  },
+  {
     name: "getPool",
     type: "function",
     stateMutability: "view",
@@ -12,16 +40,55 @@ export const UnitFlowV3FactoryABI = [
     outputs: [{ name: "pool", type: "address" }],
   },
   {
-    name: "feeAmountTickSpacing",
+    name: "owner",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "fee", type: "uint24" }],
-    outputs: [{ name: "", type: "int24" }],
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "parameters",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "factory", type: "address" },
+      { name: "token0", type: "address" },
+      { name: "token1", type: "address" },
+      { name: "fee", type: "uint24" },
+      { name: "tickSpacing", type: "int24" },
+    ],
+  },
+  {
+    name: "setOwner",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "_owner", type: "address" }],
+    outputs: [],
   },
 ] as const;
 
 // UnitFlowV3Router — Uniswap V3 SwapRouter shape (params carry a deadline). Fragments from its verified source (Sourcify, Arc 0x6fD8351b…f410).
 export const UnitFlowV3RouterABI = [
+  {
+    name: "exactInput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountIn", type: "uint256" },
+          { name: "amountOutMinimum", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+  },
   {
     name: "exactInputSingle",
     type: "function",
@@ -45,7 +112,184 @@ export const UnitFlowV3RouterABI = [
     outputs: [{ name: "amountOut", type: "uint256" }],
   },
   {
+    name: "exactOutput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+          { name: "amountInMaximum", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "exactOutputSingle",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+          { name: "amountInMaximum", type: "uint256" },
+          { name: "sqrtPriceLimitX96", type: "uint160" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
     name: "factory",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "multicall",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [{ name: "data", type: "bytes[]" }],
+    outputs: [{ name: "results", type: "bytes[]" }],
+  },
+  {
+    name: "name",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "refund",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amountMinimum", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "refundWithFee",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amountMinimum", type: "uint256" },
+      { name: "recipient", type: "address" },
+      { name: "feeBips", type: "uint256" },
+      { name: "feeRecipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "selfPermit",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "selfPermitAllowed",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "nonce", type: "uint256" },
+      { name: "expiry", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "selfPermitAllowedIfNecessary",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "nonce", type: "uint256" },
+      { name: "expiry", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "selfPermitIfNecessary",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "value", type: "uint256" },
+      { name: "deadline", type: "uint256" },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "sweepToken",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amountMinimum", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "sweepTokenWithFee",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amountMinimum", type: "uint256" },
+      { name: "recipient", type: "address" },
+      { name: "feeBips", type: "uint256" },
+      { name: "feeRecipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "unitFlowV3SwapCallback",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "amount0Delta", type: "int256" },
+      { name: "amount1Delta", type: "int256" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "USDC",
     type: "function",
     stateMutability: "view",
     inputs: [],
@@ -55,6 +299,23 @@ export const UnitFlowV3RouterABI = [
 
 // Quoter — fragment from its verified source (Sourcify, Arc 0x5AF6E89F…0E34).
 export const UnitFlowV3QuoterABI = [
+  {
+    name: "factory",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "quoteExactInput",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "path", type: "bytes" },
+      { name: "amountIn", type: "uint256" },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+  },
   {
     name: "quoteExactInputSingle",
     type: "function",
@@ -68,6 +329,47 @@ export const UnitFlowV3QuoterABI = [
     ],
     outputs: [{ name: "amountOut", type: "uint256" }],
   },
+  {
+    name: "quoteExactOutput",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "path", type: "bytes" },
+      { name: "amountOut", type: "uint256" },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "quoteExactOutputSingle",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "fee", type: "uint24" },
+      { name: "amountOut", type: "uint256" },
+      { name: "sqrtPriceLimitX96", type: "uint160" },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "unitFlowV3SwapCallback",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "amount0Delta", type: "int256" },
+      { name: "amount1Delta", type: "int256" },
+      { name: "path", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "USDC",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
 ] as const;
 
 // UnitFlowV3Pool — a Uniswap V3 pool fork; fragments from its source (UnitFlow-Finance/
@@ -75,6 +377,189 @@ export const UnitFlowV3QuoterABI = [
 // have no verified source. Its `swap` calls back for the input, which a program cannot answer, so it
 // is not declared.
 export const UnitFlowV3PoolABI = [
+  {
+    name: "burn",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+      { name: "amount", type: "uint128" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+    ],
+  },
+  {
+    name: "collect",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+      { name: "amount0Requested", type: "uint128" },
+      { name: "amount1Requested", type: "uint128" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint128" },
+      { name: "amount1", type: "uint128" },
+    ],
+  },
+  {
+    name: "collectProtocol",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "amount0Requested", type: "uint128" },
+      { name: "amount1Requested", type: "uint128" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint128" },
+      { name: "amount1", type: "uint128" },
+    ],
+  },
+  {
+    name: "factory",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "fee",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint24" }],
+  },
+  {
+    name: "feeGrowthGlobal0X128",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "feeGrowthGlobal1X128",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "flash",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "increaseObservationCardinalityNext",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "observationCardinalityNext", type: "uint16" }],
+    outputs: [],
+  },
+  {
+    name: "initialize",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "sqrtPriceX96", type: "uint160" }],
+    outputs: [],
+  },
+  {
+    name: "liquidity",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint128" }],
+  },
+  {
+    name: "maxLiquidityPerTick",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint128" }],
+  },
+  {
+    name: "mint",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+      { name: "amount", type: "uint128" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+    ],
+  },
+  {
+    name: "observations",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "index", type: "uint256" }],
+    outputs: [
+      { name: "blockTimestamp", type: "uint32" },
+      { name: "tickCumulative", type: "int56" },
+      { name: "secondsPerLiquidityCumulativeX128", type: "uint160" },
+      { name: "initialized", type: "bool" },
+    ],
+  },
+  {
+    name: "observe",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "secondsAgos", type: "uint32[]" }],
+    outputs: [
+      { name: "tickCumulatives", type: "int56[]" },
+      { name: "secondsPerLiquidityCumulativeX128s", type: "uint160[]" },
+    ],
+  },
+  {
+    name: "positions",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "key", type: "bytes32" }],
+    outputs: [
+      { name: "_liquidity", type: "uint128" },
+      { name: "feeGrowthInside0LastX128", type: "uint256" },
+      { name: "feeGrowthInside1LastX128", type: "uint256" },
+      { name: "tokensOwed0", type: "uint128" },
+      { name: "tokensOwed1", type: "uint128" },
+    ],
+  },
+  {
+    name: "protocolFees",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "token0", type: "uint128" },
+      { name: "token1", type: "uint128" },
+    ],
+  },
+  {
+    name: "setFeeProtocol",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "feeProtocol0", type: "uint8" },
+      { name: "feeProtocol1", type: "uint8" },
+    ],
+    outputs: [],
+  },
   {
     name: "slot0",
     type: "function",
@@ -91,18 +576,57 @@ export const UnitFlowV3PoolABI = [
     ],
   },
   {
-    name: "liquidity",
+    name: "snapshotCumulativesInside",
     type: "function",
     stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint128" }],
+    inputs: [
+      { name: "tickLower", type: "int24" },
+      { name: "tickUpper", type: "int24" },
+    ],
+    outputs: [
+      { name: "tickCumulativeInside", type: "int56" },
+      { name: "secondsPerLiquidityInsideX128", type: "uint160" },
+      { name: "secondsInside", type: "uint32" },
+    ],
   },
   {
-    name: "fee",
+    name: "swap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipient", type: "address" },
+      { name: "zeroForOne", type: "bool" },
+      { name: "amountSpecified", type: "int256" },
+      { name: "sqrtPriceLimitX96", type: "uint160" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [
+      { name: "amount0", type: "int256" },
+      { name: "amount1", type: "int256" },
+    ],
+  },
+  {
+    name: "tickBitmap",
     type: "function",
     stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint24" }],
+    inputs: [{ name: "wordPosition", type: "int16" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "ticks",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "tick", type: "int24" }],
+    outputs: [
+      { name: "liquidityGross", type: "uint128" },
+      { name: "liquidityNet", type: "int128" },
+      { name: "feeGrowthOutside0X128", type: "uint256" },
+      { name: "feeGrowthOutside1X128", type: "uint256" },
+      { name: "tickCumulativeOutside", type: "int56" },
+      { name: "secondsPerLiquidityOutsideX128", type: "uint160" },
+      { name: "secondsOutside", type: "uint32" },
+      { name: "initialized", type: "bool" },
+    ],
   },
   {
     name: "tickSpacing",

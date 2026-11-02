@@ -1,6 +1,550 @@
 {
   "abi": [
     {
+      "name": "chainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "evmChainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getCurrentGuardianSetIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "getGuardianSet",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "keys",
+              "type": "address[]"
+            },
+            {
+              "name": "expirationTime",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getGuardianSetExpiry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "governanceActionIsConsumed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "governanceChainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "governanceContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "isFork",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isInitialized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "impl",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "messageFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nextSequence",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "emitter",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "parseAndVerifyVM",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "encodedVM",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "vm",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "uint8"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint32"
+            },
+            {
+              "name": "emitterChainId",
+              "type": "uint16"
+            },
+            {
+              "name": "emitterAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "sequence",
+              "type": "uint64"
+            },
+            {
+              "name": "consistencyLevel",
+              "type": "uint8"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            },
+            {
+              "name": "guardianSetIndex",
+              "type": "uint32"
+            },
+            {
+              "name": "signatures",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "r",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "s",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "v",
+                  "type": "uint8"
+                },
+                {
+                  "name": "guardianIndex",
+                  "type": "uint8"
+                }
+              ]
+            },
+            {
+              "name": "hash",
+              "type": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "valid",
+          "type": "bool"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "parseContractUpgrade",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedUpgrade",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cu",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chain",
+              "type": "uint16"
+            },
+            {
+              "name": "newContract",
+              "type": "address"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseGuardianSetUpgrade",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedUpgrade",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "gsu",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chain",
+              "type": "uint16"
+            },
+            {
+              "name": "newGuardianSet",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "keys",
+                  "type": "address[]"
+                },
+                {
+                  "name": "expirationTime",
+                  "type": "uint32"
+                }
+              ]
+            },
+            {
+              "name": "newGuardianSetIndex",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseRecoverChainId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedRecoverChainId",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rci",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "evmChainId",
+              "type": "uint256"
+            },
+            {
+              "name": "newChainId",
+              "type": "uint16"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseSetMessageFee",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedSetMessageFee",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "smf",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chain",
+              "type": "uint16"
+            },
+            {
+              "name": "messageFee",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseTransferFees",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedTransferFees",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tf",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chain",
+              "type": "uint16"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "recipient",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseVM",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedVM",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "vm",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "uint8"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint32"
+            },
+            {
+              "name": "emitterChainId",
+              "type": "uint16"
+            },
+            {
+              "name": "emitterAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "sequence",
+              "type": "uint64"
+            },
+            {
+              "name": "consistencyLevel",
+              "type": "uint8"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            },
+            {
+              "name": "guardianSetIndex",
+              "type": "uint32"
+            },
+            {
+              "name": "signatures",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "r",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "s",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "v",
+                  "type": "uint8"
+                },
+                {
+                  "name": "guardianIndex",
+                  "type": "uint8"
+                }
+              ]
+            },
+            {
+              "name": "hash",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "publishMessage",
       "type": "function",
       "stateMutability": "payable",
@@ -26,14 +570,317 @@
       ]
     },
     {
-      "name": "messageFee",
+      "name": "quorum",
       "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "numGuardians",
+          "type": "uint256"
+        }
+      ],
       "outputs": [
         {
-          "name": "",
+          "name": "numSignaturesRequiredForQuorum",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "submitContractUpgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitNewGuardianSet",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitRecoverChainId",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitSetMessageFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitTransferFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "verifySignatures",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32"
+        },
+        {
+          "name": "signatures",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "r",
+              "type": "bytes32"
+            },
+            {
+              "name": "s",
+              "type": "bytes32"
+            },
+            {
+              "name": "v",
+              "type": "uint8"
+            },
+            {
+              "name": "guardianIndex",
+              "type": "uint8"
+            }
+          ]
+        },
+        {
+          "name": "guardianSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "keys",
+              "type": "address[]"
+            },
+            {
+              "name": "expirationTime",
+              "type": "uint32"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "type": "bool"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "verifyVM",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vm",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "version",
+              "type": "uint8"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint32"
+            },
+            {
+              "name": "emitterChainId",
+              "type": "uint16"
+            },
+            {
+              "name": "emitterAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "sequence",
+              "type": "uint64"
+            },
+            {
+              "name": "consistencyLevel",
+              "type": "uint8"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            },
+            {
+              "name": "guardianSetIndex",
+              "type": "uint32"
+            },
+            {
+              "name": "signatures",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "r",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "s",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "v",
+                  "type": "uint8"
+                },
+                {
+                  "name": "guardianIndex",
+                  "type": "uint8"
+                }
+              ]
+            },
+            {
+              "name": "hash",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "valid",
+          "type": "bool"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "AdminChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousAdmin",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newAdmin",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BeaconUpgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "beacon",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractUpgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldContract",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newContract",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "GuardianSetAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogMessagePublished",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "nonce",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "payload",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "consistencyLevel",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

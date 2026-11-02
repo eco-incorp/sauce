@@ -38,25 +38,22 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { toFunctionSelector } from "viem";
 
 import { createTsLoader } from "./lib/load-ts.mjs";
+import {
+  ACCESSOR_PROPERTIES,
+  abiName,
+  camel,
+  defaultContract as defaultOf,
+  pascal,
+  protocolContracts,
+} from "./lib/registry-contracts.mjs";
 
 const sdk = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_SOURCE = resolve(sdk, "src/routes/source-globals.generated.ts");
 const OUT_CONTRACTS = resolve(sdk, "src/descriptors/contracts.generated.ts");
 const load = createTsLoader(sdk);
-
-const pascal = (slug) =>
-  slug
-    .split("-")
-    .map((part) => part[0].toUpperCase() + part.slice(1))
-    .join("");
-const camel = (slug) => {
-  const p = pascal(slug).replace(/[^A-Za-z0-9]/g, "");
-  return /^[0-9]/.test(p) ? `p${p}` : p[0].toLowerCase() + p.slice(1);
-};
-const cap = (s) => s[0].toUpperCase() + s.slice(1);
-const isEvmAddress = (value) => /^0x[0-9a-fA-F]{40}$/.test(value);
 
 function fail(message) {
   throw new Error(`gen-source-globals: ${message}`);
@@ -73,65 +70,6 @@ const targets = JSON.parse(
 ).protocols;
 
 const evmChainIds = new Set(CANONICAL_CHAINS.filter((c) => c.kind === "evm").map((c) => c.id));
-const chainSlugById = new Map(CANONICAL_CHAINS.map((c) => [c.id, c.slug]));
-
-/** Camel-case words of an identifier: `clFactoryGaugeCaps` -> cl|Factory|Gauge|Caps, `stETHStrategy` -> st|ETH|Strategy. */
-const words = (id) => id.split(/(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/);
-const isUpper = (ch) => ch !== undefined && ch >= "A" && ch <= "Z";
-const isLower = (ch) => ch !== undefined && ch >= "a" && ch <= "z";
-const isDigit = (ch) => ch !== undefined && ch >= "0" && ch <= "9";
-
-/** The role's contract name: see the header. */
-function roleName(role, abiExport) {
-  const parts = words(role);
-  if (abiExport !== undefined) {
-    const abi = abiExport.replace(/ABI$/, "");
-    const lower = abi.toLowerCase();
-    for (let k = parts.length; k > 0; k--) {
-      const prefix = parts.slice(0, k).join("").toLowerCase();
-      for (let at = lower.indexOf(prefix); at !== -1; at = lower.indexOf(prefix, at + 1)) {
-        const end = at + prefix.length;
-        const startsWord =
-          at === 0 ||
-          (isUpper(abi[at]) &&
-            (isLower(abi[at - 1]) || isDigit(abi[at - 1]) || isLower(abi[at + 1])));
-        const endsWord = end === abi.length || isUpper(abi[end]) || isDigit(abi[end]);
-        if (startsWord && endsWord) return cap(abi.slice(at, end) + parts.slice(k).join(""));
-      }
-    }
-  }
-  return cap(role);
-}
-
-/** An ABI export's contract name: the export without `ABI` and the protocol's own prefix. Mirrors
- *  `deriveContractName` in `src/descriptors/derive.ts`, which `descriptors-linkage.test.ts` pins. */
-function abiName(protocolName, slug, abiExport) {
-  const base = abiExport.endsWith("ABI") ? abiExport.slice(0, -3) : abiExport;
-  const prefixes = [
-    protocolName.replace(/[^a-zA-Z0-9]/g, ""),
-    pascal(slug).replace(/[^a-zA-Z0-9]/g, ""),
-  ]
-    .filter((p) => p.length > 0)
-    .sort((a, b) => b.length - a.length);
-  for (const prefix of prefixes) {
-    const rest = base.slice(prefix.length);
-    if (base.toLowerCase().startsWith(prefix.toLowerCase()) && /^[A-Z0-9]/.test(rest)) return rest;
-  }
-  return base;
-}
-
-/** Accessor properties a method or contract name must never shadow (see descriptors/accessors.ts). */
-const ACCESSOR_PROPERTIES = new Set([
-  "descriptor",
-  "chain",
-  "address",
-  "available",
-  "chains",
-  "coverage",
-  "abi",
-  "methods",
-  "at",
-]);
 
 const protocols = [...listProtocols()].sort((a, b) => a.slug.localeCompare(b.slug));
 /** slug -> { info, abis, deployments, contracts: link[] } */
@@ -147,95 +85,11 @@ for (const info of protocols) {
       fail(`${slug}.${name} has no binding in targets.json (registry-abi.test.ts requires one)`);
     }
   }
-
-  // Roles with an EVM address on a canonical EVM chain, in first-seen order.
-  const evmRoles = [];
-  for (const d of deployments) {
-    if (!evmChainIds.has(d.chainId)) continue;
-    for (const [role, address] of Object.entries(d.addresses)) {
-      if (isEvmAddress(address) && !evmRoles.includes(role)) evmRoles.push(role);
-    }
+  for (const name of Object.keys(spec)) {
+    if (!Array.isArray(abis[name]))
+      fail(`${slug}: targets.json binds '${name}', which abis.ts does not export`);
   }
-  const exportsOfRole = new Map();
-  for (const [exportName, binding] of Object.entries(spec)) {
-    for (const role of binding.roles ?? []) {
-      exportsOfRole.set(role, [...(exportsOfRole.get(role) ?? []), exportName]);
-    }
-  }
-  /** chain id -> address, lowercase, for a role. */
-  const addressesOf = (role) =>
-    new Map(
-      deployments
-        .filter((d) => evmChainIds.has(d.chainId) && isEvmAddress(d.addresses[role] ?? ""))
-        .map((d) => [d.chainId, d.addresses[role].toLowerCase()]),
-    );
-
-  const contracts = [];
-  for (const [exportName, binding] of Object.entries(spec)) {
-    const abi = abis[exportName];
-    if (!Array.isArray(abi))
-      fail(`${slug}: targets.json binds '${exportName}', which abis.ts does not export`);
-    const roles = binding.roles ?? [];
-    if (roles.length === 0) {
-      contracts.push({
-        protocol: slug,
-        contract: abiName(info.name, slug, exportName),
-        kind: "interface",
-        abiExport: exportName,
-      });
-      continue;
-    }
-    for (const role of roles) {
-      const addresses = addressesOf(role);
-      if (addresses.size === 0) continue;
-      if (binding.unverifiable !== undefined) {
-        contracts.push({
-          protocol: slug,
-          contract: roleName(role, exportName),
-          kind: "address-only",
-          roleKey: role,
-          caveats: [`${exportName} does not describe this deployment: ${binding.unverifiable}`],
-        });
-        continue;
-      }
-      const split = (exportsOfRole.get(role) ?? []).length > 1;
-      const chains = binding.chains;
-      if (split && chains === undefined)
-        fail(`${slug}.${role} is bound to several ABIs without \`chains\``);
-      const caveats = [];
-      for (const [sig, byInstance] of Object.entries(binding.exempt ?? {})) {
-        for (const [where, reason] of Object.entries(byInstance)) {
-          const [chainId, address] = where.split(":");
-          if (addresses.get(Number(chainId)) !== address) continue;
-          caveats.push(
-            `${sig} is not available on ${chainSlugById.get(Number(chainId)) ?? chainId}: ${reason}`,
-          );
-        }
-      }
-      for (const [sig, reason] of Object.entries(binding.unverified ?? {})) {
-        caveats.push(`${sig} is checked against the deployed bytecode only: ${reason}`);
-      }
-      contracts.push({
-        protocol: slug,
-        contract: split ? abiName(info.name, slug, exportName) : roleName(role, exportName),
-        kind: "singleton",
-        roleKey: role,
-        abiExport: exportName,
-        ...(chains !== undefined ? { chains } : {}),
-        ...(caveats.length > 0 ? { caveats } : {}),
-      });
-    }
-  }
-  for (const role of evmRoles) {
-    if (exportsOfRole.has(role)) continue;
-    contracts.push({
-      protocol: slug,
-      contract: roleName(role, undefined),
-      kind: "address-only",
-      roleKey: role,
-      caveats: ["the registry has no ABI for this contract: its address only"],
-    });
-  }
+  const contracts = protocolContracts({ slug, info, deployments, spec, evmChainIds, fail });
 
   const names = new Set();
   for (const c of contracts) {
@@ -251,7 +105,7 @@ for (const info of protocols) {
       }
     }
   }
-  registry.set(slug, { info, abis, contracts });
+  registry.set(slug, { info, abis, deployments, contracts });
 }
 
 const LINKS = [...registry.values()].flatMap((p) => p.contracts);
@@ -267,6 +121,68 @@ const canonicalType = (p) =>
     ? `(${(p.components ?? []).map(canonicalType).join(",")})${p.type.slice("tuple".length)}`
     : p.type;
 const signatureOf = (f) => `${f.name}(${f.inputs.map(canonicalType).join(",")})`;
+
+// --- what a chain's deployment does not run ------------------------------------------------------
+
+/**
+ * A registry ABI is the union of what its deployments run (`gen-registry-abis.mjs`), so a role's
+ * deployment on one chain may lack a function another chain's has. Per chain, the functions its
+ * deployment does not run as declared — it does not dispatch the selector, or its verified ABI
+ * declares the function otherwise (other outputs, a write for a read, other struct fields, or
+ * another overload of the name and not this one) — are `withheld` there: a program compiled for
+ * that chain cannot call them. `registry-abi.test.ts` checks the table against the evidence.
+ */
+const evidence = JSON.parse(
+  readFileSync(resolve(sdk, "test/fixtures/registry-abi/evidence.json"), "utf8"),
+);
+const rowOf = new Map(
+  evidence.instances.map((r) => [`${r.protocol}|${r.abi}|${r.chainId}|${r.address}`, r]),
+);
+const fieldNames = (params) =>
+  params
+    .map((p) =>
+      p.components
+        ? `{${p.components.map((c) => (c.name ?? "").replace(/^_+|_+$/g, "").toLowerCase() + fieldNames([c])).join(",")}}`
+        : "",
+    )
+    .join(",");
+const declaration = (f) =>
+  JSON.stringify([
+    (f.outputs ?? []).map(canonicalType),
+    f.stateMutability === "pure" ? "view" : (f.stateMutability ?? "nonpayable"),
+    fieldNames(f.inputs ?? []),
+  ]);
+/** Whether `row`, one deployment's evidence, runs `fn` as the registry declares it. */
+function runs(row, fn) {
+  if (row === undefined || row.error !== undefined) return false;
+  const sig = signatureOf(fn);
+  const where = row.selectors?.[toFunctionSelector(sig)];
+  if (where === undefined || where === null) return false;
+  const name = `${fn.name}(`;
+  const overloads = (row.verified ?? [])
+    .map((id) => evidence.fragments[id])
+    .filter((f) => f.type === undefined && f.signature.startsWith(name));
+  if (overloads.length === 0) return true;
+  const exact = overloads.find((f) => f.signature === sig);
+  return exact !== undefined && declaration(exact) === declaration(fn);
+}
+for (const [slug, { abis, deployments }] of registry) {
+  for (const c of registry.get(slug).contracts) {
+    if (c.kind !== "singleton") continue;
+    const withheld = {};
+    for (const d of deployments) {
+      const address = d.addresses[c.roleKey];
+      if (!evmChainIds.has(d.chainId) || !/^0x[0-9a-fA-F]{40}$/.test(address ?? "")) continue;
+      if (c.chains !== undefined && !c.chains.includes(d.chainId)) continue;
+      const row = rowOf.get(`${slug}|${c.abiExport}|${d.chainId}|${address.toLowerCase()}`);
+      const lacking = abis[c.abiExport]
+        .filter((item) => item.type === "function" && !runs(row, item))
+        .map(signatureOf);
+      if (lacking.length > 0) withheld[d.chainId] = lacking;
+    }
+    if (Object.keys(withheld).length > 0) c.withheld = withheld;
+  }
+}
 
 /** `getPool(address,address,uint24)` -> that and `[]`; `poolInfo(uint256).crvRewards` -> `["crvRewards"]`. */
 function returnKey(key) {
@@ -332,10 +248,7 @@ for (const [slug, { abis }] of registry) {
 // --- namespaces, families, collisions ----------------------------------------------------------
 
 /** A protocol's default contract — `<Protocol>.<method>(...)` — when it has exactly one singleton. */
-function defaultContract(slug) {
-  const singletons = registry.get(slug).contracts.filter((c) => c.kind === "singleton");
-  return singletons.length === 1 ? singletons[0] : undefined;
-}
+const defaultContract = (slug) => defaultOf(registry.get(slug).contracts);
 
 const namespaceOf = new Map(); // namespace key -> slug
 for (const slug of registry.keys()) {

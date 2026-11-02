@@ -1,6 +1,118 @@
 {
   "abi": [
     {
+      "name": "collectProtocol",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount0Requested",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1Requested",
+          "type": "uint128"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "enableFeeAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "feeAmountTickSpacing",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int24"
+        }
+      ]
+    },
+    {
+      "name": "feeAmountTickSpacingExtraInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "whitelistRequested",
+          "type": "bool"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "getPool",
       "type": "function",
       "stateMutability": "view",
@@ -22,6 +134,249 @@
         {
           "name": "pool",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "lmPoolDeployer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolDeployer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setFeeAmountExtraInfo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        },
+        {
+          "name": "whitelistRequested",
+          "type": "bool"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeProtocol",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "feeProtocol0",
+          "type": "uint32"
+        },
+        {
+          "name": "feeProtocol1",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLmPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "lmPool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLmPoolDeployer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_lmPoolDeployer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setWhiteListAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "verified",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "FeeAmountEnabled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": true
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FeeAmountExtraInfoUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": true
+        },
+        {
+          "name": "whitelistRequested",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "enabled",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": true
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "indexed": false
+        },
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetLmPoolDeployer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "lmPoolDeployer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "WhiteListAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "verified",
+          "type": "bool",
+          "indexed": false
         }
       ]
     }

@@ -1,6 +1,210 @@
 {
   "abi": [
     {
+      "name": "addShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "addStrategiesToDepositWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategiesToWhitelist",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "allocationManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "burnShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "calculateStrategyDepositDigestHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "nonce",
+          "type": "uint256"
+        },
+        {
+          "name": "expiry",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "clearBurnOrRedistributableShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "clearBurnOrRedistributableSharesByStrategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "DEFAULT_BURN_ADDRESS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "delegation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DEPOSIT_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "depositIntoStrategy",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -26,6 +230,518 @@
       ]
     },
     {
+      "name": "depositIntoStrategyWithSignature",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "expiry",
+          "type": "uint256"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depositShares",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "domainSeparator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getBurnableShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getBurnOrRedistributableCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getBurnOrRedistributableShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        },
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getBurnOrRedistributableShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getDeposits",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        },
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getPendingOperatorSets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getPendingSlashIds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getSlashResolutionBlock",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "getStakerStrategyList",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getStrategiesWithBurnableShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        },
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "increaseBurnOrRedistributableShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "slashId",
+          "type": "uint256"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "sharesToBurn",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "initialOwner",
+          "type": "address"
+        },
+        {
+          "name": "initialStrategyWhitelister",
+          "type": "address"
+        },
+        {
+          "name": "initialPausedStatus",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nonce",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPausedStatus",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "pauseAll",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pauserRegistry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "removeDepositShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "depositSharesToRemove",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "removeStrategiesFromDepositWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategiesToRemoveFromWhitelist",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setStrategyWhitelister",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newStrategyWhitelister",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "SLASH_RESOLUTION_DELAY_BLOCKS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
       "name": "stakerDepositShares",
       "type": "function",
       "stateMutability": "view",
@@ -43,6 +759,470 @@
         {
           "name": "shares",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stakerStrategyList",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "strategies",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "stakerStrategyListLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "strategyIsWhitelistedForDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "whitelisted",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "strategyWhitelister",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPausedStatus",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "version",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "withdrawSharesAsTokens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address"
+        },
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "BurnableSharesDecreased",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BurnOrRedistributableSharesDecreased",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "slashId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BurnOrRedistributableSharesIncreased",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "slashId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newPausedStatus",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SlashResolutionBlockSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "operatorSet",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "avs",
+              "type": "address"
+            },
+            {
+              "name": "id",
+              "type": "uint32"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "slashId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "resolutionBlock",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "StrategyAddedToDepositWhitelist",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "StrategyRemovedFromDepositWhitelist",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "StrategyWhitelisterChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newPausedStatus",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CurrentlyPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InputAddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidNewPausedStatus",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidShortString",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaxStrategiesExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyDelegationManager",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyPauser",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyStrategyWhitelister",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyUnpauser",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SharesAmountTooHigh",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SharesAmountZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SignatureExpired",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SlashResolutionDelayNotElapsed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StakerAddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StrategyAlreadyInSlash",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StrategyNotFound",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StrategyNotWhitelisted",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StringTooLong",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "str",
+          "type": "string"
         }
       ]
     }

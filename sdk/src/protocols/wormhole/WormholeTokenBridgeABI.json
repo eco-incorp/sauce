@@ -1,6 +1,786 @@
 {
   "abi": [
     {
+      "name": "_parseTransferCommon",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "transfer",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "to",
+              "type": "bytes32"
+            },
+            {
+              "name": "toChain",
+              "type": "uint16"
+            },
+            {
+              "name": "fee",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "attestToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "tokenAddress",
+          "type": "address"
+        },
+        {
+          "name": "nonce",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sequence",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "bridgeContracts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "chainId_",
+          "type": "uint16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "chainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "completeTransfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "completeTransferAndUnwrapETH",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "completeTransferAndUnwrapETHWithPayload",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "completeTransferWithPayload",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "createWrapped",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVm",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "encodeAssetMeta",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "meta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "decimals",
+              "type": "uint8"
+            },
+            {
+              "name": "symbol",
+              "type": "bytes32"
+            },
+            {
+              "name": "name",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "encodeTransfer",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "transfer",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "to",
+              "type": "bytes32"
+            },
+            {
+              "name": "toChain",
+              "type": "uint16"
+            },
+            {
+              "name": "fee",
+              "type": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "encodeTransferWithPayload",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "transfer",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "to",
+              "type": "bytes32"
+            },
+            {
+              "name": "toChain",
+              "type": "uint16"
+            },
+            {
+              "name": "fromAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "evmChainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "finality",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "governanceActionIsConsumed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "governanceChainId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "governanceContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "isFork",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isInitialized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "impl",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isTransferCompleted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isWrappedAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "outstandingBridged",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "parseAssetMeta",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "meta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "decimals",
+              "type": "uint8"
+            },
+            {
+              "name": "symbol",
+              "type": "bytes32"
+            },
+            {
+              "name": "name",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parsePayloadID",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "payloadID",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "parseRecoverChainId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encodedRecoverChainId",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rci",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "evmChainId",
+              "type": "uint256"
+            },
+            {
+              "name": "newChainId",
+              "type": "uint16"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseRegisterChain",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chain",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chainId",
+              "type": "uint16"
+            },
+            {
+              "name": "emitterChainID",
+              "type": "uint16"
+            },
+            {
+              "name": "emitterAddress",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseTransfer",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "transfer",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "to",
+              "type": "bytes32"
+            },
+            {
+              "name": "toChain",
+              "type": "uint16"
+            },
+            {
+              "name": "fee",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseTransferWithPayload",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "transfer",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "payloadID",
+              "type": "uint8"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "tokenChain",
+              "type": "uint16"
+            },
+            {
+              "name": "to",
+              "type": "bytes32"
+            },
+            {
+              "name": "toChain",
+              "type": "uint16"
+            },
+            {
+              "name": "fromAddress",
+              "type": "bytes32"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "parseUpgrade",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "encoded",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chain",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "module",
+              "type": "bytes32"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "chainId",
+              "type": "uint16"
+            },
+            {
+              "name": "newContract",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "registerChain",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVM",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitRecoverChainId",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVM",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "tokenImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "transferTokens",
       "type": "function",
       "stateMutability": "payable",
@@ -38,7 +818,44 @@
       ]
     },
     {
-      "name": "completeTransfer",
+      "name": "transferTokensWithPayload",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "recipientChain",
+          "type": "uint16"
+        },
+        {
+          "name": "recipient",
+          "type": "bytes32"
+        },
+        {
+          "name": "nonce",
+          "type": "uint32"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sequence",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "updateWrapped",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
@@ -47,7 +864,106 @@
           "type": "bytes"
         }
       ],
+      "outputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "upgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "encodedVM",
+          "type": "bytes"
+        }
+      ],
       "outputs": []
+    },
+    {
+      "name": "WETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "wormhole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "wrapAndTransferETH",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "recipientChain",
+          "type": "uint16"
+        },
+        {
+          "name": "recipient",
+          "type": "bytes32"
+        },
+        {
+          "name": "arbiterFee",
+          "type": "uint256"
+        },
+        {
+          "name": "nonce",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sequence",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "wrapAndTransferETHWithPayload",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "recipientChain",
+          "type": "uint16"
+        },
+        {
+          "name": "recipient",
+          "type": "bytes32"
+        },
+        {
+          "name": "nonce",
+          "type": "uint32"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sequence",
+          "type": "uint64"
+        }
+      ]
     },
     {
       "name": "wrappedAsset",
@@ -67,6 +983,81 @@
         {
           "name": "",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AdminChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousAdmin",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newAdmin",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BeaconUpgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "beacon",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractUpgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldContract",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newContract",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TransferRedeemed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "emitterChainId",
+          "type": "uint16",
+          "indexed": true
+        },
+        {
+          "name": "emitterAddress",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

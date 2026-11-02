@@ -1,6 +1,145 @@
 {
   "abi": [
     {
+      "name": "accrueInterest",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "interest",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "assetStorage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralToken",
+              "type": "address"
+            },
+            {
+              "name": "collateralOnlyToken",
+              "type": "address"
+            },
+            {
+              "name": "debtToken",
+              "type": "address"
+            },
+            {
+              "name": "totalDeposits",
+              "type": "uint256"
+            },
+            {
+              "name": "collateralOnlyDeposits",
+              "type": "uint256"
+            },
+            {
+              "name": "totalBorrowAmount",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "borrow",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "debtAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "debtShare",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowFor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_borrower",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "debtAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "debtShare",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowPossible",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_borrower",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -26,6 +165,359 @@
         {
           "name": "collateralShare",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "depositFor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_depositor",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_collateralOnly",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "collateralAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "collateralShare",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "depositPossible",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "flashLiquidate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_users",
+          "type": "address[]"
+        },
+        {
+          "name": "_flashReceiverData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "assets",
+          "type": "address[]"
+        },
+        {
+          "name": "receivedCollaterals",
+          "type": "uint256[][]"
+        },
+        {
+          "name": "shareAmountsToRepay",
+          "type": "uint256[][]"
+        }
+      ]
+    },
+    {
+      "name": "getAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "assets",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsWithState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "assets",
+          "type": "address[]"
+        },
+        {
+          "name": "assetsStorage",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "collateralToken",
+              "type": "address"
+            },
+            {
+              "name": "collateralOnlyToken",
+              "type": "address"
+            },
+            {
+              "name": "debtToken",
+              "type": "address"
+            },
+            {
+              "name": "totalDeposits",
+              "type": "uint256"
+            },
+            {
+              "name": "collateralOnlyDeposits",
+              "type": "uint256"
+            },
+            {
+              "name": "totalBorrowAmount",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "harvestProtocolFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "harvestedAmounts",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "initAssetsTokens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "interestData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "harvestedProtocolFees",
+              "type": "uint256"
+            },
+            {
+              "name": "protocolFees",
+              "type": "uint256"
+            },
+            {
+              "name": "interestRateTimestamp",
+              "type": "uint64"
+            },
+            {
+              "name": "status",
+              "type": "uint8"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "isSolvent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "liquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "repaidAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "repaidShare",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repayFor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_borrower",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "repaidAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "repaidShare",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "siloAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "siloRepository",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "syncBridgeAssets",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "utilizationData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "totalDeposits",
+              "type": "uint256"
+            },
+            {
+              "name": "totalBorrowAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "interestRateTimestamp",
+              "type": "uint64"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "VERSION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
         }
       ]
     },
@@ -59,54 +551,282 @@
       ]
     },
     {
-      "name": "borrow",
+      "name": "withdrawFor",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "asset",
+          "name": "_asset",
           "type": "address"
         },
         {
-          "name": "amount",
+          "name": "_depositor",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
           "type": "uint256"
+        },
+        {
+          "name": "_collateralOnly",
+          "type": "bool"
         }
       ],
       "outputs": [
         {
-          "name": "debtAmount",
+          "name": "withdrawnAmount",
           "type": "uint256"
         },
         {
-          "name": "debtShare",
+          "name": "withdrawnShare",
           "type": "uint256"
         }
       ]
     },
     {
-      "name": "repay",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "AssetStatusUpdate",
+      "type": "event",
       "inputs": [
         {
           "name": "asset",
-          "type": "address"
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "status",
+          "type": "uint8",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Borrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
         },
         {
           "name": "amount",
-          "type": "uint256"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "repaidAmount",
-          "type": "uint256"
-        },
-        {
-          "name": "repaidShare",
-          "type": "uint256"
+          "type": "uint256",
+          "indexed": false
         }
       ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralOnly",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Liquidate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shareAmountRepaid",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "seizedCollateral",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Repay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Withdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralOnly",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AssetDoesNotExist",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "BorrowNotPossible",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DepositNotPossible",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DepositsExceedLimit",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DifferentArrayLength",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidRepository",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidSiloVersion",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LiquidationReentrancyCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaximumLTVReached",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughDeposits",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughLiquidity",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotSolvent",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyRouter",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Paused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TokenIsNotAContract",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnexpectedEmptyReturn",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnsupportedLTVType",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UserIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAssets",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroShares",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

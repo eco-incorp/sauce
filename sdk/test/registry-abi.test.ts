@@ -1,31 +1,43 @@
 /**
  * The protocol registry's ABIs, checked against the contracts they describe.
  *
- * For every function every `abis.ts` export declares:
- *   - the deployed contract must dispatch its selector (proxies, clones and diamonds resolved), on
- *     every captured deployment — a wrong parameter type is a different selector;
+ * A registry ABI is the FULL ABI of the deployed contract it speaks for: the union of what its
+ * deployments' verified ABIs declare (`scripts/gen-registry-abis.mjs`), less what cannot be exposed,
+ * each omission listed with why in `fixtures/registry-abi/omitted.json`. For every function an
+ * `abis.ts` export declares:
+ *   - some captured deployment must dispatch its selector (proxies, clones and diamonds resolved) —
+ *     a wrong parameter type is a different selector;
  *   - where a verified ABI exists (Sourcify, Blockscout, a keyless Etherscan-compatible API), the
  *     outputs, the state mutability and the struct field names must match it — a selector cannot
- *     catch a wrong output type, and a `view` that writes state reverts under STATICCALL.
+ *     catch a wrong output type, and a `view` that writes state reverts under STATICCALL;
+ *   - a role's deployment that does not run it as declared (no dispatch, or a verified declaration
+ *     that differs) must have it WITHHELD on its chain (`contracts.generated.ts`), so a program
+ *     compiled for that chain cannot call it; and one withheld must be one the deployment lacks;
+ *   - an interface's instance (or a role export's representative `instances`) whose verified ABI
+ *     declares it otherwise is an `exempt` entry with its reason.
+ * And every function, event and error the export's deployments verifiably declare is either in the
+ * registry ABI or in `omitted.json`: nothing is trimmed silently.
  *
  * OFFLINE. The evidence is `fixtures/registry-abi/evidence.json`, captured by
  * `scripts/capture-registry-abi.mjs` only when asked to (see CLAUDE.md). A registry edit the
  * fixture does not cover fails here, naming what to recapture, instead of passing unchecked.
  *
- * For every event and custom error an export declares, the same two checks by its topic or selector —
- * the deployed code must carry it (an event's topic is a PUSH32 before its LOG, an error's selector a
- * constant before its REVERT) — and, against a verified ABI, the event's `indexed` flags: a topic
- * cannot tell an indexed parameter from one in the data, and a wrong flag decodes no log at all. A real
- * log of each event, where the capture found one, must decode with the registry's declaration.
+ * For every event and custom error an export declares: a verified ABI must declare it with the same
+ * `indexed` flags (a topic cannot tell an indexed parameter from one in the data, and a wrong flag
+ * decodes no log), or, where none does, the deployed code must carry it (an event's topic a PUSH32
+ * before its LOG, an error's selector a constant before its REVERT) and an `unverified` entry say
+ * why. A real log of each event a target lists under `logs` must decode with the registry's
+ * declaration.
  *
  * `fixtures/registry-abi/targets.json` says which deployments evidence which export, and records
- * every exception with its reason: `exempt` (a deployment that legitimately differs, e.g. a bridged
- * token without the L1 token's functions), `unverified` (no verified source on Sourcify, Blockscout or
- * a keyless Etherscan-compatible API, so only the selector is checked) and `unverifiable` (nothing
+ * every exception with its reason: `exempt`, `unverified` (no verified source, so only the selector
+ * is checked; a reference interface's function names its source) and `unverifiable` (nothing
  * on-chain can evidence the export at all). An exception that no longer applies fails too, so the
  * list cannot rot. It also records `required` overloads: a signature some consumer binds, which the
- * registry must keep declaring even though a contract's other overloads are free to be left out.
+ * registry must keep declaring.
  */
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,6 +48,8 @@ import {
   toFunctionSelector,
   type AbiEvent,
 } from "viem";
+
+import { CONTRACT_LINKS } from "../src/descriptors/contracts.generated.js";
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PROTOCOLS = join(SDK, "src", "protocols");
@@ -87,6 +101,8 @@ interface Instance {
   readonly abi: string;
   readonly chainId: number;
   readonly address: string;
+  /** The addresses.ts role the deployment is, for a role's deployment; absent for `instances`. */
+  readonly role?: string;
   readonly error?: string;
   readonly abiErrors?: readonly string[];
   /**
@@ -94,9 +110,9 @@ interface Instance {
    * `routed:<facet>` for a selector router (diamond), or null when nothing does.
    */
   readonly selectors?: Readonly<Record<string, number | string | null>>;
-  /** Topic -> where the code carries it, as `selectors`; present for an export declaring events. */
+  /** Topic -> where the code carries it, as `selectors`. */
   readonly events?: Readonly<Record<string, number | string | null>>;
-  /** Selector -> where the code carries it; present for an export declaring errors. */
+  /** Selector -> where the code carries it. */
   readonly errors?: Readonly<Record<string, number | string | null>>;
   /** Ids into `fragments`. */
   readonly verified?: readonly string[];
@@ -117,11 +133,42 @@ interface Target {
   readonly unverifiable?: string;
   /** Signature -> the consumer that binds it. Removing one from `abis.ts` fails the suite. */
   readonly required?: Readonly<Record<string, string>>;
+  /** Signature -> why it is the overload kept of those that take as many arguments. */
+  readonly overloads?: Readonly<Record<string, string>>;
+  /** An interface whose ABI is its reference interface alone, and why. */
+  readonly standard?: string;
+  /** An interface whose ABI is what every instance declares alike, and why. */
+  readonly common?: string;
+  /** Event signatures whose real log the capture records. */
+  readonly logs?: readonly string[];
+  readonly delegates?: readonly string[];
+  /** On a role's export: why its contract is `<Protocol>.<method>(…)`'s where there are several. */
+  readonly default?: string;
+}
+interface Omitted {
+  readonly exports: Readonly<Record<string, readonly { signature: string; reason: string }[]>>;
+}
+interface ReferenceIndex {
+  readonly exports: Readonly<
+    Record<string, readonly { file: string; source: string; sha256: string }[]>
+  >;
 }
 
 const targets = JSON.parse(readFileSync(join(FIXTURES, "targets.json"), "utf-8"))
   .protocols as Record<string, Record<string, Target>>;
 const evidence = JSON.parse(readFileSync(join(FIXTURES, "evidence.json"), "utf-8")) as Evidence;
+const omitted = (JSON.parse(readFileSync(join(FIXTURES, "omitted.json"), "utf-8")) as Omitted)
+  .exports;
+const referenceIndex = JSON.parse(
+  readFileSync(join(FIXTURES, "reference", "index.json"), "utf-8"),
+) as ReferenceIndex;
+const reference = (key: string): readonly (AbiFunction | AbiMark)[] =>
+  (referenceIndex.exports[key] ?? []).flatMap(
+    ({ file }) =>
+      JSON.parse(readFileSync(join(FIXTURES, "reference", file), "utf-8")) as (
+        AbiFunction | AbiMark
+      )[],
+  );
 
 const canonical = (p: Param): string =>
   p.type.startsWith("tuple")
@@ -203,6 +250,28 @@ const registry: Record<string, Record<string, readonly AbiFunction[]>> = Object.
   ]),
 );
 
+const instancesOf = (slug: string, exportName: string) =>
+  evidence.instances.filter((i) => i.protocol === slug && i.abi === exportName);
+const fragmentsOf = (instance: Instance) =>
+  (instance.verified ?? []).map((id) => evidence.fragments[id]!);
+const where = (instance: Instance) => `${instance.chainId}:${instance.address}`;
+
+/** The functions a role's deployment on a chain withholds, by the contract the role is. */
+function withheldOn(slug: string, exportName: string, instance: Instance): ReadonlySet<string> {
+  const link = CONTRACT_LINKS.find(
+    (l) =>
+      l.protocol === slug &&
+      "abiExport" in l &&
+      "roleKey" in l &&
+      l.abiExport === exportName &&
+      l.roleKey === instance.role &&
+      (!("chains" in l) || l.chains.some((chainId: number) => chainId === instance.chainId)),
+  );
+  if (link === undefined || !("withheld" in link)) return new Set();
+  const byChain: Readonly<Record<number, readonly string[]>> = link.withheld;
+  return new Set(byChain[instance.chainId] ?? []);
+}
+
 /** Everything wrong with one registry function, against its export's evidence. */
 function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[] {
   const target = targets[slug]![exportName]!;
@@ -210,61 +279,80 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
   const selector = toFunctionSelector(sig);
   const problems: string[] = [];
   if (target.unverifiable !== undefined) return problems;
+  const everyInstance = target.standard !== undefined || target.common !== undefined;
 
-  const instances = evidence.instances.filter((i) => i.protocol === slug && i.abi === exportName);
   let dispatched = 0;
   let verifiedExact = 0;
-  for (const instance of instances) {
-    const where = `${instance.chainId}:${instance.address}`;
-    const exemption = target.exempt?.[sig]?.[where];
-    const found: string[] = [];
+  for (const instance of instancesOf(slug, exportName)) {
+    const at = where(instance);
+    const exemption = target.exempt?.[sig]?.[at];
     if (instance.error !== undefined) {
-      found.push(`${where}: ${instance.error}`);
-    } else {
-      // An explorer that could not answer during capture (`abiErrors`) only costs this deployment
-      // its verified fragments: the function still has to be verified on some deployment below.
-      const dispatch = instance.selectors?.[selector];
-      if (dispatch === undefined) {
-        found.push(`${where}: selector ${selector} was not captured — recapture ${slug}`);
-      } else if (dispatch === null) {
-        found.push(`${where}: the deployed code does not dispatch ${selector}`);
-      }
-      const overloads = (instance.verified ?? [])
-        .map((id) => evidence.fragments[id]!)
-        .filter((f) => f.type === undefined && f.signature.split("(")[0] === fn.name);
-      const exact = overloads.find((f) => f.signature === sig);
-      if (overloads.length > 0 && exact === undefined) {
-        found.push(
-          `${where}: the verified ABI has no ${sig} (it declares ${overloads.map((f) => f.signature).join(", ")})`,
+      problems.push(`${at}: ${instance.error}`);
+      continue;
+    }
+    // An explorer that could not answer during capture (`abiErrors`) only costs this deployment
+    // its verified fragments: the function still has to be verified on some deployment below.
+    const dispatch = instance.selectors?.[selector];
+    if (dispatch === undefined) {
+      problems.push(`${at}: selector ${selector} was not captured — recapture ${slug}`);
+      continue;
+    }
+    const lacks: string[] = [];
+    if (dispatch === null) lacks.push(`the deployed code does not dispatch ${selector}`);
+    else dispatched++;
+    const overloads = fragmentsOf(instance).filter(
+      (f) => f.type === undefined && f.signature.split("(")[0] === fn.name,
+    );
+    const exact = overloads.find((f) => f.signature === sig);
+    if (overloads.length > 0 && exact === undefined) {
+      lacks.push(
+        `the verified ABI has no ${sig} (it declares ${overloads.map((f) => f.signature).join(", ")})`,
+      );
+    }
+    if (exact !== undefined) {
+      const before = lacks.length;
+      if (outputTypes(exact.outputs) !== outputTypes(fn.outputs)) {
+        lacks.push(
+          `returns ${outputTypes(exact.outputs)}, the registry declares ${outputTypes(fn.outputs)}`,
         );
       }
-      if (exact !== undefined) {
-        if (outputTypes(exact.outputs) !== outputTypes(fn.outputs)) {
-          found.push(
-            `${where}: returns ${outputTypes(exact.outputs)}, the registry declares ${outputTypes(fn.outputs)}`,
-          );
-        }
-        if (mutability(exact.stateMutability) !== mutability(fn.stateMutability)) {
-          found.push(
-            `${where}: is ${exact.stateMutability}, the registry declares ${fn.stateMutability ?? "nonpayable"}`,
-          );
-        }
-        if (fieldNames(exact.inputs) !== fieldNames(fn.inputs)) {
-          found.push(
-            `${where}: struct fields ${fieldNames(exact.inputs)}, the registry names ${fieldNames(fn.inputs)}`,
-          );
-        }
+      if (mutability(exact.stateMutability) !== mutability(fn.stateMutability)) {
+        lacks.push(
+          `is ${exact.stateMutability}, the registry declares ${fn.stateMutability ?? "nonpayable"}`,
+        );
       }
-      if (exemption === undefined && found.length === 0) {
-        if (dispatch !== null) dispatched++;
-        if (exact) verifiedExact++;
+      if (fieldNames(exact.inputs) !== fieldNames(fn.inputs)) {
+        lacks.push(
+          `struct fields ${fieldNames(exact.inputs)}, the registry names ${fieldNames(fn.inputs)}`,
+        );
       }
+      if (lacks.length === before) verifiedExact++;
     }
+
+    if (instance.role !== undefined) {
+      // A role's deployment: what it lacks is withheld on its chain, and only that.
+      const withheld = withheldOn(slug, exportName, instance).has(sig);
+      if (exemption !== undefined) {
+        problems.push(
+          `${at}: stale exemption, a role's deployment withholds instead: ${exemption}`,
+        );
+      } else if (lacks.length > 0 && !withheld) {
+        problems.push(...lacks.map((lack) => `${at}: ${lack}, and it is not withheld there`));
+      } else if (lacks.length === 0 && withheld) {
+        problems.push(`${at}: withheld on chain ${instance.chainId}, but its deployment runs it`);
+      }
+      continue;
+    }
+    // An interface's example: one that does not dispatch it is another release of the interface,
+    // unless every instance must (a standard's, a `common` interface's); one that declares it
+    // otherwise is an exemption.
+    const found = lacks.filter(
+      (lack) => everyInstance || !lack.startsWith("the deployed code does not dispatch"),
+    );
     if (exemption !== undefined) {
-      if (found.length === 0)
-        problems.push(`${where}: stale exemption, it now matches: ${exemption}`);
+      if (found.length === 0) problems.push(`${at}: stale exemption, it now matches: ${exemption}`);
     } else {
-      problems.push(...found);
+      problems.push(...found.map((lack) => `${at}: ${lack}`));
     }
   }
 
@@ -282,7 +370,7 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
   if (verifiedExact > 0 && unverified !== undefined) {
     problems.push(`stale \`unverified\` entry, a verified ABI now declares it: ${unverified}`);
   }
-  return problems;
+  return problems.map((problem) => `${sig}: ${problem}`);
 }
 
 /** An event's parameters as `indexed`-or-not, in order: what decides which of them a log's topics carry. */
@@ -298,66 +386,103 @@ function markProblemsOf(slug: string, exportName: string, item: AbiMark): string
   const problems: string[] = [];
   if (target.unverifiable !== undefined) return problems;
 
-  const instances = evidence.instances.filter((i) => i.protocol === slug && i.abi === exportName);
   let carried = 0;
   let verifiedExact = 0;
-  for (const instance of instances) {
-    const where = `${instance.chainId}:${instance.address}`;
-    const exemption = target.exempt?.[key]?.[where];
+  for (const instance of instancesOf(slug, exportName)) {
+    const at = where(instance);
+    const exemption = target.exempt?.[key]?.[at];
     const found: string[] = [];
     if (instance.error !== undefined) {
-      found.push(`${where}: ${instance.error}`);
+      found.push(`${at}: ${instance.error}`);
     } else {
-      const at = (item.type === "event" ? instance.events : instance.errors)?.[mark];
-      if (at === undefined) {
-        found.push(`${where}: ${item.type} ${mark} was not captured — recapture ${slug}`);
-      } else if (at === null) {
-        found.push(
-          `${where}: the deployed code ${item.type === "event" ? "emits no" : "reverts with no"} ${sig}`,
-        );
+      const located = (item.type === "event" ? instance.events : instance.errors)?.[mark];
+      if (located === undefined) {
+        found.push(`${at}: ${item.type} ${mark} was not captured — recapture ${slug}`);
+      } else if (located !== null) {
+        carried++;
       }
-      const overloads = (instance.verified ?? [])
-        .map((id) => evidence.fragments[id]!)
-        .filter((f) => f.type === item.type && f.signature.split("(")[0] === item.name);
+      const overloads = fragmentsOf(instance).filter(
+        (f) => f.type === item.type && f.signature.split("(")[0] === item.name,
+      );
       const exact = overloads.find((f) => f.signature === sig);
-      if (overloads.length > 0 && exact === undefined) {
-        found.push(
-          `${where}: the verified ABI has no ${key} (it declares ${overloads.map((f) => f.signature).join(", ")})`,
-        );
-      }
+      // Another declaration of the name is another event or error: only the same one disagrees.
       if (exact !== undefined && item.type === "event") {
         if (indexing(exact.inputs) !== indexing(item.inputs)) {
           found.push(
-            `${where}: the verified ${sig} is (${indexing(exact.inputs)}), the registry declares (${indexing(item.inputs)})`,
+            `${at}: the verified ${sig} is (${indexing(exact.inputs)}), the registry declares (${indexing(item.inputs)})`,
           );
         }
       }
-      if (exemption === undefined && found.length === 0) {
-        if (at !== null) carried++;
-        if (exact) verifiedExact++;
-      }
+      if (exact !== undefined && found.length === 0) verifiedExact++;
     }
     if (exemption !== undefined) {
-      if (found.length === 0)
-        problems.push(`${where}: stale exemption, it now matches: ${exemption}`);
+      if (found.length === 0) problems.push(`${at}: stale exemption, it now matches: ${exemption}`);
     } else {
       problems.push(...found);
     }
   }
 
-  if (carried === 0 && problems.length === 0) {
-    problems.push(
-      "no captured deployment carries it — add an instance to targets.json and recapture",
-    );
-  }
   const unverified = target.unverified?.[key];
-  if (verifiedExact === 0 && unverified === undefined && problems.length === 0) {
-    problems.push(
-      "no verified ABI declares it — find a verified source, or record why none exists under `unverified`",
-    );
+  if (verifiedExact === 0 && problems.length === 0) {
+    if (unverified === undefined) {
+      problems.push(
+        "no verified ABI declares it — find a verified source, or record why none exists under `unverified`",
+      );
+    } else if (carried === 0) {
+      problems.push(
+        "no verified ABI declares it and no captured deployment carries it — add an instance and recapture",
+      );
+    }
   }
   if (verifiedExact > 0 && unverified !== undefined) {
     problems.push(`stale \`unverified\` entry, a verified ABI now declares it: ${unverified}`);
+  }
+  return problems.map((problem) => `${key}: ${problem}`);
+}
+
+/**
+ * What the export's deployments declare that its registry ABI does not, and `omitted.json` does not
+ * list: a silent trim. And what `omitted.json` lists that the registry declares after all.
+ */
+function untold(slug: string, exportName: string): string[] {
+  const target = targets[slug]![exportName]!;
+  if (target.unverifiable !== undefined) return [];
+  const instances = instancesOf(slug, exportName).filter((i) => i.error === undefined);
+  const declared = new Set([
+    ...registry[slug]![exportName]!.map(signature),
+    ...marks[slug]![exportName]!.map(markKey),
+  ]);
+  const listed = new Set((omitted[`${slug}.${exportName}`] ?? []).map((o) => o.signature));
+  /** Each function's, event's and error's key, and a function's selector. */
+  const offered = new Map<string, string | undefined>();
+  const offer = (item: AbiFunction | AbiMark) =>
+    item.type === "function"
+      ? offered.set(signature(item), toFunctionSelector(signature(item)))
+      : offered.set(markKey(item), undefined);
+  const ref = reference(`${slug}.${exportName}`);
+  if (target.standard !== undefined) {
+    for (const item of ref) offer(item);
+  } else {
+    for (const instance of instances) {
+      for (const f of fragmentsOf(instance)) {
+        if (f.type === undefined) offered.set(f.signature, f.selector);
+        else offered.set(`${f.type} ${f.signature}`, undefined);
+      }
+    }
+    for (const item of ref) if (item.type === "function") offer(item);
+  }
+  const declaredSelectors = new Set<string>(
+    registry[slug]![exportName]!.map((f) => toFunctionSelector(signature(f))),
+  );
+  const problems: string[] = [];
+  for (const [sig, selector] of offered) {
+    if (declared.has(sig) || listed.has(sig)) continue;
+    // Another declaration of a selector the registry declares is the same function.
+    if (selector !== undefined && declaredSelectors.has(selector)) continue;
+    problems.push(`${sig}: declared by its deployments, in neither the ABI nor omitted.json`);
+  }
+  for (const sig of listed) {
+    if (declared.has(sig)) problems.push(`${sig}: listed as omitted, and declared`);
   }
   return problems;
 }
@@ -381,7 +506,7 @@ describe("registry ABI evidence: coverage", () => {
     expect({ missing, unknown }).toEqual({ missing: [], unknown: [] });
   });
 
-  it("every exemption, `unverified` and `required` entry names a function the registry declares", () => {
+  it("every exemption, `unverified`, `required`, `overloads` and `logs` entry names what the registry declares", () => {
     const orphans: string[] = [];
     for (const [slug, exports] of Object.entries(targets)) {
       if (registry[slug] === undefined) continue; // another branch's protocol, see above
@@ -394,12 +519,49 @@ describe("registry ABI evidence: coverage", () => {
           ...Object.keys(target.exempt ?? {}),
           ...Object.keys(target.unverified ?? {}),
           ...Object.keys(target.required ?? {}),
+          ...Object.keys(target.overloads ?? {}),
+          ...(target.logs ?? []).map((event) => `event ${event}`),
         ]) {
           if (!sigs.has(sig)) orphans.push(`${slug}.${name}: ${sig}`);
         }
       }
     }
     expect(orphans).toEqual([]);
+  });
+
+  it("`standard` and `common` are on interfaces only, never both, a standard has its reference, and a `default` is one role's, one per protocol", () => {
+    const wrong: string[] = [];
+    for (const [slug, exports] of Object.entries(targets)) {
+      const defaults = Object.entries(exports).filter(([, target]) => target.default !== undefined);
+      if (defaults.length > 1) wrong.push(`${slug}: ${defaults.length} exports are its default`);
+      for (const [name, target] of Object.entries(exports)) {
+        if (target.default !== undefined && target.roles?.length !== 1)
+          wrong.push(`${slug}.${name}: a default binds exactly one role`);
+        if (target.standard === undefined && target.common === undefined) continue;
+        if ((target.roles ?? []).length > 0) wrong.push(`${slug}.${name}: a role is bound to it`);
+        if (target.standard !== undefined && target.common !== undefined)
+          wrong.push(`${slug}.${name}: both`);
+        if (target.standard !== undefined && reference(`${slug}.${name}`).length === 0)
+          wrong.push(`${slug}.${name}: no reference interface`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every reference interface is the file its index pins, and names an export", () => {
+    const wrong: string[] = [];
+    for (const [key, files] of Object.entries(referenceIndex.exports)) {
+      const [slug, name] = key.split(".");
+      if (registry[slug!] !== undefined && registry[slug!]![name!] === undefined)
+        wrong.push(`${key}: no such export`);
+      for (const { file, sha256 } of files) {
+        const digest = createHash("sha256")
+          .update(readFileSync(join(FIXTURES, "reference", file)))
+          .digest("hex");
+        if (digest !== sha256) wrong.push(`${key}: ${file} is not the pinned file`);
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 
   it("every deployment of a role a target names is captured, and `chains` drops none", () => {
@@ -411,13 +573,13 @@ describe("registry ABI evidence: coverage", () => {
         for (const [role, address] of Object.entries(d.addresses)) {
           // A Solana program id runs no EVM ABI; the capture skips it too.
           if (!roles.has(role) || !/^0x[0-9a-fA-F]{40}$/.test(address)) continue;
-          const where = `${slug}.${role} ${d.chainId}:${address.toLowerCase()}`;
+          const at = `${slug}.${role} ${d.chainId}:${address.toLowerCase()}`;
           const bound = exports.filter(
             ([, target]) =>
               target.roles?.includes(role) &&
               (target.chains === undefined || target.chains.includes(d.chainId)),
           );
-          if (bound.length === 0) uncaptured.push(`${where}: no export's \`chains\` includes it`);
+          if (bound.length === 0) uncaptured.push(`${at}: no export's \`chains\` includes it`);
           for (const [name] of bound) {
             const captured = evidence.instances.some(
               (i) =>
@@ -426,7 +588,7 @@ describe("registry ABI evidence: coverage", () => {
                 i.chainId === d.chainId &&
                 i.address === address.toLowerCase(),
             );
-            if (!captured) uncaptured.push(`${where}: no ${name} evidence — recapture ${slug}`);
+            if (!captured) uncaptured.push(`${at}: no ${name} evidence — recapture ${slug}`);
           }
         }
       }
@@ -449,8 +611,10 @@ describe("registry ABI evidence: coverage", () => {
   });
 
   it("the fixture holds no RPC endpoint or API key", () => {
-    const raw = readFileSync(join(FIXTURES, "evidence.json"), "utf-8");
-    expect(raw).not.toMatch(/https?:\/\/|apikey|api_key|alchemy|infura/i);
+    for (const file of ["evidence.json", "omitted.json"]) {
+      const raw = readFileSync(join(FIXTURES, file), "utf-8");
+      expect(raw).not.toMatch(/https?:\/\/|apikey|api_key|alchemy|infura/i);
+    }
   });
 
   it("each ABI's JSON twin (what route compilation imports) matches abis.ts", () => {
@@ -468,9 +632,6 @@ describe("registry ABI evidence: coverage", () => {
     for (const slug of slugs) {
       const exports = Object.entries(modules[slug]!).filter(([, value]) => Array.isArray(value));
       const path = (name: string) => join(PROTOCOLS, slug, `${name}.json`);
-      // A protocol that ships twins ships one per export, so a new export cannot miss its twin;
-      // one that ships none at all has nothing to compare.
-      if (!exports.some(([name]) => existsSync(path(name)))) continue;
       for (const [name, value] of exports) {
         const json = existsSync(path(name))
           ? (JSON.parse(readFileSync(path(name), "utf-8")) as { abi: unknown }).abi
@@ -482,22 +643,36 @@ describe("registry ABI evidence: coverage", () => {
     }
     expect(drift).toEqual([]);
   });
+
+  it("the registry ABIs, their twins and omitted.json are what the evidence generates (`gen-registry-abis.mjs --check`)", () => {
+    expect(() =>
+      execFileSync(process.execPath, [join(SDK, "scripts", "gen-registry-abis.mjs"), "--check"], {
+        cwd: SDK,
+        stdio: "pipe",
+      }),
+    ).not.toThrow();
+  });
 });
 
 for (const slug of slugs) {
   describe(`registry ABI evidence: ${slug}`, () => {
-    for (const [exportName, fns] of Object.entries(registry[slug]!)) {
+    for (const exportName of Object.keys(registry[slug]!)) {
       if (targets[slug]?.[exportName] === undefined) continue;
-      for (const fn of fns) {
-        it(`${exportName}.${signature(fn)}`, () => {
-          expect(problemsOf(slug, exportName, fn)).toEqual([]);
-        });
-      }
-      for (const item of marks[slug]![exportName] ?? []) {
-        it(`${exportName}: ${markKey(item)}`, () => {
-          expect(markProblemsOf(slug, exportName, item)).toEqual([]);
-        });
-      }
+      it(`${exportName}: every function`, () => {
+        expect(
+          registry[slug]![exportName]!.flatMap((fn) => problemsOf(slug, exportName, fn)),
+        ).toEqual([]);
+      });
+      it(`${exportName}: every event and error`, () => {
+        expect(
+          (marks[slug]![exportName] ?? []).flatMap((item) =>
+            markProblemsOf(slug, exportName, item),
+          ),
+        ).toEqual([]);
+      });
+      it(`${exportName}: nothing its deployments declare is left out unlisted`, () => {
+        expect(untold(slug, exportName)).toEqual([]);
+      });
     }
   });
 }
@@ -505,10 +680,18 @@ for (const slug of slugs) {
 describe("registry ABI evidence: real logs decode with the registry's events", () => {
   const logs = evidence.logs ?? [];
 
-  it("the capture holds a log of some event", () => {
-    // Every export that declares an event has one emitted somewhere; an empty list means the capture
-    // that writes them did not run.
-    expect(logs.length).toBeGreaterThan(0);
+  it("the capture holds a log of every event a target lists under `logs`", () => {
+    const wanted = Object.entries(targets).flatMap(([slug, exports]) =>
+      Object.entries(exports).flatMap(([name, target]) =>
+        (target.logs ?? []).map((event) => `${slug}.${name} ${event}`),
+      ),
+    );
+    expect(wanted.length).toBeGreaterThan(0);
+    expect(
+      wanted.filter(
+        (want) => !logs.some((log) => `${log.protocol}.${log.abi} ${log.event}` === want),
+      ),
+    ).toEqual([]);
   });
 
   it.each(logs.map((log) => [`${log.protocol}.${log.abi} ${log.event}`, log] as const))(

@@ -26,14 +26,16 @@ const TOKEN = "0x2222222222222222222222222222222222222222" as const;
 const BENEFICIARY = "0x3333333333333333333333333333333333333333" as const;
 
 /** Rebuilds the canonical `name(type,type,...)` signature from a vendored as-const ABI array
- *  entry — mirrors `templates.ts`'s own hand-transcribed `signature` field so the two can be
- *  compared string-for-string. */
+ *  entry of `name` taking `arity` arguments (a full ABI may overload the name) — mirrors
+ *  `templates.ts`'s own hand-transcribed `signature` field so the two can be compared
+ *  string-for-string. */
 function signatureFromAbi(
   abi: readonly { name: string; inputs: readonly { type: string }[] }[],
   name: string,
+  arity: number,
 ): string {
-  const entry = abi.find((e) => e.name === name);
-  if (!entry) throw new Error(`signatureFromAbi: no entry named "${name}"`);
+  const entry = abi.find((e) => e.name === name && e.inputs.length === arity);
+  if (!entry) throw new Error(`signatureFromAbi: no entry named "${name}" of ${arity} arguments`);
   return `${name}(${entry.inputs.map((i) => i.type).join(",")})`;
 }
 
@@ -57,7 +59,10 @@ describe("registry drift — every ABI-backed template's signature/selector matc
   for (const { key, abi, method } of cases) {
     it(`${key}`, () => {
       const template = DEPOSIT_TEMPLATES[key as keyof typeof DEPOSIT_TEMPLATES];
-      const expectedSignature = signatureFromAbi(abi, method);
+      const arity = template.signature
+        .slice(template.signature.indexOf("(") + 1, -1)
+        .split(",").length;
+      const expectedSignature = signatureFromAbi(abi, method, arity);
       expect(template.signature).toBe(expectedSignature);
       expect(template.selector).toBe(toFunctionSelector(`function ${expectedSignature}`));
     });

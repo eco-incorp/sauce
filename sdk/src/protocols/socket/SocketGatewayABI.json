@@ -1,6 +1,202 @@
 {
   "abi": [
     {
+      "name": "addController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "controllerAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "addressAt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "routeId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "addRoute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "routeAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "BRIDGE_AFTER_SWAP_SELECTOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "CENT_PERCENT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "claimOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "controllerCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "controllers",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "disableController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "controllerId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "disabledRouteAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "disableRoute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "routeId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "executeController",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "socketControllerRequest",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "controllerId",
+              "type": "uint32"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "executeControllers",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "controllerRequests",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "controllerId",
+              "type": "uint32"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "executeRoute",
       "type": "function",
       "stateMutability": "payable",
@@ -20,6 +216,332 @@
           "type": "bytes"
         }
       ]
+    },
+    {
+      "name": "executeRoutes",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "routeIds",
+          "type": "uint32[]"
+        },
+        {
+          "name": "dataItems",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getController",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "controllerId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoute",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "routeId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "nominateOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "nominee_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "nominee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "rescueEther",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "userAddress",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "rescueFunds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "userAddress",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "routes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "routesCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "setApprovalForRouters",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "routeAddresses",
+          "type": "address[]"
+        },
+        {
+          "name": "tokenAddresses",
+          "type": "address[]"
+        },
+        {
+          "name": "isMax",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapAndMultiBridge",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "swapMultiBridgeRequest",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "swapRouteId",
+              "type": "uint32"
+            },
+            {
+              "name": "swapImplData",
+              "type": "bytes"
+            },
+            {
+              "name": "bridgeRouteIds",
+              "type": "uint32[]"
+            },
+            {
+              "name": "bridgeImplDataItems",
+              "type": "bytes[]"
+            },
+            {
+              "name": "bridgeRatios",
+              "type": "uint256[]"
+            },
+            {
+              "name": "eventDataItems",
+              "type": "bytes[]"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ControllerAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "controllerId",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "controllerAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ControllerDisabled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "controllerId",
+          "type": "uint32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewRouteAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "routeId",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "route",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnerClaimed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "claimer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnerNominated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "nominee",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferRequested",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_to",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RouteDisabled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "routeId",
+          "type": "uint32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ArrayLengthMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "IncorrectBridgeRatios",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyNominee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAddressNotAllowed",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

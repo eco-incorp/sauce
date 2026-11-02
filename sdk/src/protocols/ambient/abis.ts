@@ -1,5 +1,31 @@
 export const CrocSwapDexABI = [
   {
+    name: "acceptCrocDex",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "protocolCmd",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "callpath", type: "uint16" },
+      { name: "cmd", type: "bytes" },
+      { name: "sudo", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "readSlot",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "slot", type: "uint256" }],
+    outputs: [{ name: "data", type: "uint256" }],
+  },
+  // Signed flows from the user's side: negative is tokens paid out to the user.
+  {
     name: "swap",
     type: "function",
     stateMutability: "payable",
@@ -15,7 +41,6 @@ export const CrocSwapDexABI = [
       { name: "minOut", type: "uint128" },
       { name: "reserveFlags", type: "uint8" },
     ],
-    // Signed flows from the user's side: negative is tokens paid out to the user.
     outputs: [
       { name: "baseFlow", type: "int128" },
       { name: "quoteFlow", type: "int128" },
@@ -30,5 +55,41 @@ export const CrocSwapDexABI = [
       { name: "cmd", type: "bytes" },
     ],
     outputs: [{ name: "result", type: "bytes" }],
+  },
+  {
+    name: "userCmdRelayer",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "callpath", type: "uint16" },
+      { name: "cmd", type: "bytes" },
+      { name: "conds", type: "bytes" },
+      { name: "relayerTip", type: "bytes" },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [{ name: "output", type: "bytes" }],
+  },
+  {
+    name: "userCmdRouter",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "callpath", type: "uint16" },
+      { name: "cmd", type: "bytes" },
+      { name: "client", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bytes" }],
+  },
+  {
+    name: "CrocKnockoutCross",
+    type: "event",
+    inputs: [
+      { name: "pool", type: "bytes32", indexed: true },
+      { name: "tick", type: "int24", indexed: true },
+      { name: "isBid", type: "bool", indexed: false },
+      { name: "pivotTime", type: "uint32", indexed: false },
+      { name: "feeMileage", type: "uint64", indexed: false },
+      { name: "commitEntropy", type: "uint160", indexed: false },
+    ],
   },
 ] as const;

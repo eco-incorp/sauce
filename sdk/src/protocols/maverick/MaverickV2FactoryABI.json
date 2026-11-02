@@ -1,6 +1,361 @@
 {
   "abi": [
     {
+      "name": "claimProtocolFeeForPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimProtocolFeeForPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "isTokenA",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "create",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint64"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "create",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint64"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint64"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "createPermissioned",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint64"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "createPermissioned",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint64"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint64"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "createPermissioned",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint64"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint64"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        },
+        {
+          "name": "permissionedLiquidity",
+          "type": "bool"
+        },
+        {
+          "name": "permissionedSwap",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "deployParameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint64"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint64"
+        },
+        {
+          "name": "lookback",
+          "type": "uint32"
+        },
+        {
+          "name": "activeTick",
+          "type": "int32"
+        },
+        {
+          "name": "tokenAScale",
+          "type": "uint64"
+        },
+        {
+          "name": "tokenBScale",
+          "type": "uint64"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint16"
+        },
+        {
+          "name": "options",
+          "type": "uint8"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "isFactoryPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lookup",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "startIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "endIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pools",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
       "name": "lookup",
       "type": "function",
       "stateMutability": "view",
@@ -28,6 +383,322 @@
           "type": "address[]"
         }
       ]
+    },
+    {
+      "name": "lookup",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint256"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint256"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint256"
+        },
+        {
+          "name": "lookback",
+          "type": "uint256"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "kinds",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "lookupPermissioned",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "startIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "endIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pools",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "lookupPermissioned",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_tokenA",
+          "type": "address"
+        },
+        {
+          "name": "_tokenB",
+          "type": "address"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        },
+        {
+          "name": "startIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "endIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pools",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "lookupPermissioned",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "feeAIn",
+          "type": "uint256"
+        },
+        {
+          "name": "feeBIn",
+          "type": "uint256"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint256"
+        },
+        {
+          "name": "lookback",
+          "type": "uint256"
+        },
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "options",
+          "type": "uint8"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolByTokenCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_tokenA",
+          "type": "address"
+        },
+        {
+          "name": "_tokenB",
+          "type": "address"
+        },
+        {
+          "name": "accessor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_poolCount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_poolCount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolPermissionedCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_poolCount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeRatioD3",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeReceiver",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolLendingFeeRateD18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setProtocolFeeRatio",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_protocolFeeRatioD3",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setProtocolFeeReceiver",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setProtocolLendingFeeRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_protocolLendingFeeRateD18",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateProtocolFeeRatioForPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateProtocolLendingFeeRateForPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
     }
   ]
 }

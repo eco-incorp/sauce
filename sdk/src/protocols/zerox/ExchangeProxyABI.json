@@ -1,6 +1,156 @@
 {
   "abi": [
     {
+      "name": "_transformERC20",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "args",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "inputToken",
+              "type": "address"
+            },
+            {
+              "name": "outputToken",
+              "type": "address"
+            },
+            {
+              "name": "inputTokenAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "minOutputTokenAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "transformations",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "deploymentNonce",
+                  "type": "uint32"
+                },
+                {
+                  "name": "data",
+                  "type": "bytes"
+                }
+              ]
+            },
+            {
+              "name": "useSelfBalance",
+              "type": "bool"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "outputTokenAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "createTransformWallet",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "wallet",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getFunctionImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "impl",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getQuoteSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTransformerDeployer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "deployer",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTransformWallet",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "wallet",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setQuoteSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "quoteSigner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTransformerDeployer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "transformerDeployer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "transformERC20",
       "type": "function",
       "stateMutability": "payable",
@@ -40,6 +190,59 @@
         {
           "name": "outputTokenAmount",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "QuoteSignerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "quoteSigner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TransformedERC20",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "taker",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "inputToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "outputToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "inputTokenAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "outputTokenAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TransformerDeployerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "transformerDeployer",
+          "type": "address",
+          "indexed": false
         }
       ]
     }

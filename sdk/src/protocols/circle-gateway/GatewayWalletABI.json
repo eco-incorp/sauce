@@ -1,6 +1,200 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "addBatchSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addBurnSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addContractSignatureSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addDelegate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "delegate",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addSupportedToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "allowlistContractSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "availableBalance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "depositor",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "balance",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "balanceOfBatch",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "depositors",
+          "type": "address[]"
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "balances",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "contractSignersAllowlister",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "contractSignersDisallowlister",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "denylist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "denylister",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -37,28 +231,371 @@
       "outputs": []
     },
     {
-      "name": "totalBalance",
+      "name": "depositWithAuthorization",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "token",
           "type": "address"
         },
         {
-          "name": "depositor",
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "validAfter",
+          "type": "uint256"
+        },
+        {
+          "name": "validBefore",
+          "type": "uint256"
+        },
+        {
+          "name": "nonce",
+          "type": "bytes32"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositWithAuthorization",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "validAfter",
+          "type": "uint256"
+        },
+        {
+          "name": "validBefore",
+          "type": "uint256"
+        },
+        {
+          "name": "nonce",
+          "type": "bytes32"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositWithPermit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositWithPermit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "disallowContractSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "contractAddr",
           "type": "address"
         }
       ],
+      "outputs": []
+    },
+    {
+      "name": "domain",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
       "outputs": [
         {
           "name": "",
-          "type": "uint256"
+          "type": "uint32"
         }
       ]
     },
     {
-      "name": "availableBalance",
+      "name": "domainSeparator",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EIP712_DOMAIN_TYPE_HASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "eip712Domain",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "fields",
+          "type": "bytes1"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "version",
+          "type": "string"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "verifyingContract",
+          "type": "address"
+        },
+        {
+          "name": "salt",
+          "type": "bytes32"
+        },
+        {
+          "name": "extensions",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "feeRecipient",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "gatewayBurn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "calldataBytes",
+          "type": "bytes"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getTypedDataHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "intent",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "pauser",
+              "type": "address"
+            },
+            {
+              "name": "denylister",
+              "type": "address"
+            },
+            {
+              "name": "supportedTokens",
+              "type": "address[]"
+            },
+            {
+              "name": "domain",
+              "type": "uint32"
+            },
+            {
+              "name": "withdrawalDelay",
+              "type": "uint256"
+            },
+            {
+              "name": "burnSigner",
+              "type": "address"
+            },
+            {
+              "name": "feeRecipient",
+              "type": "address"
+            },
+            {
+              "name": "contractSignersAllowlister",
+              "type": "address"
+            },
+            {
+              "name": "contractSignersDisallowlister",
+              "type": "address"
+            },
+            {
+              "name": "contractSignatureSigner",
+              "type": "address"
+            },
+            {
+              "name": "batchSigner",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initiateWithdrawal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isAllowlistedContractSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isAuthorizedForBalance",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
@@ -69,12 +606,84 @@
         {
           "name": "depositor",
           "type": "address"
+        },
+        {
+          "name": "addr",
+          "type": "address"
         }
       ],
       "outputs": [
         {
           "name": "",
-          "type": "uint256"
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isBatchSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isBurnSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isContractSignatureSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isDenylisted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
         }
       ]
     },
@@ -96,16 +705,1581 @@
       ]
     },
     {
-      "name": "domain",
+      "name": "isTransferSpecHashUsed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "transferSpecHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "owner",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pauser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "proxiableUUID",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "removeBatchSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeBurnSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeContractSignatureSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeDelegate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "delegate",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "submitBatch",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "calldataBytes",
+          "type": "bytes"
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "totalBalance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unDenylist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "updateContractSignersAllowlister",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAllowlister",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateContractSignersDisallowlister",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDisallowlister",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateDenylister",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDenylister",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateFeeRecipient",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newFeeRecipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updatePauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPauser",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateWithdrawalDelay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDelay",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "UPGRADE_INTERFACE_VERSION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "upgradeToAndCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdrawableBalance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdrawalBlock",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdrawalDelay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdrawingBalance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "BatchProcessed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "batchId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tokenAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BatchSignerAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BatchSignerRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BurnSignerAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BurnSignerRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignatureSignerAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignatureSignerRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignerAllowlisted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignerDisallowed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignersAllowlisterChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAllowlister",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAllowlister",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ContractSignersDisallowlisterChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldDisallowlister",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newDisallowlister",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DelegateAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "delegate",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelegateRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "delegate",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Denylisted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DenylisterChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldDenylister",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newDenylister",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Deposited",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EIP712DomainChanged",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "FeeRecipientChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeRecipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeRecipient",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "GatewayBurned",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "transferSpecHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "destinationDomain",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "destinationRecipient",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "signer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fromAvailable",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fromWithdrawing",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "InsufficientBalance",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "availableBalance",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "withdrawingBalance",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauserChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPauser",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newPauser",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenSupported",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UnDenylisted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "WithdrawalCompleted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawalDelayChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldDelay",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "newDelay",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "WithdrawalInitiated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositor",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "remainingAvailable",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalWithdrawing",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "withdrawalBlock",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AccountDenylisted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AddressEmptyCode",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BatchIdUsed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "batchId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "BurnFeeTooHighAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "maxFee",
+          "type": "uint256"
+        },
+        {
+          "name": "actualFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "CannotDelegateToSelf",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractSignerNeverAllowlisted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CursorOutOfBounds",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DeltaMustBeNonZero",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DepositorIsBlacklisted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "depositor",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DepositValueMustBePositive",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ECDSAInvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ECDSAInvalidSignatureLength",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ECDSAInvalidSignatureS",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EnforcedPause",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ERC1967InvalidImplementation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ERC1967NonPayable",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ExpectedPause",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "FailedCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InputArrayLengthMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "IntentExpiredAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "maxBlockHeight",
+          "type": "uint256"
+        },
+        {
+          "name": "currentBlock",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "IntentValueMustBePositiveAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
           "type": "uint32"
         }
       ]
+    },
+    {
+      "name": "InvalidAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidBatchSigner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidBurnSigner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInitialization",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidIntentSourceContractAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "intentContract",
+          "type": "address"
+        },
+        {
+          "name": "expectedContract",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "InvalidIntentSourceSignerAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "intentSigner",
+          "type": "address"
+        },
+        {
+          "name": "actualSigner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "InvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidTransferPayloadMagic",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "actualMagic",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "InvalidTransferSpecMagic",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "actualMagic",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "InvalidTransferSpecVersion",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "actualVersion",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "MismatchedBurn",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MustHaveAtLeastOneBurnIntent",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MustHaveAtLeastOneDelta",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MustNetToZero",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "totalDelta",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "NoRelevantBurnIntents",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAllSameToken",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAuthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotInitializing",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NoWithdrawingBalance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OwnableInvalidOwner",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OwnableUnauthorizedAccount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "RenounceOwnershipDisabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeERC20FailedOperation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadDataTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedMinimumLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadHeaderTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedMinimumLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadOverallLengthMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedTotalLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualTotalLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadSetElementHeaderTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "actualSetLength",
+          "type": "uint256"
+        },
+        {
+          "name": "requiredOffset",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadSetElementTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "actualSetLength",
+          "type": "uint256"
+        },
+        {
+          "name": "requiredOffset",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadSetHeaderTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedMinimumLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadSetInvalidElementMagic",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "actualMagic",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "TransferPayloadSetOverallLengthMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedTotalLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualTotalLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferSpecHashUsed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "transferSpecHash",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "TransferSpecHeaderTooShort",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedMinimumLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferSpecInvalidHookData",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedHookDataLength",
+          "type": "uint256"
+        },
+        {
+          "name": "transferSpecLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "TransferSpecOverallLengthMismatch",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "expectedTotalLength",
+          "type": "uint256"
+        },
+        {
+          "name": "actualTotalLength",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UnauthorizedContractSignerAllowlister",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UnauthorizedContractSignerDisallowlister",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UnauthorizedDenylister",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addr",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UnauthorizedPauser",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedToken",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UnsupportedTokenAtIndex",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint32"
+        },
+        {
+          "name": "sourceToken",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UUPSUnauthorizedCallContext",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UUPSUnsupportedProxiableUUID",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "WithdrawalNotYetAvailable",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WithdrawalValueExceedsAvailableBalance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WithdrawalValueMustBePositive",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WrongDomain",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "WrongGatewayContract",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAddressAllowlister",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAddressContractSigner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAddressDisallowlister",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

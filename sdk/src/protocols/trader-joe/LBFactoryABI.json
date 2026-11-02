@@ -1,6 +1,189 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "addQuoteAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "becomeOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "createLBPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "activeId",
+          "type": "uint24"
+        },
+        {
+          "name": "binStep",
+          "type": "uint16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pair",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DEFAULT_ADMIN_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "forceDecay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pair",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getAllBinSteps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "binStepWithPreset",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getAllLBPairs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lbPairsAvailable",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "binStep",
+              "type": "uint16"
+            },
+            {
+              "name": "LBPair",
+              "type": "address"
+            },
+            {
+              "name": "createdByOwner",
+              "type": "bool"
+            },
+            {
+              "name": "ignoredForRouting",
+              "type": "bool"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getFeeRecipient",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "feeRecipient",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getFlashLoanFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "flashLoanFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getLBPairAtIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lbPair",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getLBPairImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "lbPairImplementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "getLBPairInformation",
       "type": "function",
       "stateMutability": "view",
@@ -40,6 +223,1178 @@
               "type": "bool"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "getMaxFlashLoanFee",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "maxFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getMinBinStep",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "minBinStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNumberOfLBPairs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "lbPairNumber",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNumberOfQuoteAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "numberOfQuoteAssets",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getOpenBinSteps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "openBinStep",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getPreset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "baseFactor",
+          "type": "uint256"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint256"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint256"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint256"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint256"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint256"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint256"
+        },
+        {
+          "name": "isOpen",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getQuoteAssetAtIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoleAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "grantRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "hasRole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isQuoteAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isQuote",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "LB_HOOKS_MANAGER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "removeLBHooksOnPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removePreset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeQuoteAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "renounceRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "callerConfirmation",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "revokePendingOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "revokeRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeRecipient",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "feeRecipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeesParametersOnPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint16"
+        },
+        {
+          "name": "baseFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFlashLoanFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "flashLoanFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLBHooksParametersOnPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint16"
+        },
+        {
+          "name": "hooksParameters",
+          "type": "bytes32"
+        },
+        {
+          "name": "onHooksSetData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLBPairIgnored",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint16"
+        },
+        {
+          "name": "ignored",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLBPairImplementation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newLBPairImplementation",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPendingOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pendingOwner_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPreset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint16"
+        },
+        {
+          "name": "baseFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24"
+        },
+        {
+          "name": "isOpen",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPresetOpenState",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint16"
+        },
+        {
+          "name": "isOpen",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "supportsInterface",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "FeeRecipientSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldRecipient",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newRecipient",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FlashLoanFeeSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFlashLoanFee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newFlashLoanFee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LBPairCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tokenY",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "binStep",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "LBPair",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "pid",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LBPairIgnoredStateChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "LBPair",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ignored",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LBPairImplementationSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldLBPairImplementation",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "LBPairImplementation",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PendingOwnerSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pendingOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PresetOpenStateChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "isOpen",
+          "type": "bool",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PresetRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PresetSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "baseFactor",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "QuoteAssetAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "QuoteAssetRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleAdminChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "previousAdminRole",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "newAdminRole",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AccessControlBadConfirmation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "AccessControlUnauthorizedAccount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "neededRole",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EnumerableMapNonexistentKey",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__AddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__BinStepHasNoPreset",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__BinStepTooLow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__CannotGrantDefaultAdminRole",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__FlashLoanFeeAboveMax",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "fees",
+          "type": "uint256"
+        },
+        {
+          "name": "maxFees",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__IdenticalAddresses",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__ImplementationNotSet",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__InvalidHooksParameters",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__LBPairAlreadyExists",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "_binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__LBPairDoesNotExist",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__LBPairIgnoredIsAlreadyInTheSameState",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__LBPairNotCreated",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        },
+        {
+          "name": "tokenY",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__LBPairSafetyCheckFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "LBPairImplementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__PresetIsLockedForUsers",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "binStep",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__PresetOpenStateIsAlreadyInTheSameState",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBFactory__QuoteAssetAlreadyWhitelisted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__QuoteAssetNotWhitelisted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "quoteAsset",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__SameFeeRecipient",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "feeRecipient",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__SameFlashLoanFee",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "flashLoanFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__SameHooksImplementation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "hooksImplementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__SameHooksParameters",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "hooksParameters",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "LBFactory__SameImplementation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "LBPairImplementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OwnableInvalidOwner",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OwnableUnauthorizedAccount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "PairParametersHelper__InvalidParameter",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PendingOwnable__AddressZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PendingOwnable__NoPendingOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PendingOwnable__NotOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PendingOwnable__NotPendingOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PendingOwnable__PendingOwnerAlreadySet",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeCast__Exceeds16Bits",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Uint128x128Math__PowUnderflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "int256"
         }
       ]
     }

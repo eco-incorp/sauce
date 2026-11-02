@@ -1,6 +1,39 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "acceptPauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "approveCctpTokenMessenger",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "axelarGasService",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "bridgeCall",
       "type": "function",
       "stateMutability": "payable",
@@ -101,6 +134,1175 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "CCTP_BRIDGE_DATA_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "CCTP_BRIDGE_WITNESS_TYPE_STRING",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "cctpBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "destinationCaller",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "cctpTokenMessenger",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "cfReceive",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        },
+        {
+          "name": "",
+          "type": "bytes"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "chainflipVault",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "contractId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "execute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "executeWithInterchainToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "tokenId",
+          "type": "bytes32"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "executeWithToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "tokenSymbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "expressExecute",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "expressExecuteWithInterchainToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "bytes"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "tokenId",
+          "type": "bytes32"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "expressExecuteWithToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "FUND_AND_RUN_MULTICALL_DATA_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "FUND_AND_RUN_MULTICALL_WITNESS_TYPE_STRING",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "fundAndRunMulticall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "calls",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "callType",
+              "type": "uint8"
+            },
+            {
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "callData",
+              "type": "bytes"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "gateway",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getExpressExecutor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "expressExecutor",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getExpressExecutorWithToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32"
+        },
+        {
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string"
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "expressExecutor",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "implementation_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "interchainTokenService",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "owner_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "value",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pauser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "value",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "owner_",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingPauser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "value",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "permit2",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "permitCctpBridge",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "destinationAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "destinationCaller",
+          "type": "bytes32"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "permit",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "permitted",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "permitFundAndRunMulticall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "calls",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "callType",
+              "type": "uint8"
+            },
+            {
+              "name": "target",
+              "type": "address"
+            },
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "callData",
+              "type": "bytes"
+            },
+            {
+              "name": "payload",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "permit",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "permitted",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "proposeOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "rescueFunds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setup",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "squidMulticall",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "updatePauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPauser",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgrade",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "newImplementationCodeHash",
+          "type": "bytes32"
+        },
+        {
+          "name": "params",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "usdc",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CrossMulticallExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "CrossMulticallFailed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "reason",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "refundRecipient",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "expressExecutor",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressExecutedWithToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "expressExecutor",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressExecutionFulfilled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "expressExecutor",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ExpressExecutionWithTokenFulfilled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "commandId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sourceChain",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "sourceAddress",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "payloadHash",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "expressExecutor",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "PauserProposed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "currentPauser",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "pendingPauser",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PauserUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newPauser",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AlreadyExecuted",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ApprovalFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractIsPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ExpressExecutorAlreadySet",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InsufficientValue",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCodeHash",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidImplementation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidOwnerAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotApprovedByGateway",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotProxy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotService",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OnlyCfVault",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyPauser",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyPendingPauser",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Permit2Unavailable",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ServiceUnavailable",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SetupFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TokenTransferFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TransferFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnsafeCast",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ZeroAddressProvided",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

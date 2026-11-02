@@ -1,16 +1,128 @@
 {
   "abi": [
     {
-      "name": "swap",
+      "name": "addRouter",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "_tokenIn",
+          "name": "_router",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "adjustForDecimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_tokenDiv",
           "type": "address"
         },
         {
-          "name": "_tokenOut",
+          "name": "_tokenMul",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "allWhitelistedTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allWhitelistedTokensLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "approvedRouters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BASIS_POINTS_DIVISOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "bufferAmounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyUSDG",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
           "type": "address"
         },
         {
@@ -26,32 +138,33 @@
       ]
     },
     {
-      "name": "increasePosition",
+      "name": "clearTokenConfig",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "_account",
+          "name": "_token",
           "type": "address"
-        },
-        {
-          "name": "_collateralToken",
-          "type": "address"
-        },
-        {
-          "name": "_indexToken",
-          "type": "address"
-        },
-        {
-          "name": "_sizeDelta",
-          "type": "uint256"
-        },
-        {
-          "name": "_isLong",
-          "type": "bool"
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "cumulativeFundingRates",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
     },
     {
       "name": "decreasePosition",
@@ -91,6 +204,2693 @@
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "directPoolDeposit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "errorController",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "errors",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "feeReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "FUNDING_RATE_PRECISION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "fundingInterval",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "fundingRateFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getDelta",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_size",
+          "type": "uint256"
+        },
+        {
+          "name": "_averagePrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_lastIncreasedTime",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getEntryFundingRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFeeBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_usdgDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_feeBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_taxBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_increment",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFundingFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_size",
+          "type": "uint256"
+        },
+        {
+          "name": "_entryFundingRate",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFundingFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_size",
+          "type": "uint256"
+        },
+        {
+          "name": "_entryFundingRate",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getGlobalShortDelta",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getMaxPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getMinPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNextAveragePrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_size",
+          "type": "uint256"
+        },
+        {
+          "name": "_averagePrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_nextPrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_lastIncreasedTime",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNextFundingRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNextGlobalShortAveragePrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_nextPrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPosition",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionDelta",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPositionKey",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getPositionLeverage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRedemptionAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_usdgAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRedemptionCollateral",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRedemptionCollateralUsd",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTargetUsdgAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUtilisation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "globalShortAveragePrices",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "globalShortSizes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "gov",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "guaranteedUsd",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "hasDynamicFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "includeAmmPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "increasePosition",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_sizeDelta",
+          "type": "uint256"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_router",
+          "type": "address"
+        },
+        {
+          "name": "_usdg",
+          "type": "address"
+        },
+        {
+          "name": "_priceFeed",
+          "type": "address"
+        },
+        {
+          "name": "_liquidationFeeUsd",
+          "type": "uint256"
+        },
+        {
+          "name": "_fundingRateFactor",
+          "type": "uint256"
+        },
+        {
+          "name": "_stableFundingRateFactor",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "inManagerMode",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "inPrivateLiquidationMode",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isInitialized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isLeverageEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isLiquidator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isSwapEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastFundingTimes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidatePosition",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_feeReceiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "liquidationFeeUsd",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "marginFeeBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MAX_FEE_BASIS_POINTS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MAX_FUNDING_RATE_FACTOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MAX_LIQUIDATION_FEE_USD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxGasPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxGlobalShortSizes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxLeverage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxUsdgAmounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MIN_FUNDING_RATE_INTERVAL",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MIN_LEVERAGE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minProfitBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minProfitTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintBurnFeeBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolAmounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "positions",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "size",
+          "type": "uint256"
+        },
+        {
+          "name": "collateral",
+          "type": "uint256"
+        },
+        {
+          "name": "averagePrice",
+          "type": "uint256"
+        },
+        {
+          "name": "entryFundingRate",
+          "type": "uint256"
+        },
+        {
+          "name": "reserveAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "realisedPnl",
+          "type": "int256"
+        },
+        {
+          "name": "lastIncreasedTime",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PRICE_PRECISION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "priceFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "removeRouter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_router",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "reservedAmounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "router",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "sellUSDG",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setBufferAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setError",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_errorCode",
+          "type": "uint256"
+        },
+        {
+          "name": "_error",
+          "type": "string"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setErrorController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_errorController",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_taxBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_stableTaxBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_mintBurnFeeBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_swapFeeBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_stableSwapFeeBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_marginFeeBasisPoints",
+          "type": "uint256"
+        },
+        {
+          "name": "_liquidationFeeUsd",
+          "type": "uint256"
+        },
+        {
+          "name": "_minProfitTime",
+          "type": "uint256"
+        },
+        {
+          "name": "_hasDynamicFees",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFundingRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_fundingInterval",
+          "type": "uint256"
+        },
+        {
+          "name": "_fundingRateFactor",
+          "type": "uint256"
+        },
+        {
+          "name": "_stableFundingRateFactor",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setGov",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_gov",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setInManagerMode",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_inManagerMode",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setInPrivateLiquidationMode",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_inPrivateLiquidationMode",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setIsLeverageEnabled",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_isLeverageEnabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setIsSwapEnabled",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_isSwapEnabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLiquidator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_liquidator",
+          "type": "address"
+        },
+        {
+          "name": "_isActive",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_manager",
+          "type": "address"
+        },
+        {
+          "name": "_isManager",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxGasPrice",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maxGasPrice",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxGlobalShortSize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxLeverage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maxLeverage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceFeed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_priceFeed",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTokenConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_tokenDecimals",
+          "type": "uint256"
+        },
+        {
+          "name": "_tokenWeight",
+          "type": "uint256"
+        },
+        {
+          "name": "_minProfitBps",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxUsdgAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_isStable",
+          "type": "bool"
+        },
+        {
+          "name": "_isShortable",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUsdgAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setVaultUtils",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultUtils",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "shortableTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "stableFundingRateFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stableSwapFeeBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stableTaxBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stableTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "_tokenOut",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "swapFeeBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "taxBasisPoints",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenBalances",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenDecimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenToUsdMin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_tokenAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenWeights",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalTokenWeights",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "updateCumulativeFundingRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateCumulativeFundingRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgradeVault",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newVault",
+          "type": "address"
+        },
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "usdg",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "USDG_DECIMALS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "usdgAmounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "usdToToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_usdAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_price",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "usdToTokenMax",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_usdAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "usdToTokenMin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_usdAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "useSwapPricing",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "validateLiquidation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        },
+        {
+          "name": "_collateralToken",
+          "type": "address"
+        },
+        {
+          "name": "_indexToken",
+          "type": "address"
+        },
+        {
+          "name": "_isLong",
+          "type": "bool"
+        },
+        {
+          "name": "_raise",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "vaultUtils",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "whitelistedTokenCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "whitelistedTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "withdrawFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "BuyUSDG",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tokenAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "usdgAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeBasisPoints",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ClosePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "size",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateral",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "averagePrice",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "entryFundingRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "reserveAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "realisedPnl",
+          "type": "int256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollectMarginFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feeUsd",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeTokens",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollectSwapFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feeUsd",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeTokens",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DecreaseGuaranteedUsd",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DecreasePoolAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DecreasePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "collateralToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "indexToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "collateralDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sizeDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "isLong",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DecreaseReservedAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DecreaseUsdgAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DirectPoolDeposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreaseGuaranteedUsd",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreasePoolAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreasePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "collateralToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "indexToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "collateralDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sizeDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "isLong",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "price",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreaseReservedAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreaseUsdgAmount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LiquidatePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "collateralToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "indexToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "isLong",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "size",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateral",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "reserveAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "realisedPnl",
+          "type": "int256",
+          "indexed": false
+        },
+        {
+          "name": "markPrice",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SellUSDG",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "usdgAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeBasisPoints",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Swap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tokenIn",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tokenOut",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amountIn",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amountOutAfterFees",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeBasisPoints",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateFundingRate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "fundingRate",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdatePnl",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "hasProfit",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "delta",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdatePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "size",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateral",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "averagePrice",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "entryFundingRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "reserveAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "realisedPnl",
+          "type": "int256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdatePosition",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "size",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateral",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "averagePrice",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "entryFundingRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "reserveAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "realisedPnl",
+          "type": "int256",
+          "indexed": false
+        },
+        {
+          "name": "markPrice",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     }

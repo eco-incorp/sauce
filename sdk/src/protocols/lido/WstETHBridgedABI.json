@@ -1,71 +1,6 @@
 {
   "abi": [
     {
-      "name": "name",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "symbol",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "decimals",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "totalSupply",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "balanceOf",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "allowance",
       "type": "function",
       "stateMutability": "view",
@@ -104,6 +39,173 @@
         {
           "name": "",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "bridge",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "bridgeBurn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account_",
+          "type": "address"
+        },
+        {
+          "name": "amount_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "bridgeMint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account_",
+          "type": "address"
+        },
+        {
+          "name": "amount_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "decreaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "subtractedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "increaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "addedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "name_",
+          "type": "string"
+        },
+        {
+          "name": "symbol_",
+          "type": "string"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
         }
       ]
     },
@@ -154,58 +256,81 @@
       ]
     },
     {
-      "name": "increaseAllowance",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "Approval",
+      "type": "event",
       "inputs": [
         {
-          "name": "spender",
-          "type": "address"
+          "name": "owner",
+          "type": "address",
+          "indexed": true
         },
         {
-          "name": "addedValue",
-          "type": "uint256"
-        }
-      ],
-      "outputs": [
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
         {
-          "name": "",
-          "type": "bool"
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     },
     {
-      "name": "decreaseAllowance",
-      "type": "function",
-      "stateMutability": "nonpayable",
+      "name": "Transfer",
+      "type": "event",
       "inputs": [
         {
-          "name": "spender",
-          "type": "address"
+          "name": "from",
+          "type": "address",
+          "indexed": true
         },
         {
-          "name": "subtractedValue",
-          "type": "uint256"
-        }
-      ],
-      "outputs": [
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
         {
-          "name": "",
-          "type": "bool"
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     },
     {
-      "name": "bridge",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "address"
-        }
-      ]
+      "name": "ErrorAccountIsZeroAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorDecreasedAllowanceBelowZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorNameAlreadySet",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorNotBridge",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorNotEnoughAllowance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorNotEnoughBalance",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ErrorSymbolAlreadySet",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

@@ -1,6 +1,584 @@
 {
   "abi": [
     {
+      "name": "balances",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "_user",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "BATCH_FILL_INTENT_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "batchFillIntent",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_intents",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_amountOut",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_receivers",
+          "type": "bytes32[]"
+        },
+        {
+          "name": "_destinations",
+          "type": "uint32[][]"
+        },
+        {
+          "name": "_signature",
+          "type": "bytes"
+        },
+        {
+          "name": "_pullFunds",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_fillMessages",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "intentId",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "intentInputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "intentOrigin",
+              "type": "uint32"
+            },
+            {
+              "name": "amountOut",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "executionTimestamp",
+              "type": "uint48"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "callExecutor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "deprecated_fillQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "first",
+          "type": "uint256"
+        },
+        {
+          "name": "last",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "deprecated_intentQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "first",
+          "type": "uint256"
+        },
+        {
+          "name": "last",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "DOMAIN",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "EVERCLEAR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "executeIntentCalldata",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_intent",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "feeAdapter",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "FILL_INTENT_FOR_SOLVER_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "FILL_INTENT_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "fillIntent",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_intent",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "_receiver",
+          "type": "bytes32"
+        },
+        {
+          "name": "_destinations",
+          "type": "uint32[]"
+        },
+        {
+          "name": "_signature",
+          "type": "bytes"
+        },
+        {
+          "name": "_pullFunds",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_fillMessage",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "intentId",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "intentInputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "intentOrigin",
+              "type": "uint32"
+            },
+            {
+              "name": "amountOut",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "executionTimestamp",
+              "type": "uint48"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fillQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "first",
+          "type": "uint256"
+        },
+        {
+          "name": "last",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "fillSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "gateway",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeAdapter",
+          "type": "address"
+        },
+        {
+          "name": "_messageReceiver",
+          "type": "address"
+        },
+        {
+          "name": "_fillSigner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "intentQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "first",
+          "type": "uint256"
+        },
+        {
+          "name": "last",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lighthouse",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "messageGasLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "messageReceiver",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "modules",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_strategy",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_module",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "newIntent",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -96,6 +674,1452 @@
               "type": "bytes"
             }
           ]
+        }
+      ]
+    },
+    {
+      "name": "nonce",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "PERMIT2",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "PROCESS_FILL_QUEUE_VIA_RELAYER_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "PROCESS_INTENT_QUEUE_VIA_RELAYER_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "processFillQueue",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint32"
+        },
+        {
+          "name": "_dynamicGasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "processFillQueueViaRelayer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_domain",
+          "type": "uint32"
+        },
+        {
+          "name": "_amount",
+          "type": "uint32"
+        },
+        {
+          "name": "_relayer",
+          "type": "address"
+        },
+        {
+          "name": "_ttl",
+          "type": "uint256"
+        },
+        {
+          "name": "_nonce",
+          "type": "uint256"
+        },
+        {
+          "name": "_dynamicGasLimit",
+          "type": "uint256"
+        },
+        {
+          "name": "_signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "processIntentQueue",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_intents",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_dynamicGasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "processIntentQueueViaRelayer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_domain",
+          "type": "uint32"
+        },
+        {
+          "name": "_intents",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "_relayer",
+          "type": "address"
+        },
+        {
+          "name": "_ttl",
+          "type": "uint256"
+        },
+        {
+          "name": "_nonce",
+          "type": "uint256"
+        },
+        {
+          "name": "_dynamicGasLimit",
+          "type": "uint256"
+        },
+        {
+          "name": "_signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "proxiableUUID",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "receiveMessage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setModuleForStrategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_strategy",
+          "type": "uint8"
+        },
+        {
+          "name": "_module",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStrategyForAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_strategy",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "status",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "status",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "strategies",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_strategy",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "updateFeeAdapter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeAdapter",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateFillSigner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeSigner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateGateway",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newGateway",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateMessageGasLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newGasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateMessageReceiver",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newMessageReceiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateSecurityModule",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newSecurityModule",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "UPGRADE_INTERFACE_VERSION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "upgradeToAndCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "watchtower",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdrawTokens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "AssetMintFailed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_strategy",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AssetTransferFailed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Deposited",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_depositant",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ExternalCalldataExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_returnData",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeeAdapterUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_newFeeAdapter",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FillQueueProcessed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_messageId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_firstIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_lastIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_quote",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FillSignerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldFillSigner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_newFillSigner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GatewayUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldGateway",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_newGateway",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IntentAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_queueIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_intent",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IntentFilled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_solver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_receiver",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_amountOut",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_queueIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_intent",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "initiator",
+              "type": "bytes32"
+            },
+            {
+              "name": "receiver",
+              "type": "bytes32"
+            },
+            {
+              "name": "inputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "outputAsset",
+              "type": "bytes32"
+            },
+            {
+              "name": "origin",
+              "type": "uint32"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            },
+            {
+              "name": "timestamp",
+              "type": "uint48"
+            },
+            {
+              "name": "ttl",
+              "type": "uint48"
+            },
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "amountOutMin",
+              "type": "uint256"
+            },
+            {
+              "name": "destinations",
+              "type": "uint32[]"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IntentQueueProcessed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_messageId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_firstIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_lastIdx",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_quote",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LighthouseUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldLightHouse",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_newLightHouse",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MessageGasLimitUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldGasLimit",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_newGasLimit",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MessageReceiverUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldMessageReceiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_newMessageReceiver",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ModuleSetForStrategy",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_strategy",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "_module",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "Settled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "_account",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "StrategySetForAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_strategy",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "WatchtowerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_oldWatchtower",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_newWatchtower",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_withdrawer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddressEmptyCode",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AddressInsufficientBalance",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ECDSAInvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ECDSAInvalidSignatureLength",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ECDSAInvalidSignatureS",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "ERC1967InvalidImplementation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ERC1967NonPayable",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ExecuteIntentCalldata_ExternalCallFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ExecuteIntentCalldata_InvalidStatus",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_FeeAdapter_NotAuthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_AmountOutInvalid",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "_amountOutMin",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_InsufficientFunds",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_requested",
+          "type": "uint256"
+        },
+        {
+          "name": "_available",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_IntentExpired",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_InvalidArrayLengths",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_InvalidDestinationArray",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_FillIntent_InvalidStatus",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_Initialize_FillQueueNotEmpty",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_Initialize_IntentQueueNotEmpty",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_InvalidFillSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_InvalidMessageType",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_InvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_InvalidVarUpdate",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_NewIntent_CalldataExceedsLimit",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_NewIntent_InvalidIntent",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_NewIntent_OutputAssetNotNull",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_NewIntent_OutputAssetNull",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_NewIntent_ZeroAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_Pause_NotAuthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_Paused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ProcessFillViaRelayer_NotRelayer",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ProcessFillViaRelayer_TTLExpired",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ProcessFillViaRelayer_WrongDomain",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ProcessIntentQueue_NotFound",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_intentId",
+          "type": "bytes32"
+        },
+        {
+          "name": "_position",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_ProcessQueue_ExceedsGasLimit",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_dynamicGasLimit",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_ProcessQueue_InvalidAmount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "_first",
+          "type": "uint256"
+        },
+        {
+          "name": "_last",
+          "type": "uint256"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EverclearSpoke_ProcessQueue_ZeroAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_Unauthorized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_WrongDestination",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "EverclearSpoke_ZeroAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "FailedInnerCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAccountNonce",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "currentNonce",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidInitialization",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotInitializing",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OwnableInvalidOwner",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OwnableUnauthorizedAccount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "Queue_EmptyQueue",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeERC20FailedOperation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "UUPSUnauthorizedCallContext",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UUPSUnsupportedProxiableUUID",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
         }
       ]
     }
