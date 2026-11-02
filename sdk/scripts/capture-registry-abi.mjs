@@ -163,11 +163,11 @@ function rpcUrl(chainId, attempt) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** One request, retried along the config's URLs from the `first`th. */
-async function rpc(chainId, method, params, first = 0) {
+/** One request to `url`, retried there alone: the answer is that endpoint's, or it throws. */
+async function rpcAt(chainId, url, method, params, attempts) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await fetch(rpcUrl(chainId, first + attempt), {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -181,9 +181,23 @@ async function rpc(chainId, method, params, first = 0) {
       }
       return body.result;
     } catch (err) {
-      if (attempt >= Math.max(4, 2 * RPC_URLS.get(chainId).length)) {
+      if (attempt >= attempts - 1) {
         throw new Error(`chain ${chainId} ${method} failed: ${err.message}`, { cause: err });
       }
+      await sleep(1000 * 2 ** Math.min(attempt, 4));
+    }
+  }
+}
+
+/** One request, retried along the config's URLs in turn. */
+async function rpc(chainId, method, params) {
+  const urls = RPC_URLS.get(chainId);
+  const attempts = Math.max(5, 2 * urls.length + 1);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await rpcAt(chainId, rpcUrl(chainId, attempt), method, params, 1);
+    } catch (err) {
+      if (attempt >= attempts - 1) throw err;
       await sleep(1000 * 2 ** Math.min(attempt, 4));
     }
   }
@@ -264,17 +278,34 @@ function diskMemo(key, fn) {
 }
 
 /**
- * An answer of nothing (no code, a zero word) is asked again of each other endpoint the config
- * lists, and the first that has something wins: a node that lags or drops state answers empty, and
- * an empty implementation slot would silently leave a proxy's implementation out of its layers.
+ * An answer of nothing (no code, a zero word) is asked of each endpoint the config lists, each
+ * request pinned to its endpoint, and the first that has something wins: a node that lags or drops
+ * state answers empty, and an empty implementation slot would silently leave a proxy's
+ * implementation out of its layers. Nothing is believed only when two endpoints that answered agree
+ * (or when the config gives one endpoint, which nothing can corroborate); an endpoint that could
+ * not answer is no vote, so one endpoint is never counted twice.
  */
 async function consensus(chainId, method, params, empty) {
-  let answer;
-  for (let first = 0; first < RPC_URLS.get(chainId).length; first++) {
-    answer = await rpc(chainId, method, params, first);
+  const urls = RPC_URLS.get(chainId);
+  let emptyAnswer;
+  let emptyVotes = 0;
+  const failures = [];
+  for (const url of urls) {
+    let answer;
+    try {
+      answer = await rpcAt(chainId, url, method, params, 3);
+    } catch (err) {
+      failures.push(err.message);
+      continue;
+    }
     if (!empty(answer)) return answer;
+    emptyAnswer = answer;
+    if (++emptyVotes >= Math.min(2, urls.length)) return emptyAnswer;
   }
-  return answer;
+  throw new Error(
+    `chain ${chainId} ${method}: ${emptyVotes} endpoint(s) answered nothing and no other could ` +
+      `confirm it (${failures.join("; ")})`,
+  );
 }
 const getCode = (chainId, address) =>
   diskMemo(`code:${chainId}:${address.toLowerCase()}`, () =>
@@ -336,18 +367,6 @@ function decodeAddressArray(data) {
 const wordToAddress = (word) =>
   word && word.length === 66 && /^0x0{24}/.test(word) ? `0x${word.slice(-40)}`.toLowerCase() : null;
 const isAddress = (a) => a !== null && a !== ZERO && /^0x[0-9a-f]{40}$/.test(a);
-
-/** The opcodes `code` executes (PUSH immediates skipped). */
-function opcodes(code) {
-  const hex = code.slice(2);
-  const ops = new Set();
-  for (let i = 0; i < hex.length; i += 2) {
-    const op = parseInt(hex.slice(i, i + 2), 16);
-    ops.add(op);
-    if (op >= 0x60 && op <= 0x7f) i += 2 * (op - 0x5f);
-  }
-  return ops;
-}
 
 /** Small code that DELEGATECALLs: a proxy, whatever its storage layout. */
 function proxyShaped(chainId, code) {
@@ -443,6 +462,34 @@ function embeddedAddresses(code) {
   return [...out];
 }
 
+/**
+ * The Solidity libraries `codes` link, by address: each embedded address whose code is a deployed
+ * library's, which opens with the call guard solc writes into every library (PUSH20 its own
+ * address, ADDRESS, EQ). A library runs in its caller's context through DELEGATECALL, so what it
+ * emits or reverts with is its caller's (Aave's Pool emits `Supply` from SupplyLogic). A library
+ * links others in turn. None on EraVM, whose code is not EVM bytecode.
+ */
+async function linkedLibraries(chainId, codes) {
+  const found = new Map();
+  if (ERAVM.has(chainId)) return found;
+  const tried = new Set();
+  for (let frontier = codes.filter(Boolean); frontier.length > 0;) {
+    const next = [];
+    for (const code of frontier) {
+      for (const address of embeddedAddresses(code)) {
+        if (tried.has(address)) continue;
+        tried.add(address);
+        const library = await getCode(chainId, address).catch(() => null);
+        if (!library?.toLowerCase().startsWith(`0x73${address.slice(2)}3014`)) continue;
+        found.set(address, library);
+        next.push(library);
+      }
+    }
+    frontier = next;
+  }
+  return found;
+}
+
 /** True when `code` dispatches `selector`: a PUSH1..PUSH4 immediate of its value or (EraVM, dense
  *  tables) a raw match. */
 function dispatches(code, selector, chainId) {
@@ -494,22 +541,68 @@ function immediates(code) {
   return found;
 }
 
-/** True when `code` carries an event's 32-byte topic: the PUSH32 its LOG takes (raw on EraVM). */
-function emits(code, topic, chainId) {
-  const t = topic.slice(2).toLowerCase();
-  if (ERAVM.has(chainId)) return code.toLowerCase().includes(t);
-  return immediates(code).has(t);
+/** True when the lowercase hex `hex` holds `needle` at a byte boundary. */
+function holdsAligned(hex, needle) {
+  for (let at = hex.indexOf(needle); at !== -1; at = hex.indexOf(needle, at + 1)) {
+    if (at % 2 === 0) return true;
+  }
+  return false;
 }
 
 /**
- * True when `code` carries a custom error's selector: a PUSH4 shifted into place, or the PUSH32 of the
- * selector already left-aligned, which is how solc's optimizer usually spells it (raw on EraVM).
+ * True when `code` carries an event's 32-byte topic: the PUSH32 its LOG takes, or the same word in
+ * the code's data, which solc's constant optimizer CODECOPYs a constant from where that is cheaper
+ * (Compound's cTokens carry `Transfer` so); raw on EraVM.
+ */
+function emits(code, topic, chainId) {
+  const t = topic.slice(2).toLowerCase();
+  if (ERAVM.has(chainId)) return code.toLowerCase().includes(t);
+  return holdsAligned(lowerHex(code), t);
+}
+
+/** Every opcode `code` executes (PUSH immediates skipped), memoized per code. */
+const opcodesOf = new Map();
+function opcodes(code) {
+  let found = opcodesOf.get(code);
+  if (found !== undefined) return found;
+  found = new Set();
+  const hex = lowerHex(code);
+  for (let i = 0; i < hex.length; i += 2) {
+    const op = parseInt(hex.slice(i, i + 2), 16);
+    found.add(op);
+    if (op >= 0x60 && op <= 0x7f) i += 2 * (op - 0x5f);
+  }
+  opcodesOf.set(code, found);
+  return found;
+}
+
+/**
+ * True when `code` can emit an anonymous event whose `topics` parameters are indexed: it executes
+ * LOG<topics>. An anonymous event has no topic0 to find in the code, so the shape of the LOG that
+ * would emit it is the evidence there is (EraVM code has no such opcode to read).
+ */
+function emitsAnonymous(code, topics, chainId) {
+  if (ERAVM.has(chainId)) return false;
+  return opcodes(code).has(0xa0 + topics);
+}
+
+/** topic0 of each anonymous event seen, -> how many of its parameters are indexed. */
+const ANONYMOUS = new Map();
+function noteAnonymous(frag) {
+  if (frag.type === "event" && frag.anonymous === true) {
+    ANONYMOUS.set(frag.topic0, frag.inputs.filter((p) => p.indexed).length);
+  }
+}
+
+/**
+ * True when `code` carries a custom error's selector: a PUSH4 shifted into place, or the selector
+ * already left-aligned in a word, which is how solc's optimizer usually spells it, pushed or copied
+ * from the code's data like an event's topic (raw on EraVM).
  */
 function reverts(code, selector, chainId) {
   const s = selector.slice(2).toLowerCase();
   if (ERAVM.has(chainId)) return code.toLowerCase().includes(s);
-  const found = immediates(code);
-  return found.has(s) || found.has(s + "0".repeat(56));
+  return immediates(code).has(s) || holdsAligned(lowerHex(code), s + "0".repeat(56));
 }
 
 const SOURCIFY = "https://sourcify.dev/server/v2/contract";
@@ -590,7 +683,10 @@ function fragment(f) {
 /**
  * An event or a custom error, reduced the same way, with its `type` (a function fragment has none,
  * which keeps every function fragment id the fixture already holds). An event keeps each top-level
- * parameter's `indexed` flag: it decides which parameters a log carries as topics.
+ * parameter's `indexed` flag: it decides which parameters a log carries as topics. An anonymous
+ * event says so (`anonymous: true`, only then, so no other event's fragment id moves): its log
+ * carries no topic0, so its topics are its indexed parameters alone. Its `topic0` is still the
+ * signature's hash, which names it like any other event's.
  */
 function eventOrErrorFragment(item) {
   const strip = (p, top) => ({
@@ -606,6 +702,7 @@ function eventOrErrorFragment(item) {
     ...(item.type === "event"
       ? { topic0: toEventSelector(sig) }
       : { selector: toFunctionSelector(sig) }),
+    ...(item.type === "event" && item.anonymous === true ? { anonymous: true } : {}),
     inputs: (item.inputs ?? []).map((p) => strip(p, true)),
   };
 }
@@ -633,11 +730,56 @@ async function pool(items, limit, fn) {
   return out;
 }
 
-/** `verifiedAbi`, with a lookup that could not be answered recorded on the instance, not thrown. */
+/**
+ * Code hash (a layer's `codeHash`) -> the deployments a live source verified a layer of that code
+ * at: where the same runtime code is verified elsewhere, for `sameCodeAbi`.
+ */
+const VERIFIED_CODE = new Map();
+function noteVerifiedCode(chainId, address, codeHash) {
+  const list = VERIFIED_CODE.get(codeHash) ?? [];
+  if (!list.some(([c, a]) => c === chainId && a === address)) list.push([chainId, address]);
+  VERIFIED_CODE.set(codeHash, list);
+}
+
+/**
+ * The verified ABI of the same runtime code elsewhere, for an address no source could answer for:
+ * another captured layer with its code hash, or the same address on another configured chain. It
+ * is taken only where the two codes are equal byte for byte (`sameCodeAs`), so it is that code's
+ * own ABI; null when none is.
+ */
+function sameCodeAbi(chainId, address) {
+  return memo(`same:${chainId}:${address}`, async () => {
+    const code = await getCode(chainId, address).catch(() => null);
+    if (!code || code === "0x") return null;
+    const full = keccak256(code);
+    const candidates = [
+      ...(VERIFIED_CODE.get(full.slice(0, 18)) ?? []),
+      ...[...RPC_URLS.keys()].map((c) => [c, address]),
+    ];
+    const tried = new Set([`${chainId}:${address}`]);
+    for (const [c, a] of candidates) {
+      if (tried.has(`${c}:${a}`)) continue;
+      tried.add(`${c}:${a}`);
+      const other = await getCode(c, a).catch(() => null);
+      if (!other || keccak256(other) !== full) continue;
+      const v = await verifiedAbi(c, a).catch(() => null);
+      if (v) return { ...v, sameCodeAs: `${c}:${a}` };
+    }
+    return null;
+  });
+}
+
+/**
+ * `verifiedAbi`, with a lookup that could not be answered recorded on the instance, not thrown. One
+ * that could not be answered is first resolved from the same code verified elsewhere
+ * (`sameCodeAbi`).
+ */
 async function lookupAbi(chainId, address, result) {
   try {
     return await verifiedAbi(chainId, address);
   } catch (err) {
+    const twin = await sameCodeAbi(chainId, address);
+    if (twin !== null) return twin;
     (result.abiErrors ??= []).push(`${address}: ${err.message}`);
     return null;
   }
@@ -730,6 +872,7 @@ async function captureInstance(job, target, seeds, seedMarks) {
       } else if (item.type === "event" || item.type === "error") {
         if (wrapper && !markNames.has(`${item.type} ${item.name}`)) continue;
         const frag = eventOrErrorFragment(item);
+        noteAnonymous(frag);
         verifiedMarks[markOf(frag)] ??= { ...frag, from };
       }
     }
@@ -740,16 +883,23 @@ async function captureInstance(job, target, seeds, seedMarks) {
     if (!layer.code) continue;
     const v = await lookupAbi(chainId, layer.address, result);
     if (!v) continue;
-    abiSources.push({ address: layer.address, source: v.source, contract: v.contract });
-    layerAbis.push([layer, v.abi]);
+    const { abi, ...source } = v;
+    abiSources.push({ address: layer.address, ...source });
+    layerAbis.push([layer, abi]);
+    if (v.sameCodeAs === undefined) {
+      noteVerifiedCode(chainId, layer.address, keccak256(layer.code).slice(0, 18));
+    }
   }
   for (const [layer, abi] of layerAbis) if (!layer.wrapper) take(abi, layer.address, false);
   for (const [layer, abi] of layerAbis) if (layer.wrapper) take(abi, layer.address, true);
   // A source that verified a layer before and cannot answer now (an explorer behind a challenge
-  // page) does not unverify it, as long as nothing the previous capture's fragments came from has
-  // changed: the same layers with the same code, none reached through a router (whose facets are
-  // not layers, and may have moved). The deployment keeps what that capture recorded, and the
-  // source says when that was (`carried`).
+  // page), and whose code no other source has verified (`sameCodeAbi`), does not unverify it, as
+  // long as nothing the previous capture's fragments came from has changed: the same layers with
+  // the same code, none reached through a router (whose facets are not layers, and may have
+  // moved). The deployment keeps what that capture recorded, and the source says when that was and
+  // whether it is the whole ABI (`carried: { date, partial }`). A capture before the registry took
+  // full ABIs kept only the functions, events and errors the registry declared, so what it carries
+  // is `partial`, and so is anything carried from a partial source again; the generator lists each.
   const before = PREVIOUS.rows.get(`${slug}|${abiExport}|${chainId}|${result.address}`);
   const codeOf = (list) => JSON.stringify((list ?? []).map((l) => [l.address, l.codeHash ?? null]));
   if (
@@ -765,7 +915,17 @@ async function captureInstance(job, target, seeds, seedMarks) {
         result.layers.some((l) => l.address === s.address) &&
         !abiSources.some((x) => x.address === s.address),
     );
-    for (const s of carried) abiSources.push({ ...s, carried: s.carried ?? PREVIOUS.capturedAt });
+    for (const s of carried) {
+      // A date alone is how a capture before full ABIs marked what it carried.
+      const was = s.carried;
+      abiSources.push({
+        ...s,
+        carried:
+          typeof was === "object" && was !== null
+            ? was
+            : { date: was ?? PREVIOUS.capturedAt, partial: was !== undefined },
+      });
+    }
     if (carried.length > 0) {
       for (const frag of before.verified ?? []) {
         if (frag.type === undefined) verified[frag.selector] ??= { ...frag, from: "carried" };
@@ -786,7 +946,8 @@ async function captureInstance(job, target, seeds, seedMarks) {
     const v = await lookupAbi(chainId, facet, result);
     if (!v) return;
     if (!abiSources.some((s) => s.address === facet)) {
-      abiSources.push({ address: facet, source: v.source, contract: v.contract });
+      const { abi: _abi, ...source } = v;
+      abiSources.push({ address: facet, ...source });
     }
     take(v.abi, facet, false);
     for (const sel of Object.keys(verified)) candidates.add(sel);
@@ -801,6 +962,9 @@ async function captureInstance(job, target, seeds, seedMarks) {
     }
   }
   const perSelector = [];
+  /** How the instance routes selectors to facets: `facets()` for a loupe's whole table, else each
+   *  per-selector lookup it answers. */
+  const routing = new Set();
   for (const host of hosts) {
     const lookups = await routerLookups(chainId, host);
     let table = null;
@@ -808,6 +972,7 @@ async function captureInstance(job, target, seeds, seedMarks) {
     if (lookups.some(([lookup]) => lookup === "facetAddress(bytes4)")) {
       table = decodeFacets(await call(chainId, host, FACETS));
       if (table !== null && table.length > 0) {
+        routing.add("facets()");
         for (const { facet, selectors } of table) {
           if (!isAddress(facet)) continue;
           for (const sel of selectors) routed[sel] ??= { via: "facets()", facet };
@@ -822,6 +987,7 @@ async function captureInstance(job, target, seeds, seedMarks) {
     for (const [lookup, lsel] of lookups) {
       if (table !== null && lookup === "facetAddress(bytes4)") continue;
       perSelector.push([host, lookup, lsel]);
+      routing.add(lookup);
     }
   }
   // A router that answers one selector at a time is asked about every candidate, and again about
@@ -855,25 +1021,51 @@ async function captureInstance(job, target, seeds, seedMarks) {
     selectors[sel] = where >= 0 ? where : null;
   }
   result.selectors = selectors;
+  result.router = [...routing].sort();
+  // A router asked one selector at a time names only the facets some candidate reaches: which of
+  // its inventory's facets (`reference/index.json` `inventories`) this deployment reached.
+  if (job.inventory !== undefined) {
+    result.inventory = {
+      facets: job.inventory.length,
+      resolved: job.inventory
+        .filter((facet) => facet.selectors.some((sel) => routed[sel] !== undefined))
+        .map((facet) => facet.name),
+    };
+  }
 
   // Every event and error the export's deployments declare, and the registry's: where the code
-  // that runs carries each (a layer, or a facet a router named), or null.
+  // that runs carries each (a layer, a facet a router named, or a library either links), or null.
+  // An anonymous event is found by the shape of the LOG that emits it (`emitsAnonymous`), having no
+  // topic0 to find.
   const facetCode = {};
   for (const facet of [...new Set([...facets, ...Object.values(routed).map((r) => r.facet)])]) {
-    facetCode[facet] = await getCode(chainId, facet);
+    facetCode[facet] = await getCode(chainId, facet).catch(() => null);
   }
+  const libraries = await linkedLibraries(chainId, [
+    ...layers.map((l) => l.code),
+    ...Object.values(facetCode),
+  ]);
   const locate = (kind, mark) => {
-    const carries = kind === "event" ? emits : reverts;
-    const where = layers.findIndex((l) => l.code && carries(l.code, mark, chainId));
+    const topics = kind === "event" ? ANONYMOUS.get(mark) : undefined;
+    const carries =
+      kind === "error"
+        ? (code) => reverts(code, mark, chainId)
+        : topics !== undefined
+          ? (code) => emitsAnonymous(code, topics, chainId)
+          : (code) => emits(code, mark, chainId);
+    const where = layers.findIndex((l) => l.code && carries(l.code));
     if (where >= 0) return where;
     const facet = Object.keys(facetCode)
       .sort()
-      .find((f) => facetCode[f] && facetCode[f] !== "0x" && carries(facetCode[f], mark, chainId));
-    return facet === undefined ? null : `routed:${facet}`;
+      .find((f) => facetCode[f] && facetCode[f] !== "0x" && carries(facetCode[f]));
+    if (facet !== undefined) return `routed:${facet}`;
+    const library = [...libraries.keys()].sort().find((a) => carries(libraries.get(a)));
+    return library === undefined ? null : `library:${library}`;
   };
   const wanted = new Map(seedMarks);
   for (const item of registryMarks) {
     const frag = eventOrErrorFragment(item);
+    noteAnonymous(frag);
     wanted.set(markOf(frag), frag.type);
   }
   for (const frag of Object.values(verifiedMarks)) wanted.set(markOf(frag), frag.type);
@@ -991,17 +1183,52 @@ async function captureLogs(jobs) {
 
 const logKey = (log) => `${log.protocol}\u0000${log.abi}\u0000${log.event}`;
 
-/** The reference interfaces' functions, by `<slug>.<AbiExport>` (`reference/index.json`). */
+/**
+ * The reference interfaces' functions, events and errors, by `<slug>.<AbiExport>`
+ * (`reference/index.json`). Their events and errors are located on every instance like the
+ * registry's, so a standard's event no example carries stays recorded as such once the registry
+ * leaves it out.
+ */
 function readReference() {
   const dir = join(FIXTURE_DIR, "reference");
   const index = join(dir, "index.json");
   const out = new Map();
   if (!existsSync(index)) return out;
   for (const [key, files] of Object.entries(JSON.parse(readFileSync(index, "utf-8")).exports)) {
-    const functions = files.flatMap(({ file }) =>
-      JSON.parse(readFileSync(join(dir, file), "utf-8")).filter((i) => i.type === "function"),
+    const items = files.flatMap(({ file }) =>
+      JSON.parse(readFileSync(join(dir, file), "utf-8")).filter((i) =>
+        ["function", "event", "error"].includes(i.type),
+      ),
     );
-    out.set(key, functions);
+    out.set(key, items);
+  }
+  return out;
+}
+
+/**
+ * Each per-selector router's inventory, by `<slug>.<AbiExport>` (`reference/index.json`
+ * `inventories`): every facet its maker publishes, with the selectors of its functions. Such a
+ * router names only the facets a candidate selector reaches, so its inventory's functions are all
+ * candidates, and each deployment records which of the facets it reached.
+ */
+function readInventories() {
+  const dir = join(FIXTURE_DIR, "reference");
+  const index = join(dir, "index.json");
+  const out = new Map();
+  if (!existsSync(index)) return out;
+  const inventories = JSON.parse(readFileSync(index, "utf-8")).inventories ?? {};
+  for (const [key, value] of Object.entries(inventories)) {
+    if (key === "note") continue;
+    const { facets } = value;
+    out.set(
+      key,
+      Object.entries(facets).map(([name, { file }]) => ({
+        name,
+        selectors: JSON.parse(readFileSync(join(dir, file), "utf-8"))
+          .filter((i) => i.type === "function")
+          .map((f) => toFunctionSelector(signature(f))),
+      })),
+    );
   }
   return out;
 }
@@ -1018,6 +1245,14 @@ async function main() {
   PREVIOUS.capturedAt = stored?.capturedAt;
   for (const row of previous.instances) {
     PREVIOUS.rows.set(`${row.protocol}|${row.abi}|${row.chainId}|${row.address}`, row);
+    // Where a live source verified a layer's code, for an address no source can answer for now.
+    const live = (row.abiSources ?? []).filter((s) => !s.carried && !s.sameCodeAs);
+    for (const layer of row.layers ?? []) {
+      if (layer.codeHash && live.some((s) => s.address === layer.address)) {
+        noteVerifiedCode(row.chainId, layer.address, layer.codeHash);
+      }
+    }
+    for (const frag of row.verified ?? []) noteAnonymous(frag);
   }
   // A target can name a protocol another branch adds: without its build output there is nothing to
   // capture, and its evidence is carried over untouched until the protocol lands.
@@ -1029,6 +1264,7 @@ async function main() {
       (CHAINS_ONLY !== null && !CHAINS_ONLY.has(i.chainId)),
   );
   const reference = readReference();
+  const inventories = readInventories();
   const jobs = [];
   for (const [slug, exports] of Object.entries(TARGETS.protocols)) {
     if (only.size > 0 && !only.has(slug)) continue;
@@ -1068,10 +1304,21 @@ async function main() {
       if (selected.length === 0) continue;
       // The candidates start from the reference interfaces and from every instance this run keeps
       // as captured, so a run narrowed to some chains still answers for the export's whole union.
-      const seeds = new Set(
-        (reference.get(`${slug}.${abiExport}`) ?? []).map((f) => toFunctionSelector(signature(f))),
-      );
+      const inventory = inventories.get(`${slug}.${abiExport}`);
+      const referenceItems = reference.get(`${slug}.${abiExport}`) ?? [];
+      const seeds = new Set([
+        ...referenceItems
+          .filter((f) => f.type === "function")
+          .map((f) => toFunctionSelector(signature(f))),
+        ...(inventory ?? []).flatMap((facet) => facet.selectors),
+      ]);
       const seedMarks = new Map();
+      for (const item of referenceItems) {
+        if (item.type === "function") continue;
+        const frag = eventOrErrorFragment(item);
+        noteAnonymous(frag);
+        seedMarks.set(markOf(frag), frag.type);
+      }
       for (const row of keep) {
         if (row.protocol !== slug || row.abi !== abiExport) continue;
         for (const sel of Object.keys(row.selectors ?? {})) seeds.add(sel);
@@ -1087,6 +1334,7 @@ async function main() {
         instances: selected,
         seeds,
         seedMarks,
+        inventory,
       });
     }
   }
