@@ -55,9 +55,50 @@ function main() {
 
 `import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";` Speaks for: rootChainManager.
 
+- `checkpointManagerAddress() view returns (address)`
+- `childChainManagerAddress() view returns (address)`
+- `childToRootToken(address) view returns (address)`
+- `cleanMapToken(address rootToken, address childToken)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `DEPOSIT() view returns (bytes32)`
 - `depositEtherFor(address user) payable`
 - `depositFor(address user, address rootToken, bytes depositData)`
+- `ERC712_VERSION() view returns (string)`
+- `ETHER_ADDRESS() view returns (address)`
+- `executeMetaTransaction(address userAddress, bytes functionSignature, bytes32 sigR, bytes32 sigS, uint8 sigV) payable returns (bytes)`
 - `exit(bytes inputData)`
+- `getChainId() pure returns (uint256)`
+- `getDomainSeperator() view returns (bytes32)`
+- `getNonce(address user) view returns (uint256 nonce)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `getRoleMember(bytes32 role, uint256 index) view returns (address)`
+- `getRoleMemberCount(bytes32 role) view returns (uint256)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `initialize(address _owner)`
+- `initializeEIP712()`
+- `isMigrated(address rootToken) view returns (bool)`
+- `MAP_TOKEN() view returns (bytes32)`
+- `MAPPER_ROLE() view returns (bytes32)`
+- `mapToken(address rootToken, address childToken, bytes32 tokenType)`
+- `migrateBridgeFunds(address rootToken, bytes data)`
+- `MIGRATION_MANAGER_ROLE() view returns (bytes32)`
+- `migrationStatus(address) view returns (bool isDepositDisabled, bool isExitDisabled, uint256 lastExitBlockNumber)`
+- `processedExits(bytes32) view returns (bool)`
+- `registerPredicate(bytes32 tokenType, address predicateAddress)`
+- `remapToken(address rootToken, address childToken, bytes32 tokenType)`
+- `renounceRole(bytes32 role, address account)`
+- `revokeRole(bytes32 role, address account)`
+- `rootToChildToken(address) view returns (address)`
+- `setCheckpointManager(address newCheckpointManager)`
+- `setChildChainManagerAddress(address newChildChainManager)`
+- `setStateSender(address newStateSender)`
+- `setupContractId()`
+- `stateSenderAddress() view returns (address)`
+- `tokenToType(address) view returns (bytes32)`
+- `typeToPredicate(bytes32) view returns (address)`
+- `updateTokenMigrationStatus(address rootToken, bool isDepositDisable, bool isExitDisabled, uint256 lastExitBlockNumber)`
+- `USDT_ADDRESS() view returns (address)`
 
 ## Next
 

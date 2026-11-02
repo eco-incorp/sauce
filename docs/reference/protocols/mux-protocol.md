@@ -56,17 +56,80 @@ function main() {
 
 `import LiquidityPoolABI from "./protocols/mux-protocol/LiquidityPoolABI.json";` Speaks for: liquidityPool.
 
+- `closePosition(bytes32 subAccountId, uint96 amount, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice) returns (uint96)`
 - `depositCollateral(bytes32 subAccountId, uint256 rawAmount)`
+- `getAllAssetInfo() view returns ((bytes32 symbol, address tokenAddress, uint8 id, uint8 decimals, uint56 flags, uint24 _flagsPadding, uint32 initialMarginRate, uint32 maintenanceMarginRate, uint32 minProfitRate, uint32 minProfitTime, uint32 positionFeeRate, address referenceOracle, uint32 referenceDeviation, uint8 referenceOracleType, uint32 halfSpread, uint96 credit, uint128 _reserved2, uint96 collectedFee, uint32 liquidationFeeRate, uint96 spotLiquidity, uint96 maxLongPositionSize, uint96 totalLongPosition, uint96 averageLongPrice, uint96 maxShortPositionSize, uint96 totalShortPosition, uint96 averageShortPrice, address muxTokenAddress, uint32 spotWeight, uint32 longFundingBaseRate8H, uint32 longFundingLimitRate8H, uint128 longCumulativeFundingRate, uint128 shortCumulativeFunding)[])`
 - `getAssetAddress(uint8 assetId) view returns (address)`
+- `getAssetInfo(uint8 assetId) view returns ((bytes32 symbol, address tokenAddress, uint8 id, uint8 decimals, uint56 flags, uint24 _flagsPadding, uint32 initialMarginRate, uint32 maintenanceMarginRate, uint32 minProfitRate, uint32 minProfitTime, uint32 positionFeeRate, address referenceOracle, uint32 referenceDeviation, uint8 referenceOracleType, uint32 halfSpread, uint96 credit, uint128 _reserved2, uint96 collectedFee, uint32 liquidationFeeRate, uint96 spotLiquidity, uint96 maxLongPositionSize, uint96 totalLongPosition, uint96 averageLongPrice, uint96 maxShortPositionSize, uint96 totalShortPosition, uint96 averageShortPrice, address muxTokenAddress, uint32 spotWeight, uint32 longFundingBaseRate8H, uint32 longFundingLimitRate8H, uint128 longCumulativeFundingRate, uint128 shortCumulativeFunding))`
+- `getLiquidityPoolStorage() view returns (uint32[8] u32s, uint96[2] u96s)`
 - `getSubAccount(bytes32 subAccountId) view returns (uint96 collateral, uint96 size, uint32 lastIncreasedTime, uint96 entryPrice, uint128 entryFunding)`
+- `initialize(address nextHop, address mlp, address orderBook, address weth, address nativeUnwrapper, address vault)`
+- `liquidate(bytes32 subAccountId, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice) returns (uint96)`
+- `openPosition(bytes32 subAccountId, uint96 amount, uint96 collateralPrice, uint96 assetPrice) returns (uint96)`
+- `owner() view returns (address)`
+- `renounceOwnership()`
+- `takeOwnership()`
+- `transferOwnership(address newOwner)`
+- `upgradeChainedProxy(address nextHop)`
+- `withdrawAllCollateral(bytes32 subAccountId)`
+- `withdrawCollateral(bytes32 subAccountId, uint256 rawAmount, uint96 collateralPrice, uint96 assetPrice)`
+- `withdrawProfit(bytes32 subAccountId, uint256 rawAmount, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice)`
 
 ### `OrderBookABI`
 
 `import OrderBookABI from "./protocols/mux-protocol/OrderBookABI.json";` Speaks for: orderBook.
 
+- `addBroker(address newBroker)`
+- `addRebalancer(address newRebalancer)`
+- `brokers(address broker) view returns (bool)`
+- `cancelCoolDown() view returns (uint32)`
 - `cancelOrder(uint64 orderId)`
+- `claimBrokerGasRebate() returns (uint256 rawAmount)`
+- `collectFundingFee(bytes32 subAccountId, uint96 collateralPrice, uint96 assetPrice)`
+- `depositCollateral(bytes32 subAccountId, uint256 collateralAmount) payable`
+- `fillLiquidityOrder(uint64 orderId, uint96 assetPrice, uint96 mlpPrice, uint96 currentAssetValue, uint96 targetAssetValue)`
+- `fillPositionOrder(uint64 orderId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice)`
+- `fillRebalanceOrder(uint64 orderId, uint96 price0, uint96 price1)`
+- `fillWithdrawalOrder(uint64 orderId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice)`
+- `getOrder(uint64 orderId) view returns (bytes32[3], bool)`
+- `getOrderCount() view returns (uint256)`
+- `getOrders(uint256 begin, uint256 end) view returns (bytes32[3][] orderArray, uint256 totalCount)`
+- `initialize(address pool, address mlp, address weth, address nativeUnwrapper)`
+- `isLiquidityOrderPaused() view returns (bool)`
+- `isPositionOrderPaused() view returns (bool)`
+- `liquidate(bytes32 subAccountId, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice)`
+- `liquidityLockPeriod() view returns (uint32)`
+- `maintainer() view returns (address)`
+- `marketOrderTimeout() view returns (uint32)`
+- `maxLimitOrderTimeout() view returns (uint32)`
+- `nextOrderId() view returns (uint64)`
+- `owner() view returns (address)`
+- `pause(bool isPositionOrderPaused_, bool isLiquidityOrderPaused_)`
 - `placeLiquidityOrder(uint8 assetId, uint96 rawAmount, bool isAdding) payable`
 - `placePositionOrder3(bytes32 subAccountId, uint96 collateralAmount, uint96 size, uint96 price, uint8 profitTokenId, uint8 flags, uint32 deadline, bytes32 referralCode, (uint96 tpPrice, uint96 slPrice, uint8 tpslProfitTokenId, uint32 tpslDeadline) extra) payable`
+- `placeRebalanceOrder(uint8 tokenId0, uint8 tokenId1, uint96 rawAmount0, uint96 maxRawAmount1, bytes32 userData)`
+- `placeWithdrawalOrder(bytes32 subAccountId, uint96 rawAmount, uint8 profitTokenId, bool isProfit)`
+- `positionOrderExtras(uint64 orderId) view returns ((uint96 tpPrice, uint96 slPrice, uint8 tpslProfitTokenId, uint32 tpslDeadline))`
+- `rebalancers(address rebalancer) view returns (bool)`
+- `redeemMuxToken(uint8 tokenId, uint96 muxTokenAmount)`
+- `referralManager() view returns (address)`
+- `removeBroker(address broker)`
+- `removeRebalancer(address rebalancer)`
+- `renounceBroker()`
+- `renounceOwnership()`
+- `renounceRebalancer()`
+- `setAggregator(address aggregatorAddress, bool isEnable)`
+- `setCallbackGasLimit(uint256 gasLimit)`
+- `setCallbackWhitelist(address caller, bool enable)`
+- `setLiquidityLockPeriod(uint32 newLiquidityLockPeriod)`
+- `setLotSize(uint8 assetId, uint96 lotSize)`
+- `setMaintainer(address newMaintainer)`
+- `setOrderTimeout(uint32 marketOrderTimeout_, uint32 maxLimitOrderTimeout_, uint32 cancelCoolDown_)`
+- `setReferralManager(address newReferralManager)`
+- `takeOwnership()`
+- `transferOwnership(address newOwner)`
+- `updateFundingState(uint32 stableUtilization, uint8[] unstableTokenIds, uint32[] unstableUtilizations, uint96[] unstablePrices)`
+- `withdrawAllCollateral(bytes32 subAccountId)`
 
 ## Next
 

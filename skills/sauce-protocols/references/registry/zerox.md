@@ -41,4 +41,19 @@ function main() {
 
 `import ExchangeProxyABI from "./protocols/zerox/ExchangeProxyABI.json";` Speaks for: exchangeProxy.
 
+- `_transformERC20((address taker, address inputToken, address outputToken, uint256 inputTokenAmount, uint256 minOutputTokenAmount, (uint32 deploymentNonce, bytes data)[] transformations, bool useSelfBalance, address recipient) args) payable returns (uint256 outputTokenAmount)`
+- `createTransformWallet() returns (address wallet)`
+- `getFunctionImplementation(bytes4 selector) view returns (address impl)`
+- `getQuoteSigner() view returns (address signer)`
+- `getTransformerDeployer() view returns (address deployer)`
+- `getTransformWallet() view returns (address wallet)`
+- `setQuoteSigner(address quoteSigner)`
+- `setTransformerDeployer(address transformerDeployer)`
 - `transformERC20(address inputToken, address outputToken, uint256 inputTokenAmount, uint256 minOutputTokenAmount, (uint32 deploymentNonce, bytes data)[] transformations) payable returns (uint256 outputTokenAmount)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `FEATURE_NAME` taking `()`: no captured deployment dispatches it.
+- `FEATURE_VERSION` taking `()`: no captured deployment dispatches it.
+- `migrate` taking `(address)`: no captured deployment dispatches it.
+- `transformERC20Staging` taking `(address,address,uint256,uint256,(uint32,bytes)[])`: no captured deployment dispatches it.

@@ -36,14 +36,93 @@ function main() {
 
 `import RswETHABI from "./protocols/swell/RswETHABI.json";` Speaks for: rswETH.
 
-- `deposit() payable`
-- `rswETHToETHRate() view returns (uint256)`
+- `AccessControlManager() view returns (address)`
+- `addToWhitelist(address _address)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
 - `balanceOf(address account) view returns (uint256)`
+- `batchAddToWhitelist(address[] _addresses)`
+- `batchRemoveFromWhitelist(address[] _addresses)`
+- `burn(uint256 amount)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `deposit() payable`
+- `depositViaDepositManager(uint256 _amount, address _to, uint256 _minRswETH)`
+- `depositWithReferral(address referral) payable`
+- `disableWhitelist()`
+- `enableWhitelist()`
+- `ethToRswETHRate() view returns (uint256)`
+- `getRate() view returns (uint256)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `initialize(address _accessControlManager)`
+- `lastRepriceETHReserves() view returns (uint256)`
+- `lastRepriceUNIX() view returns (uint256)`
+- `maximumRepriceDifferencePercentage() view returns (uint256)`
+- `maximumRepriceRswETHDifferencePercentage() view returns (uint256)`
+- `minimumRepriceTime() view returns (uint256)`
+- `name() view returns (string)`
+- `nodeOperatorRewardPercentage() view returns (uint256)`
+- `removeFromWhitelist(address _address)`
+- `reprice(uint256 _preRewardETHReserves, uint256 _newETHRewards, uint256 _rswETHTotalSupply)`
+- `rswETHToETHRate() view returns (uint256)`
+- `setMaximumRepriceDifferencePercentage(uint256 _maximumRepriceDifferencePercentage)`
+- `setMaximumRepriceRswETHDifferencePercentage(uint256 _maximumRepriceRswETHDifferencePercentage)`
+- `setMinimumRepriceTime(uint256 _minimumRepriceTime)`
+- `setNodeOperatorRewardPercentage(uint256 _newNodeOperatorRewardPercentage)`
+- `setSwellTreasuryRewardPercentage(uint256 _newSwellTreasuryRewardPercentage)`
+- `swellTreasuryRewardPercentage() view returns (uint256)`
+- `symbol() view returns (string)`
+- `totalETHDeposited() view returns (uint256)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `whitelistedAddresses(address) view returns (bool)`
+- `whitelistEnabled() view returns (bool)`
+- `withdrawERC20(address _token)`
 
 ### `SwETHABI`
 
 `import SwETHABI from "./protocols/swell/SwETHABI.json";` Speaks for: swETH.
 
-- `deposit() payable`
-- `swETHToETHRate() view returns (uint256)`
+- `AccessControlManager() view returns (address)`
+- `addToWhitelist(address _address)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
 - `balanceOf(address account) view returns (uint256)`
+- `batchAddToWhitelist(address[] _addresses)`
+- `batchRemoveFromWhitelist(address[] _addresses)`
+- `burn(uint256 amount)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `deposit() payable`
+- `depositWithReferral(address referral) payable`
+- `disableWhitelist()`
+- `enableWhitelist()`
+- `ethToSwETHRate() view returns (uint256)`
+- `getRate() view returns (uint256)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `initialize(address _accessControlManager)`
+- `lastRepriceETHReserves() view returns (uint256)`
+- `lastRepriceUNIX() view returns (uint256)`
+- `maximumRepriceDifferencePercentage() view returns (uint256)`
+- `maximumRepriceswETHDifferencePercentage() view returns (uint256)`
+- `minimumRepriceTime() view returns (uint256)`
+- `name() view returns (string)`
+- `nodeOperatorRewardPercentage() view returns (uint256)`
+- `removeFromWhitelist(address _address)`
+- `reprice(uint256 _preRewardETHReserves, uint256 _newETHRewards, uint256 _swETHTotalSupply)`
+- `setMaximumRepriceDifferencePercentage(uint256 _maximumRepriceDifferencePercentage)`
+- `setMaximumRepriceswETHDifferencePercentage(uint256 _maximumRepriceswETHDifferencePercentage)`
+- `setMinimumRepriceTime(uint256 _minimumRepriceTime)`
+- `setNodeOperatorRewardPercentage(uint256 _newNodeOperatorRewardPercentage)`
+- `setSwellTreasuryRewardPercentage(uint256 _newSwellTreasuryRewardPercentage)`
+- `swellTreasuryRewardPercentage() view returns (uint256)`
+- `swETHToETHRate() view returns (uint256)`
+- `symbol() view returns (string)`
+- `totalETHDeposited() view returns (uint256)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `whitelistedAddresses(address) view returns (bool)`
+- `whitelistEnabled() view returns (bool)`
+- `withdrawERC20(address _token)`

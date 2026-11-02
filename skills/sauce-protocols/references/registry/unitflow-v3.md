@@ -42,16 +42,41 @@ functions, and its writes are SafeERC20.
 
 `import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";` Speaks for: factory.
 
-- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UnitflowV3.Pool`
+- `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
+- `enableFeeAmount(uint24 fee, int24 tickSpacing)`
 - `feeAmountTickSpacing(uint24 fee) view returns (int24)`
+- `getPool(address tokenA, address tokenB, uint24 fee) view returns (address pool)`: the address is a `UnitflowV3.Pool`
+- `owner() view returns (address)`
+- `parameters() view returns (address factory, address token0, address token1, uint24 fee, int24 tickSpacing)`
+- `setOwner(address _owner)`
 
 ### `UnitFlowV3PoolABI`
 
 `import UnitFlowV3PoolABI from "./protocols/unitflow-v3/UnitFlowV3PoolABI.json";`
 
-- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)`
-- `liquidity() view returns (uint128)`
+- `burn(int24 tickLower, int24 tickUpper, uint128 amount) returns (uint256 amount0, uint256 amount1)`
+- `collect(address recipient, int24 tickLower, int24 tickUpper, uint128 amount0Requested, uint128 amount1Requested) returns (uint128 amount0, uint128 amount1)`
+- `collectProtocol(address recipient, uint128 amount0Requested, uint128 amount1Requested) returns (uint128 amount0, uint128 amount1)`
+- `factory() view returns (address)`
 - `fee() view returns (uint24)`
+- `feeGrowthGlobal0X128() view returns (uint256)`
+- `feeGrowthGlobal1X128() view returns (uint256)`
+- `flash(address recipient, uint256 amount0, uint256 amount1, bytes data)`
+- `increaseObservationCardinalityNext(uint16 observationCardinalityNext)`
+- `initialize(uint160 sqrtPriceX96)`
+- `liquidity() view returns (uint128)`
+- `maxLiquidityPerTick() view returns (uint128)`
+- `mint(address recipient, int24 tickLower, int24 tickUpper, uint128 amount, bytes data) returns (uint256 amount0, uint256 amount1)`
+- `observations(uint256 index) view returns (uint32 blockTimestamp, int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128, bool initialized)`
+- `observe(uint32[] secondsAgos) view returns (int56[] tickCumulatives, uint160[] secondsPerLiquidityCumulativeX128s)`
+- `positions(bytes32 key) view returns (uint128 _liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)`
+- `protocolFees() view returns (uint128 token0, uint128 token1)`
+- `setFeeProtocol(uint8 feeProtocol0, uint8 feeProtocol1)`
+- `slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)`
+- `snapshotCumulativesInside(int24 tickLower, int24 tickUpper) view returns (int56 tickCumulativeInside, uint160 secondsPerLiquidityInsideX128, uint32 secondsInside)`
+- `swap(address recipient, bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96, bytes data) returns (int256 amount0, int256 amount1)`
+- `tickBitmap(int16 wordPosition) view returns (uint256)`
+- `ticks(int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128, int56 tickCumulativeOutside, uint160 secondsPerLiquidityOutsideX128, uint32 secondsOutside, bool initialized)`
 - `tickSpacing() view returns (int24)`
 - `token0() view returns (address)`: the address is a token
 - `token1() view returns (address)`: the address is a token
@@ -60,11 +85,32 @@ functions, and its writes are SafeERC20.
 
 `import UnitFlowV3QuoterABI from "./protocols/unitflow-v3/UnitFlowV3QuoterABI.json";` Speaks for: quoter.
 
+- `factory() view returns (address)`
+- `quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut)`
 - `quoteExactInputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountIn, uint160 sqrtPriceLimitX96) returns (uint256 amountOut)`
+- `quoteExactOutput(bytes path, uint256 amountOut) returns (uint256 amountIn)`
+- `quoteExactOutputSingle(address tokenIn, address tokenOut, uint24 fee, uint256 amountOut, uint160 sqrtPriceLimitX96) returns (uint256 amountIn)`
+- `unitFlowV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes path) view`
+- `USDC() view returns (address)`
 
 ### `UnitFlowV3RouterABI`
 
 `import UnitFlowV3RouterABI from "./protocols/unitflow-v3/UnitFlowV3RouterABI.json";` Speaks for: router.
 
+- `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`
+- `exactOutput((bytes path, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum) params) payable returns (uint256 amountIn)`
+- `exactOutputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountOut, uint256 amountInMaximum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountIn)`
 - `factory() view returns (address)`: the address is a `UnitflowV3.Factory`
+- `multicall(bytes[] data) payable returns (bytes[] results)`
+- `name() view returns (string)`
+- `refund(address token, uint256 amountMinimum, address recipient) payable`
+- `refundWithFee(address token, uint256 amountMinimum, address recipient, uint256 feeBips, address feeRecipient) payable`
+- `selfPermit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) payable`
+- `selfPermitAllowed(address token, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) payable`
+- `selfPermitAllowedIfNecessary(address token, uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s) payable`
+- `selfPermitIfNecessary(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) payable`
+- `sweepToken(address token, uint256 amountMinimum, address recipient) payable`
+- `sweepTokenWithFee(address token, uint256 amountMinimum, address recipient, uint256 feeBips, address feeRecipient) payable`
+- `unitFlowV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes _data)`
+- `USDC() view returns (address)`

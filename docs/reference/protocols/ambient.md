@@ -63,8 +63,13 @@ function main() {
 
 `import CrocSwapDexABI from "./protocols/ambient/CrocSwapDexABI.json";` Speaks for: crocSwapDex.
 
+- `acceptCrocDex() pure returns (bool)`
+- `protocolCmd(uint16 callpath, bytes cmd, bool sudo) payable`
+- `readSlot(uint256 slot) view returns (uint256 data)`
 - `swap(address base, address quote, uint256 poolIdx, bool isBuy, bool inBaseQty, uint128 qty, uint16 tip, uint128 limitPrice, uint128 minOut, uint8 reserveFlags) payable returns (int128 baseFlow, int128 quoteFlow)`
 - `userCmd(uint16 callpath, bytes cmd) payable returns (bytes result)`
+- `userCmdRelayer(uint16 callpath, bytes cmd, bytes conds, bytes relayerTip, bytes signature) payable returns (bytes output)`
+- `userCmdRouter(uint16 callpath, bytes cmd, address client) payable returns (bytes)`
 
 ## Next
 

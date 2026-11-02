@@ -36,15 +36,90 @@ function main() {
 
 `import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";` Speaks for: susde.
 
-- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
-- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
+- `acceptAdmin()`
+- `addToBlacklist(address target, bool isFullBlacklisting)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `asset() view returns (address)`
+- `balanceOf(address account) view returns (uint256)`
+- `convertToAssets(uint256 shares) view returns (uint256)`
+- `convertToShares(uint256 assets) view returns (uint256)`
 - `cooldownAssets(uint256 assets) returns (uint256 shares)`
+- `cooldownDuration() view returns (uint24)`
+- `cooldowns(address) view returns (uint104 cooldownEnd, uint152 underlyingAmount)`
 - `cooldownShares(uint256 shares) returns (uint256 assets)`
+- `decimals() pure returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `getUnvestedAmount() view returns (uint256)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `lastDistributionTimestamp() view returns (uint256)`
+- `MAX_COOLDOWN_DURATION() view returns (uint24)`
+- `maxDeposit(address) view returns (uint256)`
+- `maxMint(address) view returns (uint256)`
+- `maxRedeem(address owner) view returns (uint256)`
+- `maxWithdraw(address owner) view returns (uint256)`
+- `mint(uint256 shares, address receiver) returns (uint256)`
+- `name() view returns (string)`
+- `nonces(address owner) view returns (uint256)`
+- `owner() view returns (address)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `previewDeposit(uint256 assets) view returns (uint256)`
+- `previewMint(uint256 shares) view returns (uint256)`
+- `previewRedeem(uint256 shares) view returns (uint256)`
+- `previewWithdraw(uint256 assets) view returns (uint256)`
+- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
+- `redistributeLockedAmount(address from, address to)`
+- `removeFromBlacklist(address target, bool isFullBlacklisting)`
+- `renounceRole(bytes32, address)`
+- `rescueTokens(address token, uint256 amount, address to)`
+- `revokeRole(bytes32 role, address account)`
+- `setCooldownDuration(uint24 duration)`
+- `silo() view returns (address)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `symbol() view returns (string)`
+- `totalAssets() view returns (uint256)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferAdmin(address newAdmin)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `transferInRewards(uint256 amount)`
 - `unstake(address receiver)`
+- `vestingAmount() view returns (uint256)`
+- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
 
 ### `USDeABI`
 
 `import USDeABI from "./protocols/ethena/USDeABI.json";` Speaks for: usde.
 
+- `acceptOwnership()`
+- `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `burn(uint256 amount)`
+- `burnFrom(address account, uint256 amount)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `mint(address to, uint256 amount)`
+- `minter() view returns (address)`
+- `name() view returns (string)`
+- `nonces(address owner) view returns (uint256)`
+- `owner() view returns (address)`
+- `pendingOwner() view returns (address)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `renounceOwnership() view`
+- `setMinter(address newMinter)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `transferOwnership(address newOwner)`

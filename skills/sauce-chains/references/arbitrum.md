@@ -35,10 +35,10 @@ function main() {
   const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(pot) == held);
-  // `AaveV3.Pool` is Arbitrum One's pool: `0x794a61358D6845594F94dc1DB02A252b5b4814aD`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Arbitrum One's oracle: `0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Arbitrum.AaveV3.Pool == AaveV3.Pool);
+  require(Arbitrum.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -58,11 +58,12 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | oracle | `0xb56c2F0B653B2e0b10C9b928C8580Ac5Df02C7C7` | `AaveV3.Oracle` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool`; not on this deployment: `dropReserve`, `resetIsolationModeTotalDebt` |
 | [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
 | [Abracadabra](../../sauce-protocols/references/registry/abracadabra.md) | degenBox | `0x7C8FeF8eA9b1fE46A7689bfb8149341C90431D38` | `Abracadabra.DegenBox` |
 | [Abracadabra](../../sauce-protocols/references/registry/abracadabra.md) | mim | `0xFEa7a6a0B346362BF88A9e4A88416B77a57D6c2A` | `Abracadabra.Mim` |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A` | `Across.SpokePool` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0xe35e9842fceaCA96570B734083f4a58e8F7C5f2A` | `Across.SpokePool`; not on this deployment: `__OvmSpokePool_init`, `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `DEPRECATED_zkErc20Bridge`, `fxChild`, `initialize`, `L1_USDB`, `l1ChainId`, `l1Gas`, `L2_ASSET_ROUTER_ADDR`, `L2_BLAST_BRIDGE`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2Eth`, `l2ScrollMessenger`, `MESSENGER`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `remoteL1Tokens`, `renounceOwnership`, `setFxChild`, `setL1GasLimit`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `setRemoteL1Token`, `setTokenBridge`, `tokenBridges`, `transferOwnership`, `USDB`, `wrap`, `YIELD_RECIPIENT`, `zkUSDCBridge` |
 | [Arbitrum Native Bridge](../../sauce-protocols/references/registry/arbitrum-bridge.md) | l2GatewayRouter | `0x5288c571Fd7aD117beA99bF60FE0846C4E84F933` | `ArbitrumBridge.L2GatewayRouter` |
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | gateway | `0xe432150cce91c13a887f7D836923d5597adD8E31` | `Axelar.Gateway` |
 | [Axelar](../../sauce-protocols/references/registry/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
@@ -72,13 +73,14 @@ address.
 | [Camelot](../../sauce-protocols/references/registry/camelot.md) | v2Router | `0xc873fEcbd354f5A56E00E710B90EF4201db2448d` | `Camelot.V2Router` |
 | [Camelot](../../sauce-protocols/references/registry/camelot.md) | v3Factory | `0x1a3c9B1d2F0529D97f2afC5136Cc23e58f1FD35B` | `Camelot.V3Factory` |
 | [Camelot](../../sauce-protocols/references/registry/camelot.md) | v3SwapRouter | `0x1F721E2E82F6676FCE4eA07A5958cF098D339e18` | `Camelot.V3SwapRouter` |
-| [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [CCTP](../../sauce-protocols/references/registry/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger`; not on this deployment: `getMinFeeAmount`, `initialize`, `MIN_FEE_MULTIPLIER`, `minFee`, `minFeeController`, `setMinFee`, `setMinFeeController` |
 | [Celer Network](../../sauce-protocols/references/registry/celer.md) | bridge | `0x1619DE6B6B20eD217a58d00f37B9d47C7663feca` | `Celer.Bridge` |
 | [Chainlink CCIP](../../sauce-protocols/references/registry/chainlink-ccip.md) | router | `0x141fa059441E0ca23ce184B6A78bafD2A517DdE8` | `ChainlinkCcip.Router` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../../sauce-protocols/references/registry/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDCv3 | `0x9c4ec768c28520B50860ea7a15bd7213a9fF58bf` | `CompoundV3.CUSDCv3` |
 | [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDTv3 | `0x6f7D514bbD4aFf3BcD1140B7344b32f063dEe486` | `CompoundV3.CUSDTv3` |
+| [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cometRewards | `0x88730d254A2f7e6AC8388c3198aFd694bA9f7fae` | `CompoundV3.CometRewards` |
 | [Connext (Everclear)](../../sauce-protocols/references/registry/connext.md) | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` | `Connext.EverclearSpoke` |
 | [CoW Swap](../../sauce-protocols/references/registry/cowswap.md) | gpv2Settlement | `0x9008D19f58AAbD9eD0D60971565AA8510560ab41` | `Cowswap.GPv2Settlement` |
 | [Curve Finance](../../sauce-protocols/references/registry/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
@@ -92,7 +94,7 @@ address.
 | [GMX V1](../../sauce-protocols/references/registry/gmx-v1.md) | glp | `0x4277f8F2c384827B5273592FF7CeBd9f2C1ac258` | `GmxV1.Glp` |
 | [GMX V1](../../sauce-protocols/references/registry/gmx-v1.md) | positionRouter | `0xb87a436B93fFE9D75c5cFA7bAcFff96430b09868` | `GmxV1.PositionRouter` |
 | [GMX V1](../../sauce-protocols/references/registry/gmx-v1.md) | router | `0xaBBc5F99639c9B6bCb58544ddf04EFA6802F4064` | `GmxV1.Router` |
-| [GMX V1](../../sauce-protocols/references/registry/gmx-v1.md) | vault | `0x489ee077994B6658eAfA855C308275EAd8097C4A` | `GmxV1.Vault` |
+| [GMX V1](../../sauce-protocols/references/registry/gmx-v1.md) | vault | `0x489ee077994B6658eAfA855C308275EAd8097C4A` | `GmxV1.Vault`; not on this deployment: `getEntryFundingRate`, `getFundingFee`, `getPositionFee`, `maxGlobalShortSizes`, `setMaxGlobalShortSize`, `setVaultUtils`, `updateCumulativeFundingRate`, `vaultUtils` |
 | [GMX V2](../../sauce-protocols/references/registry/gmx-v2.md) | dataStore | `0xFD70de6b91282D8017aA4E741e9Ae325CAb992d8` | `GmxV2.DataStore` |
 | [GMX V2](../../sauce-protocols/references/registry/gmx-v2.md) | exchangeRouter | `0x7dE39FF2e232A2203196788d37e234cF8F1b83f1` | `GmxV2.ExchangeRouter` |
 | [Hegic](../../sauce-protocols/references/registry/hegic.md) | hegic | `0x431402e8b9dE9aa016C743880e04E517074D8cEC` | `Hegic.Hegic` |
@@ -106,7 +108,7 @@ address.
 | [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
 | [Level Finance](../../sauce-protocols/references/registry/level-finance.md) | liquidityPool | `0x32B7bF19cb8b95C27E644183837813d4b595dcc6` | `LevelFinance.LiquidityPool` |
 | [Lido](../../sauce-protocols/references/registry/lido.md) | wstETH | `0x5979D7b546E38E414F7E9822514be443A4800529` | `Lido.WstETHBridged` |
-| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [LI.FI](../../sauce-protocols/references/registry/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `addDex`, `approvedDexs`, `batchAddDex`, `batchRemoveDex`, `batchSetFunctionApprovalBySignature`, `DLN_SOURCE`, `executeCallViaAxelar`, `executeCallWithTokenViaAxelar`, `getWhitelistedAddresses`, `getWhitelistedFunctionSelectors`, `isAddressWhitelisted`, `isFunctionApproved`, `isFunctionSelectorWhitelisted`, `isMigrated`, `quoteLayerZeroFee`, `registerMegaETHBridge`, `registerOptimismBridge`, `registerRouters`, `relayer`, `removeDex`, `setChainName`, `setFunctionApprovalBySignature`, `setLayerZeroChainId`, `setWormholeChainId`, `setWormholeChainIds`, `standardizedBridgeCall`, `standardizedCall`, `standardizedSwapAndBridgeCall`, `standardizedSwapCall`, `startBridgeTokensViaArbitrumBridge`, `startBridgeTokensViaCBridge`, `startBridgeTokensViaCelerIM`, `startBridgeTokensViaCentrifuge`, `startBridgeTokensViaGnosisBridge`, `startBridgeTokensViaHyphen`, `startBridgeTokensViaLIFuel`, `startBridgeTokensViaMegaETHBridge`, `startBridgeTokensViaMultichain`, `startBridgeTokensViaOmniBridge`, `startBridgeTokensViaOptimismBridge`, `startBridgeTokensViaPolygonBridge`, `startBridgeTokensViaThorSwap`, `startBridgeTokensViaUnit`, `startBridgeTokensViaWormhole`, `swapAndStartBridgeTokensViaArbitrumBridge`, `swapAndStartBridgeTokensViaCBridge`, `swapAndStartBridgeTokensViaCelerIM`, `swapAndStartBridgeTokensViaCentrifuge`, `swapAndStartBridgeTokensViaGnosisBridge`, `swapAndStartBridgeTokensViaHyphen`, `swapAndStartBridgeTokensViaLIFuel`, `swapAndStartBridgeTokensViaMegaETHBridge`, `swapAndStartBridgeTokensViaMultichain`, `swapAndStartBridgeTokensViaOmniBridge`, `swapAndStartBridgeTokensViaOptimismBridge`, `swapAndStartBridgeTokensViaPolygonBridge`, `swapAndStartBridgeTokensViaThorSwap`, `swapAndStartBridgeTokensViaUnit`, `swapAndStartBridgeTokensViaWormhole`, `swapTokensGeneric`, `triggerRefund`, `updateAddressMappings` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Factory | `0x0A7e848Aca42d879EF06507Fca0E7b33A0a63c1e` | `Maverick.V2Factory` |
 | [Maverick](../../sauce-protocols/references/registry/maverick.md) | v2Router | `0x5c3b380e5Aeec389d1014Da3Eb372FA2C9e0fc76` | `Maverick.V2Router` |
 | [MUX Protocol](../../sauce-protocols/references/registry/mux-protocol.md) | liquidityPool | `0x3e0199792Ce69DC29A0a36146bFa68bd7C8D6633` | `MuxProtocol.LiquidityPool` |
@@ -123,23 +125,23 @@ address.
 | [Pendle](../../sauce-protocols/references/registry/pendle.md) | router | `0x888888888889758F76e7103c6CbF23ABbF58F946` | `Pendle.Router` |
 | [Permit2](../../sauce-protocols/references/registry/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
 | [Premia](../../sauce-protocols/references/registry/premia.md) | poolFactory | `0xAE4fB6622F25f397587F11638dA8CE88C27b5645` | `Premia.PoolFactory` |
-| [Radiant](../../sauce-protocols/references/registry/radiant.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool`; not on this deployment: `deposit`, `withdraw`, `borrow`, `repay` |
+| [Radiant](../../sauce-protocols/references/registry/radiant.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool` |
 | [Ramses](../../sauce-protocols/references/registry/ramses.md) | router | `0xAAA87963EFeB6f7E0a2711F397663105Acb1805e` | `Ramses.Router` |
 | [Safe](../../sauce-protocols/references/registry/safe.md) | safeL2V130 | `0x3E5c63644E683549055b9Be8653de26E0B4CD36E` | `Safe.SafeL2V130` |
 | [Seaport](../../sauce-protocols/references/registry/seaport.md) | seaportV16 | `0x0000000000000068F116a894984e2DB1123eB395` | `Seaport.SeaportV16` |
 | [Silo](../../sauce-protocols/references/registry/silo.md) | siloRepository | `0x8658047e48CC09161f4152c79155Dac1d710Ff0a` | `Silo.SiloRepository` |
 | [Socket](../../sauce-protocols/references/registry/socket.md) | socketGateway | `0x3a23F943181408EAC424116Af7b7790c94Cb97a5` | `Socket.SocketGateway` |
 | [Squid Router](../../sauce-protocols/references/registry/squid.md) | squidRouter | `0xce16F69375520ab01377ce7B88f5BA8C48F8D666` | `Squid.SquidRouter` |
-| [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolNative | `0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F` | `Stargate.PoolNative` |
-| [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolUSDC | `0xe8CDF27AcD73a434D661C84887215F7598e7d0d3` | `Stargate.PoolUSDC` |
+| [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolNative | `0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F` | `Stargate.PoolNative`; not on this deployment: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC` |
+| [Stargate](../../sauce-protocols/references/registry/stargate.md) | poolUSDC | `0xe8CDF27AcD73a434D661C84887215F7598e7d0d3` | `Stargate.PoolUSDC`; not on this deployment: `burnLocked` |
 | [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | cfaForwarder | `0xcfA132E353cB4E398080B9700609bb008eceB125` | `Superfluid.CFAForwarder` |
 | [Superfluid](../../sauce-protocols/references/registry/superfluid.md) | host | `0xCf8Acb4eF033efF16E8080aed4c7D5B9285D2192` | `Superfluid.Host` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | factory | `0xc35DADB65012eC5796536bD9864eD8773aBc74C4` | `SushiswapV2.Factory` |
 | [SushiSwap V2](../../sauce-protocols/references/registry/sushiswap-v2.md) | router | `0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506` | `SushiswapV2.Router` |
 | [Synapse Protocol](../../sauce-protocols/references/registry/synapse.md) | synapseBridge | `0x6F4e8eBa4D337f874Ab57478AcC2Cb5BACdc19c9` | `Synapse.SynapseBridge` |
-| [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory` |
+| [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbFactory | `0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c` | `TraderJoe.LBFactory`; not on this deployment: `becomeOwner`, `revokePendingOwner`, `setPendingOwner` |
 | [Trader Joe](../../sauce-protocols/references/registry/trader-joe.md) | lbRouter | `0x18556DA13313f3532c54711497A8FedAC273220E` | `TraderJoe.LBRouter` |
-| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9` | `UniswapV2.Factory` |
+| [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | factory | `0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9` | `UniswapV2.Factory`; not on this deployment: `INIT_CODE_HASH` |
 | [Uniswap V2](../../sauce-protocols/references/registry/uniswap-v2.md) | router | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` | `UniswapV2.Router` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Uniswap V3](../../sauce-protocols/references/registry/uniswap-v3.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |

@@ -63,7 +63,6 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
-import { toFunctionSelector } from "viem";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
@@ -71,9 +70,9 @@ export const SKILLS_DIR = join(SDK, "..", "skills");
 /** The manual's generated reference. */
 export const DOCS_REFERENCE_DIR = join(SDK, "..", "docs", "reference");
 const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
-/** What each deployment's code dispatches, captured from the chain: a selector the evidence records
- *  as `null` is one the deployed code does not dispatch, so a call to it reverts there. */
-const EVIDENCE = join(SDK, "test", "fixtures", "registry-abi", "evidence.json");
+/** What each export's deployments declare that its ABI leaves out, and why
+ *  (`scripts/gen-registry-abis.mjs`). */
+const OMITTED = join(SDK, "test", "fixtures", "registry-abi", "omitted.json");
 /** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
 const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
 
@@ -310,13 +309,15 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  // Per deployment and ABI export, the selectors its code dispatches (and `null` for those it lacks).
-  const dispatched = new Map(
-    JSON.parse(readFileSync(EVIDENCE, "utf8")).instances.map((i) => [
-      `${i.protocol}|${i.abi}|${i.chainId}|${i.address.toLowerCase()}`,
-      i.selectors ?? {},
-    ]),
-  );
+  const omitted = JSON.parse(readFileSync(OMITTED, "utf8")).exports;
+  // Per role deployment, the functions of its ABI it does not run as declared: withheld on its
+  // chain, so a program compiled for that chain cannot call them (`contracts.generated.ts`).
+  const withheld = new Map();
+  for (const link of sdk.contracts.CONTRACT_LINKS) {
+    for (const [chainId, signatures] of Object.entries(link.withheld ?? {})) {
+      withheld.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, signatures);
+    }
+  }
   const globals = globalsIndex(sdk, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
@@ -367,20 +368,16 @@ export async function skillsReferences(api, documented) {
         if (typeof address !== "string") continue;
         const named = contracts.find((c) => c.address.toLowerCase() === address.toLowerCase());
         const abi = exportFor(role, deployment.chainId);
-        // The ABI's functions this deployment's code does not dispatch: a bridged token without the
-        // L1 token's functions, say. The page says so beside the deployment.
-        const selectors = dispatched.get(
-          `${info.slug}|${abi}|${deployment.chainId}|${address.toLowerCase()}`,
-        );
+        // The ABI's functions this deployment does not run as declared: a bridged token without
+        // the L1 token's functions, an older release. The page says so beside the deployment.
         const absent =
-          abi === undefined || selectors === undefined
+          abi === undefined
             ? []
             : [
                 ...new Set(
-                  exports
-                    .find((e) => e.name === abi)
-                    .functions.filter((f) => selectors[toFunctionSelector(f)] === null)
-                    .map((f) => f.name),
+                  (withheld.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map(
+                    (signature) => signature.slice(0, signature.indexOf("(")),
+                  ),
                 ),
               ];
         deployed.push({
@@ -414,6 +411,7 @@ export async function skillsReferences(api, documented) {
         name: e.name,
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
+        omitted: omitted[`${info.slug}.${e.name}`] ?? [],
         functions: e.functions.map((f) => ({
           text: functionText(f),
           returned: returnedNote(sdk, info.slug, e.name, f),
@@ -1748,9 +1746,22 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
           .flatMap((d) => [
-            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. Do not call them there: the call does not run the function, and whether it reverts is up to that code.`,
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them or declares them otherwise: ${d.absent.map(code).join(", ")}. Do not call them there: a program compiled for ${chainsBySlug.get(d.chain).name} is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.`,
             "",
           ]),
+        // What the deployments declare that this ABI leaves out, and why.
+        ...(e.omitted.length
+          ? [
+              "Left out of this ABI, though its deployments declare them:",
+              "",
+              // The name apart from its parameter types: a name the SDK reserves is not a call.
+              ...e.omitted.map((o) => {
+                const at = o.signature.indexOf("(");
+                return `- \`${o.signature.slice(0, at)}\` taking \`${o.signature.slice(at)}\`: ${o.reason}.`;
+              }),
+              "",
+            ]
+          : []),
       );
     }
   }

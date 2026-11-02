@@ -36,5 +36,18 @@ function main() {
 
 `import GPv2SettlementABI from "./protocols/cowswap/GPv2SettlementABI.json";` Speaks for: gpv2Settlement.
 
-- `setPreSignature(bytes orderUid, bool signed)`
+- `authenticator() view returns (address)`
+- `domainSeparator() view returns (bytes32)`
+- `filledAmount(bytes) view returns (uint256)`
+- `freeFilledAmountStorage(bytes[] orderUids)`
+- `freePreSignatureStorage(bytes[] orderUids)`
+- `getStorageAt(uint256 offset, uint256 length) view returns (bytes)`
 - `invalidateOrder(bytes orderUid)`
+- `preSignature(bytes) view returns (uint256)`
+- `setPreSignature(bytes orderUid, bool signed)`
+- `settle(address[] tokens, uint256[] clearingPrices, (uint256 sellTokenIndex, uint256 buyTokenIndex, address receiver, uint256 sellAmount, uint256 buyAmount, uint32 validTo, bytes32 appData, uint256 feeAmount, uint256 flags, uint256 executedAmount, bytes signature)[] trades, (address target, uint256 value, bytes callData)[][3] interactions)`
+- `simulateDelegatecall(address targetContract, bytes calldataPayload) returns (bytes response)`
+- `simulateDelegatecallInternal(address targetContract, bytes calldataPayload) returns (bytes response)`
+- `swap((bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] tokens, (uint256 sellTokenIndex, uint256 buyTokenIndex, address receiver, uint256 sellAmount, uint256 buyAmount, uint32 validTo, bytes32 appData, uint256 feeAmount, uint256 flags, uint256 executedAmount, bytes signature) trade)`
+- `vault() view returns (address)`
+- `vaultRelayer() view returns (address)`

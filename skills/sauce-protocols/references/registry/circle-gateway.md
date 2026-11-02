@@ -60,17 +60,104 @@ function main() {
 
 `import GatewayMinterABI from "./protocols/circle-gateway/GatewayMinterABI.json";` Speaks for: gatewayMinter.
 
-- `gatewayMint(bytes attestationPayload, bytes signature)`
-- `isTokenSupported(address token) view returns (bool)`
+- `acceptOwnership()`
+- `addAttestationSigner(address signer)`
+- `addSupportedToken(address token)`
+- `denylist(address addr)`
+- `denylister() view returns (address)`
 - `domain() view returns (uint32)`
+- `gatewayMint(bytes attestationPayload, bytes signature)`
+- `initialize(address pauser_, address denylister_, address[] supportedTokens_, uint32 domain_, address attestationSigner_, address[] tokenMintAuthorities_)`
+- `isAttestationSigner(address signer) view returns (bool)`
+- `isDenylisted(address addr) view returns (bool)`
+- `isTokenSupported(address token) view returns (bool)`
+- `isTransferSpecHashUsed(bytes32 transferSpecHash) view returns (bool)`
+- `owner() view returns (address)`
+- `pause()`
+- `paused() view returns (bool)`
+- `pauser() view returns (address)`
+- `pendingOwner() view returns (address)`
+- `proxiableUUID() view returns (bytes32)`
+- `removeAttestationSigner(address signer)`
+- `renounceOwnership()`
+- `tokenMintAuthority(address token) view returns (address)`
+- `transferOwnership(address newOwner)`
+- `unDenylist(address addr)`
+- `unpause()`
+- `updateDenylister(address newDenylister)`
+- `updateMintAuthority(address token, address newMintAuthority)`
+- `updatePauser(address newPauser)`
+- `UPGRADE_INTERFACE_VERSION() view returns (string)`
+- `upgradeToAndCall(address newImplementation, bytes data) payable`
 
 ### `GatewayWalletABI`
 
 `import GatewayWalletABI from "./protocols/circle-gateway/GatewayWalletABI.json";` Speaks for: gatewayWallet.
 
+- `acceptOwnership()`
+- `addBatchSigner(address signer)`
+- `addBurnSigner(address signer)`
+- `addContractSignatureSigner(address signer)`
+- `addDelegate(address token, address delegate)`
+- `addSupportedToken(address token)`
+- `allowlistContractSigner(address contractAddr)`
+- `availableBalance(address token, address depositor) view returns (uint256)`
+- `balanceOf(address depositor, uint256 id) view returns (uint256 balance)`
+- `balanceOfBatch(address[] depositors, uint256[] ids) view returns (uint256[] balances)`
+- `contractSignersAllowlister() view returns (address)`
+- `contractSignersDisallowlister() view returns (address)`
+- `denylist(address addr)`
+- `denylister() view returns (address)`
 - `deposit(address token, uint256 value)`
 - `depositFor(address token, address depositor, uint256 value)`
-- `totalBalance(address token, address depositor) view returns (uint256)`
-- `availableBalance(address token, address depositor) view returns (uint256)`
-- `isTokenSupported(address token) view returns (bool)`
+- `depositWithAuthorization(address token, address from, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, bytes signature)`
+- `depositWithAuthorization(address token, address from, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)`
+- `depositWithPermit(address token, address owner, uint256 value, uint256 deadline, bytes signature)`
+- `depositWithPermit(address token, address owner, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `disallowContractSigner(address contractAddr)`
 - `domain() view returns (uint32)`
+- `domainSeparator() pure returns (bytes32)`
+- `EIP712_DOMAIN_TYPE_HASH() view returns (bytes32)`
+- `eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)`
+- `feeRecipient() view returns (address)`
+- `gatewayBurn(bytes calldataBytes, bytes signature)`
+- `getTypedDataHash(bytes intent) view returns (bytes32)`
+- `initialize((address pauser, address denylister, address[] supportedTokens, uint32 domain, uint256 withdrawalDelay, address burnSigner, address feeRecipient, address contractSignersAllowlister, address contractSignersDisallowlister, address contractSignatureSigner, address batchSigner) config)`
+- `initiateWithdrawal(address token, uint256 value)`
+- `isAllowlistedContractSigner(address contractAddr) view returns (bool)`
+- `isAuthorizedForBalance(address token, address depositor, address addr) view returns (bool)`
+- `isBatchSigner(address signer) view returns (bool)`
+- `isBurnSigner(address signer) view returns (bool)`
+- `isContractSignatureSigner(address signer) view returns (bool)`
+- `isDenylisted(address addr) view returns (bool)`
+- `isTokenSupported(address token) view returns (bool)`
+- `isTransferSpecHashUsed(bytes32 transferSpecHash) view returns (bool)`
+- `owner() view returns (address)`
+- `pause()`
+- `paused() view returns (bool)`
+- `pauser() view returns (address)`
+- `pendingOwner() view returns (address)`
+- `proxiableUUID() view returns (bytes32)`
+- `removeBatchSigner(address signer)`
+- `removeBurnSigner(address signer)`
+- `removeContractSignatureSigner(address signer)`
+- `removeDelegate(address token, address delegate)`
+- `renounceOwnership() view`
+- `submitBatch(bytes calldataBytes, bytes signature)`
+- `totalBalance(address token, address depositor) view returns (uint256)`
+- `transferOwnership(address newOwner)`
+- `unDenylist(address addr)`
+- `unpause()`
+- `updateContractSignersAllowlister(address newAllowlister)`
+- `updateContractSignersDisallowlister(address newDisallowlister)`
+- `updateDenylister(address newDenylister)`
+- `updateFeeRecipient(address newFeeRecipient)`
+- `updatePauser(address newPauser)`
+- `updateWithdrawalDelay(uint256 newDelay)`
+- `UPGRADE_INTERFACE_VERSION() view returns (string)`
+- `upgradeToAndCall(address newImplementation, bytes data) payable`
+- `withdraw(address token)`
+- `withdrawableBalance(address token, address depositor) view returns (uint256)`
+- `withdrawalBlock(address token, address depositor) view returns (uint256)`
+- `withdrawalDelay() view returns (uint256)`
+- `withdrawingBalance(address token, address depositor) view returns (uint256)`

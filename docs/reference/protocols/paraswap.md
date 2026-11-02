@@ -53,7 +53,7 @@ function main() {
 | [BNB Chain](../chains/bsc.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Polygon](../chains/polygon.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
 | [Polygon](../chains/polygon.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
-| [Base](../chains/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5`; not on this deployment: `simpleSwap` |
+| [Base](../chains/base.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5`; not on this deployment: `DEFAULT_ADMIN_ROLE`, `getAdapterData`, `getFeeWallet`, `getImplementation`, `getPartnerFeeStructure`, `getRoleAdmin`, `getRoleMember`, `getRoleMemberCount`, `getRouterData`, `getTokenTransferProxy`, `getVersion`, `grantRole`, `hasRole`, `initialize`, `initializeAdapter`, `initializeRouter`, `isAdapterInitialized`, `isRouterInitialized`, `registerPartner`, `renounceRole`, `revokeRole`, `ROUTER_ROLE`, `setFeeWallet`, `setImplementation`, `simpleBuy`, `simpleSwap`, `transferTokens`, `WHITELISTED_ROLE` |
 | [Base](../chains/base.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Arbitrum One](../chains/arbitrum.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
 | [Arbitrum One](../chains/arbitrum.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
@@ -66,9 +66,46 @@ function main() {
 
 `import AugustusV5ABI from "./protocols/paraswap/AugustusV5ABI.json";` Speaks for: augustusV5.
 
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `getAdapterData(bytes32 key) view returns (bytes)`
+- `getFeeWallet() view returns (address)`
+- `getImplementation(bytes4 selector) view returns (address)`
+- `getPartnerFeeStructure(address partner) view returns ((uint256 partnerShare, bool noPositiveSlippage, bool positiveSlippageToUser, uint16 feePercent, string partnerId, bytes data))`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `getRoleMember(bytes32 role, uint256 index) view returns (address)`
+- `getRoleMemberCount(bytes32 role) view returns (uint256)`
+- `getRouterData(bytes32 key) view returns (bytes)`
+- `getTokenTransferProxy() view returns (address)`
+- `getVersion() pure returns (string)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `initialize(bytes)`
+- `initializeAdapter(address adapter, bytes data)`
+- `initializeRouter(address router, bytes data)`
+- `isAdapterInitialized(bytes32 key) view returns (bool)`
+- `isRouterInitialized(bytes32 key) view returns (bool)`
+- `registerPartner(address partner, uint256 _partnerShare, bool _noPositiveSlippage, bool _positiveSlippageToUser, uint16 _feePercent, string partnerId, bytes _data)`
+- `renounceRole(bytes32 role, address account)`
+- `revokeRole(bytes32 role, address account)`
+- `ROUTER_ROLE() view returns (bytes32)`
+- `setFeeWallet(address _feeWallet)`
+- `setImplementation(bytes4 selector, address implementation)`
+- `simpleBuy((address fromToken, address toToken, uint256 fromAmount, uint256 toAmount, uint256 expectedAmount, address[] callees, bytes exchangeData, uint256[] startIndexes, uint256[] values, address beneficiary, address partner, uint256 feePercent, bytes permit, uint256 deadline, bytes16 uuid) data) payable`
 - `simpleSwap((address fromToken, address toToken, uint256 fromAmount, uint256 toAmount, uint256 expectedAmount, address[] callees, bytes exchangeData, uint256[] startIndexes, uint256[] values, address beneficiary, address partner, uint256 feePercent, bytes permit, uint256 deadline, bytes16 uuid) data) payable returns (uint256 receivedAmount)`
+- `transferTokens(address token, address destination, uint256 amount)`
+- `WHITELISTED_ROLE() view returns (bytes32)`
 
-Not on Base's augustusV5 (`0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57`), whose code does not dispatch them: `simpleSwap`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
+Not on Base's augustusV5 (`0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57`), whose code does not dispatch them or declares them otherwise: `DEFAULT_ADMIN_ROLE`, `getAdapterData`, `getFeeWallet`, `getImplementation`, `getPartnerFeeStructure`, `getRoleAdmin`, `getRoleMember`, `getRoleMemberCount`, `getRouterData`, `getTokenTransferProxy`, `getVersion`, `grantRole`, `hasRole`, `initialize`, `initializeAdapter`, `initializeRouter`, `isAdapterInitialized`, `isRouterInitialized`, `registerPartner`, `renounceRole`, `revokeRole`, `ROUTER_ROLE`, `setFeeWallet`, `setImplementation`, `simpleBuy`, `simpleSwap`, `transferTokens`, `WHITELISTED_ROLE`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `augustusRFQ` taking `()`: no captured deployment dispatches it.
+- `feeClaimer` taking `()`: no captured deployment dispatches it.
+- `getKey` taking `()`: no captured deployment dispatches it.
+- `maxFeePercent` taking `()`: no captured deployment dispatches it.
+- `paraswapReferralShare` taking `()`: no captured deployment dispatches it.
+- `paraswapSlippageShare` taking `()`: no captured deployment dispatches it.
+- `partnerSharePercent` taking `()`: no captured deployment dispatches it.
 
 ## Next
 

@@ -36,4 +36,30 @@ function main() {
 
 `import HegicABI from "./protocols/hegic/HegicABI.json";` Speaks for: operationalTreasury.
 
+- `acceptedStrategy(address) view returns (bool)`
+- `addStrategy(address s)`
+- `benchmark() view returns (uint256)`
+- `buy(address strategy, address holder, uint256 amount, uint256 period, bytes[] additional)`
+- `connectStrategy(address s)`
+- `coverPool() view returns (address)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `lockedByStrategy(address) view returns (uint256)`
+- `lockedLiquidity(uint256) view returns (uint8 state, address strategy, uint128 negativepnl, uint128 positivepnl, uint32 expiration)`
+- `lockedPremium() view returns (uint256)`
+- `manager() view returns (address)`
+- `maxLockupPeriod() view returns (uint256)`
+- `mayBeAcceptedAtEpoch(address) view returns (uint256)`
 - `payOff(uint256 positionID, address account)`
+- `renounceRole(bytes32 role, address account)`
+- `replenish()`
+- `revokeRole(bytes32 role, address account)`
+- `setBenchmark(uint256 value)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `token() view returns (address)`
+- `totalBalance() view returns (uint256)`
+- `totalLocked() view returns (uint256)`
+- `unlock(uint256 lockedLiquidityID)`
+- `withdraw(address to, uint256 amount)`

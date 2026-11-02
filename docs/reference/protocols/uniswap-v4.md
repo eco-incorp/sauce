@@ -154,41 +154,116 @@ functions, and its writes are SafeERC20.
 
 `import UniswapV4PoolManagerABI from "./protocols/uniswap-v4/UniswapV4PoolManagerABI.json";` Speaks for: poolManager.
 
-- `initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) returns (int24 tick)`
-- `swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData) returns (int256 delta)`
-- `modifyLiquidity((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt) params, bytes hookData) returns (int256 delta, int256 feeDelta)`
+- `allowance(address owner, address spender, uint256 id) view returns (uint256 amount)`
+- `approve(address spender, uint256 id, uint256 amount) returns (bool)`
+- `balanceOf(address owner, uint256 id) view returns (uint256 balance)`
+- `burn(address from, uint256 id, uint256 amount)`
+- `clear(address currency, uint256 amount)`
+- `collectProtocolFees(address recipient, address currency, uint256 amount) returns (uint256 amountCollected)`
+- `donate((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint256 amount0, uint256 amount1, bytes hookData) returns (int256 delta)`
 - `extsload(bytes32 slot) view returns (bytes32)`
 - `extsload(bytes32 startSlot, uint256 nSlots) view returns (bytes32[])`
+- `exttload(bytes32 slot) view returns (bytes32)`
+- `initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) returns (int24 tick)`
+- `isOperator(address owner, address operator) view returns (bool isOperator)`
+- `mint(address to, uint256 id, uint256 amount)`
+- `modifyLiquidity((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (int24 tickLower, int24 tickUpper, int256 liquidityDelta, bytes32 salt) params, bytes hookData) returns (int256 delta, int256 feeDelta)`
+- `owner() view returns (address)`
+- `protocolFeeController() view returns (address)`
+- `protocolFeesAccrued(address currency) view returns (uint256 amount)`
+- `setOperator(address operator, bool approved) returns (bool)`
+- `setProtocolFee((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint24 newProtocolFee)`
+- `setProtocolFeeController(address controller)`
+- `settle() payable returns (uint256)`
+- `settleFor(address recipient) payable returns (uint256)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData) returns (int256 delta)`
+- `sync(address currency)`
+- `take(address currency, address to, uint256 amount)`
+- `transfer(address receiver, uint256 id, uint256 amount) returns (bool)`
+- `transferFrom(address sender, address receiver, uint256 id, uint256 amount) returns (bool)`
+- `transferOwnership(address newOwner)`
+- `unlock(bytes data) returns (bytes result)`
+- `updateDynamicLPFee((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint24 newDynamicLPFee)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `extsload` taking `(bytes32[])`: an overload of extsload(bytes32), which takes as many arguments: a call picks its overload by argument count.
+- `exttload` taking `(bytes32[])`: an overload of exttload(bytes32), which takes as many arguments: a call picks its overload by argument count.
 
 ### `UniswapV4PositionManagerABI`
 
 `import UniswapV4PositionManagerABI from "./protocols/uniswap-v4/UniswapV4PositionManagerABI.json";` Speaks for: positionManager.
 
+- `approve(address spender, uint256 id)`
+- `balanceOf(address owner) view returns (uint256)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `getApproved(uint256) view returns (address)`
+- `getPoolAndPositionInfo(uint256 tokenId) view returns ((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) poolKey, uint256 info)`
+- `getPositionLiquidity(uint256 tokenId) view returns (uint128 liquidity)`
+- `initializePool((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) payable returns (int24)`
+- `isApprovedForAll(address, address) view returns (bool)`
 - `modifyLiquidities(bytes unlockData, uint256 deadline) payable`
+- `modifyLiquiditiesWithoutUnlock(bytes actions, bytes[] params) payable`
+- `msgSender() view returns (address)`
+- `multicall(bytes[] data) payable returns (bytes[] results)`
+- `name() view returns (string)`
+- `nextTokenId() view returns (uint256)`
+- `nonces(address owner, uint256 word) view returns (uint256 bitmap)`
+- `ownerOf(uint256 id) view returns (address owner)`
+- `permit(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permitSingle, bytes signature) payable returns (bytes err)`
+- `permit(address spender, uint256 tokenId, uint256 deadline, uint256 nonce, bytes signature) payable`
+- `permit2() view returns (address)`
+- `permitBatch(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce)[] details, address spender, uint256 sigDeadline) _permitBatch, bytes signature) payable returns (bytes err)`
+- `permitForAll(address owner, address operator, bool approved, uint256 deadline, uint256 nonce, bytes signature) payable`
+- `poolKeys(bytes25 poolId) view returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)`
+- `poolManager() view returns (address)`
+- `positionInfo(uint256 tokenId) view returns (uint256 info)`
+- `revokeNonce(uint256 nonce) payable`
+- `safeTransferFrom(address from, address to, uint256 id)`
+- `safeTransferFrom(address from, address to, uint256 id, bytes data)`
+- `setApprovalForAll(address operator, bool approved)`
+- `subscribe(uint256 tokenId, address newSubscriber, bytes data) payable`
+- `subscriber(uint256 tokenId) view returns (address subscriber)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `symbol() view returns (string)`
+- `tokenDescriptor() view returns (address)`
+- `tokenURI(uint256 tokenId) view returns (string)`
+- `transferFrom(address from, address to, uint256 id)`
+- `unlockCallback(bytes data) returns (bytes)`
+- `unsubscribe(uint256 tokenId) payable`
+- `unsubscribeGasLimit() view returns (uint256)`
+- `WETH9() view returns (address)`
 
 ### `UniswapV4StateViewABI`
 
 `import UniswapV4StateViewABI from "./protocols/uniswap-v4/UniswapV4StateViewABI.json";` Speaks for: stateView.
 
-- `getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)`
-- `getLiquidity(bytes32 poolId) view returns (uint128 liquidity)`
-- `getTickInfo(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)`
-- `getTickLiquidity(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)`
-- `getTickFeeGrowthOutside(bytes32 poolId, int24 tick) view returns (uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)`
-- `getTickBitmap(bytes32 poolId, int16 tick) view returns (uint256 tickBitmap)`
 - `getFeeGrowthGlobals(bytes32 poolId) view returns (uint256 feeGrowthGlobal0, uint256 feeGrowthGlobal1)`
 - `getFeeGrowthInside(bytes32 poolId, int24 tickLower, int24 tickUpper) view returns (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128)`
+- `getLiquidity(bytes32 poolId) view returns (uint128 liquidity)`
 - `getPositionInfo(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionInfo(bytes32 poolId, address owner, int24 tickLower, int24 tickUpper, bytes32 salt) view returns (uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128)`
 - `getPositionLiquidity(bytes32 poolId, bytes32 positionId) view returns (uint128 liquidity)`
+- `getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)`
+- `getTickBitmap(bytes32 poolId, int16 tick) view returns (uint256 tickBitmap)`
+- `getTickFeeGrowthOutside(bytes32 poolId, int24 tick) view returns (uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)`
+- `getTickInfo(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet, uint256 feeGrowthOutside0X128, uint256 feeGrowthOutside1X128)`
+- `getTickLiquidity(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)`
 - `poolManager() view returns (address)`: the address is a `UniswapV4.PoolManager`
 
 ### `UniswapV4UniversalRouterABI`
 
 `import UniswapV4UniversalRouterABI from "./protocols/uniswap-v4/UniswapV4UniversalRouterABI.json";` Speaks for: universalRouter.
 
-- `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`
 - `execute(bytes commands, bytes[] inputs) payable`
+- `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`
+- `msgSender() view returns (address)`
+- `poolManager() view returns (address)`
+- `uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes data)`
+- `unlockCallback(bytes data) returns (bytes)`
+- `V3_POSITION_MANAGER() view returns (address)`
+- `V4_POSITION_MANAGER() view returns (address)`
 
 ## Next
 

@@ -44,11 +44,39 @@ functions, and its writes are SafeERC20.
 
 `import BeefyVaultABI from "./protocols/beefy/BeefyVaultABI.json";`
 
-- `deposit(uint256 _amount)`
-- `depositAll()`
-- `withdraw(uint256 _shares)`
-- `withdrawAll()`
-- `getPricePerFullShare() view returns (uint256)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approvalDelay() view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
 - `balance() view returns (uint256)`
 - `balanceOf(address account) view returns (uint256)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `deposit(uint256 _amount)`
+- `depositAll()`
+- `earn()`
+- `getPricePerFullShare() view returns (uint256)`
+- `inCaseTokensGetStuck(address _token)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `initialize(address _strategy, string _name, string _symbol, uint256 _approvalDelay)`
+- `name() view returns (string)`
+- `owner() view returns (address)`
+- `proposeStrat(address _implementation)`
+- `proxiableUUID() view returns (bytes32)`
+- `renounceOwnership()`
+- `stratCandidate() view returns (address implementation, uint256 proposedTime)`
+- `strategy() view returns (address)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `transferOwnership(address newOwner)`
+- `upgradeStrat()`
+- `upgradeTo(address newImplementation)`
+- `upgradeToAndCall(address newImplementation, bytes data) payable`
 - `want() view returns (address)`: the address is a token
+- `withdraw(uint256 _shares)`
+- `withdrawAll()`
+
+Left out of this ABI, though its deployments declare them:
+
+- `available` taking `()`: its name is an accessor's own property.

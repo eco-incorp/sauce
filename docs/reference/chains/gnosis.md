@@ -35,10 +35,10 @@ chain does not have it.
 
 ```ts
 function main() {
-  // `AaveV3.Pool` is Gnosis's pool: `0xb50201558B00496A145fE76f7424749556E326D8`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Gnosis's oracle: `0xeb0a051be10228213BAEb449db63719d6742F7c4`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Gnosis.AaveV3.Pool == AaveV3.Pool);
+  require(Gnosis.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -54,10 +54,12 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../protocols/aave-v3.md) | pool | `0xb50201558B00496A145fE76f7424749556E326D8` | `AaveV3.Pool` |
+| [Aave V3](../protocols/aave-v3.md) | oracle | `0xeb0a051be10228213BAEb449db63719d6742F7c4` | `AaveV3.Oracle` |
+| [Aave V3](../protocols/aave-v3.md) | pool | `0xb50201558B00496A145fE76f7424749556E326D8` | `AaveV3.Pool`; not on this deployment: `borrow`, `dropReserve`, `liquidationCall`, `repay`, `repayWithATokens`, `repayWithPermit`, `resetIsolationModeTotalDebt`, `setUserUseReserveAsCollateral`, `supply`, `supplyWithPermit`, `withdraw` |
+| [Aave V3](../protocols/aave-v3.md) | poolAddressesProvider | `0x36616cf17557639614c1cdDb356b1B83fc0B2132` | `AaveV3.PoolAddressesProvider` |
 | [Balancer V2](../protocols/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 | [Curve Finance](../protocols/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
-| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `startBridgeTokensViaAcrossV4` |
+| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `ACROSS_CHAIN_ID_SOLANA`, `addDex`, `approvedDexs`, `batchAddDex`, `batchRemoveDex`, `batchSetFunctionApprovalBySignature`, `chainflipVault`, `CIRCLE_BRIDGE_PROXY`, `decode_startBridgeTokensViaAcrossV4ERC20Packed`, `decode_startBridgeTokensViaAcrossV4NativePacked`, `DLN_SOURCE`, `encode_startBridgeTokensViaAcrossV4ERC20Packed`, `encode_startBridgeTokensViaAcrossV4NativePacked`, `executeCallViaAxelar`, `executeCallWithTokenViaAxelar`, `FRAX_HOP`, `FRAX_PATH_USD`, `FRAX_TIP_FEE_MANAGER`, `getChainIdToAllBridgeChainId`, `getChainIdToDomainId`, `getChainIdToEid`, `getFraxChainIdToEid`, `getWhitelistedAddresses`, `getWhitelistedFunctionSelectors`, `IS_HUB`, `isAddressWhitelisted`, `isFunctionApproved`, `isFunctionSelectorWhitelisted`, `isMigrated`, `LIFI_DISTRIBUTOR_CODE`, `M0_ORDER_BOOK`, `MAYAN`, `MULTIPLIER_BASE`, `PAXOS_TRANSIT_THIS_CHAIN_EID`, `POLYMER_FEE_RECEIVER`, `POOL_MANAGER`, `PORTAL`, `quoteLayerZeroFee`, `registerMegaETHBridge`, `registerOptimismBridge`, `registerRouters`, `relayer`, `removeDex`, `setChainIdToAllBridgeChainId`, `setChainIdToDomainId`, `setChainIdToEid`, `setChainName`, `setFraxChainIdToEid`, `setFunctionApprovalBySignature`, `setLayerZeroChainId`, `setWormholeChainId`, `setWormholeChainIds`, `standardizedBridgeCall`, `standardizedCall`, `standardizedSwapAndBridgeCall`, `standardizedSwapCall`, `startBridgeTokensViaAcross`, `startBridgeTokensViaAcrossV4`, `startBridgeTokensViaAcrossV4ERC20Min`, `startBridgeTokensViaAcrossV4ERC20Packed`, `startBridgeTokensViaAcrossV4NativeMin`, `startBridgeTokensViaAcrossV4NativePacked`, `startBridgeTokensViaAcrossV4Swap`, `startBridgeTokensViaAllBridge`, `startBridgeTokensViaArbitrumBridge`, `startBridgeTokensViaCBridge`, `startBridgeTokensViaCelerCircleBridge`, `startBridgeTokensViaCelerIM`, `startBridgeTokensViaCentrifuge`, `startBridgeTokensViaChainflip`, `startBridgeTokensViaEco`, `startBridgeTokensViaFrax`, `startBridgeTokensViaGarden`, `startBridgeTokensViaGnosisBridge`, `startBridgeTokensViaHyphen`, `startBridgeTokensViaLIFuel`, `startBridgeTokensViaM0`, `startBridgeTokensViaMayan`, `startBridgeTokensViaMegaETHBridge`, `startBridgeTokensViaMultichain`, `startBridgeTokensViaOptimismBridge`, `startBridgeTokensViaPaxosTransit`, `startBridgeTokensViaPolygonBridge`, `startBridgeTokensViaPolymerCCTP`, `startBridgeTokensViaSquid`, `startBridgeTokensViaSuperset`, `startBridgeTokensViaThorSwap`, `startBridgeTokensViaUnit`, `startBridgeTokensViaWormhole`, `swapAndStartBridgeTokensViaAcross`, `swapAndStartBridgeTokensViaAcrossV4`, `swapAndStartBridgeTokensViaAcrossV4Swap`, `swapAndStartBridgeTokensViaAllBridge`, `swapAndStartBridgeTokensViaArbitrumBridge`, `swapAndStartBridgeTokensViaCBridge`, `swapAndStartBridgeTokensViaCelerCircleBridge`, `swapAndStartBridgeTokensViaCelerIM`, `swapAndStartBridgeTokensViaCentrifuge`, `swapAndStartBridgeTokensViaChainflip`, `swapAndStartBridgeTokensViaEco`, `swapAndStartBridgeTokensViaFrax`, `swapAndStartBridgeTokensViaGarden`, `swapAndStartBridgeTokensViaGnosisBridge`, `swapAndStartBridgeTokensViaHyphen`, `swapAndStartBridgeTokensViaLIFuel`, `swapAndStartBridgeTokensViaM0`, `swapAndStartBridgeTokensViaMayan`, `swapAndStartBridgeTokensViaMegaETHBridge`, `swapAndStartBridgeTokensViaMultichain`, `swapAndStartBridgeTokensViaOptimismBridge`, `swapAndStartBridgeTokensViaPaxosTransit`, `swapAndStartBridgeTokensViaPolygonBridge`, `swapAndStartBridgeTokensViaPolymerCCTP`, `swapAndStartBridgeTokensViaSquid`, `swapAndStartBridgeTokensViaSuperset`, `swapAndStartBridgeTokensViaThorSwap`, `swapAndStartBridgeTokensViaUnit`, `swapAndStartBridgeTokensViaWormhole`, `swapTokensGeneric`, `TOKEN_MESSENGER`, `TRANSIT_STATION`, `triggerRefund`, `unsetChainIdToAllBridgeChainId`, `unsetChainIdToDomainId`, `unsetFraxChainIdToEid`, `updateAddressMappings`, `USDC` |
 
 ## Requesting support
 

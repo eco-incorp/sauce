@@ -52,7 +52,7 @@ function main() {
 | [Polygon](../chains/polygon.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [Fantom](../chains/fantom.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [zkSync Era](../chains/zksync.md) | metaAggregationRouter | `0x3F95eF3f2eAca871858dbE20A93c01daF6C2e923` | `KyberswapAggregator.MetaAggregationRouter` |
-| [Arc](../chains/arc.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
+| [Arc](../chains/arc.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter`; not on this deployment: `isWhitelist`, `swapGeneric`, `updateWhitelist` |
 | [Base](../chains/base.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [Arbitrum One](../chains/arbitrum.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [Avalanche C-Chain](../chains/avalanche.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
@@ -65,7 +65,18 @@ function main() {
 
 `import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap-aggregator/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouter.
 
+- `isWhitelist(address) view returns (bool)`
+- `owner() view returns (address)`
+- `renounceOwnership()`
+- `rescueFunds(address token, uint256 amount)`
 - `swap((address callTarget, address approveTarget, bytes targetData, (address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes clientData) execution) payable returns (uint256 returnAmount, uint256 gasUsed)`
+- `swapGeneric((address callTarget, address approveTarget, bytes targetData, (address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes clientData) execution) payable returns (uint256 returnAmount, uint256 gasUsed)`
+- `swapSimpleMode(address caller, (address srcToken, address dstToken, address[] srcReceivers, uint256[] srcAmounts, address[] feeReceivers, uint256[] feeAmounts, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes executorData, bytes clientData) returns (uint256 returnAmount, uint256 gasUsed)`
+- `transferOwnership(address newOwner)`
+- `updateWhitelist(address[] addr, bool[] value)`
+- `WETH() view returns (address)`
+
+Not on Arc's metaAggregationRouter (`0x6131B5fae19EA4f9D964eAc0408E4408b66337b5`), whose code does not dispatch them or declares them otherwise: `isWhitelist`, `swapGeneric`, `updateWhitelist`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

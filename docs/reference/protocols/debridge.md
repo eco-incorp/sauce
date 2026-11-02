@@ -68,13 +68,102 @@ function main() {
 
 `import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination.
 
+- `BPS_DENOMINATOR() view returns (uint256)`
+- `chainEngines(uint256) view returns (uint8)`
+- `deBridgeGate() view returns (address)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `dlnSourceAddresses(uint256) view returns (bytes)`
+- `EVM_ADDRESS_LENGTH() view returns (uint256)`
+- `externalCallAdapter() view returns (address)`
 - `fulfillOrder((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order, uint256 _fulFillAmount, bytes32 _orderId, bytes _permitEnvelope, address _unlockAuthority) payable`
+- `fulfillOrder((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order, uint256 _fulFillAmount, bytes32 _orderId, bytes _permitEnvelope, address _unlockAuthority, address _externalCallRewardBeneficiary) payable`
+- `getChainId() view returns (uint256 cid)`
+- `getOrderId((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order) pure returns (bytes32)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `GOVERNANCE_DELEGATED_ORDER_CANCEL_ROLE() view returns (bytes32)`
+- `GOVMONITORING_ROLE() view returns (bytes32)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `initialize()`
+- `MAX_ADDRESS_LENGTH() view returns (uint256)`
+- `maxOrderCountPerBatchEvmUnlock() view returns (uint256)`
+- `maxOrderCountPerBatchSolanaUnlock() view returns (uint256)`
+- `NATIVE_AMOUNT_DIVIDER_FOR_TRANSFER_TO_SOLANA() view returns (uint256)`
+- `pause()`
+- `paused() view returns (bool)`
+- `renounceRole(bytes32 role, address account)`
+- `revokeRole(bytes32 role, address account)`
+- `sendBatchEvmUnlock(bytes32[] _orderIds, address _beneficiary, uint256 _executionFee) payable`
+- `sendBatchSolanaUnlock((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall)[] _orders, bytes32 _beneficiary, uint256 _executionFee, uint64 _initWalletIfNeededInstructionReward, uint64 _claimUnlockInstructionReward) payable`
+- `sendEvmOrderCancel((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order, address _cancelBeneficiary, uint256 _executionFee) payable`
+- `sendEvmUnlock(bytes32 _orderId, address _beneficiary, uint256 _executionFee) payable`
+- `sendSolanaOrderCancel((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order, bytes32 _cancelBeneficiary, uint256 _executionFee, uint64 _initWalletIfNeededInstructionReward, uint64 _claimCancelInstructionReward) payable`
+- `sendSolanaUnlock((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order, bytes32 _beneficiary, uint256 _executionFee, uint64 _initWalletIfNeededInstructionReward, uint64 _claimUnlockInstructionReward) payable`
+- `setDlnSourceAddress(uint256 _chainIdFrom, bytes _dlnSourceAddress, uint8 _chainEngine)`
+- `setExternalCallAdapter(address _externalCallAdapter)`
+- `setMaxOrderCountsPerBatch(uint256 _newEvmCount, uint256 _newSolanaCount)`
+- `SOLANA_ADDRESS_LENGTH() view returns (uint256)`
+- `subscriptionId() view returns (uint32)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `takeOrders(bytes32) view returns (uint8 status, address takerAddress, uint32 giveChainId, uint256 bigGiveChainId)`
+- `takePatches(bytes32) view returns (uint256)`
+- `unpause()`
+- `version() pure returns (string)`
 
 ### `DlnSourceABI`
 
 `import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource.
 
+- `BPS_DENOMINATOR() view returns (uint256)`
+- `chainEngines(uint256) view returns (uint8)`
+- `claimBatchCancel(bytes32[] _orderIds, address _beneficiary)`
+- `claimBatchUnlock(bytes32[] _orderIds, address _beneficiary)`
+- `claimCancel(bytes32 _orderId, address _beneficiary)`
+- `claimUnlock(bytes32 _orderId, address _beneficiary)`
+- `collectedFee(address) view returns (uint256)`
 - `createOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope) payable returns (bytes32 orderId)`
+- `createSaltedOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, uint64 _salt, bytes _affiliateFee, uint32 _referralCode, bytes _permitEnvelope, bytes _metadata) payable returns (bytes32)`
+- `createSaltedOrderForIntent((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, uint64 _salt, uint32 _referralCode, uint256 _giveTokenFeeAmount, bytes _metadata) payable returns (bytes32)`
+- `createSaltedOrderForIntent((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, address _maker, uint64 _salt, uint32 _referralCode, uint256 _giveTokenFeeAmount, bytes _metadata) payable returns (bytes32)`
+- `deBridgeGate() view returns (address)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
+- `dlnDestinationAddresses(uint256) view returns (bytes)`
+- `EVM_ADDRESS_LENGTH() view returns (uint256)`
+- `FEE_COLLECTOR_ROLE() view returns (bytes32)`
+- `getChainId() view returns (uint256 cid)`
+- `getOrderId((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) _order) pure returns (bytes32)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `giveOrders(bytes32) view returns (uint8 status, uint160 giveTokenAddress, uint88 nativeFixFee, uint48 takeChainId, uint208 percentFee, uint256 giveAmount, address affiliateBeneficiary, uint256 affiliateAmount)`
+- `givePatches(bytes32) view returns (uint256)`
+- `globalFixedNativeFee() view returns (uint88)`
+- `globalTransferFeeBps() view returns (uint16)`
+- `GOVMONITORING_ROLE() view returns (bytes32)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `initialize(uint88 _globalFixedNativeFee, uint16 _globalTransferFeeBps)`
+- `intentManager() view returns (address)`
+- `intentManagerRights() view returns (address)`
+- `masterNonce(address) view returns (uint256)`
+- `MAX_ADDRESS_LENGTH() view returns (uint256)`
+- `pause()`
+- `paused() view returns (bool)`
+- `renounceRole(bytes32 role, address account)`
+- `revokeRole(bytes32 role, address account)`
+- `setDlnDestinationAddress(uint256 _chainIdTo, bytes _dlnDestinationAddress, uint8 _chainEngine)`
+- `SOLANA_ADDRESS_LENGTH() view returns (uint256)`
+- `subscriptionId() view returns (uint32)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `unclaimedAffiliateETHFees(address) view returns (uint256)`
+- `unclaimedERC20AffiliateFees(address, address) view returns (uint256)`
+- `unexpectedOrderStatusForCancel(bytes32) view returns (address)`
+- `unexpectedOrderStatusForClaim(bytes32) view returns (address)`
+- `unpause()`
+- `updateGlobalFee(uint88 _globalFixedNativeFee, uint16 _globalTransferFeeBps)`
+- `validateCreationOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, address _signer) view returns ((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) order)`
+- `validateCreationOrder((address giveTokenAddress, uint256 giveAmount, bytes takeTokenAddress, uint256 takeAmount, uint256 takeChainId, bytes receiverDst, address givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes externalCall, bytes allowedCancelBeneficiarySrc) _orderCreation, address _signer, uint64 _salt) view returns ((uint64 makerOrderNonce, bytes makerSrc, uint256 giveChainId, bytes giveTokenAddress, uint256 giveAmount, uint256 takeChainId, bytes takeTokenAddress, uint256 takeAmount, bytes receiverDst, bytes givePatchAuthoritySrc, bytes orderAuthorityAddressDst, bytes allowedTakerDst, bytes allowedCancelBeneficiarySrc, bytes externalCall) order)`
+- `version() pure returns (string)`
+- `withdrawCollectedFees(address[] _tokens)`
+- `withdrawUnclaimedAffiliateFees(address[] _tokens, address _beneficiary)`
 
 ## Next
 

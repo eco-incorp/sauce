@@ -41,6 +41,40 @@ function main() {
 
 `import SynapseBridgeABI from "./protocols/synapse/SynapseBridgeABI.json";` Speaks for: synapseBridge.
 
+- `addKappas(bytes32[] kappas)`
+- `bridgeVersion() view returns (uint256)`
+- `chainGasAmount() view returns (uint256)`
+- `DEFAULT_ADMIN_ROLE() view returns (bytes32)`
 - `deposit(address to, uint256 chainId, address token, uint256 amount)`
 - `depositAndSwap(address to, uint256 chainId, address token, uint256 amount, uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 minDy, uint256 deadline)`
+- `getFeeBalance(address tokenAddress) view returns (uint256)`
+- `getRoleAdmin(bytes32 role) view returns (bytes32)`
+- `getRoleMember(bytes32 role, uint256 index) view returns (address)`
+- `getRoleMemberCount(bytes32 role) view returns (uint256)`
+- `GOVERNANCE_ROLE() view returns (bytes32)`
+- `grantRole(bytes32 role, address account)`
+- `hasRole(bytes32 role, address account) view returns (bool)`
+- `initialize()`
+- `isLegacySendDisabled() view returns (bool)`
+- `kappaExists(bytes32 kappa) view returns (bool)`
+- `mint(address to, address token, uint256 amount, uint256 fee, bytes32 kappa)`
+- `mintAndSwap(address to, address token, uint256 amount, uint256 fee, address pool, uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 minDy, uint256 deadline, bytes32 kappa)`
+- `NODEGROUP_ROLE() view returns (bytes32)`
+- `pause()`
+- `paused() view returns (bool)`
 - `redeem(address to, uint256 chainId, address token, uint256 amount)`
+- `redeemAndRemove(address to, uint256 chainId, address token, uint256 amount, uint8 swapTokenIndex, uint256 swapMinAmount, uint256 swapDeadline)`
+- `redeemAndSwap(address to, uint256 chainId, address token, uint256 amount, uint8 tokenIndexFrom, uint8 tokenIndexTo, uint256 minDy, uint256 deadline)`
+- `redeemV2(bytes32 to, uint256 chainId, address token, uint256 amount)`
+- `renounceRole(bytes32 role, address account)`
+- `revokeRole(bytes32 role, address account)`
+- `setChainGasAmount(uint256 amount)`
+- `setLegacySendDisabled(bool _isLegacySendDisabled)`
+- `setWethAddress(address _wethAddress)`
+- `startBlockNumber() view returns (uint256)`
+- `unpause()`
+- `WETH_ADDRESS() view returns (address)`
+- `withdraw(address to, address token, uint256 amount, uint256 fee, bytes32 kappa)`
+- `withdrawAndRemove(address to, address token, uint256 amount, uint256 fee, address pool, uint8 swapTokenIndex, uint256 swapMinAmount, uint256 swapDeadline, bytes32 kappa)`
+- `withdrawChainGas()`
+- `withdrawFees(address token, address to)`

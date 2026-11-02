@@ -37,9 +37,79 @@ function main() {
 
 `import AutopoolABI from "./protocols/tokemak/AutopoolABI.json";`
 
-- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
-- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
-- `totalAssets() view returns (uint256)`
-- `convertToShares(uint256 assets) view returns (uint256)`
+- `accessController() view returns (address)`
+- `addDestinations(address[] destinations)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 value) returns (bool)`
+- `asset() view returns (address)`
+- `autoPoolStrategy() view returns (address)`
+- `balanceOf(address account) view returns (uint256)`
+- `balanceOfActual(address account) view returns (uint256)`
 - `convertToAssets(uint256 shares) view returns (uint256)`
+- `convertToAssets(uint256 shares, uint256 totalAssetsForPurpose, uint256 supply, uint8 rounding) view returns (uint256 assets)`
+- `convertToShares(uint256 assets) view returns (uint256)`
+- `convertToShares(uint256 assets, uint256 totalAssetsForPurpose, uint256 supply, uint8 rounding) view returns (uint256 shares)`
+- `DEAD_ADDRESS() view returns (address)`
+- `decimals() view returns (uint8)`
+- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `factory() view returns (address)`
+- `FEE_DIVISOR() view returns (uint256)`
+- `flashRebalance(address receiver, (address destinationIn, address tokenIn, uint256 amountIn, address destinationOut, address tokenOut, uint256 amountOut) rebalanceParams, bytes data)`
+- `getAssetBreakdown() view returns ((uint256 totalIdle, uint256 totalDebt, uint256 totalDebtMin, uint256 totalDebtMax))`
+- `getDebtReportingQueue() view returns (address[])`
+- `getDestinationInfo(address destVault) view returns ((uint256 cachedDebtValue, uint256 cachedMinDebtValue, uint256 cachedMaxDebtValue, uint256 lastReport, uint256 ownedShares))`
+- `getDestinations() view returns (address[])`
+- `getFeeSettings() view returns ((address feeSink, uint256 totalAssetsHighMark, uint256 totalAssetsHighMarkTimestamp, uint256 lastPeriodicFeeTake, address periodicFeeSink, uint256 periodicFeeBps, uint256 streamingFeeBps, uint256 navPerShareLastFeeMark, uint256 navPerShareLastFeeMarkTimestamp, bool rebalanceFeeHighWaterMarkEnabled))`
+- `getPastRewarders() view returns (address[])`
+- `getProfitUnlockSettings() view returns ((uint48 unlockPeriodInSeconds, uint48 fullProfitUnlockTime, uint48 lastProfitUnlockTime, uint256 profitUnlockRate))`
+- `getRemovalQueue() view returns (address[])`
+- `getSystemRegistry() view returns (address)`
+- `getWithdrawalQueue() view returns (address[])`
+- `initialize(address strategy, string symbolSuffix, string descPrefix, bytes)`
+- `isDestinationQueuedForRemoval(address dest) view returns (bool)`
+- `isDestinationRegistered(address destination) view returns (bool)`
+- `isPastRewarder(address _pastRewarder) view returns (bool)`
+- `isShutdown() view returns (bool)`
+- `maxDeposit(address wallet) returns (uint256 maxAssets)`
+- `maxMint(address wallet) returns (uint256 maxShares)`
+- `maxRedeem(address owner) returns (uint256 maxShares)`
+- `maxWithdraw(address owner) returns (uint256 maxAssets)`
+- `mint(uint256 shares, address receiver) returns (uint256 assets)`
+- `name() view returns (string)`
+- `nonces(address owner) view returns (uint256)`
+- `oldestDebtReporting() view returns (uint256)`
+- `ONE() view returns (uint256)`
+- `pause()`
+- `paused() returns (bool)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `previewDeposit(uint256 assets) returns (uint256 shares)`
+- `previewMint(uint256 shares) returns (uint256 assets)`
+- `previewRedeem(uint256 shares) returns (uint256 assets)`
+- `previewWithdraw(uint256 assets) returns (uint256 shares)`
+- `recover(address[] tokens, uint256[] amounts, address[] destinations)`
+- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
+- `removeDestinations(address[] destinations)`
+- `rewarder() view returns (address)`
+- `setFeeSink(address newFeeSink)`
+- `setPeriodicFeeBps(uint256 fee)`
+- `setPeriodicFeeSink(address newPeriodicFeeSink)`
+- `setProfitUnlockPeriod(uint48 newUnlockPeriodSeconds)`
+- `setRebalanceFeeHighWaterMarkEnabled(bool enabled)`
+- `setRewarder(address _rewarder)`
+- `setStreamingFeeBps(uint256 fee)`
+- `setSymbolAndDescAfterShutdown(string newSymbol, string newName)`
+- `shutdown(uint8 reason)`
+- `shutdownStatus() view returns (uint8)`
+- `symbol() view returns (string)`
+- `totalAssets() view returns (uint256)`
+- `totalAssets(uint8 purpose) view returns (uint256)`
+- `totalSupply() view returns (uint256 shares)`
+- `transfer(address to, uint256 value) returns (bool)`
+- `transferFrom(address from, address to, uint256 value) returns (bool)`
+- `unlockedShares() view returns (uint256 shares)`
+- `unpause()`
+- `updateDebtReporting(uint256 numToProcess)`
+- `vaultType() view returns (bytes32)`
+- `WETH_INIT_DEPOSIT() view returns (uint256)`
+- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`

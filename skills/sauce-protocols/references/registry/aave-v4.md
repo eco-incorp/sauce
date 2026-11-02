@@ -60,21 +60,131 @@ function main() {
 
 `import AaveV4HubABI from "./protocols/aave-v4/AaveV4HubABI.json";` Speaks for: coreHub, plusHub, primeHub, globalDollarHub, equitiesHub.
 
-- `getAssetId(address underlying) view returns (uint256)`
+- `add(uint256 assetId, uint256 amount) returns (uint256)`
+- `addAsset(address underlying, uint8 decimals, address feeReceiver, address irStrategy, bytes irData) returns (uint256)`
+- `addSpoke(uint256 assetId, address spoke, (uint40 addCap, uint40 drawCap, uint24 riskPremiumThreshold, bool active, bool halted) config)`
+- `authority() view returns (address)`
+- `draw(uint256 assetId, uint256 amount, address to) returns (uint256)`
+- `eliminateDeficit(uint256 assetId, uint256 amount, address spoke) returns (uint256, uint256)`
+- `getAddedAssets(uint256 assetId) view returns (uint256)`
+- `getAddedShares(uint256 assetId) view returns (uint256)`
+- `getAsset(uint256 assetId) view returns ((uint120 liquidity, uint120 realizedFees, uint8 decimals, uint120 addedShares, uint120 swept, int200 premiumOffsetRay, uint120 drawnShares, uint120 premiumShares, uint16 liquidityFee, uint120 drawnIndex, uint96 drawnRate, uint40 lastUpdateTimestamp, address underlying, address irStrategy, address reinvestmentController, address feeReceiver, uint200 deficitRay))`
+- `getAssetAccruedFees(uint256 assetId) view returns (uint256)`
+- `getAssetConfig(uint256 assetId) view returns ((address feeReceiver, uint16 liquidityFee, address irStrategy, address reinvestmentController))`
 - `getAssetCount() view returns (uint256)`
+- `getAssetDeficitRay(uint256 assetId) view returns (uint256)`
+- `getAssetDrawnIndex(uint256 assetId) view returns (uint256)`
+- `getAssetDrawnRate(uint256 assetId) view returns (uint256)`
+- `getAssetDrawnShares(uint256 assetId) view returns (uint256)`
+- `getAssetId(address underlying) view returns (uint256)`
 - `getAssetLiquidity(uint256 assetId) view returns (uint256)`
+- `getAssetOwed(uint256 assetId) view returns (uint256, uint256)`
+- `getAssetPremiumData(uint256 assetId) view returns (uint256, int256)`
+- `getAssetPremiumRay(uint256 assetId) view returns (uint256)`
+- `getAssetSwept(uint256 assetId) view returns (uint256)`
+- `getAssetTotalOwed(uint256 assetId) view returns (uint256)`
+- `getAssetUnderlyingAndDecimals(uint256 assetId) view returns (address, uint8)`
+- `getSpoke(uint256 assetId, address spoke) view returns ((uint120 drawnShares, uint120 premiumShares, int200 premiumOffsetRay, uint120 addedShares, uint40 addCap, uint40 drawCap, uint24 riskPremiumThreshold, bool active, bool halted, uint200 deficitRay))`
+- `getSpokeAddedAssets(uint256 assetId, address spoke) view returns (uint256)`
+- `getSpokeAddedShares(uint256 assetId, address spoke) view returns (uint256)`
+- `getSpokeAddress(uint256 assetId, uint256 index) view returns (address)`
+- `getSpokeConfig(uint256 assetId, address spoke) view returns ((uint40 addCap, uint40 drawCap, uint24 riskPremiumThreshold, bool active, bool halted))`
+- `getSpokeCount(uint256 assetId) view returns (uint256)`
+- `getSpokeDeficitRay(uint256 assetId, address spoke) view returns (uint256)`
+- `getSpokeDrawnShares(uint256 assetId, address spoke) view returns (uint256)`
+- `getSpokeOwed(uint256 assetId, address spoke) view returns (uint256, uint256)`
+- `getSpokePremiumData(uint256 assetId, address spoke) view returns (uint256, int256)`
+- `getSpokePremiumRay(uint256 assetId, address spoke) view returns (uint256)`
+- `getSpokeTotalOwed(uint256 assetId, address spoke) view returns (uint256)`
+- `HUB_REVISION() view returns (uint64)`
+- `initialize(address authority)`
+- `isConsumingScheduledOp() view returns (bytes4)`
+- `isSpokeListed(uint256 assetId, address spoke) view returns (bool)`
 - `isUnderlyingListed(address underlying) view returns (bool)`
+- `MAX_ALLOWED_SPOKE_CAP() view returns (uint40)`
+- `MAX_ALLOWED_UNDERLYING_DECIMALS() view returns (uint8)`
+- `MAX_RISK_PREMIUM_THRESHOLD() view returns (uint24)`
+- `MIN_ALLOWED_UNDERLYING_DECIMALS() view returns (uint8)`
+- `mintFeeShares(uint256 assetId) returns (uint256)`
+- `payFeeShares(uint256 assetId, uint256 shares)`
+- `previewAddByAssets(uint256 assetId, uint256 assets) view returns (uint256)`
+- `previewAddByShares(uint256 assetId, uint256 shares) view returns (uint256)`
+- `previewDrawByAssets(uint256 assetId, uint256 assets) view returns (uint256)`
+- `previewDrawByShares(uint256 assetId, uint256 shares) view returns (uint256)`
+- `previewRemoveByAssets(uint256 assetId, uint256 assets) view returns (uint256)`
+- `previewRemoveByShares(uint256 assetId, uint256 shares) view returns (uint256)`
+- `previewRestoreByAssets(uint256 assetId, uint256 assets) view returns (uint256)`
+- `previewRestoreByShares(uint256 assetId, uint256 shares) view returns (uint256)`
+- `reclaim(uint256 assetId, uint256 amount)`
+- `refreshPremium(uint256 assetId, (int256 sharesDelta, int256 offsetRayDelta, uint256 restoredPremiumRay) premiumDelta)`
+- `remove(uint256 assetId, uint256 amount, address to) returns (uint256)`
+- `reportDeficit(uint256 assetId, uint256 drawnAmount, (int256 sharesDelta, int256 offsetRayDelta, uint256 restoredPremiumRay) premiumDelta) returns (uint256, uint256)`
+- `restore(uint256 assetId, uint256 drawnAmount, (int256 sharesDelta, int256 offsetRayDelta, uint256 restoredPremiumRay) premiumDelta) returns (uint256)`
+- `setAuthority(address newAuthority)`
+- `setInterestRateData(uint256 assetId, bytes irData)`
+- `sweep(uint256 assetId, uint256 amount)`
+- `transferShares(uint256 assetId, uint256 shares, address toSpoke)`
+- `updateAssetConfig(uint256 assetId, (address feeReceiver, uint16 liquidityFee, address irStrategy, address reinvestmentController) config, bytes irData)`
+- `updateSpokeConfig(uint256 assetId, address spoke, (uint40 addCap, uint40 drawCap, uint24 riskPremiumThreshold, bool active, bool halted) config)`
 
 ### `AaveV4SpokeABI`
 
 `import AaveV4SpokeABI from "./protocols/aave-v4/AaveV4SpokeABI.json";` Speaks for: mainSpoke, forexSpoke, bluechipSpoke, ethenaCorrelatedSpoke, ethenaEcosystemSpoke, goldSpoke, paxgGoldSpoke, lombardBtcSpoke, usdgPendleSpoke, etherfiESpoke, kelpESpoke, lidoESpoke, usdgMapleESpoke, mag7Spoke, avaxCorrelatedSpoke.
 
-- `supply(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
-- `withdraw(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
+- `addDynamicReserveConfig(uint256 reserveId, (uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee) dynamicConfig) returns (uint32)`
+- `addReserve(address hub, uint256 assetId, address priceSource, (uint24 collateralRisk, bool paused, bool frozen, bool borrowable, bool receiveSharesEnabled) config, (uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee) dynamicConfig) returns (uint256)`
+- `authority() view returns (address)`
 - `borrow(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
-- `repay(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
-- `setUsingAsCollateral(uint256 reserveId, bool usingAsCollateral, address onBehalfOf)`
-- `getReserveId(address hub, uint256 assetId) view returns (uint256)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)`
+- `extSload(bytes32 slot) view returns (bytes32 ret)`
+- `extSloads(bytes32[] slots) view returns (bytes32[])`
+- `getDynamicReserveConfig(uint256 reserveId, uint32 dynamicConfigKey) view returns ((uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee))`
+- `getLiquidationBonus(uint256 reserveId, address user, uint256 healthFactor) view returns (uint256)`
+- `getLiquidationConfig() view returns ((uint128 targetHealthFactor, uint64 healthFactorForMaxBonus, uint16 liquidationBonusFactor))`
+- `getLiquidationLogic() pure returns (address)`
+- `getReserve(uint256 reserveId) view returns ((address underlying, address hub, uint16 assetId, uint8 decimals, uint24 collateralRisk, uint8 flags, uint32 dynamicConfigKey))`
+- `getReserveConfig(uint256 reserveId) view returns ((uint24 collateralRisk, bool paused, bool frozen, bool borrowable, bool receiveSharesEnabled))`
 - `getReserveCount() view returns (uint256)`
+- `getReserveDebt(uint256 reserveId) view returns (uint256, uint256)`
+- `getReserveId(address hub, uint256 assetId) view returns (uint256)`
+- `getReserveSuppliedAssets(uint256 reserveId) view returns (uint256)`
+- `getReserveSuppliedShares(uint256 reserveId) view returns (uint256)`
+- `getReserveTotalDebt(uint256 reserveId) view returns (uint256)`
+- `getUserAccountData(address user) view returns ((uint256 riskPremium, uint256 avgCollateralFactor, uint256 healthFactor, uint256 totalCollateralValue, uint256 totalDebtValueRay, uint256 activeCollateralCount, uint256 borrowCount))`
+- `getUserDebt(uint256 reserveId, address user) view returns (uint256, uint256)`
+- `getUserLastRiskPremium(address user) view returns (uint256)`
+- `getUserPosition(uint256 reserveId, address user) view returns ((uint120 drawnShares, uint120 premiumShares, int200 premiumOffsetRay, uint120 suppliedShares, uint32 dynamicConfigKey))`
+- `getUserPremiumDebtRay(uint256 reserveId, address user) view returns (uint256)`
+- `getUserReserveStatus(uint256 reserveId, address user) view returns (bool, bool)`
 - `getUserSuppliedAssets(uint256 reserveId, address user) view returns (uint256)`
+- `getUserSuppliedShares(uint256 reserveId, address user) view returns (uint256)`
 - `getUserTotalDebt(uint256 reserveId, address user) view returns (uint256)`
+- `initialize(address authority)`
+- `isConsumingScheduledOp() view returns (bytes4)`
+- `isPositionManager(address user, address positionManager) view returns (bool)`
+- `isPositionManagerActive(address positionManager) view returns (bool)`
+- `liquidationCall(uint256 collateralReserveId, uint256 debtReserveId, address user, uint256 debtToCover, bool receiveShares)`
+- `MAX_USER_RESERVES_LIMIT() view returns (uint16)`
+- `multicall(bytes[] data) returns (bytes[])`
+- `nonces(address owner, uint192 key) view returns (uint256)`
+- `ORACLE() view returns (address)`
+- `permitReserve(uint256 reserveId, address onBehalfOf, uint256 value, uint256 deadline, uint8 permitV, bytes32 permitR, bytes32 permitS)`
+- `renouncePositionManagerRole(address onBehalfOf)`
+- `repay(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
+- `SET_USER_POSITION_MANAGERS_TYPEHASH() view returns (bytes32)`
+- `setAuthority(address newAuthority)`
+- `setUserPositionManager(address positionManager, bool approve)`
+- `setUserPositionManagersWithSig((address onBehalfOf, (address positionManager, bool approve)[] updates, uint256 nonce, uint256 deadline) params, bytes signature)`
+- `setUsingAsCollateral(uint256 reserveId, bool usingAsCollateral, address onBehalfOf)`
+- `SPOKE_REVISION() view returns (uint64)`
+- `supply(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
+- `updateDynamicReserveConfig(uint256 reserveId, uint32 dynamicConfigKey, (uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee) dynamicConfig)`
+- `updateLiquidationConfig((uint128 targetHealthFactor, uint64 healthFactorForMaxBonus, uint16 liquidationBonusFactor) config)`
+- `updatePositionManager(address positionManager, bool active)`
+- `updateReserveConfig(uint256 reserveId, (uint24 collateralRisk, bool paused, bool frozen, bool borrowable, bool receiveSharesEnabled) config)`
+- `updateReservePriceSource(uint256 reserveId, address priceSource)`
+- `updateUserDynamicConfig(address onBehalfOf)`
+- `updateUserRiskPremium(address onBehalfOf)`
+- `useNonce(uint192 key) returns (uint256)`
+- `withdraw(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`

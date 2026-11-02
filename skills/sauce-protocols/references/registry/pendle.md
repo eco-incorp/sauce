@@ -33,11 +33,133 @@ function main() {
 
 ## ABI
 
+Where a line says what an address it returns is, a program that calls the function through
+its namespace calls that contract's methods on the result directly:
+`<Namespace>.<Contract>.<function>(...).<method>(...)`. A token's methods are the ERC-20
+functions, and its writes are SafeERC20.
+
+### `PendleMarketABI`
+
+`import PendleMarketABI from "./protocols/pendle/PendleMarketABI.json";`
+
+- `_storage() view returns (int128 totalPt, int128 totalSy, uint96 lastLnImpliedRate, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext)`
+- `activeBalance(address) view returns (uint256)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `burn(address receiverSy, address receiverPt, uint256 netLpToBurn) returns (uint256 netSyOut, uint256 netPtOut)`
+- `decimals() view returns (uint8)`
+- `expiry() view returns (uint256)`
+- `factory() view returns (address)`
+- `getRewardTokens() view returns (address[])`
+- `increaseObservationsCardinalityNext(uint16 cardinalityNext)`
+- `isExpired() view returns (bool)`
+- `lastRewardBlock() view returns (uint256)`
+- `mint(address receiver, uint256 netSyDesired, uint256 netPtDesired) returns (uint256 netLpOut, uint256 netSyUsed, uint256 netPtUsed)`
+- `name() view returns (string)`
+- `observations(uint256) view returns (uint32 blockTimestamp, uint216 lnImpliedRateCumulative, bool initialized)`
+- `observe(uint32[] secondsAgos) view returns (uint216[] lnImpliedRateCumulative)`
+- `readState(address router) view returns ((int256 totalPt, int256 totalSy, int256 totalLp, address treasury, int256 scalarRoot, uint256 expiry, uint256 lnFeeRateRoot, uint256 reserveFeePercent, uint256 lastLnImpliedRate) market)`
+- `readTokens() view returns (address _SY, address _PT, address _YT)`: `_SY` is a `Pendle.SY`, `_PT` is a token, `_YT` is a token
+- `redeemRewards(address user) returns (uint256[])`
+- `rewardState(address) view returns (uint128 index, uint128 lastBalance)`
+- `skim()`
+- `swapExactPtForSy(address receiver, uint256 exactPtIn, bytes data) returns (uint256 netSyOut, uint256 netSyFee)`
+- `swapSyForExactPt(address receiver, uint256 exactPtOut, bytes data) returns (uint256 netSyIn, uint256 netSyFee)`
+- `symbol() view returns (string)`
+- `totalActiveSupply() view returns (uint256)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `userReward(address, address) view returns (uint128 index, uint128 accrued)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `DOMAIN_SEPARATOR` taking `()`: not every deployment dispatches it.
+- `error MarketZeroNetLPFee` taking `()`: not every deployment declares it.
+- `event RedeemRewards` taking `(address,uint256[])`: not every deployment declares it.
+- `getNonOverrideLnFeeRateRoot` taking `()`: not every deployment dispatches it.
+- `initialAnchor` taking `()`: not every deployment dispatches it.
+- `nonces` taking `(address)`: not every deployment dispatches it.
+- `permit` taking `(address,address,uint256,uint256,uint8,bytes32,bytes32)`: not every deployment dispatches it.
+- `reentrancyGuardEntered` taking `()`: not every deployment dispatches it.
+- `scalarRoot` taking `()`: not every deployment dispatches it.
+- `VERSION` taking `()`: not every deployment dispatches it.
+
 ### `PendleRouterABI`
 
 `import PendleRouterABI from "./protocols/pendle/PendleRouterABI.json";` Speaks for: router.
 
+- `addLiquidityDualSyAndPt(address receiver, address market, uint256 netSyDesired, uint256 netPtDesired, uint256 minLpOut) returns (uint256 netLpOut, uint256 netSyUsed, uint256 netPtUsed)`
+- `addLiquidityDualTokenAndPt(address receiver, address market, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, uint256 netPtDesired, uint256 minLpOut) payable returns (uint256 netLpOut, uint256 netPtUsed, uint256 netSyInterm)`
+- `addLiquiditySinglePt(address receiver, address market, uint256 netPtIn, uint256 minLpOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtSwapToSy, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netLpOut, uint256 netSyFee)`
+- `addLiquiditySingleSy(address receiver, address market, uint256 netSyIn, uint256 minLpOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtReceivedFromSy, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netLpOut, uint256 netSyFee)`
+- `addLiquiditySingleSyKeepYt(address receiver, address market, uint256 netSyIn, uint256 minLpOut, uint256 minYtOut) returns (uint256 netLpOut, uint256 netYtOut, uint256 netSyMintPy)`
 - `addLiquiditySingleToken(address receiver, address market, uint256 minLpOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtReceivedFromSy, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) payable returns (uint256 netLpOut, uint256 netSyFee, uint256 netSyInterm)`
+- `addLiquiditySingleTokenKeepYt(address receiver, address market, uint256 minLpOut, uint256 minYtOut, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input) payable returns (uint256 netLpOut, uint256 netYtOut, uint256 netSyMintPy, uint256 netSyInterm)`
+- `removeLiquidityDualSyAndPt(address receiver, address market, uint256 netLpToRemove, uint256 minSyOut, uint256 minPtOut) returns (uint256 netSyOut, uint256 netPtOut)`
+- `removeLiquidityDualTokenAndPt(address receiver, address market, uint256 netLpToRemove, (address tokenOut, uint256 minTokenOut, address tokenRedeemSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) output, uint256 minPtOut) returns (uint256 netTokenOut, uint256 netPtOut, uint256 netSyInterm)`
+- `removeLiquiditySinglePt(address receiver, address market, uint256 netLpToRemove, uint256 minPtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtReceivedFromSy, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netPtOut, uint256 netSyFee)`
+- `removeLiquiditySingleSy(address receiver, address market, uint256 netLpToRemove, uint256 minSyOut, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netSyOut, uint256 netSyFee)`
 - `removeLiquiditySingleToken(address receiver, address market, uint256 netLpToRemove, (address tokenOut, uint256 minTokenOut, address tokenRedeemSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) output, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netTokenOut, uint256 netSyFee, uint256 netSyInterm)`
+- `swapExactPtForSy(address receiver, address market, uint256 exactPtIn, uint256 minSyOut, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netSyOut, uint256 netSyFee)`
+- `swapExactPtForToken(address receiver, address market, uint256 exactPtIn, (address tokenOut, uint256 minTokenOut, address tokenRedeemSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) output, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netTokenOut, uint256 netSyFee, uint256 netSyInterm)`
+- `swapExactSyForPt(address receiver, address market, uint256 exactSyIn, uint256 minPtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtOut, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netPtOut, uint256 netSyFee)`
+- `swapExactSyForYt(address receiver, address market, uint256 exactSyIn, uint256 minYtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessYtOut, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netYtOut, uint256 netSyFee)`
 - `swapExactTokenForPt(address receiver, address market, uint256 minPtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessPtOut, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) payable returns (uint256 netPtOut, uint256 netSyFee, uint256 netSyInterm)`
 - `swapExactTokenForYt(address receiver, address market, uint256 minYtOut, (uint256 guessMin, uint256 guessMax, uint256 guessOffchain, uint256 maxIteration, uint256 eps) guessYtOut, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) payable returns (uint256 netYtOut, uint256 netSyFee, uint256 netSyInterm)`
+- `swapExactYtForSy(address receiver, address market, uint256 exactYtIn, uint256 minSyOut, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netSyOut, uint256 netSyFee)`
+- `swapExactYtForToken(address receiver, address market, uint256 exactYtIn, (address tokenOut, uint256 minTokenOut, address tokenRedeemSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) output, (address limitRouter, uint256 epsSkipMarket, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] normalFills, ((uint256 salt, uint256 expiry, uint256 nonce, uint8 orderType, address token, address YT, address maker, address receiver, uint256 makingAmount, uint256 lnImpliedRate, uint256 failSafeRate, bytes permit) order, bytes signature, uint256 makingAmount)[] flashFills, bytes optData) limit) returns (uint256 netTokenOut, uint256 netSyFee, uint256 netSyInterm)`
+
+### `PendleSYABI`
+
+`import PendleSYABI from "./protocols/pendle/PendleSYABI.json";`
+
+- `accruedRewards(address) view returns (uint256[] rewardAmounts)`
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `assetInfo() view returns (uint8 assetType, address assetAddress, uint8 assetDecimals)`
+- `balanceOf(address account) view returns (uint256)`
+- `claimOwnership()`
+- `claimRewards(address) returns (uint256[] rewardAmounts)`
+- `decimals() view returns (uint8)`
+- `deposit(address receiver, address tokenIn, uint256 amountTokenToDeposit, uint256 minSharesOut) payable returns (uint256 amountSharesOut)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `exchangeRate() view returns (uint256)`
+- `getRewardTokens() view returns (address[] rewardTokens)`
+- `getTokensIn() view returns (address[] res)`
+- `getTokensOut() view returns (address[] res)`
+- `isValidTokenIn(address token) view returns (bool)`
+- `isValidTokenOut(address token) view returns (bool)`
+- `name() view returns (string)`
+- `nonces(address owner) view returns (uint256)`
+- `owner() view returns (address)`
+- `pause()`
+- `paused() view returns (bool)`
+- `pendingOwner() view returns (address)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `previewDeposit(address tokenIn, uint256 amountTokenToDeposit) view returns (uint256 amountSharesOut)`
+- `previewRedeem(address tokenOut, uint256 amountSharesToRedeem) view returns (uint256 amountTokenOut)`
+- `redeem(address receiver, uint256 amountSharesToRedeem, address tokenOut, uint256 minTokenOut, bool burnFromInternalBalance) returns (uint256 amountTokenOut)`
+- `rewardIndexesCurrent() returns (uint256[] indexes)`
+- `rewardIndexesStored() view returns (uint256[] indexes)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `transferOwnership(address newOwner, bool direct, bool renounce)`
+- `unpause()`
+- `yieldToken() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `adapter` taking `()`: not every deployment dispatches it.
+- `asset` taking `()`: not every deployment dispatches it.
+- `eip712Domain` taking `()`: not every deployment dispatches it.
+- `event EIP712DomainChanged` taking `()`: not every deployment declares it.
+- `event SetAdapter` taking `(address)`: not every deployment declares it.
+- `initialize` taking `(string,string,address)`: not every deployment dispatches it.
+- `setAdapter` taking `(address)`: not every deployment dispatches it.
+- `stETH` taking `()`: not every deployment dispatches it.
+- `wETH` taking `()`: not every deployment dispatches it.
+- `wstETH` taking `()`: not every deployment dispatches it.
