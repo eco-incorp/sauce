@@ -336,6 +336,39 @@
       ]
     },
     {
+      "name": "addLiquiditySinglePtSimple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netPtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minLpOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netLpOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "addLiquiditySingleSy",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -585,6 +618,39 @@
         },
         {
           "name": "netSyMintPy",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "addLiquiditySingleSySimple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netSyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minLpOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netLpOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
           "type": "uint256"
         }
       ]
@@ -932,6 +998,1358 @@
       ]
     },
     {
+      "name": "addLiquiditySingleTokenSimple",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "minLpOut",
+          "type": "uint256"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netLpOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "boostMarkets",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "markets",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burnAccount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "callAndReflect",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "reflector",
+          "type": "address"
+        },
+        {
+          "name": "selfCall1",
+          "type": "bytes"
+        },
+        {
+          "name": "selfCall2",
+          "type": "bytes"
+        },
+        {
+          "name": "reflectCall",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "selfRes1",
+          "type": "bytes"
+        },
+        {
+          "name": "selfRes2",
+          "type": "bytes"
+        },
+        {
+          "name": "reflectRes",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "claimOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "exitPostExpToSy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netPtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netLpIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minSyOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "netPtFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netPtRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "totalSyOut",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "exitPostExpToToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netPtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netLpIn",
+          "type": "uint256"
+        },
+        {
+          "name": "output",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minTokenOut",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenRedeemSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "totalTokenOut",
+          "type": "uint256"
+        },
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "netPtFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netPtRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "totalSyOut",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "exitPreExpToSy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netPtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netYtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netLpIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minSyOut",
+          "type": "uint256"
+        },
+        {
+          "name": "limit",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "limitRouter",
+              "type": "address"
+            },
+            {
+              "name": "epsSkipMarket",
+              "type": "uint256"
+            },
+            {
+              "name": "normalFills",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "flashFills",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "optData",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "netPtFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netPyRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netPtSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netYtSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFee",
+              "type": "uint256"
+            },
+            {
+              "name": "totalSyOut",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "exitPreExpToToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netPtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netYtIn",
+          "type": "uint256"
+        },
+        {
+          "name": "netLpIn",
+          "type": "uint256"
+        },
+        {
+          "name": "output",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minTokenOut",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenRedeemSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "limit",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "limitRouter",
+              "type": "address"
+            },
+            {
+              "name": "epsSkipMarket",
+              "type": "uint256"
+            },
+            {
+              "name": "normalFills",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "flashFills",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "order",
+                  "type": "tuple",
+                  "components": [
+                    {
+                      "name": "salt",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "expiry",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "nonce",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "orderType",
+                      "type": "uint8"
+                    },
+                    {
+                      "name": "token",
+                      "type": "address"
+                    },
+                    {
+                      "name": "YT",
+                      "type": "address"
+                    },
+                    {
+                      "name": "maker",
+                      "type": "address"
+                    },
+                    {
+                      "name": "receiver",
+                      "type": "address"
+                    },
+                    {
+                      "name": "makingAmount",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "lnImpliedRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "failSafeRate",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "permit",
+                      "type": "bytes"
+                    }
+                  ]
+                },
+                {
+                  "name": "signature",
+                  "type": "bytes"
+                },
+                {
+                  "name": "makingAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "optData",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "totalTokenOut",
+          "type": "uint256"
+        },
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "netPtFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRemove",
+              "type": "uint256"
+            },
+            {
+              "name": "netPyRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromRedeem",
+              "type": "uint256"
+            },
+            {
+              "name": "netPtSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netYtSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFromSwap",
+              "type": "uint256"
+            },
+            {
+              "name": "netSyFee",
+              "type": "uint256"
+            },
+            {
+              "name": "totalSyOut",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "limitRouterCallback",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "actualMaking",
+          "type": "uint256"
+        },
+        {
+          "name": "actualTaking",
+          "type": "uint256"
+        },
+        {
+          "name": "totalFee",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "mintPyFromSy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "YT",
+          "type": "address"
+        },
+        {
+          "name": "netSyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minPyOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netPyOut",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintPyFromToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "YT",
+          "type": "address"
+        },
+        {
+          "name": "minPyOut",
+          "type": "uint256"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netPyOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintSyFromToken",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "SY",
+          "type": "address"
+        },
+        {
+          "name": "minSyOut",
+          "type": "uint256"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netSyOut",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "multicall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "calls",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "allowFailure",
+              "type": "bool"
+            },
+            {
+              "name": "callData",
+              "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "res",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "success",
+              "type": "bool"
+            },
+            {
+              "name": "returnData",
+              "type": "bytes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "redeemDueInterestAndRewards",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "sys",
+          "type": "address[]"
+        },
+        {
+          "name": "yts",
+          "type": "address[]"
+        },
+        {
+          "name": "markets",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "redeemDueInterestAndRewardsV2",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "SYs",
+          "type": "address[]"
+        },
+        {
+          "name": "YTs",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "yt",
+              "type": "address"
+            },
+            {
+              "name": "doRedeemInterest",
+              "type": "bool"
+            },
+            {
+              "name": "doRedeemRewards",
+              "type": "bool"
+            },
+            {
+              "name": "tokenRedeemSy",
+              "type": "address"
+            },
+            {
+              "name": "minTokenRedeemOut",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "markets",
+          "type": "address[]"
+        },
+        {
+          "name": "pendleSwap",
+          "type": "address"
+        },
+        {
+          "name": "swaps",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minOut",
+              "type": "uint256"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netOutFromSwaps",
+          "type": "uint256[]"
+        },
+        {
+          "name": "netInterests",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "redeemPyToSy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "YT",
+          "type": "address"
+        },
+        {
+          "name": "netPyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minSyOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netSyOut",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "redeemPyToToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "YT",
+          "type": "address"
+        },
+        {
+          "name": "netPyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "output",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minTokenOut",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenRedeemSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netTokenOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "redeemSyToToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "SY",
+          "type": "address"
+        },
+        {
+          "name": "netSyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "output",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minTokenOut",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenRedeemSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netTokenOut",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "removeLiquidityDualSyAndPt",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -1249,6 +2667,39 @@
               "type": "bytes"
             }
           ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netPtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "removeLiquiditySinglePtSimple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "netLpToRemove",
+          "type": "uint256"
+        },
+        {
+          "name": "minPtOut",
+          "type": "uint256"
         }
       ],
       "outputs": [
@@ -1679,6 +3130,101 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "requestBurnQuota",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "optData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "selectorToFacet",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setSelectorToFacets",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "arr",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "facet",
+              "type": "address"
+            },
+            {
+              "name": "selectors",
+              "type": "bytes4[]"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "simulate",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapCallback",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "ptToAccount",
+          "type": "int256"
+        },
+        {
+          "name": "syToAccount",
+          "type": "int256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
     },
     {
       "name": "swapExactPtForSy",
@@ -2312,6 +3858,39 @@
       ]
     },
     {
+      "name": "swapExactSyForPtSimple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "exactSyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minPtOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netPtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "swapExactSyForYt",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -2511,6 +4090,39 @@
               "type": "bytes"
             }
           ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netYtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "swapExactSyForYtSimple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "exactSyIn",
+          "type": "uint256"
+        },
+        {
+          "name": "minYtOut",
+          "type": "uint256"
         }
       ],
       "outputs": [
@@ -2782,6 +4394,83 @@
       ]
     },
     {
+      "name": "swapExactTokenForPtSimple",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "minPtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netPtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "swapExactTokenForYt",
       "type": "function",
       "stateMutability": "payable",
@@ -3019,6 +4708,83 @@
             {
               "name": "optData",
               "type": "bytes"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netYtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyFee",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "swapExactTokenForYtSimple",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "minYtOut",
+          "type": "uint256"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
             }
           ]
         }
@@ -3455,6 +5221,164 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "swapTokensToTokens",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "pendleSwap",
+          "type": "address"
+        },
+        {
+          "name": "swaps",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "tokenOut",
+              "type": "address"
+            },
+            {
+              "name": "minOut",
+              "type": "uint256"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "netSwaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netOutFromSwaps",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "swapTokenToTokenViaSy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "SY",
+          "type": "address"
+        },
+        {
+          "name": "input",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "tokenIn",
+              "type": "address"
+            },
+            {
+              "name": "netTokenIn",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenMintSy",
+              "type": "address"
+            },
+            {
+              "name": "pendleSwap",
+              "type": "address"
+            },
+            {
+              "name": "swapData",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "swapType",
+                  "type": "uint8"
+                },
+                {
+                  "name": "extRouter",
+                  "type": "address"
+                },
+                {
+                  "name": "extCalldata",
+                  "type": "bytes"
+                },
+                {
+                  "name": "needScale",
+                  "type": "bool"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "tokenRedeemSy",
+          "type": "address"
+        },
+        {
+          "name": "minTokenOut",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "netTokenOut",
+          "type": "uint256"
+        },
+        {
+          "name": "netSyInterm",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        },
+        {
+          "name": "direct",
+          "type": "bool"
+        },
+        {
+          "name": "renounce",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
     },
     {
       "name": "AddLiquidityDualSyAndPt",
@@ -4665,6 +6589,20 @@
         {
           "name": "totalAsset",
           "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "SimulationResults",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "success",
+          "type": "bool"
+        },
+        {
+          "name": "res",
+          "type": "bytes"
         }
       ]
     }
