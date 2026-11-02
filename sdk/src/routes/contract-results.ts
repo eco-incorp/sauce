@@ -42,6 +42,7 @@ import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
+import { methodListing } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
 import {
@@ -320,10 +321,14 @@ export function rewriteContractResults(
     }
     const call = `${spelled(object)}.${method}(...)`;
     if (!contract.methods.some((m) => m.name === method)) {
-      const methods = [...new Set(contract.methods.map((m) => m.name))].join(", ");
+      const methods = methodListing(
+        contract.methods.map((m) => m.name),
+        method,
+        "its methods",
+      );
       fail(
         `'${call}': ${spelled(object)} is ${isToken(contract) ? "a token" : `a ${named(contract)}`}, ` +
-          `whose ABI has no '${method}' (its methods: ${methods})`,
+          `whose ABI has no '${method}' ${methods}`,
       );
     }
     const write = isToken(contract) && Object.hasOwn(SAFE_WRITES, method);

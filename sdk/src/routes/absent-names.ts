@@ -72,6 +72,7 @@ import {
   type Scope,
 } from "./lexical-scope.js";
 import { lexicalBindings } from "./lexical-bindings.js";
+import { isWithheld, listed, methodListing, withheldRefusal } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
@@ -306,13 +307,6 @@ function unwrap(node: AstNode): AstNode {
   return at;
 }
 
-/** A list of chains for a message: every one, or the first few and how many more. */
-function listed(slugs: readonly string[]): string {
-  return slugs.length <= 8
-    ? slugs.join(", ")
-    : `${slugs.slice(0, 8).join(", ")} and ${slugs.length - 8} more`;
-}
-
 /** Every chain's native coin's symbol. */
 let natives: ReadonlySet<string> | undefined;
 function nativeSymbols(): ReadonlySet<string> {
@@ -471,10 +465,11 @@ export function checkNames(
         namespace.defaultContract === undefined
           ? undefined
           : namespace.members.get(namespace.defaultContract);
-      const methods =
-        fallback !== undefined && fallback.kind !== "ambiguous"
-          ? new Set(fallback.descriptor.methods.map((method) => method.name))
-          : new Set<string>();
+      const target = fallback === undefined || fallback.kind === "ambiguous" ? undefined : fallback;
+      const full = target?.kind === "deployed" ? target.full : target?.descriptor;
+      // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+      const called = validating ? full : target?.descriptor;
+      const methods = new Set(called?.methods.map((method) => method.name));
       if (role === "callee" && methods.has(name)) {
         return {
           kind: "contract",
@@ -483,9 +478,12 @@ export function checkNames(
           chain: on,
           namespace,
           contract: namespace.defaultContract!,
-          entry: fallback!,
+          entry: target!,
           viaDefault: name,
         };
+      }
+      if (role === "callee" && full !== undefined && isWithheld(full, called!, name)) {
+        return fail(node, withheldRefusal(`${shown}(…)`, name, full, on));
       }
       return fail(
         node,
@@ -1087,13 +1085,20 @@ export function checkNames(
     if (owner?.kind !== "contract" || owner.viaDefault !== undefined) return;
     const { entry } = owner;
     if (entry.kind !== "deployed" && entry.kind !== "absent") return;
-    const { protocol, contract } = entry.descriptor;
-    const methods = [...new Set(entry.descriptor.methods.map((method) => method.name))];
-    const known = `${protocol}.${contract}'s vendored ABI (known methods: ${methods.join(", ")})`;
+    // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+    const full = entry.kind === "deployed" ? entry.full : entry.descriptor;
+    const descriptor = validating ? full : entry.descriptor;
+    const { protocol, contract } = descriptor;
+    const methods = [...new Set(descriptor.methods.map((method) => method.name))];
+    const known = `${protocol}.${contract}'s vendored ABI ${methodListing(methods, read)}`;
+    const withheld = isWithheld(full, descriptor, read);
     const property = prop<AstNode>(node, "property");
     if (role === "callee") {
       // A scalar method reads the contract's address (`protocol-rewrite.ts`, shape G).
       if (methods.includes(read) || SCALAR_METHODS.has(read)) return;
+      if (withheld) {
+        fail(property, withheldRefusal(`${owner.shown}.${read}(…)`, read, full, owner.chain));
+      }
       fail(
         property,
         `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${known}.` + meant(read, methods),
@@ -1116,6 +1121,8 @@ export function checkNames(
           `\`${owner.shown}.${read}(…)\`.`,
       );
     }
+    if (withheld)
+      fail(property, withheldRefusal(`${owner.shown}.${read}`, read, full, owner.chain));
     fail(
       property,
       `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${known} nor a token ` +

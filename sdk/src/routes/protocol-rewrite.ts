@@ -32,6 +32,7 @@ import type { Address } from "viem";
 import type { ContractsConfig } from "./compile-types.js";
 
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
+import { descriptorOn } from "../descriptors/derive.js";
 import { addressOn } from "../descriptors/query.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { walk, collectPatternBinders, type AstNode } from "./ast-walk.js";
@@ -44,6 +45,7 @@ import {
   resolveNamespace,
   type Namespace,
 } from "./accessor-index.js";
+import { isWithheld, methodListing, withheldRefusal } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 import { shadowed as shadowedAt, walkScoped, type Scope } from "./lexical-scope.js";
@@ -365,6 +367,7 @@ export interface AccessorTarget {
   readonly chain: CanonicalChain;
   readonly protocol: string;
   readonly contract: string;
+  /** The contract as the chain's deployment runs it (`descriptorOn`). */
   readonly descriptor: ContractDescriptor;
   readonly address: Address;
 }
@@ -424,7 +427,7 @@ function resolveAccessorTarget(
     );
   }
 
-  return { chain, protocol, contract, descriptor, address };
+  return { chain, protocol, contract, descriptor: descriptorOn(descriptor, chain.id), address };
 }
 
 /** A contract reference resolved to its descriptor and the chain it is read on. */
@@ -504,7 +507,12 @@ function resolveBound(
   if (path.length !== (isChainKey(head) ? 2 : 1)) {
     fail(`${shown} -- expected '<Protocol>.<Contract>.at(<address>).<method>(...)'`);
   }
-  const { protocol, contract, descriptor } = resolveContractReference(
+  const {
+    chain,
+    protocol,
+    contract,
+    descriptor: full,
+  } = resolveContractReference(
     head,
     path,
     enclosingChain,
@@ -512,24 +520,35 @@ function resolveBound(
     shown,
     ".at(<address>).<method>(...)",
   );
-  if (descriptor.kind === "address-only") {
+  if (full.kind === "address-only") {
     fail(
       `${protocol}.${contract} has no ABI vendored (kind: "address-only") — there is nothing to bind`,
     );
   }
-  if (descriptor.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
+  if (full.coverage.typeFidelity === "widened" && !allowWidenedSelectors) {
     fail(
       `${protocol}.${contract}'s vendored ABI is "widened" (computed selectors do NOT match the deployed ` +
-        `contract) — ${descriptor.coverage.caveats.join("; ")} — pass accessors: { allowWidenedSelectors: true } ` +
+        `contract) — ${full.coverage.caveats.join("; ")} — pass accessors: { allowWidenedSelectors: true } ` +
         "to rewrite it anyway",
     );
   }
+  // The ABI the chain's deployment runs, where the chain has the contract (`descriptorOn`).
+  const descriptor = descriptorOn(full, chain.id);
   const methodDescriptor = methodByName(descriptor, method);
   if (methodDescriptor === undefined) {
-    const known = descriptor.methods.map((m) => m.name).join(", ");
-    fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI (known methods: ${known})`);
+    if (isWithheld(full, descriptor, method)) {
+      fail(withheldRefusal(`${spelled}(…).${method}(…)`, method, full, chain));
+    }
+    const known = methodListing(
+      descriptor.methods.map((m) => m.name),
+      method,
+    );
+    fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI ${known}`);
   }
-  const bindingName = `I${pascalOfSlug(protocol)}_${contract}`;
+  // Another chain's view of the ABI is another binding: two chains in one program never share one.
+  const bindingName =
+    `I${pascalOfSlug(protocol)}_${contract}` +
+    (descriptor === full ? "" : `_On${pascalOfSlug(chain.slug)}`);
   return {
     start: candidate.calleeStart,
     end: candidate.calleeEnd,

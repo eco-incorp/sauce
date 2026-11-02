@@ -156,6 +156,9 @@ function lazy<T>(target: object, key: string, compute: () => T): void {
   });
 }
 
+/** A descriptor whose every deployment runs its whole ABI. */
+const NOTHING_WITHHELD: Readonly<Record<number, readonly string[]>> = Object.freeze({});
+
 /**
  * Assembles one full ContractDescriptor from a link entry plus the protocol's already-resolved data.
  * `deployments` defaults to the protocol's catalog deployments; `returns` is the contracts the ABI's
@@ -178,6 +181,8 @@ export function buildDescriptor(
     roleKey: link.roleKey,
     abiExport: link.abiExport,
     abi: resolvedAbi,
+    withheldOn: link.withheld ?? NOTHING_WITHHELD,
+    ...(link.default === true ? { isDefault: true as const } : {}),
   };
   lazy(descriptor, "methods", () => withReturns(resolvedAbi, returns));
   lazy(descriptor, "perChainAddress", () =>
@@ -190,4 +195,38 @@ export function buildDescriptor(
     buildCoverage((descriptor as unknown as ContractDescriptor).methods, link),
   );
   return descriptor as unknown as ContractDescriptor;
+}
+
+/** Each descriptor's views by chain id, built once (`descriptorOn`). */
+const chainViews = new WeakMap<ContractDescriptor, Map<number, ContractDescriptor>>();
+
+/**
+ * `descriptor` as the deployment on `chainId` runs it. The registry's ABI for a role is the union
+ * of what its deployments run, so one chain's may lack some functions (`withheldOn`). Where the
+ * chain's deployment runs the whole ABI (or there is none), this is `descriptor` itself; otherwise
+ * a view, built once per descriptor and chain, whose `abi` and `methods` leave those functions
+ * out. Events and errors stay, and everything else is the descriptor's.
+ */
+export function descriptorOn(descriptor: ContractDescriptor, chainId: number): ContractDescriptor {
+  const withheld = descriptor.withheldOn[chainId];
+  if (withheld === undefined || withheld.length === 0) return descriptor;
+  let views = chainViews.get(descriptor);
+  if (views === undefined) {
+    views = new Map();
+    chainViews.set(descriptor, views);
+  }
+  let view = views.get(chainId);
+  if (view === undefined) {
+    const lacking = new Set(withheld);
+    view = {
+      ...descriptor,
+      abi: descriptor.abi.filter(
+        (item) => item.type !== "function" || !lacking.has(toFunctionSignature(item)),
+      ),
+      methods: descriptor.methods.filter((method) => !lacking.has(method.signature)),
+    };
+    views.set(chainId, view);
+  }
+
+  return view;
 }

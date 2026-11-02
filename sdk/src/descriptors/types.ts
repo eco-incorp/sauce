@@ -68,6 +68,16 @@ export interface ContractDescriptor {
   /** Derived via the canonical chain registry, id-ascending. */
   readonly chains: readonly ChainSlug[];
   readonly coverage: ContractCoverage;
+  /** The protocol's default contract, which `<Protocol>.<method>(…)` calls, where the registry
+   *  marks one among several singletons (`ContractLink.default`). */
+  readonly isDefault?: true;
+  /**
+   * Per chain id, the canonical signatures of `abi`'s functions the chain's deployment does not run
+   * as declared (see `ContractLink.withheld`); `{}` when every deployment runs all of it. `abi`
+   * and `methods` are the union over the deployments: `descriptorOn(descriptor, chainId)` is the
+   * chain's own.
+   */
+  readonly withheldOn: Readonly<Record<number, readonly string[]>>;
 }
 
 export interface ResolvedContract {

@@ -24,6 +24,12 @@
  * `if (!USDT)`, `X != 0`, `X == 0`, `?:`, `&&`, `||`. The branch a test rules out is not compiled,
  * so a call on a contract the chain lacks compiles there as long as a test of it rules the call out.
  *
+ * EACH CHAIN'S OWN ABI. A registry ABI is the union of what a role's deployments run, so one
+ * chain's deployment may lack some functions (`ContractDescriptor.withheldOn`). The module binds
+ * the contract with the ABI that chain's deployment runs (`descriptorOn`), imported under a path of
+ * its own (`abi/<protocol>/<Export>-<hash of its text>.json`), so a call to a function it lacks is
+ * refused there (`absent-names.ts`) and compiles where the deployment runs it.
+ *
  * A ZERO IS NEVER A CONTRACT AT RUN TIME. The compiler takes a zero anywhere a value goes, so a use
  * of a name the chain lacks outside a branch its test rules out would compile to a call to, or a
  * transfer to, address zero. `absent-names.ts` refuses that use before the compiler runs, at the
@@ -42,6 +48,7 @@
 import type { ContractDescriptor } from "../descriptors/types.js";
 
 import { CANONICAL_CHAINS, type CanonicalChain } from "../chains/canonical.js";
+import { descriptorOn } from "../descriptors/derive.js";
 import { addressOn } from "../descriptors/query.js";
 import {
   CHAIN_KEY_SET,
@@ -99,7 +106,11 @@ export type NameEntry =
   /** Deployed with an ABI: the module binds it, `ABI.at(address)`. */
   | {
       readonly kind: "deployed";
+      /** The contract as this chain's deployment runs it (`descriptorOn`): the ABI the module
+       *  binds, without the functions the deployment withholds. */
       readonly descriptor: ContractDescriptor;
+      /** The contract with every chain's deployments' ABI, which names what this one withholds. */
+      readonly full: ContractDescriptor;
       readonly address: `0x${string}`;
     }
   /** An address the registry records with no ABI: the module holds the address. */
@@ -123,7 +134,8 @@ export interface NamespaceEntry {
   /** The protocol slug, or the family alias's members. */
   readonly protocols: readonly string[];
   readonly members: ReadonlyMap<string, NameEntry>;
-  /** The contract `<Namespace>.<method>(…)` calls: a protocol's one contract with an ABI. */
+  /** The contract `<Namespace>.<method>(…)` calls: the protocol's default contract
+   *  (`ProtocolNamespace.defaultContract`). */
   readonly defaultContract?: string;
 }
 
@@ -161,11 +173,14 @@ export interface ChainNames {
 const ABI_TEXT = new Map<string, string>();
 const ABI_PATHS = new WeakMap<object, string>();
 
-function abiPath(descriptor: ContractDescriptor): string {
+/** The path of `descriptor`'s ABI, where `full` is the contract over every chain's deployment: a
+ *  chain whose deployment withholds some of it imports the rest, under a path of its own text. */
+function abiPath(descriptor: ContractDescriptor, full: ContractDescriptor): string {
   let path = ABI_PATHS.get(descriptor.abi);
   if (path !== undefined) return path;
-  path = `abi/${descriptor.protocol}/${descriptor.abiExport ?? descriptor.contract}.json`;
+  const name = `abi/${descriptor.protocol}/${descriptor.abiExport ?? descriptor.contract}`;
   const text = JSON.stringify(descriptor.abi);
+  path = descriptor === full ? `${name}.json` : `${name}-${hash(text)}.json`;
   // Two ABIs exported under one name are kept apart by the contract's name.
   if (ABI_TEXT.has(path) && ABI_TEXT.get(path) !== text) {
     path = `abi/${descriptor.protocol}/${descriptor.contract}.json`;
@@ -228,7 +243,12 @@ function entryOn(
     return { kind: "refused", descriptor, reason: widened(descriptor) };
   }
 
-  return { kind: "deployed", descriptor, address };
+  return {
+    kind: "deployed",
+    descriptor: descriptorOn(descriptor, chain.id),
+    full: descriptor,
+    address,
+  };
 }
 
 /** Every namespace on `chain`. */
@@ -278,7 +298,7 @@ function namespaceLiteral(
   const fields: string[] = [];
   for (const [name, entry] of namespace.members) {
     if (entry.kind === "deployed") {
-      const path = `${root}${abiPath(entry.descriptor)}`;
+      const path = `${root}${abiPath(entry.descriptor, entry.full)}`;
       let binding = imports.get(path);
       if (binding === undefined) {
         binding = `ABI_${imports.size}`;

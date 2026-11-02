@@ -984,7 +984,7 @@ describe("code a test rules out is still checked as on any chain: only a name th
       ["(available(UniswapV3.Factory) ? 1 : 0)", /`available\(X\)` is removed/],
       [
         "PancakeswapV3.Factory.getPol(USDC, WETH, 500)",
-        /`getPol` is not in pancakeswap-v3\.Factory's vendored ABI \(known methods: .*getPool.*\)/,
+        /`getPol` is not in pancakeswap-v3\.Factory's vendored ABI \(15 known methods; nearest: getPool, setLmPool, createPool, owner, setOwner\)\. Did you mean `getPool`\?/,
       ],
       ["pot.USDCC", /`USDCC` is not a token on optimism\. Did you mean `USDC`\?/],
       ["self.USDC", /the Pot is `pot`, not `self`: write `pot\.USDC`/],
@@ -1262,7 +1262,7 @@ describe("a registry contract's members are its ABI's methods and the balances r
       "function main(a: Address, b: Address): Uint256 { return UniswapV3.Factory.getPol(a, b, 500); }",
     );
     expect(message).toMatch(
-      /`UniswapV3\.Factory\.getPol\(…\)`: `getPol` is not in uniswap-v3\.Factory's vendored ABI \(known methods: getPool, createPool\)\. Did you mean `getPool`\?/,
+      /`UniswapV3\.Factory\.getPol\(…\)`: `getPol` is not in uniswap-v3\.Factory's vendored ABI \(7 known methods; nearest: getPool, createPool, owner, setOwner, parameters\)\. Did you mean `getPool`\?/,
     );
     expect(message).toMatch(/--> main\.js:1:75/);
     // Named on another chain, the same.
@@ -1282,7 +1282,7 @@ describe("a registry contract's members are its ABI's methods and the balances r
       refusal("base", "function main(): Uint256 { return UniswapV3.Factory.getPool; }"),
     ).toMatch(/`UniswapV3\.Factory\.getPool` is a method of uniswap-v3\.Factory: call it/);
     expect(refusal("base", "function main(): Uint256 { return UniswapV3.Factory.Foo; }")).toMatch(
-      /`UniswapV3\.Factory\.Foo`: `Foo` is neither a method of uniswap-v3\.Factory's vendored ABI \(known methods: getPool, createPool\) nor a token base registers/,
+      /`UniswapV3\.Factory\.Foo`: `Foo` is neither a method of uniswap-v3\.Factory's vendored ABI \(7 known methods; nearest: getPool, owner, createPool, setOwner, parameters\) nor a token base registers/,
     );
     // Its balance of a token the chain has, and of its native coin, are read as ever.
     expect(() =>

@@ -59,7 +59,7 @@ describe("descriptors accessors: the motivating path", () => {
       }),
     );
     expect(() => invoke(router, "execute", "0x00")).toThrow(
-      "uniswap-v4.UniversalRouter.execute takes 3 or 2 arguments, got 1",
+      "uniswap-v4.UniversalRouter.execute takes 2 or 3 arguments, got 1",
     );
   });
 
@@ -68,7 +68,7 @@ describe("descriptors accessors: the motivating path", () => {
     expect(methodOf(router, "execute", 2)?.selector).toBe("0x24856bc3");
     expect(methodOf(router, "execute", 3)?.selector).toBe("0x3593564c");
     expect(methodOf(router, "execute", 1)).toBeUndefined();
-    expect(selectorOf(router, "execute")).toBe("0x3593564c");
+    expect(selectorOf(router, "execute")).toBe("0x24856bc3");
   });
 
   it("`on(...)` (the import-based front door) is equivalent to chainContracts(...)", () => {
@@ -189,9 +189,9 @@ describe("descriptors accessors: interface + address-only kinds", () => {
     expect(call.data.startsWith("0xa9059cbb")).toBe(true);
   });
 
-  it("an address-only descriptor (AaveV3.PoolAddressesProvider) has zero methods but a real address", () => {
+  it("an address-only descriptor (Paraswap.AugustusV6) has zero methods but a real address", () => {
     const base = chainContracts("base");
-    const accessor = base.AaveV3.PoolAddressesProvider;
+    const accessor = base.Paraswap.AugustusV6;
     expect(accessor.methods.length).toBe(0);
     expect(accessor.abi.length).toBe(0);
   });

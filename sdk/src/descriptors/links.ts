@@ -32,6 +32,19 @@ export interface ContractLink {
   readonly typeFidelity?: "widened";
   /** Where a deployment differs from the ABI, from the evidence's `exempt`/`unverified` records. */
   readonly caveats?: readonly string[];
+  /** The protocol's `<Protocol>.<method>(…)` contract where it has several singletons: the one a
+   *  method called through the namespace goes to (`accessor-index.ts`). GENERATED from the
+   *  `default` key of the binding in `test/fixtures/registry-abi/targets.json`. */
+  readonly default?: true;
+  /**
+   * Per chain id, the canonical signatures (`exchangeRate()`, `getReserveData(address)`) of this
+   * link's ABI functions that the chain's deployment does not run as declared. A role's ABI is the
+   * union of what its deployments run, so a chain's deployment may lack some of it; a program
+   * compiled for that chain cannot call those (`descriptorOn`). Singletons only, and absent where
+   * every deployment runs the whole ABI. GENERATED (`gen-source-globals.mjs`) from the registry-ABI
+   * evidence, which `registry-abi.test.ts` holds the table to.
+   */
+  readonly withheld?: Readonly<Record<number, readonly string[]>>;
 }
 
 /**
