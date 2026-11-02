@@ -8,18 +8,31 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { requireChain } from "../src/chains/canonical.js";
-import { getDescriptor } from "../src/descriptors/query.js";
-import { checkNames, LANGUAGE_NAMES, withoutDead } from "../src/routes/absent-names.js";
-import {
-  CHAIN_MODULE_ROOT,
-  chainModuleText,
-  chainNames,
-  INSTALLED_CHAIN_MODULE,
-} from "../src/routes/chain-module.js";
-import { ambientPotRefusal } from "../src/routes/pot-sugar.js";
-import { ambientNamesOf, compileWithRs, makeResolve } from "../src/routes/rs-compile.js";
-import { compileSauceProgram } from "../src/routes/sauce-route.js";
+import * as unknownGlobal from "../src/routes/unknown-global.js";
+
+// ESM jest exposes `jest` on `import.meta`. `nearestOf` is counted, and otherwise itself, so a test
+// can hold a compile that succeeds to building no refusal's listing; every import of the modules
+// under test is dynamic and comes after the mock, or the real one is linked first.
+const { jest } = import.meta as unknown as {
+  jest: { unstable_mockModule(path: string, factory: () => unknown): void };
+};
+let nearestCalls = 0;
+jest.unstable_mockModule("../src/routes/unknown-global.js", () => ({
+  ...unknownGlobal,
+  nearestOf: (...args: Parameters<typeof unknownGlobal.nearestOf>) => {
+    nearestCalls += 1;
+    return unknownGlobal.nearestOf(...args);
+  },
+}));
+const { requireChain } = await import("../src/chains/canonical.js");
+const { getDescriptor } = await import("../src/descriptors/query.js");
+const { checkNames, LANGUAGE_NAMES, withoutDead } = await import("../src/routes/absent-names.js");
+const { CHAIN_MODULE_ROOT, chainModuleText, chainNames, INSTALLED_CHAIN_MODULE } = await import(
+  "../src/routes/chain-module.js"
+);
+const { ambientPotRefusal } = await import("../src/routes/pot-sugar.js");
+const { ambientNamesOf, compileWithRs, makeResolve } = await import("../src/routes/rs-compile.js");
+const { compileSauceProgram } = await import("../src/routes/sauce-route.js");
 
 /** Compiles `body` (a `main` body) for `chain`, returning the bytecode as hex. */
 function build(
@@ -1298,6 +1311,25 @@ describe("a registry contract's members are its ABI's methods and the balances r
     ]) {
       expect(() => hex("base", body)).not.toThrow();
     }
+  });
+
+  it("a member that resolves builds no refusal's listing, however many methods the contract has", () => {
+    // uniswap-v3.Factory has 7 methods: past the 6 a refusal lists whole, so a listing ranks them
+    // by their distance to what was written (`nearestOf`), which only a refusal reads.
+    const methods = getDescriptor("uniswap-v3", "Factory")!.methods.map((method) => method.name);
+    expect(new Set(methods).size).toBeGreaterThan(6);
+    nearestCalls = 0;
+    for (const source of [
+      "function main(a: Address, b: Address) { return UniswapV3.Factory.getPool(a, b, 500); }",
+      "function main(): Uint256 { return UniswapV3.Factory.USDC + UniswapV3.Factory.balance; }",
+      "function main(): Address { return UniswapV3.Factory.address; }",
+    ]) {
+      hex("base", source);
+    }
+    expect(nearestCalls).toBe(0);
+    // The count is live: the refusal of a method the ABI lacks ranks them.
+    refusal("base", "function main(): Uint256 { return UniswapV3.Factory.Foo; }");
+    expect(nearestCalls).toBeGreaterThan(0);
   });
 });
 
