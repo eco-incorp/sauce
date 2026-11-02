@@ -27,9 +27,8 @@ jest.unstable_mockModule("../src/routes/unknown-global.js", () => ({
 const { requireChain } = await import("../src/chains/canonical.js");
 const { getDescriptor } = await import("../src/descriptors/query.js");
 const { checkNames, LANGUAGE_NAMES, withoutDead } = await import("../src/routes/absent-names.js");
-const { CHAIN_MODULE_ROOT, chainModuleText, chainNames, INSTALLED_CHAIN_MODULE } = await import(
-  "../src/routes/chain-module.js"
-);
+const { CHAIN_MODULE_ROOT, chainModuleText, chainNames, INSTALLED_CHAIN_MODULE } =
+  await import("../src/routes/chain-module.js");
 const { ambientPotRefusal } = await import("../src/routes/pot-sugar.js");
 const { ambientNamesOf, compileWithRs, makeResolve } = await import("../src/routes/rs-compile.js");
 const { compileSauceProgram } = await import("../src/routes/sauce-route.js");
