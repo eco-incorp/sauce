@@ -179,7 +179,10 @@ function abiPath(descriptor: ContractDescriptor, full: ContractDescriptor): stri
   let path = ABI_PATHS.get(descriptor.abi);
   if (path !== undefined) return path;
   const name = `abi/${descriptor.protocol}/${descriptor.abiExport ?? descriptor.contract}`;
-  const text = JSON.stringify(descriptor.abi);
+  // Only what a program can call: its functions. No program can name an event, an error, the
+  // constructor, the fallback or receive (the compiler refuses each alike with or without them),
+  // so the compiler is not handed them; the descriptor, its JSON twin and every decoder keep them.
+  const text = JSON.stringify(descriptor.abi.filter((entry) => entry.type === "function"));
   path = descriptor === full ? `${name}.json` : `${name}-${hash(text)}.json`;
   // Two ABIs exported under one name are kept apart by the contract's name.
   if (ABI_TEXT.has(path) && ABI_TEXT.get(path) !== text) {
