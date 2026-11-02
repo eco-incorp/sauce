@@ -93,6 +93,11 @@ function main() {
 - `updateOwner()`
 - `versionRecipient() pure returns (string)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event TrustedForwarderChanged` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TrustedForwarderUpdated` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `VaultABI`
 
 `import VaultABI from "./protocols/perpetual-protocol/VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused.

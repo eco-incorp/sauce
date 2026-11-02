@@ -63,3 +63,7 @@ function main() {
 - `totalLocked() view returns (uint256)`
 - `unlock(uint256 lockedLiquidityID)`
 - `withdraw(address to, uint256 amount)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -150,6 +150,16 @@ export const LendingPoolABI = [
     outputs: [],
   },
   {
+    name: "initialize",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "initReserve",
     type: "function",
     stateMutability: "nonpayable",
@@ -340,19 +350,6 @@ export const LendingPoolABI = [
       { name: "referralCode", type: "uint16", indexed: false },
     ],
   },
-  {
-    name: "LiquidationCall",
-    type: "event",
-    inputs: [
-      { name: "collateralAsset", type: "address", indexed: true },
-      { name: "debtAsset", type: "address", indexed: true },
-      { name: "user", type: "address", indexed: true },
-      { name: "debtToCover", type: "uint256", indexed: false },
-      { name: "liquidatedCollateralAmount", type: "uint256", indexed: false },
-      { name: "liquidator", type: "address", indexed: false },
-      { name: "receiveAToken", type: "bool", indexed: false },
-    ],
-  },
   { name: "Paused", type: "event", inputs: [] },
   {
     name: "RebalanceStableBorrowRate",
@@ -386,14 +383,6 @@ export const LendingPoolABI = [
   },
   {
     name: "ReserveUsedAsCollateralDisabled",
-    type: "event",
-    inputs: [
-      { name: "reserve", type: "address", indexed: true },
-      { name: "user", type: "address", indexed: true },
-    ],
-  },
-  {
-    name: "ReserveUsedAsCollateralEnabled",
     type: "event",
     inputs: [
       { name: "reserve", type: "address", indexed: true },

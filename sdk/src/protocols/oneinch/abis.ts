@@ -632,7 +632,6 @@ export const AggregationRouterV6ABI = [
       { name: "slotValue", type: "uint256", indexed: false },
     ],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "EpochIncreased",
     type: "event",
@@ -685,7 +684,6 @@ export const AggregationRouterV6ABI = [
   { name: "InvalidMsgValue", type: "error", inputs: [] },
   { name: "InvalidPermit2Transfer", type: "error", inputs: [] },
   { name: "InvalidShortString", type: "error", inputs: [] },
-  { name: "MakingAmountTooLow", type: "error", inputs: [] },
   { name: "MismatchArraysLengths", type: "error", inputs: [] },
   { name: "OrderExpired", type: "error", inputs: [] },
   { name: "OrderIsNotSuitableForMassInvalidation", type: "error", inputs: [] },
@@ -702,14 +700,6 @@ export const AggregationRouterV6ABI = [
   { name: "ReentrancyDetected", type: "error", inputs: [] },
   { name: "RemainingInvalidatedOrder", type: "error", inputs: [] },
   { name: "ReservesCallFailed", type: "error", inputs: [] },
-  {
-    name: "ReturnAmountIsNotEnough",
-    type: "error",
-    inputs: [
-      { name: "result", type: "uint256" },
-      { name: "minReturn", type: "uint256" },
-    ],
-  },
   { name: "SafeTransferFailed", type: "error", inputs: [] },
   { name: "SafeTransferFromFailed", type: "error", inputs: [] },
   {
@@ -720,13 +710,11 @@ export const AggregationRouterV6ABI = [
       { name: "res", type: "bytes" },
     ],
   },
-  { name: "StringTooLong", type: "error", inputs: [{ name: "str", type: "string" }] },
   { name: "SwapWithZeroAmount", type: "error", inputs: [] },
   { name: "TakingAmountExceeded", type: "error", inputs: [] },
   { name: "TakingAmountTooHigh", type: "error", inputs: [] },
   { name: "TransferFromMakerToTakerFailed", type: "error", inputs: [] },
   { name: "TransferFromTakerToMakerFailed", type: "error", inputs: [] },
   { name: "WrongSeriesNonce", type: "error", inputs: [] },
-  { name: "ZeroAddress", type: "error", inputs: [] },
   { name: "ZeroMinReturn", type: "error", inputs: [] },
 ] as const;

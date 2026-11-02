@@ -71,6 +71,10 @@ function main() {
 - `userCmdRelayer(uint16 callpath, bytes cmd, bytes conds, bytes relayerTip, bytes signature) payable returns (bytes output)`
 - `userCmdRouter(uint16 callpath, bytes cmd, address client) payable returns (bytes)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event CrocKnockoutCross` taking `(bytes32,int24,bool,uint32,uint64,uint160)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

@@ -82,3 +82,5 @@ Not every contract reached through this interface runs every function listed: th
 Left out of this ABI, though its deployments declare them:
 
 - `available` taking `()`: its name is an accessor's own property.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

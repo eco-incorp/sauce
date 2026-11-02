@@ -103,3 +103,7 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address sender, address recipient, uint256 amount) returns (bool)`
 - `weth_address() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

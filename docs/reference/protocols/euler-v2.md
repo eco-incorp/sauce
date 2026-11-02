@@ -195,6 +195,62 @@ function main() {
 - `viewDelegate() payable`
 - `withdraw(uint256 amount, address receiver, address owner) returns (uint256 shares)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error E_BadAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadAssetReceiver` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadBorrowCap` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadCollateral` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadFee` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadMaxLiquidationDiscount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_BadSupplyCap` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_CollateralDisabled` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ConfigAmountTooLargeToEncode` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ExcessiveRepayAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_FlashLoanNotRepaid` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_Initialized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_InsufficientAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_InsufficientCash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_InsufficientDebt` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_InvalidLTVAsset` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_LiquidationCoolOff` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_LTVBorrow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_LTVLiquidation` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_MinYield` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_NoLiability` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_NotController` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_NotHookTarget` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_NotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_OutstandingDebt` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ProxyMetadata` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_RepayTooMuch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_SelfLiquidation` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_TransientState` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ViolatorLiquidityDeferred` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ZeroAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error E_ZeroShares` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BalanceForwarderStatus` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Borrow` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ConvertFees` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event DebtSocialized` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Deposit` taking `(address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EVaultCreated` taking `(address,address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetCaps` taking `(uint16,uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetConfigFlags` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetFeeReceiver` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetGovernorAdmin` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetHookConfig` taking `(address,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetInterestFee` taking `(uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetInterestRateModel` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetLiquidationCoolOffTime` taking `(uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetLTV` taking `(address,uint16,uint16,uint16,uint48,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GovSetMaxLiquidationDiscount` taking `(uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event InterestAccrued` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Liquidate` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event PullDebt` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Repay` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Withdraw` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

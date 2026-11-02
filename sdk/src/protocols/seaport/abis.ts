@@ -936,20 +936,8 @@ export const SeaportABI = [
     ],
   },
   { name: "CriteriaNotEnabledForItem", type: "error", inputs: [] },
-  {
-    name: "ERC1155BatchTransferGenericFailure",
-    type: "error",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "identifiers", type: "uint256[]" },
-      { name: "amounts", type: "uint256[]" },
-    ],
-  },
   { name: "InexactFraction", type: "error", inputs: [] },
   { name: "InsufficientNativeTokensSupplied", type: "error", inputs: [] },
-  { name: "Invalid1155BatchTransferEncoding", type: "error", inputs: [] },
   { name: "InvalidBasicOrderParameterEncoding", type: "error", inputs: [] },
   { name: "InvalidCallToConduit", type: "error", inputs: [{ name: "conduit", type: "address" }] },
   {
@@ -1019,7 +1007,6 @@ export const SeaportABI = [
   { name: "OrderIsCancelled", type: "error", inputs: [{ name: "orderHash", type: "bytes32" }] },
   { name: "OrderPartiallyFilled", type: "error", inputs: [{ name: "orderHash", type: "bytes32" }] },
   { name: "PartialFillsNotEnabledForOrder", type: "error", inputs: [] },
-  { name: "TloadTestContractDeploymentFailed", type: "error", inputs: [] },
   {
     name: "TokenTransferGenericFailure",
     type: "error",

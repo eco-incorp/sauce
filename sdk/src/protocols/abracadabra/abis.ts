@@ -444,8 +444,6 @@ export const CauldronABI = [
       { name: "newOwner", type: "address", indexed: true },
     ],
   },
-  { name: "ErrNotClone", type: "error", inputs: [] },
-  { name: "ErrOverflow", type: "error", inputs: [] },
 ] as const;
 
 export const DegenBoxABI = [

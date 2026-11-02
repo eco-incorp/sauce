@@ -82,3 +82,7 @@ function main() {
 - `typeToPredicate(bytes32) view returns (address)`
 - `updateTokenMigrationStatus(address rootToken, bool isDepositDisable, bool isExitDisabled, uint256 lastExitBlockNumber)`
 - `USDT_ADDRESS() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

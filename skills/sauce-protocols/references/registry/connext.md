@@ -97,4 +97,32 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_FeeAdapter_NotAuthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_FillIntent_InsufficientFunds` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_FillIntent_IntentExpired` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_FillIntent_InvalidArrayLengths` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_FillIntent_InvalidDestinationArray` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_InvalidMessageType` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_InvalidSignature` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_InvalidVarUpdate` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_NewIntent_CalldataExceedsLimit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_NewIntent_InvalidIntent` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_NewIntent_OutputAssetNull` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_Pause_NotAuthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_ProcessFillViaRelayer_NotRelayer` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_ProcessFillViaRelayer_TTLExpired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_ProcessQueue_InvalidAmount` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_ProcessQueue_ZeroAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EverclearSpoke_Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FailedInnerCall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAccountNonce` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInitializing` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnauthorizedCallContext` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnsupportedProxiableUUID` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AssetMintFailed` taking `(address,address,uint256,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AssetTransferFailed` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LighthouseUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Settled` taking `(bytes32,address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event WatchtowerUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `newIntent` taking `(uint32[],bytes32,address,bytes32,uint256,uint256,uint48,bytes)`: an overload of newIntent(uint32[],address,address,address,uint256,uint256,uint48,bytes), which takes as many arguments: a call picks its overload by argument count.

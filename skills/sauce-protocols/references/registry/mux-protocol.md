@@ -55,6 +55,31 @@ function main() {
 - `withdrawCollateral(bytes32 subAccountId, uint256 rawAmount, uint96 collateralPrice, uint96 assetPrice)`
 - `withdrawProfit(bytes32 subAccountId, uint256 rawAmount, uint8 profitAssetId, uint96 collateralPrice, uint96 assetPrice, uint96 profitAssetPrice)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event AddAsset` taking `(uint8,bytes32,uint8,bool,address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AddLiquidity` taking `(address,uint8,uint96,uint96,uint96,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BorrowAsset` taking `(uint8,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ClaimBrokerGasRebate` taking `(address,uint32,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Rebalance` taking `(address,uint8,uint8,uint96,uint96,uint96,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RedeemMuxToken` taking `(address,uint8,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RemoveLiquidity` taking `(address,uint8,uint96,uint96,uint96,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RepayAsset` taking `(uint8,address,address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetAssetFlags` taking `(uint8,uint56,uint32,uint96,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetAssetParams` taking `(uint8,bytes32,uint32,uint32,uint32,uint32,uint32,uint32,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetBrokerGasRebate` taking `(uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetFundingInterval` taking `(uint32,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetFundingParams` taking `(uint8,uint32,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetLiquidityFee` taking `(uint32,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetLiquidityManager` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetMaintainer` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetMlpPriceRange` taking `(uint96,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetReferenceOracle` taking `(uint8,uint8,address,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetStrictStableDeviation` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TransferLiquidity` taking `(address,address,uint8,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UpdateFundingRate` taking `(uint8,uint32,uint128,uint32,uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event WithdrawCollectedFee` taking `(uint8,uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `OrderBookABI`
 
 `import OrderBookABI from "./protocols/mux-protocol/OrderBookABI.json";` Speaks for: orderBook. The import is the contract's full ABI across every deployment; call it through the `MuxProtocol` namespace to have a function a chain's deployment does not run refused.
@@ -110,3 +135,7 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `updateFundingState(uint32 stableUtilization, uint8[] unstableTokenIds, uint32[] unstableUtilizations, uint96[] unstablePrices)`
 - `withdrawAllCollateral(bytes32 subAccountId)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event NewPositionOrder` taking `(bytes32,uint64,uint96,uint96,uint96,uint8,uint8,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -93,3 +93,61 @@ function main() {
 - `tryCacheSettlementPrice()`
 - `withdraw((address owner, address operator, uint256 lower, uint256 upper, uint8 orderType) p, uint256 size, uint256 minMarketPrice, uint256 maxMarketPrice) returns ((int256 collateral, int256 longs, int256 shorts) delta)`
 - `writeFrom(address underwriter, address longReceiver, uint256 size, address referrer)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AddressUtils__NotContract` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DiamondWritable__RemoveTargetNotZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DiamondWritable__ReplaceTargetIsIdentical` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DiamondWritable__SelectorAlreadyAdded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DiamondWritable__SelectorNotFound` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DiamondWritable__TargetHasNoCode` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DoublyLinkedList__InvalidInput` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DoublyLinkedList__NonExistentEntry` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSA__InvalidSignature` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSA__InvalidV` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC1155Base__ArrayLengthMismatch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC1155Base__MintToZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC1155Base__NotOwnerOrApproved` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC1155Base__SelfApproval` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC1155Base__TransferExceedsBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC165Base__InvalidInterfaceId` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Ownable__NotTransitiveOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__AboveQuoteSize` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__ActionNotAuthorized` taking `(address,address,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__CostExceedsPayout` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__CostNotAuthorized` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__DifferenceOfSizeAndContractDeltaTooLarge` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__FlashLoanCallbackFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__FlashLoanNotRepayed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InsufficientAskLiquidity` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidAssetUpdate` taking `(int256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidBelowPrice` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidMonth` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidQuoteOBTaker` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidRange` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidReconciliation` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidSize` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__InvalidTickPrice` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__NotPoolToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__NotWrappedNativeTokenPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__OptionExpired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__OptionNotExpired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__PositionDoesNotExist` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__QuoteOBExpired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__SettlementPriceAlreadyCached` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pool__WithdrawalDelayNotElapsed` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Position__InvalidOrderType` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Position__InvalidPositionUpdate` taking `(uint256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Position__LowerGreaterOrEqualUpper` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PRBMath_MulDiv_Overflow` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PRBMath_UD60x18_IntoSD59x18_Overflow` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pricing__PriceCannotBeComputedWithinTickRange` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pricing__PriceOutOfRange` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pricing__UpperNotGreaterThanLower` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Proxy__ImplementationIsNotContract` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReentrancyGuard__ReentrantCall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeERC20__OperationFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SD49x28_IntoUD50x28_Underflow` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UD50x28_IntoSD49x28_Overflow` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UD60x18_IntoUD50x28_Overflow` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -257,14 +257,6 @@ export const SocketGatewayABI = [
     inputs: [{ name: "nominee", type: "address", indexed: true }],
   },
   {
-    name: "OwnershipTransferRequested",
-    type: "event",
-    inputs: [
-      { name: "_from", type: "address", indexed: true },
-      { name: "_to", type: "address", indexed: true },
-    ],
-  },
-  {
     name: "RouteDisabled",
     type: "event",
     inputs: [{ name: "routeId", type: "uint32", indexed: true }],

@@ -1939,40 +1939,6 @@
       ]
     },
     {
-      "name": "AccessManagedInvalidAuthority",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "authority",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "AccessManagedRequiredDelay",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "caller",
-          "type": "address"
-        },
-        {
-          "name": "delay",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "AccessManagedUnauthorized",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "caller",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "AssetNotListed",
       "type": "error",
       "inputs": []
@@ -1998,36 +1964,12 @@
       "inputs": []
     },
     {
-      "name": "InvalidAccountNonce",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address"
-        },
-        {
-          "name": "currentNonce",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "InvalidAddress",
       "type": "error",
       "inputs": []
     },
     {
       "name": "InvalidAssetDecimals",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidAssetId",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidCollateralFactor",
       "type": "error",
       "inputs": []
     },
@@ -2057,37 +1999,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidLiquidationFee",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidMaxUserReservesLimit",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidOracleDecimals",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidSignature",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaxDataSizeExceeded",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaximumDynamicConfigKeyReached",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaximumUserReservesExceeded",
       "type": "error",
       "inputs": []
     },
@@ -2097,27 +2009,12 @@
       "inputs": []
     },
     {
-      "name": "NotInitializing",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ReentrancyGuardReentrantCall",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "ReserveExists",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ReserveFrozen",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ReserveNotBorrowable",
       "type": "error",
       "inputs": []
     },
@@ -2206,11 +2103,6 @@
     },
     {
       "name": "SelfLiquidation",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Unauthorized",
       "type": "error",
       "inputs": []
     }

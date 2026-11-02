@@ -611,16 +611,6 @@
       ]
     },
     {
-      "name": "AccountDenylisted",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "AddressEmptyCode",
       "type": "error",
       "inputs": [
@@ -659,11 +649,6 @@
       ]
     },
     {
-      "name": "CursorOutOfBounds",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ECDSAInvalidSignature",
       "type": "error",
       "inputs": []
@@ -675,16 +660,6 @@
         {
           "name": "length",
           "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "ECDSAInvalidSignatureS",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "s",
-          "type": "bytes32"
         }
       ]
     },
@@ -742,24 +717,6 @@
       ]
     },
     {
-      "name": "InvalidAttestationDestinationContractAtIndex",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "attestationContract",
-          "type": "address"
-        },
-        {
-          "name": "expectedContract",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "InvalidAttestationDestinationDomainAtIndex",
       "type": "error",
       "inputs": [
@@ -806,59 +763,9 @@
       "inputs": []
     },
     {
-      "name": "InvalidTransferPayloadMagic",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualMagic",
-          "type": "bytes4"
-        }
-      ]
-    },
-    {
-      "name": "InvalidTransferSpecMagic",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualMagic",
-          "type": "bytes4"
-        }
-      ]
-    },
-    {
-      "name": "InvalidTransferSpecVersion",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualVersion",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "MismatchedLengthTokenAndTokenMintAuthorities",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "MustHaveAtLeastOneAttestation",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "NotInitializing",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OwnableInvalidOwner",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "owner",
-          "type": "address"
-        }
-      ]
     },
     {
       "name": "OwnableUnauthorizedAccount",
@@ -867,98 +774,6 @@
         {
           "name": "account",
           "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadDataTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadOverallLengthMismatch",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedTotalLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualTotalLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetElementHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "actualSetLength",
-          "type": "uint256"
-        },
-        {
-          "name": "requiredOffset",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetElementTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "actualSetLength",
-          "type": "uint256"
-        },
-        {
-          "name": "requiredOffset",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
         }
       ]
     },
@@ -977,44 +792,6 @@
       ]
     },
     {
-      "name": "TransferPayloadSetOverallLengthMismatch",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedTotalLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualTotalLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferSpecHashUsed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "transferSpecHash",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "TransferSpecHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "TransferSpecOverallLengthMismatch",
       "type": "error",
       "inputs": [
@@ -1029,31 +806,11 @@
       ]
     },
     {
-      "name": "UnauthorizedDenylister",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "UnauthorizedPauser",
       "type": "error",
       "inputs": [
         {
           "name": "caller",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "UnsupportedToken",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "token",
           "type": "address"
         }
       ]
@@ -1069,21 +826,6 @@
         {
           "name": "destinationToken",
           "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "UUPSUnauthorizedCallContext",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UUPSUnsupportedProxiableUUID",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "slot",
-          "type": "bytes32"
         }
       ]
     }

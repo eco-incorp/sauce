@@ -295,15 +295,6 @@ export const StakePoolManagerABI = [
     inputs: [{ name: "poolId", type: "uint8", indexed: true }],
   },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [
@@ -348,13 +339,8 @@ export const StakePoolManagerABI = [
   },
   { name: "CallerNotManager", type: "error", inputs: [] },
   { name: "CallerNotStaderContract", type: "error", inputs: [] },
-  { name: "CooldownNotComplete", type: "error", inputs: [] },
-  { name: "InsufficientBalance", type: "error", inputs: [] },
   { name: "InvalidDepositAmount", type: "error", inputs: [] },
-  { name: "PoolIdDoesNotExit", type: "error", inputs: [] },
-  { name: "TransferFailed", type: "error", inputs: [] },
   { name: "UnsupportedOperation", type: "error", inputs: [] },
-  { name: "UnsupportedOperationInSafeMode", type: "error", inputs: [] },
   { name: "ZeroAddress", type: "error", inputs: [] },
 ] as const;
 
@@ -598,15 +584,6 @@ export const ETHxABI = [
     inputs: [{ name: "version", type: "uint8", indexed: false }],
   },
   { name: "Paused", type: "event", inputs: [{ name: "account", type: "address", indexed: false }] },
-  {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
   {
     name: "RoleGranted",
     type: "event",

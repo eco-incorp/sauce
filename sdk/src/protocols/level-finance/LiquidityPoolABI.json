@@ -1618,27 +1618,6 @@
       ]
     },
     {
-      "name": "InterestRateSet",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "interestRate",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "stableCoinInterestRate",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "interval",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "LiquidatePosition",
       "type": "event",
       "inputs": [
@@ -1777,17 +1756,6 @@
         },
         {
           "name": "fee",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "MaintenanceMarginChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "ratio",
           "type": "uint256",
           "indexed": false
         }
@@ -2071,17 +2039,6 @@
       ]
     },
     {
-      "name": "TrancheAdded",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "lpToken",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "Unpaused",
       "type": "event",
       "inputs": [
@@ -2145,11 +2102,6 @@
       ]
     },
     {
-      "name": "AddLiquidityNotAllowed",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "AssetNotListed",
       "type": "error",
       "inputs": []
@@ -2160,27 +2112,7 @@
       "inputs": []
     },
     {
-      "name": "DuplicateToken",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "FeeDistributorOnly",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientPoolAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidInterval",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidLeverage",
       "type": "error",
       "inputs": []
     },
@@ -2190,27 +2122,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidMaxLeverage",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidPositionSize",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidSwapPair",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidTranche",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaxGlobalShortSizeExceeded",
       "type": "error",
       "inputs": []
     },
@@ -2220,22 +2132,7 @@
       "inputs": []
     },
     {
-      "name": "MaxNumberOfTranchesReached",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotApplicableForStableCoin",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OrderManagerOnly",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Overflow",
       "type": "error",
       "inputs": []
     },
@@ -2250,17 +2147,7 @@
       "inputs": []
     },
     {
-      "name": "RemoveLiquidityTooMuch",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "RequireAllTokens",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ReserveReduceTooMuch",
       "type": "error",
       "inputs": []
     },
@@ -2276,11 +2163,6 @@
     },
     {
       "name": "TooManyTokenAdded",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "TrancheAlreadyAdded",
       "type": "error",
       "inputs": []
     },

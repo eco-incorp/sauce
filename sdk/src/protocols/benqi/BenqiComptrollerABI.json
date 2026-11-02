@@ -1468,22 +1468,6 @@
       ]
     },
     {
-      "name": "ContributorQiSpeedUpdated",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "contributor",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "newSpeed",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "DistributedBorrowerReward",
       "type": "event",
       "inputs": [

@@ -63,6 +63,7 @@ function main() {
 - `getAmountsOut(uint256 amountIn, (address from, address to, bool stable)[] routes) view returns (uint256[] amounts)`
 - `getReserves(address tokenA, address tokenB, bool stable) view returns (uint256 reserveA, uint256 reserveB)`
 - `initialize(address _factory, address _weth)`
+- `initialize(address _logic, address admin_, bytes _data) payable`
 - `isPair(address pair) view returns (bool)`
 - `pairFor(address tokenA, address tokenB, bool stable) view returns (address pair)`
 - `quoteAddLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired) view returns (uint256 amountA, uint256 amountB, uint256 liquidity)`

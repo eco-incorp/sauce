@@ -316,6 +316,22 @@
     {
       "name": "initialize",
       "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_logic",
+          "type": "address"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
@@ -567,27 +583,6 @@
       ]
     },
     {
-      "name": "Approval",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "owner",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "spender",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "value",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "BorrowAllowanceDelegated",
       "type": "event",
       "inputs": [
@@ -738,11 +733,6 @@
       ]
     },
     {
-      "name": "CallerMustBePool",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ECDSAInvalidSignature",
       "type": "error",
       "inputs": []
@@ -753,34 +743,6 @@
       "inputs": [
         {
           "name": "length",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "ECDSAInvalidSignatureS",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "s",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "ERC20InsufficientAllowance",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "spender",
-          "type": "address"
-        },
-        {
-          "name": "allowance",
-          "type": "uint256"
-        },
-        {
-          "name": "needed",
           "type": "uint256"
         }
       ]
@@ -804,21 +766,6 @@
       ]
     },
     {
-      "name": "InvalidBurnAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidExpiration",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidMintAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidSignature",
       "type": "error",
       "inputs": []
@@ -832,20 +779,6 @@
       "name": "PoolAddressesDoNotMatch",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "SafeCastOverflowedUintDowncast",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "bits",
-          "type": "uint8"
-        },
-        {
-          "name": "value",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "ZeroAddressNotValid",

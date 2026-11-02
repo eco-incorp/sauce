@@ -800,26 +800,7 @@ export const LidoABI = [
     type: "event",
     inputs: [{ name: "maxExternalRatioBP", type: "uint256", indexed: false }],
   },
-  {
-    name: "RecoverToVault",
-    type: "event",
-    inputs: [
-      { name: "vault", type: "address", indexed: true },
-      { name: "token", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
   { name: "Resumed", type: "event", inputs: [] },
-  {
-    name: "ScriptResult",
-    type: "event",
-    inputs: [
-      { name: "executor", type: "address", indexed: true },
-      { name: "script", type: "bytes", indexed: false },
-      { name: "input", type: "bytes", indexed: false },
-      { name: "returnData", type: "bytes", indexed: false },
-    ],
-  },
   {
     name: "SharesBurnt",
     type: "event",
@@ -1251,6 +1232,5 @@ export const WstETHBridgedABI = [
   { name: "ErrorNameAlreadySet", type: "error", inputs: [] },
   { name: "ErrorNotBridge", type: "error", inputs: [] },
   { name: "ErrorNotEnoughAllowance", type: "error", inputs: [] },
-  { name: "ErrorNotEnoughBalance", type: "error", inputs: [] },
   { name: "ErrorSymbolAlreadySet", type: "error", inputs: [] },
 ] as const;

@@ -402,7 +402,6 @@ export const LRTDepositPoolABI = [
     inputs: [{ name: "lrtConfig", type: "address", indexed: true }],
   },
   { name: "AssetNotSupported", type: "error", inputs: [] },
-  { name: "CallerNotLRTConfigAdmin", type: "error", inputs: [] },
   {
     name: "CallerNotLRTConfigAllowedRole",
     type: "error",
@@ -411,7 +410,6 @@ export const LRTDepositPoolABI = [
   { name: "CallerNotLRTConfigAssetTransferRole", type: "error", inputs: [] },
   { name: "CallerNotLRTConfigManager", type: "error", inputs: [] },
   { name: "CallerNotLRTConfigOperator", type: "error", inputs: [] },
-  { name: "ETHNotSupported", type: "error", inputs: [] },
   { name: "EthTransferFailed", type: "error", inputs: [] },
   { name: "InvalidAmountToDeposit", type: "error", inputs: [] },
   { name: "InvalidMaximumNodeDelegatorLimit", type: "error", inputs: [] },

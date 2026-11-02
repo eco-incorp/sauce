@@ -644,14 +644,6 @@ export const LockupLinearABI = [
       { name: "amount", type: "uint128", indexed: false },
     ],
   },
-  {
-    name: "CallerNotAdmin",
-    type: "error",
-    inputs: [
-      { name: "admin", type: "address" },
-      { name: "caller", type: "address" },
-    ],
-  },
   { name: "DelegateCall", type: "error", inputs: [] },
   {
     name: "PRBMath_MulDiv_Overflow",
@@ -693,28 +685,9 @@ export const LockupLinearABI = [
     ],
   },
   {
-    name: "SablierV2Lockup_InvalidSenderWithdrawal",
-    type: "error",
-    inputs: [
-      { name: "streamId", type: "uint256" },
-      { name: "sender", type: "address" },
-      { name: "to", type: "address" },
-    ],
-  },
-  {
     name: "SablierV2Lockup_NotTransferable",
     type: "error",
     inputs: [{ name: "tokenId", type: "uint256" }],
-  },
-  { name: "SablierV2Lockup_Null", type: "error", inputs: [{ name: "streamId", type: "uint256" }] },
-  {
-    name: "SablierV2Lockup_Overdraw",
-    type: "error",
-    inputs: [
-      { name: "streamId", type: "uint256" },
-      { name: "amount", type: "uint128" },
-      { name: "withdrawableAmount", type: "uint128" },
-    ],
   },
   {
     name: "SablierV2Lockup_ProtocolFeeTooHigh",
@@ -735,17 +708,7 @@ export const LockupLinearABI = [
     inputs: [{ name: "streamId", type: "uint256" }],
   },
   {
-    name: "SablierV2Lockup_StreamNotCancelable",
-    type: "error",
-    inputs: [{ name: "streamId", type: "uint256" }],
-  },
-  {
     name: "SablierV2Lockup_StreamNotDepleted",
-    type: "error",
-    inputs: [{ name: "streamId", type: "uint256" }],
-  },
-  {
-    name: "SablierV2Lockup_StreamSettled",
     type: "error",
     inputs: [{ name: "streamId", type: "uint256" }],
   },

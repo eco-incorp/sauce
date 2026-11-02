@@ -1,5 +1,5 @@
 {
-  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs, scripts/gen-registry-abis.mjs, scripts/gen-source-globals.mjs and test/registry-abi.test.ts. An export's ABI is the union of its deployments' full verified ABIs (gen-registry-abis.mjs), and a role's deployment that does not run one of its functions as declared has it withheld on its chain (gen-source-globals.mjs), so a deployment that differs needs no entry here. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"). standard: on an interface whose instances are examples of an ERC or a protocol's interface, why: its ABI is its reference interface alone (reference/index.json), each function where every instance dispatches it; the instances' verified ABIs still check each declaration. common: on an interface whose instances run different implementations, why: its ABI is only what every instance dispatches and declares alike. overloads: signature -> why, the overload kept where several of one name take as many arguments (otherwise the registry's, then the most dispatched). default: on a role's export, why its contract is the one `<Protocol>.<method>(…)` calls where the protocol has several. delegates: getters whose answer a contract's fallback delegates to (Comet's extensionDelegate()), captured as a layer. logs: event signatures whose newest real log the capture records for the test to decode. exempt: an interface instance whose verified declaration legitimately differs; unverified: a function no verified ABI declares, with why the deployed bytecode is the evidence (a reference interface's function names its source); unverifiable: an export nothing on-chain can evidence; required: a signature a consumer binds; probes: signatures to ask a selector router about.",
+  "note": "Which deployed contracts evidence each registry ABI export. roles: addresses.ts role keys (every chain that lists them); instances: representative deployments for interface-shaped ABIs. Read by scripts/capture-registry-abi.mjs, scripts/gen-registry-abis.mjs, scripts/gen-source-globals.mjs and test/registry-abi.test.ts. An export's ABI is the union of its deployments' full verified ABIs (gen-registry-abis.mjs), and a role's deployment that does not run one of its functions as declared has it withheld on its chain (gen-source-globals.mjs), so a deployment that differs needs no entry here. returns: the registry ABI an address a function returns speaks, by the function's signature and, for a field of what it returns, the field names after it (\"poolInfo(uint256).crvRewards\"). standard: on an interface whose instances are examples of an ERC or a protocol's interface, why: its ABI is its reference interface alone (reference/index.json), each function where every instance dispatches it; the instances' verified ABIs still check each declaration. common: on an interface whose instances run different implementations, why: its ABI is only what every instance dispatches and declares alike. overloads: signature -> why, the overload kept where several of one name take as many arguments (otherwise the registry's, then the most dispatched). default: on a role's export, why its contract is the one `<Protocol>.<method>(…)` calls where the protocol has several. delegates: getters whose answer a contract's fallback delegates to (Comet's extensionDelegate()), captured as a layer. logs: event signatures whose newest real log the capture records for the test to decode. exempt: an interface instance whose verified declaration legitimately differs; unverified: a function no verified ABI declares, with why the deployed bytecode is the evidence (a reference interface's function names its source); unverifiable: an export nothing on-chain can evidence; required: a signature a consumer binds; probes: signatures to ask a selector router about where its inventory has none; unresolved: a facet of a per-selector router's inventory (reference/index.json `inventories`) that no deployment reaches, and why.",
   "protocols": {
     "aave-v2": {
       "LendingPoolABI": {
@@ -1069,10 +1069,7 @@
     },
     "paraswap": {
       "AugustusV5ABI": {
-        "roles": ["augustusV5"],
-        "probes": [
-          "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))"
-        ]
+        "roles": ["augustusV5"]
       }
     },
     "pendle": {
@@ -1112,20 +1109,7 @@
         "common": "every SY is its own contract over StandardizedYield: only what every one of them declares alike"
       },
       "PendleRouterABI": {
-        "roles": ["router"],
-        "probes": [
-          "swapExactTokenForPt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
-          "swapExactTokenForYt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
-          "addLiquiditySingleToken(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
-          "removeLiquiditySingleToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
-          "mintSyFromToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)))",
-          "redeemSyToToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)))",
-          "mintPyFromToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)))",
-          "redeemPyToToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)))",
-          "swapExactSyForPtSimple(address,address,uint256,uint256)",
-          "swapCallback(int256,int256,bytes)",
-          "owner()"
-        ]
+        "roles": ["router"]
       }
     },
     "permit2": {
@@ -1909,7 +1893,10 @@
     },
     "zerox": {
       "ExchangeProxyABI": {
-        "roles": ["exchangeProxy"]
+        "roles": ["exchangeProxy"],
+        "unresolved": {
+          "ERC165Feature": "getFunctionImplementation names no feature for its one function, supportInterface(bytes4) (0x75e79be6), on any captured Exchange Proxy (chains 1, 10, 56, 137, 8453, 42161, 43114), and the proxy's own code does not dispatch it: the feature is not registered at these deployments"
+        }
       }
     },
     "zksync-bridge": {

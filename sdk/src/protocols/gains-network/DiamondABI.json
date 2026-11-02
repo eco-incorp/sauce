@@ -6809,27 +6809,6 @@
       ]
     },
     {
-      "name": "CouldNotCloseTrade",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "trader",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "pairIndex",
-          "type": "uint16",
-          "indexed": true
-        },
-        {
-          "name": "index",
-          "type": "uint32",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "CumulativeFactorUpdated",
       "type": "event",
       "inputs": [
@@ -7562,27 +7541,6 @@
       ]
     },
     {
-      "name": "OnePercentDepthUpdated",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "pairIndex",
-          "type": "uint256",
-          "indexed": true
-        },
-        {
-          "name": "valueAboveUsd",
-          "type": "uint128",
-          "indexed": false
-        },
-        {
-          "name": "valueBelowUsd",
-          "type": "uint128",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "OnePercentSkewDepthUpdated",
       "type": "event",
       "inputs": [
@@ -7896,32 +7854,6 @@
               "type": "uint128"
             }
           ],
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "ParamUpdateRequested",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "collateralIndex",
-          "type": "uint8",
-          "indexed": true
-        },
-        {
-          "name": "pairIndex",
-          "type": "uint16",
-          "indexed": true
-        },
-        {
-          "name": "updateType",
-          "type": "uint8",
-          "indexed": false
-        },
-        {
-          "name": "newValue",
-          "type": "uint224",
           "indexed": false
         }
       ]
@@ -9254,17 +9186,6 @@
       ]
     },
     {
-      "name": "UpdatedOpenFeeP",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "value",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "UpdatedStartReferrerFeeP",
       "type": "event",
       "inputs": [
@@ -9375,47 +9296,12 @@
       "inputs": []
     },
     {
-      "name": "AlreadyActive",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "AlreadyBeingMarketClosed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "AlreadyExists",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "AlreadyInactive",
       "type": "error",
       "inputs": []
     },
     {
       "name": "BelowMin",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BlockOrder",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowingWrongExponent",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowingZeroGroup",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CollateralNotActive",
       "type": "error",
       "inputs": []
     },
@@ -9440,22 +9326,7 @@
       "inputs": []
     },
     {
-      "name": "DepthBandsAboveMax",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "DepthBandsIncomplete",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DoesntExist",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InitError",
       "type": "error",
       "inputs": []
     },
@@ -9474,42 +9345,12 @@
       ]
     },
     {
-      "name": "InsufficientBalance",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InsufficientCollateral",
       "type": "error",
       "inputs": []
     },
     {
       "name": "InvalidAddress",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidAddresses",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidCollateralIndex",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidDecreasePositionSizeInput",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidFacetCutAction",
       "type": "error",
       "inputs": []
     },
@@ -9524,37 +9365,12 @@
       "inputs": []
     },
     {
-      "name": "InvalidShareSum",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NewPositionSizeSmaller",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NoOrder",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "NoPendingRewards",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NoPendingTriggerRewards",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NoSl",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotAllowed",
       "type": "error",
       "inputs": []
     },
@@ -9589,47 +9405,7 @@
       "inputs": []
     },
     {
-      "name": "NotYourOrder",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Overflow",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Paused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PendingTrigger",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PointsOverflow",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PriceImpactTooHigh",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PriceZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ReentrancyGuardReentrantCall",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "StakingCooldownActive",
       "type": "error",
       "inputs": []
     },
@@ -9644,47 +9420,12 @@
       "inputs": []
     },
     {
-      "name": "WaitTimeout",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongAccess",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongDepthBandsOrder",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WrongFeeTier",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "WrongFromBlock",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongIndex",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongLength",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WrongLeverage",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongOrder",
       "type": "error",
       "inputs": []
     },
@@ -9699,27 +9440,7 @@
       "inputs": []
     },
     {
-      "name": "WrongSl",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongTp",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WrongTradeType",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongWindowsCount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongWindowsDuration",
       "type": "error",
       "inputs": []
     },

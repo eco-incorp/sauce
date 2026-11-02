@@ -236,14 +236,6 @@ export const BeefyVaultABI = [
   },
   { name: "withdrawAll", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
     name: "Approval",
     type: "event",
     inputs: [
@@ -251,11 +243,6 @@ export const BeefyVaultABI = [
       { name: "spender", type: "address", indexed: true },
       { name: "value", type: "uint256", indexed: false },
     ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
   },
   {
     name: "Initialized",

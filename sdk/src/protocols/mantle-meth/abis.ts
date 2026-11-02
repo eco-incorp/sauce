@@ -362,20 +362,10 @@ export const METHABI = [
     type: "event",
     inputs: [{ name: "blockList", type: "address", indexed: true }],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "Initialized",
     type: "event",
     inputs: [{ name: "version", type: "uint8", indexed: false }],
-  },
-  {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
   },
   {
     name: "RoleGranted",

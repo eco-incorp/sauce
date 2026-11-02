@@ -383,30 +383,12 @@ export const WormholeCoreBridgeABI = [
     ],
   },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
-  },
-  {
     name: "ContractUpgraded",
     type: "event",
     inputs: [
       { name: "oldContract", type: "address", indexed: true },
       { name: "newContract", type: "address", indexed: true },
     ],
-  },
-  {
-    name: "GuardianSetAdded",
-    type: "event",
-    inputs: [{ name: "index", type: "uint32", indexed: true }],
   },
   {
     name: "LogMessagePublished",
@@ -883,14 +865,6 @@ export const WormholeTokenBridgeABI = [
       { name: "tokenAddress", type: "bytes32" },
     ],
     outputs: [{ name: "", type: "address" }],
-  },
-  {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
   },
   {
     name: "BeaconUpgraded",

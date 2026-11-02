@@ -599,25 +599,6 @@ export const EverclearSpokeABI = [
     outputs: [],
   },
   {
-    name: "AssetMintFailed",
-    type: "event",
-    inputs: [
-      { name: "_asset", type: "address", indexed: true },
-      { name: "_recipient", type: "address", indexed: true },
-      { name: "_amount", type: "uint256", indexed: false },
-      { name: "_strategy", type: "uint8", indexed: false },
-    ],
-  },
-  {
-    name: "AssetTransferFailed",
-    type: "event",
-    inputs: [
-      { name: "_asset", type: "address", indexed: true },
-      { name: "_recipient", type: "address", indexed: true },
-      { name: "_amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "Deposited",
     type: "event",
     inputs: [
@@ -738,14 +719,6 @@ export const EverclearSpokeABI = [
     ],
   },
   {
-    name: "LighthouseUpdated",
-    type: "event",
-    inputs: [
-      { name: "_oldLightHouse", type: "address", indexed: false },
-      { name: "_newLightHouse", type: "address", indexed: false },
-    ],
-  },
-  {
     name: "MessageGasLimitUpdated",
     type: "event",
     inputs: [
@@ -779,16 +752,6 @@ export const EverclearSpokeABI = [
   },
   { name: "Paused", type: "event", inputs: [] },
   {
-    name: "Settled",
-    type: "event",
-    inputs: [
-      { name: "_intentId", type: "bytes32", indexed: true },
-      { name: "_account", type: "address", indexed: false },
-      { name: "_asset", type: "address", indexed: false },
-      { name: "_amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "StrategySetForAsset",
     type: "event",
     inputs: [
@@ -801,14 +764,6 @@ export const EverclearSpokeABI = [
     name: "Upgraded",
     type: "event",
     inputs: [{ name: "implementation", type: "address", indexed: true }],
-  },
-  {
-    name: "WatchtowerUpdated",
-    type: "event",
-    inputs: [
-      { name: "_oldWatchtower", type: "address", indexed: false },
-      { name: "_newWatchtower", type: "address", indexed: false },
-    ],
   },
   {
     name: "Withdrawn",
@@ -831,7 +786,6 @@ export const EverclearSpokeABI = [
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
   },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
   {
     name: "ERC1967InvalidImplementation",
     type: "error",
@@ -844,7 +798,6 @@ export const EverclearSpokeABI = [
     type: "error",
     inputs: [{ name: "_intentId", type: "bytes32" }],
   },
-  { name: "EverclearSpoke_FeeAdapter_NotAuthorized", type: "error", inputs: [] },
   {
     name: "EverclearSpoke_FillIntent_AmountOutInvalid",
     type: "error",
@@ -854,21 +807,6 @@ export const EverclearSpokeABI = [
     ],
   },
   {
-    name: "EverclearSpoke_FillIntent_InsufficientFunds",
-    type: "error",
-    inputs: [
-      { name: "_requested", type: "uint256" },
-      { name: "_available", type: "uint256" },
-    ],
-  },
-  {
-    name: "EverclearSpoke_FillIntent_IntentExpired",
-    type: "error",
-    inputs: [{ name: "_intentId", type: "bytes32" }],
-  },
-  { name: "EverclearSpoke_FillIntent_InvalidArrayLengths", type: "error", inputs: [] },
-  { name: "EverclearSpoke_FillIntent_InvalidDestinationArray", type: "error", inputs: [] },
-  {
     name: "EverclearSpoke_FillIntent_InvalidStatus",
     type: "error",
     inputs: [{ name: "_intentId", type: "bytes32" }],
@@ -876,18 +814,9 @@ export const EverclearSpokeABI = [
   { name: "EverclearSpoke_Initialize_FillQueueNotEmpty", type: "error", inputs: [] },
   { name: "EverclearSpoke_Initialize_IntentQueueNotEmpty", type: "error", inputs: [] },
   { name: "EverclearSpoke_InvalidFillSignature", type: "error", inputs: [] },
-  { name: "EverclearSpoke_InvalidMessageType", type: "error", inputs: [] },
-  { name: "EverclearSpoke_InvalidSignature", type: "error", inputs: [] },
-  { name: "EverclearSpoke_InvalidVarUpdate", type: "error", inputs: [] },
-  { name: "EverclearSpoke_NewIntent_CalldataExceedsLimit", type: "error", inputs: [] },
-  { name: "EverclearSpoke_NewIntent_InvalidIntent", type: "error", inputs: [] },
   { name: "EverclearSpoke_NewIntent_OutputAssetNotNull", type: "error", inputs: [] },
-  { name: "EverclearSpoke_NewIntent_OutputAssetNull", type: "error", inputs: [] },
   { name: "EverclearSpoke_NewIntent_ZeroAmount", type: "error", inputs: [] },
-  { name: "EverclearSpoke_Pause_NotAuthorized", type: "error", inputs: [] },
   { name: "EverclearSpoke_Paused", type: "error", inputs: [] },
-  { name: "EverclearSpoke_ProcessFillViaRelayer_NotRelayer", type: "error", inputs: [] },
-  { name: "EverclearSpoke_ProcessFillViaRelayer_TTLExpired", type: "error", inputs: [] },
   { name: "EverclearSpoke_ProcessFillViaRelayer_WrongDomain", type: "error", inputs: [] },
   {
     name: "EverclearSpoke_ProcessIntentQueue_NotFound",
@@ -902,30 +831,9 @@ export const EverclearSpokeABI = [
     type: "error",
     inputs: [{ name: "_dynamicGasLimit", type: "uint256" }],
   },
-  {
-    name: "EverclearSpoke_ProcessQueue_InvalidAmount",
-    type: "error",
-    inputs: [
-      { name: "_first", type: "uint256" },
-      { name: "_last", type: "uint256" },
-      { name: "_amount", type: "uint256" },
-    ],
-  },
-  { name: "EverclearSpoke_ProcessQueue_ZeroAmount", type: "error", inputs: [] },
-  { name: "EverclearSpoke_Unauthorized", type: "error", inputs: [] },
   { name: "EverclearSpoke_WrongDestination", type: "error", inputs: [] },
   { name: "EverclearSpoke_ZeroAddress", type: "error", inputs: [] },
-  { name: "FailedInnerCall", type: "error", inputs: [] },
-  {
-    name: "InvalidAccountNonce",
-    type: "error",
-    inputs: [
-      { name: "account", type: "address" },
-      { name: "currentNonce", type: "uint256" },
-    ],
-  },
   { name: "InvalidInitialization", type: "error", inputs: [] },
-  { name: "NotInitializing", type: "error", inputs: [] },
   { name: "OwnableInvalidOwner", type: "error", inputs: [{ name: "owner", type: "address" }] },
   {
     name: "OwnableUnauthorizedAccount",
@@ -934,10 +842,4 @@ export const EverclearSpokeABI = [
   },
   { name: "Queue_EmptyQueue", type: "error", inputs: [] },
   { name: "SafeERC20FailedOperation", type: "error", inputs: [{ name: "token", type: "address" }] },
-  { name: "UUPSUnauthorizedCallContext", type: "error", inputs: [] },
-  {
-    name: "UUPSUnsupportedProxiableUUID",
-    type: "error",
-    inputs: [{ name: "slot", type: "bytes32" }],
-  },
 ] as const;

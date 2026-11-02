@@ -73,6 +73,11 @@ function main() {
 - `upgradeClearinghouseLiq(address _clearinghouseLiq)`
 - `withdrawCollateral((bytes32 sender, uint32 productId, uint128 amount, uint64 nonce) txn)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error PRBMathSD59x18__SqrtNegativeInput` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Liquidation` taking `(bytes32,bytes32,uint8,uint32,int128,int128,int128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `EndpointABI`
 
 `import EndpointABI from "./protocols/vertex/EndpointABI.json";` Speaks for: endpoint. The import is the contract's full ABI across every deployment; call it through the `Vertex` namespace to have a function a chain's deployment does not run refused.

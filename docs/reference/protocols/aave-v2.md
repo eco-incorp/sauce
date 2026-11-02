@@ -90,6 +90,7 @@ function main() {
 - `getUserAccountData(address user) view returns (uint256 totalCollateralETH, uint256 totalDebtETH, uint256 availableBorrowsETH, uint256 currentLiquidationThreshold, uint256 ltv, uint256 healthFactor)`
 - `getUserConfiguration(address user) view returns ((uint256 data))`
 - `initialize(address provider)`
+- `initialize(address _logic, bytes _data) payable`
 - `initReserve(address asset, address aTokenAddress, address stableDebtAddress, address variableDebtAddress, address interestRateStrategyAddress)`
 - `LENDINGPOOL_REVISION() view returns (uint256)`
 - `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
@@ -110,6 +111,11 @@ function main() {
 Not on Polygon's lendingPool (`0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf`), whose code does not dispatch them or declares them otherwise: `swapToVariable`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Not on Avalanche C-Chain's lendingPool (`0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C`), whose code does not dispatch them or declares them otherwise: `swapToVariable`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `event LiquidationCall` taking `(address,address,address,uint256,uint256,address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ReserveUsedAsCollateralEnabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

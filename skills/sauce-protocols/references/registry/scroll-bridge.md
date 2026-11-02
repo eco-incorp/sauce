@@ -61,6 +61,15 @@ function main() {
 - `setETHGateway(address _newEthGateway)`
 - `transferOwnership(address newOwner)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event DepositERC20` taking `(address,address,address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event DepositETH` taking `(address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FinalizeWithdrawERC20` taking `(address,address,address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FinalizeWithdrawETH` taking `(address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RefundERC20` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RefundETH` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `ScrollL1MessengerABI`
 
 `import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger. The import is the contract's full ABI across every deployment; call it through the `ScrollBridge` namespace to have a function a chain's deployment does not run refused.
@@ -87,3 +96,7 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `updateFeeVault(address _newFeeVault)`
 - `xDomainMessageSender() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ErrorZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

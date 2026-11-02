@@ -22,12 +22,19 @@
  * `scripts/capture-registry-abi.mjs` only when asked to (see CLAUDE.md). A registry edit the
  * fixture does not cover fails here, naming what to recapture, instead of passing unchecked.
  *
- * For every event and custom error an export declares: a verified ABI must declare it with the same
- * `indexed` flags (a topic cannot tell an indexed parameter from one in the data, and a wrong flag
- * decodes no log), or, where none does, the deployed code must carry it (an event's topic a PUSH32
- * before its LOG, an error's selector a constant before its REVERT) and an `unverified` entry say
- * why. A real log of each event a target lists under `logs` must decode with the registry's
- * declaration.
+ * For every event and custom error an export declares: some deployment's code must carry it (an
+ * event's topic a PUSH32 before its LOG, an anonymous one the LOG its indexed parameters take, an
+ * error's selector a constant before its REVERT), `unverified` or not; each deployment whose code
+ * does not is recorded against it under `uncarried` in `omitted.json`; a verified ABI must declare
+ * it with the same `indexed` flags and anonymity (a topic cannot tell an indexed parameter from one
+ * in the data, and a wrong flag decodes no log), or, where none does, an `unverified` entry say why.
+ * A real log of each event a target lists under `logs` must decode with the registry's declaration.
+ *
+ * A router that names one selector's facet at a time is asked about every function of its
+ * inventory (`reference/index.json` `inventories`, each facet pinned by sha256): each facet must be
+ * reached by some deployment or its target say why under `unresolved`. A deployment whose verified
+ * ABI is carried from a capture that kept only the registry's names (`carried.partial`) is listed
+ * in `omitted.json` under `partial`.
  *
  * `fixtures/registry-abi/targets.json` says which deployments evidence which export, and records
  * every exception with its reason: `exempt`, `unverified` (no verified source, so only the selector
@@ -71,6 +78,8 @@ interface AbiFunction {
 interface AbiMark {
   readonly type: "event" | "error";
   readonly name: string;
+  /** An anonymous event: its log carries no topic0, only its indexed parameters. */
+  readonly anonymous?: boolean;
   readonly inputs: readonly (Param & { readonly indexed?: boolean })[];
 }
 /** A verified fragment. A function's has no `type`; an event's or error's carries it. */
@@ -79,6 +88,7 @@ interface Fragment {
   readonly signature: string;
   readonly selector?: string;
   readonly topic0?: string;
+  readonly anonymous?: boolean;
   readonly inputs: readonly (Param & { readonly indexed?: boolean })[];
   readonly outputs?: readonly Param[];
   readonly stateMutability?: string;
@@ -116,6 +126,19 @@ interface Instance {
   readonly errors?: Readonly<Record<string, number | string | null>>;
   /** Ids into `fragments`. */
   readonly verified?: readonly string[];
+  /**
+   * How the deployment routes selectors to facets: `facets()` for an EIP-2535 loupe's whole table,
+   * else each per-selector lookup it answers (`getImplementation(bytes4)`, …); empty for none.
+   */
+  readonly router?: readonly string[];
+  /** For an export with a router inventory: how many facets it has, and which this one reached. */
+  readonly inventory?: { readonly facets: number; readonly resolved: readonly string[] };
+  /** Where each layer's verified ABI came from; `carried` when kept from an earlier capture. */
+  readonly abiSources?: readonly {
+    readonly address: string;
+    readonly carried?: unknown;
+    readonly sameCodeAs?: string;
+  }[];
 }
 interface Evidence {
   readonly fragments: Readonly<Record<string, Fragment>>;
@@ -144,21 +167,41 @@ interface Target {
   readonly delegates?: readonly string[];
   /** On a role's export: why its contract is `<Protocol>.<method>(…)`'s where there are several. */
   readonly default?: string;
+  /** A router inventory's facet no deployment reaches -> why. */
+  readonly unresolved?: Readonly<Record<string, string>>;
 }
 interface Omitted {
   readonly exports: Readonly<Record<string, readonly { signature: string; reason: string }[]>>;
+  /** `<slug>.<Export>` -> `<chainId>:<address>` -> the shipped events and errors its code lacks. */
+  readonly uncarried: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
+  /** `<slug>.<Export>` -> the deployments whose verified ABI is a partial earlier capture's. */
+  readonly partial: Readonly<
+    Record<string, readonly { deployment: string; source: string; date: string }[]>
+  >;
 }
 interface ReferenceIndex {
   readonly exports: Readonly<
     Record<string, readonly { file: string; source: string; sha256: string }[]>
+  >;
+  /** `<slug>.<Export>` -> a per-selector router's facets, each its maker's interface; and a note. */
+  readonly inventories: Readonly<
+    Record<
+      string,
+      | string
+      | {
+          readonly facets: Readonly<
+            Record<string, { file: string; source: string; sha256: string }>
+          >;
+        }
+    >
   >;
 }
 
 const targets = JSON.parse(readFileSync(join(FIXTURES, "targets.json"), "utf-8"))
   .protocols as Record<string, Record<string, Target>>;
 const evidence = JSON.parse(readFileSync(join(FIXTURES, "evidence.json"), "utf-8")) as Evidence;
-const omitted = (JSON.parse(readFileSync(join(FIXTURES, "omitted.json"), "utf-8")) as Omitted)
-  .exports;
+const omittedFile = JSON.parse(readFileSync(join(FIXTURES, "omitted.json"), "utf-8")) as Omitted;
+const omitted = omittedFile.exports;
 const referenceIndex = JSON.parse(
   readFileSync(join(FIXTURES, "reference", "index.json"), "utf-8"),
 ) as ReferenceIndex;
@@ -169,6 +212,10 @@ const reference = (key: string): readonly (AbiFunction | AbiMark)[] =>
         AbiFunction | AbiMark
       )[],
   );
+/** Each per-selector router's inventory (`reference/index.json` `inventories`): its facets. */
+const inventories = Object.entries(referenceIndex.inventories ?? {}).flatMap(([key, value]) =>
+  typeof value === "string" ? [] : [[key, value.facets] as const],
+);
 
 const canonical = (p: Param): string =>
   p.type.startsWith("tuple")
@@ -377,7 +424,12 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
 const indexing = (inputs: AbiMark["inputs"]): string =>
   inputs.map((p) => `${p.indexed ? "indexed " : ""}${canonical(p)}`).join(", ");
 
-/** Everything wrong with one registry event or custom error, against its export's evidence. */
+/**
+ * Everything wrong with one registry event or custom error, against its export's evidence. Some
+ * deployment's code must carry it, `unverified` or not (a contract whose code carries none never
+ * logs or reverts with it), and each deployment's code that does not is recorded against it under
+ * `uncarried` in `omitted.json`, and only such a one.
+ */
 function markProblemsOf(slug: string, exportName: string, item: AbiMark): string[] {
   const target = targets[slug]![exportName]!;
   const sig = signature(item);
@@ -396,10 +448,17 @@ function markProblemsOf(slug: string, exportName: string, item: AbiMark): string
       found.push(`${at}: ${instance.error}`);
     } else {
       const located = (item.type === "event" ? instance.events : instance.errors)?.[mark];
+      // A shipped one a deployment's code does not carry is recorded against it in omitted.json.
+      const recorded = (omittedFile.uncarried?.[`${slug}.${exportName}`]?.[at] ?? []).includes(key);
       if (located === undefined) {
         found.push(`${at}: ${item.type} ${mark} was not captured — recapture ${slug}`);
       } else if (located !== null) {
         carried++;
+        if (recorded) found.push(`${at}: recorded under \`uncarried\`, but its code carries it`);
+      } else if (!recorded) {
+        found.push(
+          `${at}: its code does not carry ${mark}, and omitted.json does not record it under \`uncarried\``,
+        );
       }
       const overloads = fragmentsOf(instance).filter(
         (f) => f.type === item.type && f.signature.split("(")[0] === item.name,
@@ -412,6 +471,12 @@ function markProblemsOf(slug: string, exportName: string, item: AbiMark): string
             `${at}: the verified ${sig} is (${indexing(exact.inputs)}), the registry declares (${indexing(item.inputs)})`,
           );
         }
+        // An anonymous event's log has no topic0: declared otherwise, no log of it decodes.
+        if (Boolean(exact.anonymous) !== Boolean(item.anonymous)) {
+          found.push(
+            `${at}: the verified ${sig} is ${exact.anonymous ? "" : "not "}anonymous, the registry declares it ${item.anonymous ? "" : "not "}anonymous`,
+          );
+        }
       }
       if (exact !== undefined && found.length === 0) verifiedExact++;
     }
@@ -422,17 +487,16 @@ function markProblemsOf(slug: string, exportName: string, item: AbiMark): string
     }
   }
 
+  if (carried === 0 && problems.length === 0) {
+    problems.push(
+      "no captured deployment's code carries it — leave it out (`gen-registry-abis.mjs`), or add an instance that does and recapture",
+    );
+  }
   const unverified = target.unverified?.[key];
-  if (verifiedExact === 0 && problems.length === 0) {
-    if (unverified === undefined) {
-      problems.push(
-        "no verified ABI declares it — find a verified source, or record why none exists under `unverified`",
-      );
-    } else if (carried === 0) {
-      problems.push(
-        "no verified ABI declares it and no captured deployment carries it — add an instance and recapture",
-      );
-    }
+  if (verifiedExact === 0 && unverified === undefined && problems.length === 0) {
+    problems.push(
+      "no verified ABI declares it — find a verified source, or record why none exists under `unverified`",
+    );
   }
   if (verifiedExact > 0 && unverified !== undefined) {
     problems.push(`stale \`unverified\` entry, a verified ABI now declares it: ${unverified}`);
@@ -560,6 +624,149 @@ describe("registry ABI evidence: coverage", () => {
           .digest("hex");
         if (digest !== sha256) wrong.push(`${key}: ${file} is not the pinned file`);
       }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every router inventory is the files its index pins, and each of its facets is reached by some deployment or says why under `unresolved`", () => {
+    const wrong: string[] = [];
+    for (const [key, facets] of inventories) {
+      const [slug, name] = key.split(".") as [string, string];
+      if (registry[slug] === undefined) continue; // another branch's protocol, see above
+      if (registry[slug][name] === undefined) {
+        wrong.push(`${key}: no such export`);
+        continue;
+      }
+      for (const [facet, { file, sha256 }] of Object.entries(facets)) {
+        const digest = createHash("sha256")
+          .update(readFileSync(join(FIXTURES, "reference", file)))
+          .digest("hex");
+        if (digest !== sha256) wrong.push(`${key}: ${facet}'s ${file} is not the pinned file`);
+      }
+      const count = Object.keys(facets).length;
+      const rows = instancesOf(slug, name).filter((i) => i.error === undefined);
+      for (const row of rows) {
+        if (row.inventory?.facets !== count) {
+          wrong.push(
+            `${key} ${where(row)}: captured against ${row.inventory?.facets ?? "no"} inventory facets, the inventory has ${count} — recapture ${slug}`,
+          );
+        }
+        for (const facet of row.inventory?.resolved ?? []) {
+          if (facets[facet] === undefined) {
+            wrong.push(`${key} ${where(row)}: reached ${facet}, no facet of the inventory`);
+          }
+        }
+      }
+      const reached = new Set(rows.flatMap((row) => row.inventory?.resolved ?? []));
+      const unresolved = targets[slug]?.[name]?.unresolved ?? {};
+      for (const facet of Object.keys(facets)) {
+        const why = unresolved[facet];
+        if (reached.has(facet)) {
+          if (why !== undefined) {
+            wrong.push(`${key}: stale \`unresolved\` entry, a deployment reaches ${facet}: ${why}`);
+          }
+        } else if (why === undefined) {
+          wrong.push(
+            `${key}: no deployment reaches ${facet} — add one that does, or say why under \`unresolved\``,
+          );
+        }
+      }
+      for (const facet of Object.keys(unresolved)) {
+        if (facets[facet] === undefined) {
+          wrong.push(`${key}: \`unresolved\` names ${facet}, no facet of the inventory`);
+        }
+      }
+    }
+    for (const [slug, exports] of Object.entries(targets)) {
+      for (const [name, target] of Object.entries(exports)) {
+        if (
+          target.unresolved !== undefined &&
+          !inventories.some(([key]) => key === `${slug}.${name}`)
+        )
+          wrong.push(`${slug}.${name}: \`unresolved\` with no inventory`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every deployment records how it routes selectors, and a per-selector router has an inventory", () => {
+    const wrong: string[] = [];
+    const inventoried = new Set(inventories.map(([key]) => key));
+    for (const row of evidence.instances) {
+      if (row.error !== undefined) continue;
+      const at = `${row.protocol}.${row.abi} ${where(row)}`;
+      if (!Array.isArray(row.router)) {
+        wrong.push(`${at}: no \`router\` recorded — recapture ${row.protocol}`);
+        continue;
+      }
+      // A lookup that names one selector's facet at a time leaves a facet no candidate reaches
+      // unseen: what an inventory is for. A loupe's `facets()` lists the whole table, and an EIP-2535
+      // diamond's `facetAddress(bytes4)` comes with `facetAddresses()`, which lists every facet.
+      const perSelector = row.router.filter(
+        (lookup) => lookup !== "facets()" && lookup !== "facetAddress(bytes4)",
+      );
+      if (perSelector.length > 0 && !inventoried.has(`${row.protocol}.${row.abi}`)) {
+        wrong.push(
+          `${at}: routes by ${perSelector.join(", ")}, and reference/index.json has no inventory of its facets`,
+        );
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every `uncarried` record names a captured deployment and an event or error its export declares", () => {
+    const wrong: string[] = [];
+    for (const [key, byDeployment] of Object.entries(omittedFile.uncarried ?? {})) {
+      const [slug, name] = key.split(".") as [string, string];
+      if (registry[slug] === undefined) continue; // another branch's protocol, see above
+      const declared = new Set((marks[slug]?.[name] ?? []).map(markKey));
+      for (const [deployment, keys] of Object.entries(byDeployment)) {
+        const captured = instancesOf(slug, name).some(
+          (i) => i.error === undefined && where(i) === deployment,
+        );
+        if (!captured) wrong.push(`${key} ${deployment}: no captured deployment`);
+        for (const k of keys) {
+          if (!declared.has(k)) wrong.push(`${key} ${deployment}: ${k} is not declared`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("every ABI carried from an earlier capture says when and whether it is partial, and omitted.json lists each partial one", () => {
+    const wrong: string[] = [];
+    const partial = new Set<string>();
+    for (const row of evidence.instances) {
+      if (targets[row.protocol]?.[row.abi]?.unverifiable !== undefined) continue;
+      for (const source of row.abiSources ?? []) {
+        if (source.carried === undefined) continue;
+        const carried = source.carried as { date?: unknown; partial?: unknown } | null;
+        if (
+          typeof carried !== "object" ||
+          carried === null ||
+          typeof carried.date !== "string" ||
+          typeof carried.partial !== "boolean"
+        ) {
+          wrong.push(
+            `${row.protocol}.${row.abi} ${where(row)} ${source.address}: \`carried\` is not { date, partial } — recapture ${row.protocol}`,
+          );
+          continue;
+        }
+        if (carried.partial) {
+          partial.add(`${row.protocol}.${row.abi} ${where(row)} ${source.address} ${carried.date}`);
+        }
+      }
+    }
+    const listed = new Set(
+      Object.entries(omittedFile.partial ?? {}).flatMap(([key, list]) =>
+        list.map((p) => `${key} ${p.deployment} ${p.source} ${p.date}`),
+      ),
+    );
+    for (const p of partial) {
+      if (!listed.has(p)) wrong.push(`${p}: a partial carry omitted.json does not list`);
+    }
+    for (const p of listed) {
+      if (!partial.has(p)) wrong.push(`${p}: listed in omitted.json as a partial carry, not one`);
     }
     expect(wrong).toEqual([]);
   });

@@ -162,6 +162,10 @@ functions, and its writes are SafeERC20.
 - `usersOfMarket(address, address) view returns (bool)`
 - `validator() view returns (address)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event FlashLoan` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

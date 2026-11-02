@@ -137,6 +137,27 @@ function main() {
 
 Not on BNB Chain's liquidityPool (`0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874`), whose code does not dispatch them or declares them otherwise: `accrueInterest`, `addToken`, `borrowIndices`, `canSwap`, `daoFee`, `delistToken`, `feeReserves`, `getAllAssets`, `getAllTranches`, `globalShortSize`, `interestRate`, `interestRateModel`, `isValidLeverageTokenPair`, `lastAccrualTimestamps`, `liquidatePositionAllowed`, `liquidationFee`, `liquidityCalculator`, `pause`, `paused`, `poolBalances`, `positionFee`, `positionRevisions`, `reinit_setFeeDiscount`, `setController`, `setDaoFee`, `setFeeDistributor`, `setInterestRateModel`, `setLiquidityCalculator`, `setMaxLeverage`, `setOracle`, `setOrderManager`, `setPoolHook`, `setPositionFee`, `setRiskFactor`, `unpause`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AddLiquidityNotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DuplicateToken` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientPoolAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidInterval` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidLeverage` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMaxLeverage` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPositionSize` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTranche` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxGlobalShortSizeExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxNumberOfTranchesReached` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotApplicableForStableCoin` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Overflow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RemoveLiquidityTooMuch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReserveReduceTooMuch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TrancheAlreadyAdded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event InterestRateSet` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MaintenanceMarginChanged` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TrancheAdded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

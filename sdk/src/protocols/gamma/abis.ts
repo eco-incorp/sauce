@@ -255,16 +255,6 @@ export const UniProxyLegacyABI = [
     outputs: [{ name: "", type: "uint32" }],
   },
   {
-    name: "CustomDeposit",
-    type: "event",
-    inputs: [
-      { name: "", type: "address", indexed: false },
-      { name: "", type: "uint256", indexed: false },
-      { name: "", type: "uint256", indexed: false },
-      { name: "", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "DeltaScaleSet",
     type: "event",
     inputs: [{ name: "_deltaScale", type: "uint256", indexed: false }],

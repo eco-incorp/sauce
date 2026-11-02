@@ -86,3 +86,8 @@ function main() {
 - `updatePauser(address newPauser)`
 - `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes params)`
 - `usdc() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InsufficientValue` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

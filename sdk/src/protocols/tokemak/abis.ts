@@ -667,16 +667,6 @@ export const AutopoolABI = [
     ],
   },
   {
-    name: "DestinationDebtReporting",
-    type: "event",
-    inputs: [
-      { name: "destination", type: "address", indexed: false },
-      { name: "debtValue", type: "uint256", indexed: false },
-      { name: "claimed", type: "uint256", indexed: false },
-      { name: "claimGasUsed", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "DestinationVaultAdded",
     type: "event",
     inputs: [{ name: "destination", type: "address", indexed: false }],
@@ -685,18 +675,6 @@ export const AutopoolABI = [
     name: "DestinationVaultRemoved",
     type: "event",
     inputs: [{ name: "destination", type: "address", indexed: false }],
-  },
-  {
-    name: "FeeCollected",
-    type: "event",
-    inputs: [
-      { name: "fees", type: "uint256", indexed: false },
-      { name: "feeSink", type: "address", indexed: false },
-      { name: "mintedShares", type: "uint256", indexed: false },
-      { name: "profit", type: "uint256", indexed: false },
-      { name: "idle", type: "uint256", indexed: false },
-      { name: "debt", type: "uint256", indexed: false },
-    ],
   },
   {
     name: "Initialized",
@@ -745,15 +723,6 @@ export const AutopoolABI = [
     ],
   },
   {
-    name: "TokensPulled",
-    type: "event",
-    inputs: [
-      { name: "tokens", type: "address[]", indexed: false },
-      { name: "amounts", type: "uint256[]", indexed: false },
-      { name: "destinations", type: "address[]", indexed: false },
-    ],
-  },
-  {
     name: "TokensRecovered",
     type: "event",
     inputs: [
@@ -787,39 +756,7 @@ export const AutopoolABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  {
-    name: "WithdrawalQueueSet",
-    type: "event",
-    inputs: [{ name: "destinations", type: "address[]", indexed: false }],
-  },
   { name: "AccessDenied", type: "error", inputs: [] },
-  { name: "DepositFailed", type: "error", inputs: [] },
-  {
-    name: "ERC4626DepositExceedsMax",
-    type: "error",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "maxDeposit", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxRedeem",
-    type: "error",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "shares", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxWithdraw",
-    type: "error",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "assets", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
   {
     name: "ERC4626MintExceedsMax",
     type: "error",
@@ -828,28 +765,10 @@ export const AutopoolABI = [
       { name: "maxMint", type: "uint256" },
     ],
   },
-  {
-    name: "InsufficientFundsInDestinations",
-    type: "error",
-    inputs: [{ name: "deficit", type: "uint256" }],
-  },
-  { name: "InvalidDestination", type: "error", inputs: [{ name: "destination", type: "address" }] },
-  { name: "InvalidDestinationVault", type: "error", inputs: [] },
   { name: "InvalidParam", type: "error", inputs: [{ name: "paramName", type: "string" }] },
-  { name: "InvalidParams", type: "error", inputs: [] },
-  { name: "InvalidShutdownStatus", type: "error", inputs: [{ name: "status", type: "uint8" }] },
-  { name: "InvalidUser", type: "error", inputs: [] },
   { name: "IsNotPaused", type: "error", inputs: [] },
   { name: "IsPaused", type: "error", inputs: [] },
   { name: "ItemExists", type: "error", inputs: [] },
-  {
-    name: "NavChanged",
-    type: "error",
-    inputs: [
-      { name: "oldNav", type: "uint256" },
-      { name: "newNav", type: "uint256" },
-    ],
-  },
   {
     name: "NavDecreased",
     type: "error",
@@ -858,35 +777,6 @@ export const AutopoolABI = [
       { name: "newNav", type: "uint256" },
     ],
   },
-  { name: "NavOpsInProgress", type: "error", inputs: [] },
-  {
-    name: "RebalanceDestinationsMatch",
-    type: "error",
-    inputs: [{ name: "destinationVault", type: "address" }],
-  },
-  { name: "RebalanceFailed", type: "error", inputs: [{ name: "message", type: "string" }] },
   { name: "ReentrancyGuardReentrantCall", type: "error", inputs: [] },
-  { name: "RegistryItemMissing", type: "error", inputs: [{ name: "item", type: "string" }] },
-  { name: "RewarderAlreadySet", type: "error", inputs: [] },
-  { name: "UndefinedAddress", type: "error", inputs: [] },
-  {
-    name: "ValueSharesMismatch",
-    type: "error",
-    inputs: [
-      { name: "value", type: "uint256" },
-      { name: "shares", type: "uint256" },
-    ],
-  },
-  { name: "VaultShutdown", type: "error", inputs: [] },
-  { name: "WithdrawalFailed", type: "error", inputs: [] },
-  { name: "WithdrawalIncomplete", type: "error", inputs: [] },
-  {
-    name: "WithdrawShareCalcInvalid",
-    type: "error",
-    inputs: [
-      { name: "currentShares", type: "uint256" },
-      { name: "cachedShares", type: "uint256" },
-    ],
-  },
   { name: "ZeroAddress", type: "error", inputs: [{ name: "paramName", type: "string" }] },
 ] as const;

@@ -311,7 +311,8 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const omitted = JSON.parse(readFileSync(OMITTED, "utf8")).exports;
+  const omittedFile = JSON.parse(readFileSync(OMITTED, "utf8"));
+  const omitted = omittedFile.exports;
   // An interface binds to whatever address a program gives it, so the contracts it reaches can
   // differ. Read from the captured instances of each interface export: one whose instances do not
   // all dispatch the same of the functions it lists is flagged. Only the listed functions count:
@@ -437,6 +438,12 @@ export async function skillsReferences(api, documented) {
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
         omitted: omitted[`${info.slug}.${e.name}`] ?? [],
+        // Deployments whose verified ABI is carried, in part, from an earlier capture.
+        partial: (omittedFile.partial?.[`${info.slug}.${e.name}`] ?? []).flatMap((c) => {
+          const [chainId, address] = c.deployment.split(":");
+          const chain = byId.get(Number(chainId));
+          return chain === undefined ? [] : [{ chain: chain.slug, address, date: c.date }];
+        }),
         // An interface export whose captured instances dispatch different functions.
         instancesDiffer: instancesDiffer(info.slug, e.name),
         functions: e.functions.map((f) => ({
@@ -1803,6 +1810,12 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
               "",
             ]
           : []),
+        // A deployment whose verified ABI no source could give, kept from an earlier capture that
+        // took only what the registry declared then: this ABI may lack what it runs.
+        ...e.partial.flatMap((c) => [
+          `On ${chainsBySlug.get(c.chain).name}, no source could give the verified ABI of ${addressCode(chainsBySlug.get(c.chain).kind, c.address)} when the registry was checked, so what it declares is kept from a check of ${c.date} that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.`,
+          "",
+        ]),
       );
     }
   }

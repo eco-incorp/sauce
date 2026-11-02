@@ -99,6 +99,11 @@ function main() {
 - `userCollateralShare(address user) view returns (uint256)`
 - `withdrawFees()`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error ErrNotClone` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ErrOverflow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `DegenBoxABI`
 
 `import DegenBoxABI from "./protocols/abracadabra/DegenBoxABI.json";` Speaks for: degenBox. The import is the contract's full ABI across every deployment; call it through the `Abracadabra` namespace to have a function a chain's deployment does not run refused.

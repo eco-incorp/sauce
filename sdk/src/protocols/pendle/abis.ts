@@ -2653,14 +2653,6 @@ export const PendleRouterABI = [
     ],
   },
   {
-    name: "SelectorToFacetSet",
-    type: "event",
-    inputs: [
-      { name: "selector", type: "bytes4", indexed: true },
-      { name: "facet", type: "address", indexed: true },
-    ],
-  },
-  {
     name: "SwapPtAndSy",
     type: "event",
     inputs: [
@@ -3147,11 +3139,6 @@ export const PendleMarketABI = [
     type: "error",
     inputs: [{ name: "rateScalar", type: "int256" }],
   },
-  {
-    name: "MarketScalarRootBelowZero",
-    type: "error",
-    inputs: [{ name: "scalarRoot", type: "int256" }],
-  },
   { name: "MarketZeroAmountsInput", type: "error", inputs: [] },
   { name: "MarketZeroAmountsOutput", type: "error", inputs: [] },
   { name: "MarketZeroLnImpliedRate", type: "error", inputs: [] },
@@ -3453,15 +3440,6 @@ export const PendleSYABI = [
       { name: "owner", type: "address", indexed: true },
       { name: "spender", type: "address", indexed: true },
       { name: "value", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "ClaimRewards",
-    type: "event",
-    inputs: [
-      { name: "user", type: "address", indexed: true },
-      { name: "rewardTokens", type: "address[]", indexed: false },
-      { name: "rewardAmounts", type: "uint256[]", indexed: false },
     ],
   },
   {

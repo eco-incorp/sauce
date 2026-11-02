@@ -328,7 +328,6 @@ export const SfrxETHABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  { name: "SyncError", type: "error", inputs: [] },
 ] as const;
 
 export const FrxETHMinterABI = [
@@ -665,7 +664,6 @@ export const FrxETHMinterABI = [
       { name: "withheld_amt", type: "uint256", indexed: false },
     ],
   },
-  { name: "KeysCleared", type: "event", inputs: [] },
   {
     name: "OwnerChanged",
     type: "event",

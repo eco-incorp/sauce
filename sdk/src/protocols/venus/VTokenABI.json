@@ -1766,33 +1766,9 @@
       ]
     },
     {
-      "name": "AccrueInterestFailed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "errorCode",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "FlashLoanAlreadyActive",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "FlashLoanFeeTooHigh",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "fee",
-          "type": "uint256"
-        },
-        {
-          "name": "maxFee",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "FlashLoanProtocolShareTooHigh",

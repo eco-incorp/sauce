@@ -81,6 +81,12 @@ functions, and its writes are SafeERC20.
 - `uniswapV3SwapCallback(int256 _amount0Delta, int256 _amount1Delta, bytes _data)`
 - `WETH() view returns (address)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidNativeErc20Decimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WethIsNativeErc20` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `AerodromeSlipstreamPoolABI`
 
 `import AerodromeSlipstreamPoolABI from "./protocols/aerodrome-slipstream/AerodromeSlipstreamPoolABI.json";`
@@ -128,6 +134,10 @@ functions, and its writes are SafeERC20.
 - `token1() view returns (address)`: the address is a token
 - `unstakedFee() view returns (uint24)`
 - `updateRewardsGrowthGlobal()`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event SetFeeProtocol` taking `(uint8,uint8,uint8,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `SlipstreamCLFactoryABI`
 

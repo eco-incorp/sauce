@@ -185,24 +185,6 @@ export const AggregatorV3ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "AnswerUpdated",
-    type: "event",
-    inputs: [
-      { name: "current", type: "int256", indexed: true },
-      { name: "roundId", type: "uint256", indexed: true },
-      { name: "updatedAt", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "NewRound",
-    type: "event",
-    inputs: [
-      { name: "roundId", type: "uint256", indexed: true },
-      { name: "startedBy", type: "address", indexed: true },
-      { name: "startedAt", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "OwnershipTransferred",
     type: "event",
     inputs: [

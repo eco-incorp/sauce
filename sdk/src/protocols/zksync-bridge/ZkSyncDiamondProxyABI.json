@@ -1831,22 +1831,6 @@
       ]
     },
     {
-      "name": "BridgeMint",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "_account",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "_amount",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "DiamondCut",
       "type": "event",
       "inputs": [
@@ -2375,11 +2359,6 @@
     },
     {
       "name": "CanOnlyProcessOneBatch",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CantExecuteUnprovenBatches",
       "type": "error",
       "inputs": []
     },
@@ -3106,11 +3085,6 @@
     },
     {
       "name": "TooMuchGas",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "TransactionNotAllowed",
       "type": "error",
       "inputs": []
     },

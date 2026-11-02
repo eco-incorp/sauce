@@ -75,6 +75,11 @@ function main() {
 - `unpause()`
 - `updateMaxNodeDelegatorLimit(uint256 maxNodeDelegatorLimit_)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error CallerNotLRTConfigAdmin` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ETHNotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `RsETHABI`
 
 `import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH. The import is the contract's full ABI across every deployment; call it through the `Kelp` namespace to have a function a chain's deployment does not run refused.

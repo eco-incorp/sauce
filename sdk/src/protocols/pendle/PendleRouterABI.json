@@ -6365,22 +6365,6 @@
       ]
     },
     {
-      "name": "SelectorToFacetSet",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "selector",
-          "type": "bytes4",
-          "indexed": true
-        },
-        {
-          "name": "facet",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "SwapPtAndSy",
       "type": "event",
       "inputs": [

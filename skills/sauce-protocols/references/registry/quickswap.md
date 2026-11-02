@@ -56,10 +56,33 @@ functions, and its writes are SafeERC20.
 
 `import QuickSwapV2PairABI from "./protocols/quickswap/QuickSwapV2PairABI.json";`
 
+- `allowance(address, address) view returns (uint256)`
+- `approve(address spender, uint256 value) returns (bool)`
+- `balanceOf(address) view returns (uint256)`
+- `burn(address to) returns (uint256 amount0, uint256 amount1)`
+- `decimals() view returns (uint8)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `factory() view returns (address)`
 - `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `initialize(address _token0, address _token1)`
+- `kLast() view returns (uint256)`
+- `MINIMUM_LIQUIDITY() view returns (uint256)`
+- `mint(address to) returns (uint256 liquidity)`
+- `name() view returns (string)`
+- `nonces(address) view returns (uint256)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `PERMIT_TYPEHASH() view returns (bytes32)`
+- `price0CumulativeLast() view returns (uint256)`
+- `price1CumulativeLast() view returns (uint256)`
+- `skim(address to)`
 - `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+- `symbol() view returns (string)`
+- `sync()`
 - `token0() view returns (address)`: the address is a token
 - `token1() view returns (address)`: the address is a token
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 value) returns (bool)`
+- `transferFrom(address from, address to, uint256 value) returns (bool)`
 
 ### `QuickSwapV2RouterABI`
 

@@ -1132,17 +1132,7 @@
       "inputs": []
     },
     {
-      "name": "InputAddressZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidNewPausedStatus",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidShortString",
       "type": "error",
       "inputs": []
     },
@@ -1152,22 +1142,7 @@
       "inputs": []
     },
     {
-      "name": "MaxStrategiesExceeded",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OnlyDelegationManager",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyPauser",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyStrategyWhitelister",
       "type": "error",
       "inputs": []
     },
@@ -1182,17 +1157,7 @@
       "inputs": []
     },
     {
-      "name": "SharesAmountZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "SignatureExpired",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SlashResolutionDelayNotElapsed",
       "type": "error",
       "inputs": []
     },
@@ -1205,26 +1170,6 @@
       "name": "StrategyAlreadyInSlash",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "StrategyNotFound",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "StrategyNotWhitelisted",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
-        }
-      ]
     }
   ]
 }

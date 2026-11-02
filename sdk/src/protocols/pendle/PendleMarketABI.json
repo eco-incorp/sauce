@@ -847,16 +847,6 @@
       ]
     },
     {
-      "name": "MarketScalarRootBelowZero",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "scalarRoot",
-          "type": "int256"
-        }
-      ]
-    },
-    {
       "name": "MarketZeroAmountsInput",
       "type": "error",
       "inputs": []

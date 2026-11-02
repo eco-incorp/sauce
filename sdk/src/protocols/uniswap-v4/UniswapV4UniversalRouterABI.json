@@ -152,11 +152,6 @@
       ]
     },
     {
-      "name": "ETHNotAccepted",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ExecutionFailed",
       "type": "error",
       "inputs": [
@@ -177,11 +172,6 @@
     },
     {
       "name": "InputLengthMismatch",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientBalance",
       "type": "error",
       "inputs": []
     },

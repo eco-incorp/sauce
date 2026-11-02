@@ -984,33 +984,6 @@
       ]
     },
     {
-      "name": "AdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "previousAdmin",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "newAdmin",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "BeaconUpgraded",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "beacon",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "Deposit",
       "type": "event",
       "inputs": [
@@ -1282,11 +1255,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidPauseUntilDuration",
       "type": "error",
       "inputs": []
@@ -1328,11 +1296,6 @@
     },
     {
       "name": "RebaseExceedsPositiveCap",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Reentrancy",
       "type": "error",
       "inputs": []
     },

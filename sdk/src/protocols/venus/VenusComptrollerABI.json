@@ -3802,31 +3802,6 @@
       ]
     },
     {
-      "name": "AlreadyInSelectedPool",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ArrayLengthMismatch",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowNotAllowedInPool",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "EmptyPoolLabel",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ExecuteFlashLoanFailed",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "FailedToCreateDebtPosition",
       "type": "error",
       "inputs": []
@@ -3857,29 +3832,9 @@
       "inputs": []
     },
     {
-      "name": "InvalidAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidFlashLoanParams",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "InvalidOperationForCorePool",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidWeightingStrategy",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "strategy",
-          "type": "uint8"
-        }
-      ]
     },
     {
       "name": "LiquidityCheckFailed",
@@ -3903,21 +3858,6 @@
           "name": "poolId",
           "type": "uint96"
         },
-        {
-          "name": "vToken",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "MarketConfigNotFound",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MarketNotListed",
-      "type": "error",
-      "inputs": [
         {
           "name": "vToken",
           "type": "address"
@@ -3950,30 +3890,6 @@
         {
           "name": "required",
           "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "PoolDoesNotExist",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "poolId",
-          "type": "uint96"
-        }
-      ]
-    },
-    {
-      "name": "PoolMarketNotFound",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "poolId",
-          "type": "uint96"
-        },
-        {
-          "name": "vToken",
-          "type": "address"
         }
       ]
     },

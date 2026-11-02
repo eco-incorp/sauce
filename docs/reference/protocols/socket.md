@@ -85,6 +85,10 @@ function main() {
 - `setApprovalForRouters(address[] routeAddresses, address[] tokenAddresses, bool isMax)`
 - `swapAndMultiBridge((uint32 swapRouteId, bytes swapImplData, uint32[] bridgeRouteIds, bytes[] bridgeImplDataItems, uint256[] bridgeRatios, bytes[] eventDataItems) swapMultiBridgeRequest) payable`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event OwnershipTransferRequested` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

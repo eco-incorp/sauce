@@ -95,7 +95,7 @@ address.
 | [1inch](../protocols/oneinch.md) | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` | `Oneinch.AggregationRouterV6` |
 | [OpenOcean](../protocols/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `Openocean.ExchangeV2` |
 | [Optimism Native Bridge](../protocols/optimism-bridge.md) | l2StandardBridge | `0x4200000000000000000000000000000000000010` | `OptimismBridge.L2StandardBridge` |
-| [ParaSwap](../protocols/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [ParaSwap](../protocols/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5`; not on this deployment: `buyOnAugustusRFQTryBatchFill`, `buyOnAugustusRFQTryBatchFillWithPermit`, `buyOnUniswap`, `buyOnUniswapFork`, `buyOnUniswapV2Fork`, `buyOnUniswapV2ForkWithPermit`, `partialSwapOnAugustusRFQ`, `partialSwapOnAugustusRFQNFT`, `partialSwapOnAugustusRFQNFTWithPermit`, `partialSwapOnAugustusRFQWithPermit`, `swapOnAugustusRFQ`, `swapOnAugustusRFQNFT`, `swapOnAugustusRFQNFTWithPermit`, `swapOnAugustusRFQTryBatchFill`, `swapOnAugustusRFQTryBatchFillWithPermit`, `swapOnAugustusRFQWithPermit`, `swapOnUniswap`, `swapOnUniswapFork`, `swapOnUniswapV2Fork`, `swapOnUniswapV2ForkWithPermit`, `swapOnZeroXv2`, `swapOnZeroXv2WithPermit`, `swapOnZeroXv4`, `swapOnZeroXv4WithPermit` |
 | [ParaSwap](../protocols/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Permit2](../protocols/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
 | [Perpetual Protocol](../protocols/perpetual-protocol.md) | clearingHouse | `0x82ac2CE43e33683c58BE4cDc40975E73aA50f459` | `PerpetualProtocol.ClearingHouse` |
@@ -126,7 +126,7 @@ address.
 | [Velodrome](../protocols/velodrome.md) | routerV2 | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` | `Velodrome.RouterV2` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xEe91C335eab126dF5fDB3797EA9d6aD93aeC9722` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x1D68124e65faFC907325e3EDbF8c4d84499DAa8b` | `Wormhole.TokenBridge` |
-| [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy` |
+| [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy`; not on this deployment: `_fillRfqOrder`, `_multiplexBatchSell`, `_multiplexMultiHopSell`, `_sellHeldTokenForTokenToUniswapV3`, `_sellTokenForTokenToUniswapV3`, `batchExecuteMetaTransactions`, `executeMetaTransaction`, `getMetaTransactionExecutedBlock`, `getMetaTransactionHash`, `getMetaTransactionHashExecutedBlock`, `multiplexBatchSellEthForToken`, `multiplexBatchSellTokenForEth`, `multiplexBatchSellTokenForToken`, `multiplexMultiHopSellEthForToken`, `multiplexMultiHopSellTokenForEth`, `multiplexMultiHopSellTokenForToken`, `sellEthForTokenToUniswapV3`, `sellTokenForEthToUniswapV3`, `sellTokenForTokenToUniswapV3`, `sellToLiquidityProvider`, `sellToPancakeSwap`, `sellToUniswap`, `transferTrappedTokensTo`, `uniswapV3SwapCallback` |
 
 ## Requesting support
 

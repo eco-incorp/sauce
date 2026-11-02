@@ -108,6 +108,24 @@ function main() {
 - `updateOperatorMetadataURI(address operator, string metadataURI)`
 - `version() view returns (string)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error ActivelyDelegated` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CallerCannotUndelegate` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FullySlashed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InputAddressZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDepositScalingFactor` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidShortString` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidSnapshotOrdering` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyEigenPodManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyPauser` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyStrategyManagerOrEigenPodManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OperatorsCannotUndelegate` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SaltSpent` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalDelayNotElapsed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawerNotCaller` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `StrategyABI`
 
 `import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";` Speaks for: stETHStrategy, rETHStrategy, cbETHStrategy. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
@@ -139,6 +157,16 @@ function main() {
 - `userUnderlying(address user) returns (uint256)`
 - `userUnderlyingView(address user) view returns (uint256)`
 - `withdraw(address recipient, address token, uint256 amountShares) returns (uint256 amountOut)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InputAddressZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxPerDepositExceedsMax` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NewSharesZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyPauser` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyUnderlyingToken` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TotalSharesExceedsMax` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalAmountExceedsTotalDeposits` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `StrategyManagerABI`
 
@@ -190,6 +218,19 @@ function main() {
 - `unpause(uint256 newPausedStatus)`
 - `version() view returns (string)`
 - `withdrawSharesAsTokens(address staker, address strategy, address token, uint256 shares)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InputAddressZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidShortString` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxStrategiesExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyPauser` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyStrategyWhitelister` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SharesAmountZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SlashResolutionDelayNotElapsed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StrategyNotFound` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StrategyNotWhitelisted` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

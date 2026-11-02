@@ -91,6 +91,10 @@ function main() {
 - `togglePauseSubmits()`
 - `withholdRatio() view returns (uint256)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event KeysCleared` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `SfrxETHABI`
 
 `import SfrxETHABI from "./protocols/frax-ether/SfrxETHABI.json";` Speaks for: sfrxETH. The import is the contract's full ABI across every deployment; call it through the `FraxEther` namespace to have a function a chain's deployment does not run refused.
@@ -130,6 +134,10 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
 - `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error SyncError` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

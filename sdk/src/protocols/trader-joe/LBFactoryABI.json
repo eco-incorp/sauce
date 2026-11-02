@@ -1016,27 +1016,6 @@
       ]
     },
     {
-      "name": "RoleAdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "role",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "previousAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "newAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "RoleGranted",
       "type": "event",
       "inputs": [
@@ -1079,11 +1058,6 @@
       ]
     },
     {
-      "name": "AccessControlBadConfirmation",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "AccessControlUnauthorizedAccount",
       "type": "error",
       "inputs": [
@@ -1098,31 +1072,6 @@
       ]
     },
     {
-      "name": "EnumerableMapNonexistentKey",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "key",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__AddressZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LBFactory__BinStepHasNoPreset",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "binStep",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "LBFactory__BinStepTooLow",
       "type": "error",
       "inputs": [
@@ -1131,11 +1080,6 @@
           "type": "uint256"
         }
       ]
-    },
-    {
-      "name": "LBFactory__CannotGrantDefaultAdminRole",
-      "type": "error",
-      "inputs": []
     },
     {
       "name": "LBFactory__FlashLoanFeeAboveMax",
@@ -1162,11 +1106,6 @@
       ]
     },
     {
-      "name": "LBFactory__ImplementationNotSet",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "LBFactory__InvalidHooksParameters",
       "type": "error",
       "inputs": []
@@ -1190,29 +1129,6 @@
       ]
     },
     {
-      "name": "LBFactory__LBPairDoesNotExist",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "tokenX",
-          "type": "address"
-        },
-        {
-          "name": "tokenY",
-          "type": "address"
-        },
-        {
-          "name": "binStep",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__LBPairIgnoredIsAlreadyInTheSameState",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "LBFactory__LBPairNotCreated",
       "type": "error",
       "inputs": [
@@ -1229,35 +1145,6 @@
           "type": "uint256"
         }
       ]
-    },
-    {
-      "name": "LBFactory__LBPairSafetyCheckFailed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "LBPairImplementation",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__PresetIsLockedForUsers",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "user",
-          "type": "address"
-        },
-        {
-          "name": "binStep",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__PresetOpenStateIsAlreadyInTheSameState",
-      "type": "error",
-      "inputs": []
     },
     {
       "name": "LBFactory__QuoteAssetAlreadyWhitelisted",
@@ -1290,52 +1177,12 @@
       ]
     },
     {
-      "name": "LBFactory__SameFlashLoanFee",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "flashLoanFee",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__SameHooksImplementation",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "hooksImplementation",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "LBFactory__SameHooksParameters",
       "type": "error",
       "inputs": [
         {
           "name": "hooksParameters",
           "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "LBFactory__SameImplementation",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "LBPairImplementation",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "OwnableInvalidOwner",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "owner",
-          "type": "address"
         }
       ]
     },
@@ -1370,11 +1217,6 @@
       "inputs": []
     },
     {
-      "name": "PendingOwnable__NotPendingOwner",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "PendingOwnable__PendingOwnerAlreadySet",
       "type": "error",
       "inputs": []
@@ -1383,20 +1225,6 @@
       "name": "SafeCast__Exceeds16Bits",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "Uint128x128Math__PowUnderflow",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "x",
-          "type": "uint256"
-        },
-        {
-          "name": "y",
-          "type": "int256"
-        }
-      ]
     }
   ]
 }

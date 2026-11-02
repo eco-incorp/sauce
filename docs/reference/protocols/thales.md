@@ -94,6 +94,11 @@ function main() {
 - `times() view returns (uint256 maturity, uint256 expiry)`
 - `totalSupplies() view returns (uint256 up, uint256 down)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event SetZeroExAddress` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetZeroExAddressAtInit` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `SpeedMarketsAMMABI`
 
 `import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";` Speaks for: speedMarketsAMM. The import is the contract's full ABI across every deployment; call it through the `Thales` namespace to have a function a chain's deployment does not run refused.
@@ -160,6 +165,24 @@ function main() {
 - `transferAmount(address _collateral, address _destination, uint256 _amount)`
 - `transferOwnershipAtInit(address proxyAddress)`
 - `whitelistedAddresses(address) view returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error BonusTooHigh` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CanNotResolve` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralNotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EtherTransferFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOffRampCollateral` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPrice` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidStrikeTime` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchedLengths` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MulticollateralOnrampDisabled` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotEnoughReceivedViaOnramp` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyCreatorAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyMarketOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RiskPerAssetExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SkewSlippageExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TimeTooFarIntoFuture` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `ThalesAMMABI`
 
@@ -233,6 +256,10 @@ function main() {
 - `usdc() view returns (address)`
 - `usdt() view returns (address)`
 - `whitelistedAddresses(address) view returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event SetSafeBox` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

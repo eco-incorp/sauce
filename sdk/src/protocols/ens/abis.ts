@@ -412,15 +412,6 @@ export const BaseRegistrarABI = [
     inputs: [{ name: "controller", type: "address", indexed: true }],
   },
   {
-    name: "NameMigrated",
-    type: "event",
-    inputs: [
-      { name: "id", type: "uint256", indexed: true },
-      { name: "owner", type: "address", indexed: true },
-      { name: "expires", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "NameRegistered",
     type: "event",
     inputs: [

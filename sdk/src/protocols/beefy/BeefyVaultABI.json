@@ -443,22 +443,6 @@
       "outputs": []
     },
     {
-      "name": "AdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "previousAdmin",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "newAdmin",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "Approval",
       "type": "event",
       "inputs": [
@@ -476,17 +460,6 @@
           "name": "value",
           "type": "uint256",
           "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "BeaconUpgraded",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "beacon",
-          "type": "address",
-          "indexed": true
         }
       ]
     },

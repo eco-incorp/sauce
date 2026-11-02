@@ -235,6 +235,10 @@ Left out of this ABI, though its deployments declare them:
 - `unsubscribeGasLimit() view returns (uint256)`
 - `WETH9() view returns (address)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error NoSelfPermit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `UniswapV4StateViewABI`
 
 `import UniswapV4StateViewABI from "./protocols/uniswap-v4/UniswapV4StateViewABI.json";` Speaks for: stateView. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
@@ -252,6 +256,10 @@ Left out of this ABI, though its deployments declare them:
 - `getTickLiquidity(bytes32 poolId, int24 tick) view returns (uint128 liquidityGross, int128 liquidityNet)`
 - `poolManager() view returns (address)`: the address is a `UniswapV4.PoolManager`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error NotPoolManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `UniswapV4UniversalRouterABI`
 
 `import UniswapV4UniversalRouterABI from "./protocols/uniswap-v4/UniswapV4UniversalRouterABI.json";` Speaks for: universalRouter. The import is the contract's full ABI across every deployment; call it through the `UniswapV4` namespace to have a function a chain's deployment does not run refused.
@@ -264,6 +272,11 @@ Left out of this ABI, though its deployments declare them:
 - `unlockCallback(bytes data) returns (bytes)`
 - `V3_POSITION_MANAGER() view returns (address)`
 - `V4_POSITION_MANAGER() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ETHNotAccepted` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

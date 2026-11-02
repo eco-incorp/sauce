@@ -102,6 +102,13 @@ function main() {
 - `upgradeTo(address newImplementation)`
 - `upgradeToAndCall(address newImplementation, bytes data) payable`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error InsufficientBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Reentrancy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `LiquidityPoolABI`
 
 `import LiquidityPoolABI from "./protocols/etherfi/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the contract's full ABI across every deployment; call it through the `Etherfi` namespace to have a function a chain's deployment does not run refused.
@@ -176,6 +183,10 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error InvalidAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Reentrancy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `withdraw` taking `(uint256,uint256)`: an overload of withdraw(address,uint256), which takes as many arguments: a call picks its overload by argument count.
 
 ### `WeETHABI`
@@ -226,6 +237,14 @@ Left out of this ABI, though its deployments declare them:
 - `upgradeToAndCall(address newImplementation, bytes data) payable`
 - `wrap(uint256 _eETHAmount) returns (uint256)`
 - `wrapWithPermit(uint256 _eETHAmount, (uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) _permit) returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InsufficientBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Reentrancy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

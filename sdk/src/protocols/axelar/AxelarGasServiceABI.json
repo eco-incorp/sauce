@@ -1321,11 +1321,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidAmounts",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidCodeHash",
       "type": "error",
       "inputs": []
@@ -1346,22 +1341,12 @@
       "inputs": []
     },
     {
-      "name": "InvalidOwnerAddress",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidParams",
       "type": "error",
       "inputs": []
     },
     {
       "name": "NativeTransferFailed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotCollector",
       "type": "error",
       "inputs": []
     },

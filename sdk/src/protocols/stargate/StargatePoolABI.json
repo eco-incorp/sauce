@@ -1552,47 +1552,6 @@
       ]
     },
     {
-      "name": "UnreceivedTokenCached",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "guid",
-          "type": "bytes32",
-          "indexed": false
-        },
-        {
-          "name": "index",
-          "type": "uint8",
-          "indexed": false
-        },
-        {
-          "name": "srcEid",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "receiver",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "amountLD",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "composeMsg",
-          "type": "bytes",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "InvalidLocalDecimals",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "Path_AlreadyHasCredit",
       "type": "error",
       "inputs": []
@@ -1608,20 +1567,6 @@
       "inputs": []
     },
     {
-      "name": "SlippageExceeded",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountLD",
-          "type": "uint256"
-        },
-        {
-          "name": "minAmountLD",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "Stargate_InsufficientFare",
       "type": "error",
       "inputs": []
@@ -1633,11 +1578,6 @@
     },
     {
       "name": "Stargate_InvalidPath",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Stargate_InvalidTokenDecimals",
       "type": "error",
       "inputs": []
     },
@@ -1693,11 +1633,6 @@
     },
     {
       "name": "StargatePoolUSDC_BurnAmountExceedsBalance",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Transfer_ApproveFailed",
       "type": "error",
       "inputs": []
     },

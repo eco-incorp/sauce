@@ -248,5 +248,5 @@ address.
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | coreBridge | `0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B` | `Wormhole.CoreBridge` |
 | [Wormhole](../../sauce-protocols/references/registry/wormhole.md) | tokenBridge | `0x3ee18B2214AFF97000D974cf647E7C347E8fa585` | `Wormhole.TokenBridge` |
 | [Yearn V3](../../sauce-protocols/references/registry/yearn-v3.md) | vaultFactory | `0x770D0d1Fb036483Ed4AbB6d53c1C88fb277D812F` | `YearnV3.VaultFactory` |
-| [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy` |
+| [0x Protocol](../../sauce-protocols/references/registry/zerox.md) | exchangeProxy | `0xDef1C0ded9bec7F1a1670819833240f027b25EfF` | `Zerox.ExchangeProxy`; not on this deployment: `_fillRfqOrder`, `sellToPancakeSwap` |
 | [zkSync Native Bridge](../../sauce-protocols/references/registry/zksync-bridge.md) | diamondProxy | `0x32400084C286CF3E17e7B677ea9583e60a000324` | `ZksyncBridge.DiamondProxy` |

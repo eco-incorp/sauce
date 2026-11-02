@@ -5006,41 +5006,6 @@ export const LiFiDiamondABI = [
     ],
   },
   {
-    name: "LiFiSwappedGeneric",
-    type: "event",
-    inputs: [
-      { name: "transactionId", type: "bytes32", indexed: true },
-      { name: "integrator", type: "string", indexed: false },
-      { name: "referrer", type: "string", indexed: false },
-      { name: "fromAssetId", type: "address", indexed: false },
-      { name: "toAssetId", type: "address", indexed: false },
-      { name: "fromAmount", type: "uint256", indexed: false },
-      { name: "toAmount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "LiFiTransferCompleted",
-    type: "event",
-    inputs: [
-      { name: "transactionId", type: "bytes32", indexed: true },
-      { name: "receivingAssetId", type: "address", indexed: false },
-      { name: "receiver", type: "address", indexed: false },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "timestamp", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "LiFiTransferRecovered",
-    type: "event",
-    inputs: [
-      { name: "transactionId", type: "bytes32", indexed: true },
-      { name: "receivingAssetId", type: "address", indexed: false },
-      { name: "receiver", type: "address", indexed: false },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "timestamp", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "LiFiTransferStarted",
     type: "event",
     inputs: [
@@ -5366,7 +5331,6 @@ export const LiFiDiamondABI = [
   { name: "SignatureExpired", type: "error", inputs: [] },
   { name: "SliceOutOfBounds", type: "error", inputs: [] },
   { name: "SliceOverflow", type: "error", inputs: [] },
-  { name: "SymbolDoesNotExist", type: "error", inputs: [] },
   { name: "TokenNotSupported", type: "error", inputs: [] },
   { name: "TooManyChainIds", type: "error", inputs: [] },
   { name: "TransactionAlreadyProcessed", type: "error", inputs: [] },
@@ -5375,7 +5339,6 @@ export const LiFiDiamondABI = [
   { name: "UnknownDeBridgeChain", type: "error", inputs: [] },
   { name: "UnknownLayerZeroChain", type: "error", inputs: [] },
   { name: "UnsupportedAllBridgeChainId", type: "error", inputs: [] },
-  { name: "UnsupportedChain", type: "error", inputs: [] },
   { name: "UnsupportedChainflipChainId", type: "error", inputs: [] },
   { name: "UnsupportedChainId", type: "error", inputs: [{ name: "chainId", type: "uint256" }] },
   { name: "WithdrawFailed", type: "error", inputs: [] },

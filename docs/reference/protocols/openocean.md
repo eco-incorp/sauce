@@ -90,6 +90,10 @@ Not on Fantom's exchangeV2 (`0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`), whose
 
 Not on Avalanche C-Chain's exchangeV2 (`0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`), whose code does not dispatch them or declares them otherwise: `callUniswap`, `callUniswapTo`, `callUniswapToWithPermit`, `callUniswapWithPermit`, `swapGmxV2`, `uniswapV3SwapCallback`, `uniswapV3SwapTo`, `uniswapV3SwapToWithPermit`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI, though its deployments declare them:
+
+- `event Unpaused` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

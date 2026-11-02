@@ -88,6 +88,7 @@ functions, and its writes are SafeERC20.
 - `getPreviousIndex(address user) view returns (uint256)`
 - `getScaledUserBalanceAndSupply(address user) view returns (uint256, uint256)`
 - `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `initialize(address _logic, bytes _data) payable`
 - `initialize(address initializingPool, address underlyingAsset, uint8 aTokenDecimals, string aTokenName, string aTokenSymbol, bytes params)`
 - `mint(address caller, address onBehalfOf, uint256 scaledAmount, uint256 index) returns (bool)`
 - `mintToTreasury(uint256 scaledAmount, uint256 index)`
@@ -111,6 +112,16 @@ functions, and its writes are SafeERC20.
 - `TREASURY() view returns (address)`
 - `UNDERLYING_ASSET_ADDRESS() view returns (address)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error CallerMustBePool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC20InsufficientAllowance` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidBurnAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidExpiration` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMintAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeCastOverflowedUintDowncast` taking `(uint8,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `AaveOracleABI`
 
 `import AaveOracleABI from "./protocols/aave-v3/AaveOracleABI.json";` Speaks for: oracle. The import is the contract's full ABI across every deployment; call it through the `AaveV3` namespace to have a function a chain's deployment does not run refused.
@@ -124,6 +135,10 @@ functions, and its writes are SafeERC20.
 - `getSourceOfAsset(address asset) view returns (address)`
 - `setAssetSources(address[] assets, address[] sources)`
 - `setFallbackOracle(address fallbackOracle)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event BaseCurrencySet` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `PoolABI`
 
@@ -174,6 +189,7 @@ functions, and its writes are SafeERC20.
 - `getUserEMode(address user) view returns (uint256)`
 - `getVirtualUnderlyingBalance(address asset) view returns (uint128)`
 - `initialize(address provider)`
+- `initialize(address _logic, bytes _data) payable`
 - `initReserve(address asset, address aTokenAddress, address variableDebtAddress)`
 - `isApprovedPositionManager(address user, address positionManager) view returns (bool)`
 - `liquidationCall(bytes32 args1, bytes32 args2)`
@@ -237,6 +253,8 @@ Not on Scroll's pool (`0x11fCfe756c05AD438e312a7fd934381537D3cFfe`), whose code 
 Left out of this ABI, though its deployments declare them:
 
 - `configureEModeCategory` taking `(uint8,(uint16,uint16,uint16,string))`: an overload of configureEModeCategory(uint8,(uint16,uint16,uint16,bool,string)), which takes as many arguments: a call picks its overload by argument count.
+- `error CallerNotPositionManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ReserveUsedAsCollateralEnabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `PoolAddressesProviderABI`
 
@@ -286,6 +304,7 @@ Left out of this ABI, though its deployments declare them:
 - `getPreviousIndex(address user) view returns (uint256)`
 - `getScaledUserBalanceAndSupply(address user) view returns (uint256, uint256)`
 - `increaseAllowance(address, uint256) returns (bool)`
+- `initialize(address _logic, bytes _data) payable`
 - `initialize(address initializingPool, address underlyingAsset, uint8 debtTokenDecimals, string debtTokenName, string debtTokenSymbol, bytes params)`
 - `mint(address user, address onBehalfOf, uint256 amount, uint256 scaledAmount, uint256 index) returns (uint256)`
 - `name() view returns (string)`
@@ -301,3 +320,14 @@ Left out of this ABI, though its deployments declare them:
 - `transfer(address, uint256) returns (bool)`
 - `transferFrom(address, address, uint256) returns (bool)`
 - `UNDERLYING_ASSET_ADDRESS() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CallerMustBePool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC20InsufficientAllowance` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidBurnAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidExpiration` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMintAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeCastOverflowedUintDowncast` taking `(uint8,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Approval` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

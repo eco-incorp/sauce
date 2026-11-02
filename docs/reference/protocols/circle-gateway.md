@@ -141,6 +141,32 @@ function main() {
 - `UPGRADE_INTERFACE_VERSION() view returns (string)`
 - `upgradeToAndCall(address newImplementation, bytes data) payable`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AccountDenylisted` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CursorOutOfBounds` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAttestationDestinationContractAtIndex` taking `(uint32,address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferPayloadMagic` taking `(bytes4)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferSpecMagic` taking `(bytes4)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferSpecVersion` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchedLengthTokenAndTokenMintAuthorities` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInitializing` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OwnableInvalidOwner` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadDataTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadOverallLengthMismatch` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetElementHeaderTooShort` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetElementTooShort` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetOverallLengthMismatch` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferSpecHashUsed` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferSpecHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnauthorizedDenylister` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnauthorizedCallContext` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnsupportedProxiableUUID` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `GatewayWalletABI`
 
 `import GatewayWalletABI from "./protocols/circle-gateway/GatewayWalletABI.json";` Speaks for: gatewayWallet. The import is the contract's full ABI across every deployment; call it through the `CircleGateway` namespace to have a function a chain's deployment does not run refused.
@@ -212,6 +238,49 @@ function main() {
 - `withdrawalBlock(address token, address depositor) view returns (uint256)`
 - `withdrawalDelay() view returns (uint256)`
 - `withdrawingBalance(address token, address depositor) view returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AccountDenylisted` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BatchIdUsed` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BurnFeeTooHighAtIndex` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CannotDelegateToSelf` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CursorOutOfBounds` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DepositorIsBlacklisted` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IntentExpiredAtIndex` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IntentValueMustBePositiveAtIndex` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidIntentSourceSignerAtIndex` taking `(uint32,address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferPayloadMagic` taking `(bytes4)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferSpecMagic` taking `(bytes4)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTransferSpecVersion` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchedBurn` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MustHaveAtLeastOneBurnIntent` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MustHaveAtLeastOneDelta` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MustNetToZero` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotAllSameToken` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInitializing` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OwnableInvalidOwner` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadDataTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadOverallLengthMismatch` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetElementHeaderTooShort` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetElementTooShort` taking `(uint32,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferPayloadSetOverallLengthMismatch` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferSpecHashUsed` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferSpecHeaderTooShort` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferSpecInvalidHookData` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnauthorizedContractSignerAllowlister` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnauthorizedContractSignerDisallowlister` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnauthorizedDenylister` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnauthorizedCallContext` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UUPSUnsupportedProxiableUUID` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalNotYetAvailable` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalValueMustBePositive` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongGatewayContract` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

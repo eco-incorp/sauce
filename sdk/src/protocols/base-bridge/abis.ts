@@ -344,11 +344,7 @@ export const BaseL1StandardBridgeABI = [
     type: "event",
     inputs: [{ name: "version", type: "uint8", indexed: false }],
   },
-  { name: "ProxyAdminOwnedBase_NotProxyAdmin", type: "error", inputs: [] },
   { name: "ProxyAdminOwnedBase_NotProxyAdminOrProxyAdminOwner", type: "error", inputs: [] },
-  { name: "ProxyAdminOwnedBase_NotProxyAdminOwner", type: "error", inputs: [] },
   { name: "ProxyAdminOwnedBase_NotResolvedDelegateProxy", type: "error", inputs: [] },
-  { name: "ProxyAdminOwnedBase_NotSharedProxyAdminOwner", type: "error", inputs: [] },
   { name: "ProxyAdminOwnedBase_ProxyAdminNotFound", type: "error", inputs: [] },
-  { name: "ReinitializableBase_ZeroInitVersion", type: "error", inputs: [] },
 ] as const;

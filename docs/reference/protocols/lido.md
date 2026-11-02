@@ -144,6 +144,11 @@ function main() {
 - `transferToVault(address)`
 - `withdrawDepositableEther(uint256 _amount, uint256 _seedDepositsCount)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event RecoverToVault` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ScriptResult` taking `(address,bytes,bytes,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `WstETHABI`
 
 `import WstETHABI from "./protocols/lido/WstETHABI.json";` Speaks for: wstETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
@@ -189,6 +194,10 @@ function main() {
 - `totalSupply() view returns (uint256)`
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ErrorNotEnoughBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

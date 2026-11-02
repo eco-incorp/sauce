@@ -726,11 +726,6 @@
           "indexed": false
         }
       ]
-    },
-    {
-      "name": "SyncError",
-      "type": "error",
-      "inputs": []
     }
   ]
 }

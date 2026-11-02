@@ -258,6 +258,16 @@ export const SparkPoolABI = [
     outputs: [],
   },
   {
+    name: "initialize",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "initReserve",
     type: "function",
     stateMutability: "nonpayable",
@@ -602,14 +612,6 @@ export const SparkPoolABI = [
   },
   {
     name: "ReserveUsedAsCollateralDisabled",
-    type: "event",
-    inputs: [
-      { name: "reserve", type: "address", indexed: true },
-      { name: "user", type: "address", indexed: true },
-    ],
-  },
-  {
-    name: "ReserveUsedAsCollateralEnabled",
     type: "event",
     inputs: [
       { name: "reserve", type: "address", indexed: true },

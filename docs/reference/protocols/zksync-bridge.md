@@ -147,6 +147,9 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error CantExecuteUnprovenBatches` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransactionNotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BridgeMint` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `getName` taking `()`: no captured deployment dispatches it.
 
 ## Next

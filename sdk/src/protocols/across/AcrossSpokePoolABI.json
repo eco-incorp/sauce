@@ -2166,22 +2166,6 @@
       ]
     },
     {
-      "name": "AdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "previousAdmin",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "newAdmin",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "AdminExternalCallExecuted",
       "type": "event",
       "inputs": [
@@ -2194,17 +2178,6 @@
           "name": "data",
           "type": "bytes",
           "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "BeaconUpgraded",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "beacon",
-          "type": "address",
-          "indexed": true
         }
       ]
     },
@@ -2242,27 +2215,6 @@
           "name": "rootBundleId",
           "type": "uint256",
           "indexed": true
-        }
-      ]
-    },
-    {
-      "name": "EnabledDepositRoute",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "originToken",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "destinationChainId",
-          "type": "uint256",
-          "indexed": true
-        },
-        {
-          "name": "enabled",
-          "type": "bool",
-          "indexed": false
         }
       ]
     },
@@ -2402,105 +2354,6 @@
             {
               "name": "updatedMessageHash",
               "type": "bytes32"
-            },
-            {
-              "name": "updatedOutputAmount",
-              "type": "uint256"
-            },
-            {
-              "name": "fillType",
-              "type": "uint8"
-            }
-          ],
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "FilledV3Relay",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "inputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "outputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "inputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "outputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "repaymentChainId",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "originChainId",
-          "type": "uint256",
-          "indexed": true
-        },
-        {
-          "name": "depositId",
-          "type": "uint32",
-          "indexed": true
-        },
-        {
-          "name": "fillDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "exclusivityDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "exclusiveRelayer",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "relayer",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "depositor",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "recipient",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "message",
-          "type": "bytes",
-          "indexed": false
-        },
-        {
-          "name": "relayExecutionInfo",
-          "type": "tuple",
-          "components": [
-            {
-              "name": "updatedRecipient",
-              "type": "address"
-            },
-            {
-              "name": "updatedMessage",
-              "type": "bytes"
             },
             {
               "name": "updatedOutputAmount",
@@ -2775,108 +2628,6 @@
       ]
     },
     {
-      "name": "RequestedSpeedUpV3Deposit",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "updatedOutputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "depositId",
-          "type": "uint32",
-          "indexed": true
-        },
-        {
-          "name": "depositor",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "updatedRecipient",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "updatedMessage",
-          "type": "bytes",
-          "indexed": false
-        },
-        {
-          "name": "depositorSignature",
-          "type": "bytes",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "RequestedV3SlowFill",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "inputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "outputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "inputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "outputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "originChainId",
-          "type": "uint256",
-          "indexed": true
-        },
-        {
-          "name": "depositId",
-          "type": "uint32",
-          "indexed": true
-        },
-        {
-          "name": "fillDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "exclusivityDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "exclusiveRelayer",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "depositor",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "recipient",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "message",
-          "type": "bytes",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "SetFxChild",
       "type": "event",
       "inputs": [
@@ -3023,22 +2774,6 @@
       ]
     },
     {
-      "name": "SetZkBridge",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "erc20Bridge",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "oldErc20Bridge",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "TokensBridged",
       "type": "event",
       "inputs": [
@@ -3081,77 +2816,6 @@
       ]
     },
     {
-      "name": "V3FundsDeposited",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "inputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "outputToken",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "inputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "outputAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "destinationChainId",
-          "type": "uint256",
-          "indexed": true
-        },
-        {
-          "name": "depositId",
-          "type": "uint32",
-          "indexed": true
-        },
-        {
-          "name": "quoteTimestamp",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "fillDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "exclusivityDeadline",
-          "type": "uint32",
-          "indexed": false
-        },
-        {
-          "name": "depositor",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "recipient",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "exclusiveRelayer",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "message",
-          "type": "bytes",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "WhitelistedTokens",
       "type": "event",
       "inputs": [
@@ -3189,11 +2853,6 @@
       ]
     },
     {
-      "name": "CallValidatedAlreadySet",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "CallValidatedNotSet",
       "type": "error",
       "inputs": []
@@ -3210,11 +2869,6 @@
     },
     {
       "name": "DepositsArePaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DisabledRoute",
       "type": "error",
       "inputs": []
     },
@@ -3254,16 +2908,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidClaimedAmount",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "InvalidCrossDomainAdmin",
       "type": "error",
       "inputs": []
@@ -3295,11 +2939,6 @@
     },
     {
       "name": "InvalidOutputToken",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidPayoutAdjustmentPct",
       "type": "error",
       "inputs": []
     },
@@ -3359,17 +2998,7 @@
       "inputs": []
     },
     {
-      "name": "NotCrossChainCall",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NotCrossDomainAdmin",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotEOA",
       "type": "error",
       "inputs": []
     },
@@ -3379,42 +3008,12 @@
       "inputs": []
     },
     {
-      "name": "NotFxChild",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotHubPool",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OftFeeCapExceeded",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "OFTFeeUnderpaid",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OftIncorrectAmountReceivedLD",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OftIncorrectAmountSentLD",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OftInsufficientBalanceForFee",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OftLzFeeNotZero",
       "type": "error",
       "inputs": []
     },

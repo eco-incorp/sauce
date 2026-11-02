@@ -59,3 +59,9 @@ function main() {
 - `totalSupply() view returns (uint256)`
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address sender, address recipient, uint256 amount) returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidShortString` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

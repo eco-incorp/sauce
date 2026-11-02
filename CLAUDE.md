@@ -680,16 +680,20 @@ evidence: some deployment must dispatch each function's selector (after resolvin
 EIP-1967/beacon/legacy proxy slots, `implementation()` getters, `delegates`, and diamond or selector
 routers), and where a verified ABI exists, its outputs, mutability and struct field names must
 match; a role's deployment that does not match must withhold it, and one that does must not; an
-interface instance that declares it otherwise needs an `exempt`. An event or error must match a
-verified declaration (an event's `indexed` flags included), or be carried by the deployed code (a
-PUSH32 before its LOG, a constant before its REVERT) with an `unverified` entry; each event a target
-lists under `logs` must have a captured real log that decodes, strictly, with the registry's own
-declaration. And every function, event and error the deployments verifiably declare is either in
-the export or in `omitted.json`: nothing is trimmed silently. `targets.json` beside it is the
+interface instance that declares it otherwise needs an `exempt`. An event or error ships only where
+some deployment's code carries it (a PUSH32 before its LOG, an anonymous event's LOG of as many
+topics as it indexes, a constant before its REVERT), `unverified` or not: the generator leaves the
+rest out as "no deployment carries it", and records each shipped one a deployment's code does not
+carry under `uncarried` in `omitted.json`, which the test holds both ways. It must match a verified
+declaration (`indexed` flags and `anonymous` included), or have an `unverified` entry; each event a
+target lists under `logs` must have a captured real log that decodes, strictly, with the registry's
+own declaration. And every function, event and error the deployments verifiably declare is either
+in the export or in `omitted.json`: nothing is trimmed silently. `targets.json` beside it is the
 hand-written half (its `note` defines every key): which deployments evidence which export (`roles`
 from `addresses.ts`, narrowed by `chains` where one role's deployments run different releases, or
 representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
-about), `delegates` (a getter naming the contract a fallback delegates to: Comet's
+about), `unresolved` (a router inventory's facet no deployment reaches, and why), `delegates` (a
+getter naming the contract a fallback delegates to: Comet's
 `extensionDelegate()`), `overloads`, `default` (the contract `<Protocol>.<method>(…)` calls where a
 protocol has several singletons: Aave V3's Pool), `standard` (an interface whose instances are
 examples of an ERC or a protocol's interface — ERC-20, ERC-4626, ERC-3156's lender, Morpho Blue's
@@ -710,6 +714,15 @@ INTERFACE its deployed code dispatches: `test/fixtures/registry-abi/reference/` 
 canonical ABI file, and `index.json` names it per export with its exact provenance (an npm package
 version or a repository commit) and sha256, which the test re-hashes. Each function adopted that
 way is an `unverified` entry naming that source. Never write a function no source declares.
+
+A router that names one selector's facet at a time (Pendle's `selectorToFacet`, 0x's
+`getFunctionImplementation`, Paraswap's `getImplementation`) reveals only the facets a candidate
+selector reaches, so `index.json`'s `inventories` lists every facet its maker publishes, each its
+interface pinned by sha256; the capture asks the router about every function listed and records
+each deployment's `router` (the lookups it answers, or `facets()` for a loupe's whole table) and
+which facets it reached. A facet's functions reach the registry only from its deployed code's
+verified ABI, never from the inventory. The test fails a per-selector router with no inventory, a
+facet no deployment reaches without an `unresolved` reason, and a stale `unresolved`.
 
 A target may name a protocol this tree does not have yet (one another branch adds): the suite skips
 it and the capture carries its evidence over untouched, so the evidence can land before the
@@ -734,11 +747,16 @@ reads nothing from the environment and has no public fallback: before its first 
 listing each chain id the selected deployments need that the file does not give. Verified ABIs come
 from Sourcify, Blockscout and keyless Etherscan-compatible APIs. An explorer that refuses (HTTP
 401/403: Base, Arbitrum and Polygon Blockscout sit behind a challenge page) is recorded as
-`abiErrors`, never as "unverified"; a deployment whose layers and code are unchanged keeps the
-fragments the previous capture verified from that source, the source marked `carried` with that
-capture's date. The fixture must never hold an endpoint or key; the suite greps it. Review the
-fixture diff before committing it: a changed layer code hash or facet is a contract upgrade to look
-at, not noise.
+`abiErrors`, never as "unverified". Such a layer first takes the verified ABI of the same runtime
+code elsewhere (another captured layer, or the address on another configured chain), byte-equal by
+keccak and recorded as `sameCodeAs`; else a deployment whose layers and code are unchanged keeps the
+fragments the previous capture verified from that source, the source marked
+`carried: { date, partial }`. A carry from a capture before the registry took full ABIs kept only
+the registry's names then, so it is `partial`: `omitted.json` lists each under `partial` and the
+registry documents say that export may lack what that deployment runs; the test fails an unlisted
+one. The fixture must never hold an endpoint or key; the suite greps it. Review the fixture diff
+before committing it: a changed layer code hash or facet is a contract upgrade to look at, not
+noise.
 
 **Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
 issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against

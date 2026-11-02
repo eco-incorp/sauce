@@ -127,6 +127,10 @@ function main() {
 - `updateAssetConfig(uint256 assetId, (address feeReceiver, uint16 liquidityFee, address irStrategy, address reinvestmentController) config, bytes irData)`
 - `updateSpokeConfig(uint256 assetId, address spoke, (uint40 addCap, uint40 drawCap, uint24 riskPremiumThreshold, bool active, bool halted) config)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AccessManagedRequiredDelay` taking `(address,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `AaveV4SpokeABI`
 
 `import AaveV4SpokeABI from "./protocols/aave-v4/AaveV4SpokeABI.json";` Speaks for: mainSpoke, forexSpoke, bluechipSpoke, ethenaCorrelatedSpoke, ethenaEcosystemSpoke, goldSpoke, paxgGoldSpoke, lombardBtcSpoke, usdgPendleSpoke, etherfiESpoke, kelpESpoke, lidoESpoke, usdgMapleESpoke, mag7Spoke, avaxCorrelatedSpoke. The import is the contract's full ABI across every deployment; call it through the `AaveV4` namespace to have a function a chain's deployment does not run refused.
@@ -188,3 +192,22 @@ function main() {
 - `updateUserRiskPremium(address onBehalfOf)`
 - `useNonce(uint192 key) returns (uint256)`
 - `withdraw(uint256 reserveId, uint256 amount, address onBehalfOf) returns (uint256, uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AccessManagedInvalidAuthority` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AccessManagedRequiredDelay` taking `(address,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AccessManagedUnauthorized` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAccountNonce` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAssetId` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidCollateralFactor` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidLiquidationFee` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMaxUserReservesLimit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOracleDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxDataSizeExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaximumDynamicConfigKeyReached` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaximumUserReservesExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInitializing` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReserveExists` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReserveNotBorrowable` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

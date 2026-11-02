@@ -94,6 +94,10 @@ function main() {
 - `withdrawChainGas()`
 - `withdrawFees(address token, address to)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

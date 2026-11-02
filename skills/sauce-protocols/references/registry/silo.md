@@ -62,6 +62,19 @@ function main() {
 - `withdraw(address asset, uint256 amount, bool collateralOnly) returns (uint256 withdrawnAmount, uint256 withdrawnShare)`
 - `withdrawFor(address _asset, address _depositor, address _receiver, uint256 _amount, bool _collateralOnly) returns (uint256 withdrawnAmount, uint256 withdrawnShare)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error BorrowNotPossible` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DepositNotPossible` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DepositsExceedLimit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidRepository` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidSiloVersion` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaximumLTVReached` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotEnoughDeposits` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Paused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UserIsZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `SiloRepositoryABI`
 
 `import SiloRepositoryABI from "./protocols/silo/SiloRepositoryABI.json";` Speaks for: siloRepository. The import is the contract's full ABI across every deployment; call it through the `Silo` namespace to have a function a chain's deployment does not run refused.
@@ -125,3 +138,24 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `transferPendingOwnership(address newPendingOwner)`
 - `unregisterSiloVersion(uint128 _siloVersion)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AssetIsZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BridgeAssetIsZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyBridgeAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FeesDidNotChange` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidLiquidationThreshold` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidLTV` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPriceProvidersRepository` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidSiloFactory` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidSiloRouter` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTokensFactory` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ManagerDidNotChange` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NoPriceProviderForAsset` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RouterDidNotChange` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SiloAlreadyExistsForAsset` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SiloAlreadyExistsForBridgeAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SiloNotAllowedForBridgeAsset` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LimitedMaxLiquidityToggled` taking `(bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -428,32 +428,6 @@
       ]
     },
     {
-      "name": "CustomDeposit",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "DeltaScaleSet",
       "type": "event",
       "inputs": [

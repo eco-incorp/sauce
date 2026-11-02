@@ -504,11 +504,6 @@
       "name": "ErrorForbidToCallMessageQueue",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "ErrorZeroAddress",
-      "type": "error",
-      "inputs": []
     }
   ]
 }

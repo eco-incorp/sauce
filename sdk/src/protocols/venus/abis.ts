@@ -836,16 +836,7 @@ export const VTokenABI = [
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
-  { name: "AccrueInterestFailed", type: "error", inputs: [{ name: "errorCode", type: "uint256" }] },
   { name: "FlashLoanAlreadyActive", type: "error", inputs: [] },
-  {
-    name: "FlashLoanFeeTooHigh",
-    type: "error",
-    inputs: [
-      { name: "fee", type: "uint256" },
-      { name: "maxFee", type: "uint256" },
-    ],
-  },
   {
     name: "FlashLoanProtocolShareTooHigh",
     type: "error",
@@ -1320,15 +1311,6 @@ export const VBNBABI = [
       { name: "repayAmount", type: "uint256", indexed: false },
       { name: "accountBorrows", type: "uint256", indexed: false },
       { name: "totalBorrows", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "ReservesAdded",
-    type: "event",
-    inputs: [
-      { name: "benefactor", type: "address", indexed: false },
-      { name: "addAmount", type: "uint256", indexed: false },
-      { name: "newTotalReserves", type: "uint256", indexed: false },
     ],
   },
   {
@@ -3194,24 +3176,12 @@ export const VenusComptrollerABI = [
       { name: "newSpeed", type: "uint256", indexed: false },
     ],
   },
-  { name: "AlreadyInSelectedPool", type: "error", inputs: [] },
-  { name: "ArrayLengthMismatch", type: "error", inputs: [] },
-  { name: "BorrowNotAllowedInPool", type: "error", inputs: [] },
-  { name: "EmptyPoolLabel", type: "error", inputs: [] },
-  { name: "ExecuteFlashLoanFailed", type: "error", inputs: [] },
   { name: "FailedToCreateDebtPosition", type: "error", inputs: [] },
   { name: "FlashLoanNotEnabled", type: "error", inputs: [] },
   { name: "FlashLoanPausedSystemWide", type: "error", inputs: [] },
   { name: "InactivePool", type: "error", inputs: [{ name: "poolId", type: "uint96" }] },
   { name: "IncompatibleBorrowedAssets", type: "error", inputs: [] },
-  { name: "InvalidAmount", type: "error", inputs: [] },
   { name: "InvalidFlashLoanParams", type: "error", inputs: [] },
-  { name: "InvalidOperationForCorePool", type: "error", inputs: [] },
-  {
-    name: "InvalidWeightingStrategy",
-    type: "error",
-    inputs: [{ name: "strategy", type: "uint8" }],
-  },
   {
     name: "LiquidityCheckFailed",
     type: "error",
@@ -3228,8 +3198,6 @@ export const VenusComptrollerABI = [
       { name: "vToken", type: "address" },
     ],
   },
-  { name: "MarketConfigNotFound", type: "error", inputs: [] },
-  { name: "MarketNotListed", type: "error", inputs: [{ name: "vToken", type: "address" }] },
   { name: "MarketNotListedInCorePool", type: "error", inputs: [] },
   { name: "NoAssetsRequested", type: "error", inputs: [] },
   { name: "NotAnApprovedDelegate", type: "error", inputs: [] },
@@ -3239,15 +3207,6 @@ export const VenusComptrollerABI = [
     inputs: [
       { name: "repaid", type: "uint256" },
       { name: "required", type: "uint256" },
-    ],
-  },
-  { name: "PoolDoesNotExist", type: "error", inputs: [{ name: "poolId", type: "uint96" }] },
-  {
-    name: "PoolMarketNotFound",
-    type: "error",
-    inputs: [
-      { name: "poolId", type: "uint96" },
-      { name: "vToken", type: "address" },
     ],
   },
   { name: "ReentrancyGuardReentrantCall", type: "error", inputs: [] },

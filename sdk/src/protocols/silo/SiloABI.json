@@ -734,47 +734,12 @@
       "inputs": []
     },
     {
-      "name": "BorrowNotPossible",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DepositNotPossible",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DepositsExceedLimit",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "DifferentArrayLength",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "InvalidRepository",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidSiloVersion",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "LiquidationReentrancyCall",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaximumLTVReached",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotEnoughDeposits",
       "type": "error",
       "inputs": []
     },
@@ -794,11 +759,6 @@
       "inputs": []
     },
     {
-      "name": "Paused",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "TokenIsNotAContract",
       "type": "error",
       "inputs": []
@@ -810,16 +770,6 @@
     },
     {
       "name": "UnsupportedLTVType",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UserIsZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroAssets",
       "type": "error",
       "inputs": []
     },

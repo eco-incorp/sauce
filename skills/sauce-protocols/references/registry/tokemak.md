@@ -113,3 +113,32 @@ function main() {
 - `vaultType() view returns (bytes32)`
 - `WETH_INIT_DEPOSIT() view returns (uint256)`
 - `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error DepositFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC4626DepositExceedsMax` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC4626ExceededMaxRedeem` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ERC4626ExceededMaxWithdraw` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientFundsInDestinations` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDestination` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDestinationVault` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidParams` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidShutdownStatus` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidUser` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NavChanged` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NavOpsInProgress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RebalanceDestinationsMatch` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RebalanceFailed` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RegistryItemMissing` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RewarderAlreadySet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UndefinedAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ValueSharesMismatch` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error VaultShutdown` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawalIncomplete` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WithdrawShareCalcInvalid` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event DestinationDebtReporting` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FeeCollected` taking `(uint256,address,uint256,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TokensPulled` taking `(address[],uint256[],address[])`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event WithdrawalQueueSet` taking `(address[])`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -428,6 +428,16 @@ export const PoolABI = [
     outputs: [],
   },
   {
+    name: "initialize",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "initReserve",
     type: "function",
     stateMutability: "nonpayable",
@@ -873,14 +883,6 @@ export const PoolABI = [
     ],
   },
   {
-    name: "ReserveUsedAsCollateralEnabled",
-    type: "event",
-    inputs: [
-      { name: "reserve", type: "address", indexed: true },
-      { name: "user", type: "address", indexed: true },
-    ],
-  },
-  {
     name: "Supply",
     type: "event",
     inputs: [
@@ -914,7 +916,6 @@ export const PoolABI = [
   { name: "CallerNotAToken", type: "error", inputs: [] },
   { name: "CallerNotPoolAdmin", type: "error", inputs: [] },
   { name: "CallerNotPoolConfigurator", type: "error", inputs: [] },
-  { name: "CallerNotPositionManager", type: "error", inputs: [] },
   { name: "CallerNotUmbrella", type: "error", inputs: [] },
   { name: "EModeCategoryReserved", type: "error", inputs: [] },
   { name: "FailedCall", type: "error", inputs: [] },
@@ -1263,14 +1264,6 @@ export const AaveOracleABI = [
     ],
   },
   {
-    name: "BaseCurrencySet",
-    type: "event",
-    inputs: [
-      { name: "baseCurrency", type: "address", indexed: true },
-      { name: "baseCurrencyUnit", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "FallbackOracleUpdated",
     type: "event",
     inputs: [{ name: "fallbackOracle", type: "address", indexed: true }],
@@ -1390,6 +1383,16 @@ export const ATokenABI = [
       { name: "addedValue", type: "uint256" },
     ],
     outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "initialize",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
   },
   {
     name: "initialize",
@@ -1652,7 +1655,6 @@ export const ATokenABI = [
       { name: "value", type: "uint256", indexed: false },
     ],
   },
-  { name: "CallerMustBePool", type: "error", inputs: [] },
   { name: "CallerNotPoolAdmin", type: "error", inputs: [] },
   { name: "ECDSAInvalidSignature", type: "error", inputs: [] },
   {
@@ -1660,29 +1662,8 @@ export const ATokenABI = [
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
   },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
-  {
-    name: "ERC20InsufficientAllowance",
-    type: "error",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "allowance", type: "uint256" },
-      { name: "needed", type: "uint256" },
-    ],
-  },
-  { name: "InvalidBurnAmount", type: "error", inputs: [] },
-  { name: "InvalidExpiration", type: "error", inputs: [] },
-  { name: "InvalidMintAmount", type: "error", inputs: [] },
   { name: "InvalidSignature", type: "error", inputs: [] },
   { name: "PoolAddressesDoNotMatch", type: "error", inputs: [] },
-  {
-    name: "SafeCastOverflowedUintDowncast",
-    type: "error",
-    inputs: [
-      { name: "bits", type: "uint8" },
-      { name: "value", type: "uint256" },
-    ],
-  },
   { name: "UnderlyingCannotBeRescued", type: "error", inputs: [] },
   { name: "ZeroAddressNotValid", type: "error", inputs: [] },
 ] as const;
@@ -1848,6 +1829,16 @@ export const VariableDebtTokenABI = [
   {
     name: "initialize",
     type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "initialize",
+    type: "function",
     stateMutability: "nonpayable",
     inputs: [
       { name: "initializingPool", type: "address" },
@@ -1971,15 +1962,6 @@ export const VariableDebtTokenABI = [
     outputs: [{ name: "", type: "address" }],
   },
   {
-    name: "Approval",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "spender", type: "address", indexed: true },
-      { name: "value", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "BorrowAllowanceDelegated",
     type: "event",
     inputs: [
@@ -2033,22 +2015,11 @@ export const VariableDebtTokenABI = [
       { name: "value", type: "uint256", indexed: false },
     ],
   },
-  { name: "CallerMustBePool", type: "error", inputs: [] },
   { name: "ECDSAInvalidSignature", type: "error", inputs: [] },
   {
     name: "ECDSAInvalidSignatureLength",
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
-  },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
-  {
-    name: "ERC20InsufficientAllowance",
-    type: "error",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "allowance", type: "uint256" },
-      { name: "needed", type: "uint256" },
-    ],
   },
   {
     name: "InsufficientBorrowAllowance",
@@ -2059,19 +2030,8 @@ export const VariableDebtTokenABI = [
       { name: "needed", type: "uint256" },
     ],
   },
-  { name: "InvalidBurnAmount", type: "error", inputs: [] },
-  { name: "InvalidExpiration", type: "error", inputs: [] },
-  { name: "InvalidMintAmount", type: "error", inputs: [] },
   { name: "InvalidSignature", type: "error", inputs: [] },
   { name: "OperationNotSupported", type: "error", inputs: [] },
   { name: "PoolAddressesDoNotMatch", type: "error", inputs: [] },
-  {
-    name: "SafeCastOverflowedUintDowncast",
-    type: "error",
-    inputs: [
-      { name: "bits", type: "uint8" },
-      { name: "value", type: "uint256" },
-    ],
-  },
   { name: "ZeroAddressNotValid", type: "error", inputs: [] },
 ] as const;

@@ -11229,109 +11229,6 @@
       ]
     },
     {
-      "name": "LiFiSwappedGeneric",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "transactionId",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "integrator",
-          "type": "string",
-          "indexed": false
-        },
-        {
-          "name": "referrer",
-          "type": "string",
-          "indexed": false
-        },
-        {
-          "name": "fromAssetId",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "toAssetId",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "fromAmount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "toAmount",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "LiFiTransferCompleted",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "transactionId",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "receivingAssetId",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "receiver",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "timestamp",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "LiFiTransferRecovered",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "transactionId",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "receivingAssetId",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "receiver",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "timestamp",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "LiFiTransferStarted",
       "type": "event",
       "inputs": [
@@ -12176,11 +12073,6 @@
       "inputs": []
     },
     {
-      "name": "SymbolDoesNotExist",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "TokenNotSupported",
       "type": "error",
       "inputs": []
@@ -12217,11 +12109,6 @@
     },
     {
       "name": "UnsupportedAllBridgeChainId",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UnsupportedChain",
       "type": "error",
       "inputs": []
     },

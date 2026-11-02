@@ -2133,27 +2133,6 @@
       ]
     },
     {
-      "name": "RoleAdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "role",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "previousAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "newAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "RoleGranted",
       "type": "event",
       "inputs": [
@@ -2348,16 +2327,6 @@
       "inputs": []
     },
     {
-      "name": "BytesLengthNotMultipleOfTwo",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "bytesLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "CallerIsNotYieldManager",
       "type": "error",
       "inputs": []
@@ -2373,50 +2342,6 @@
       "inputs": [
         {
           "name": "index",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "FeePaymentFailed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "recipient",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "FeeTooLow",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "FinalBlockStateEqualsZeroHash",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "FinalizationDataMissingForcedTransaction",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "nextForcedTransactionNumber",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "FinalizationInTheFuture",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "l2BlockTimestamp",
-          "type": "uint256"
-        },
-        {
-          "name": "currentBlockTimestamp",
           "type": "uint256"
         }
       ]
@@ -2460,40 +2385,6 @@
       ]
     },
     {
-      "name": "FinalStateRootHashIsZeroHash",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ForcedTransactionExistsForBlockOrIsTooLow",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "blockNumber",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "InitializedVersionWrong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expected",
-          "type": "uint256"
-        },
-        {
-          "name": "actual",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "InvalidMerkleProof",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidProof",
       "type": "error",
       "inputs": []
@@ -2512,40 +2403,6 @@
       "name": "InvalidProofType",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "IsNotPaused",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "pauseType",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "IsPaused",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "pauseType",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "L1RollingHashDoesNotExistOnL1",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "messageNumber",
-          "type": "uint256"
-        },
-        {
-          "name": "rollingHash",
-          "type": "bytes32"
-        }
-      ]
     },
     {
       "name": "L2MerkleRootAlreadyAnchored",
@@ -2587,21 +2444,6 @@
       "inputs": []
     },
     {
-      "name": "LSTWithdrawalRequiresDeficit",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MessageAlreadyClaimed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "messageIndex",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "MessageDoesNotExistOrHasAlreadyBeenClaimed",
       "type": "error",
       "inputs": [
@@ -2622,36 +2464,6 @@
       ]
     },
     {
-      "name": "MissingMessageNumberForRollingHash",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "rollingHash",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "MissingRollingHashForForcedTransactionNumber",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "forcedTransactionNumber",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "MissingRollingHashForMessageNumber",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "messageNumber",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "NoEthSent",
       "type": "error",
       "inputs": []
@@ -2660,26 +2472,6 @@
       "name": "OnlyNonLivenessRecoveryOperator",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "OnlySecurityCouncilCanUnpauseIndefinitePause",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "pauseType",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "ParentShnarfNotSubmitted",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "shnarf",
-          "type": "bytes32"
-        }
-      ]
     },
     {
       "name": "PauseNotExpired",
@@ -2695,16 +2487,6 @@
       "name": "PauseTypeNotUsed",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "PauseUnavailableDueToCooldown",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "cooldownEnd",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "PeriodIsZero",
@@ -2779,61 +2561,12 @@
       "inputs": []
     },
     {
-      "name": "SafeCastOverflowedUintDowncast",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "bits",
-          "type": "uint8"
-        },
-        {
-          "name": "value",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "ShnarfAlreadySubmitted",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "shnarf",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "ShnarfSubmissionIsZeroHash",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "StartingRootHashDoesNotMatch",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ValueSentTooLow",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroAddressNotAllowed",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ZeroHashNotAllowed",
       "type": "error",
       "inputs": []
     },
     {
       "name": "ZeroLengthNotAllowed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroValueNotAllowed",
       "type": "error",
       "inputs": []
     }

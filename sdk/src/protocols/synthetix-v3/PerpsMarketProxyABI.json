@@ -3535,26 +3535,6 @@
       ]
     },
     {
-      "name": "AccountLiquidatable",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "AccountNotFound",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
       "name": "ExceedsMarketCreditCapacity",
       "type": "error",
       "inputs": [
@@ -3585,24 +3565,6 @@
         {
           "name": "implementation",
           "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "InsufficientCollateral",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "collateralId",
-          "type": "uint128"
-        },
-        {
-          "name": "collateralAmount",
-          "type": "uint256"
-        },
-        {
-          "name": "withdrawAmount",
-          "type": "uint256"
         }
       ]
     },
@@ -3653,36 +3615,6 @@
       ]
     },
     {
-      "name": "InvalidAccountId",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "InvalidAmountDelta",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountDelta",
-          "type": "int256"
-        }
-      ]
-    },
-    {
-      "name": "InvalidDistributor",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "collateralId",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
       "name": "InvalidDistributor",
       "type": "error",
       "inputs": [
@@ -3693,84 +3625,6 @@
         {
           "name": "distributor",
           "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "InvalidDistributorContract",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "distributor",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "InvalidFeeCollectorInterface",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "invalidFeeCollector",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "InvalidId",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "id",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "InvalidInterestRateParameters",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "lowUtilizationInterestRateGradient",
-          "type": "uint128"
-        },
-        {
-          "name": "highUtilizationInterestRateGradient",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "InvalidMarket",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "marketId",
-          "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "InvalidParameter",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "parameter",
-          "type": "string"
-        },
-        {
-          "name": "reason",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "InvalidPermission",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "permission",
-          "type": "bytes32"
         }
       ]
     },
@@ -3795,41 +3649,9 @@
       ]
     },
     {
-      "name": "InvalidSettlementWindowDuration",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "duration",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "KeeperCostsNotSet",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "MaxCollateralExceeded",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "collateralId",
-          "type": "uint128"
-        },
-        {
-          "name": "maxAmount",
-          "type": "uint256"
-        },
-        {
-          "name": "collateralAmount",
-          "type": "uint256"
-        },
-        {
-          "name": "depositAmount",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "MaxCollateralsPerAccountReached",
@@ -3838,24 +3660,6 @@
         {
           "name": "maxCollateralsPerAccount",
           "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "MaxOpenInterestReached",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "marketId",
-          "type": "uint128"
-        },
-        {
-          "name": "maxMarketSize",
-          "type": "uint256"
-        },
-        {
-          "name": "newSideSize",
-          "type": "int256"
         }
       ]
     },
@@ -3870,65 +3674,9 @@
       ]
     },
     {
-      "name": "MaxUSDOpenInterestReached",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "marketId",
-          "type": "uint128"
-        },
-        {
-          "name": "maxMarketValue",
-          "type": "uint256"
-        },
-        {
-          "name": "newSideSize",
-          "type": "int256"
-        },
-        {
-          "name": "price",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "MismatchAssociatedSystemKind",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expected",
-          "type": "bytes32"
-        },
-        {
-          "name": "actual",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "MissingAssociatedSystem",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "id",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
       "name": "NoChange",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "NonexistentDebt",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        }
-      ]
     },
     {
       "name": "NotAContract",
@@ -3937,16 +3685,6 @@
         {
           "name": "contr",
           "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "NotEligibleForLiquidation",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
         }
       ]
     },
@@ -3971,22 +3709,7 @@
       ]
     },
     {
-      "name": "OnlyAccountTokenProxy",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "origin",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "OrderNotValid",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OverflowInt128ToUint128",
       "type": "error",
       "inputs": []
     },
@@ -3996,73 +3719,7 @@
       "inputs": []
     },
     {
-      "name": "OverflowInt256ToUint256",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OverflowUint128ToInt128",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OverflowUint256ToInt256",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OverflowUint256ToUint128",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OverflowUint256ToUint64",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PendingOrderExists",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PermissionDenied",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        },
-        {
-          "name": "permission",
-          "type": "bytes32"
-        },
-        {
-          "name": "target",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "PermissionNotGranted",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "accountId",
-          "type": "uint128"
-        },
-        {
-          "name": "permission",
-          "type": "bytes32"
-        },
-        {
-          "name": "user",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "PerpsMarketAlreadyInitialized",
       "type": "error",
       "inputs": []
     },
@@ -4083,34 +3740,6 @@
         {
           "name": "marketId",
           "type": "uint128"
-        }
-      ]
-    },
-    {
-      "name": "SettlementStrategyNotFound",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "strategyType",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "SettlementWindowExpired",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "timestamp",
-          "type": "uint256"
-        },
-        {
-          "name": "settlementTime",
-          "type": "uint256"
-        },
-        {
-          "name": "settlementExpiration",
-          "type": "uint256"
         }
       ]
     },

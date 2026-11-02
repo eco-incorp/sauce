@@ -245,7 +245,6 @@ export const BoldTokenABI = [
     type: "event",
     inputs: [{ name: "_newCollateralRegistryAddress", type: "address", indexed: false }],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "OwnershipTransferred",
     type: "event",
@@ -273,6 +272,4 @@ export const BoldTokenABI = [
     type: "event",
     inputs: [{ name: "_newTroveManagerAddress", type: "address", indexed: false }],
   },
-  { name: "InvalidShortString", type: "error", inputs: [] },
-  { name: "StringTooLong", type: "error", inputs: [{ name: "str", type: "string" }] },
 ] as const;

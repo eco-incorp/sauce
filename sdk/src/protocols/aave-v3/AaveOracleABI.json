@@ -144,22 +144,6 @@
       ]
     },
     {
-      "name": "BaseCurrencySet",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "baseCurrency",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "baseCurrencyUnit",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "FallbackOracleUpdated",
       "type": "event",
       "inputs": [

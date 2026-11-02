@@ -120,6 +120,14 @@ Not on Arbitrum One's poolNative (`0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F`),
 
 Not on Arbitrum One's poolUSDC (`0xe8CDF27AcD73a434D661C84887215F7598e7d0d3`), whose code does not dispatch them or declares them otherwise: `burnLocked`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidLocalDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SlippageExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Stargate_InvalidTokenDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Transfer_ApproveFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UnreceivedTokenCached` taking `(bytes32,uint8,uint32,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

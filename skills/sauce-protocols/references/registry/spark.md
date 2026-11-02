@@ -60,6 +60,7 @@ function main() {
 - `getUserConfiguration(address user) view returns ((uint256 data))`
 - `getUserEMode(address user) view returns (uint256)`
 - `initialize(address provider)`
+- `initialize(address _logic, bytes _data) payable`
 - `initReserve(address asset, address aTokenAddress, address stableDebtAddress, address variableDebtAddress, address interestRateStrategyAddress)`
 - `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
 - `MAX_NUMBER_RESERVES() view returns (uint16)`
@@ -83,3 +84,7 @@ function main() {
 - `updateBridgeProtocolFee(uint256 protocolFee)`
 - `updateFlashloanPremiums(uint128 flashLoanPremiumTotal, uint128 flashLoanPremiumToProtocol)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event ReserveUsedAsCollateralEnabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

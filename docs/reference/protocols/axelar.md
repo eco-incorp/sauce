@@ -93,6 +93,12 @@ function main() {
 - `updateGasInfo(string[] chains, (uint64 gasEstimationType, uint64 l1FeeScalar, uint128 axelarBaseFee, uint128 relativeGasPrice, uint128 relativeBlobBaseFee, uint128 expressFee)[] gasUpdates)`
 - `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes params)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidAmounts` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOwnerAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotCollector` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `AxelarGatewayABI`
 
 `import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
@@ -134,6 +140,17 @@ function main() {
 - `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes setupParams)`
 - `validateContractCall(bytes32 commandId, string sourceChain, string sourceAddress, bytes32 payloadHash) returns (bool valid)`
 - `validateContractCallAndMint(bytes32 commandId, string sourceChain, string sourceAddress, bytes32 payloadHash, string symbol, uint256 amount) returns (bool valid)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidAuthModule` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidGovernance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTokenDeployer` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MintFailed` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotGovernance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotMintLimiter` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSelf` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenDoesNotExist` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `AxelarITSABI`
 
@@ -189,6 +206,37 @@ function main() {
 - `trustedAddress(string chain) view returns (string trustedAddress_)`
 - `trustedAddressHash(string chain) view returns (bytes32 trustedAddressHash_)`
 - `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes params)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CannotDeployRemotelyToSelf` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyData` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyParams` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyTokenSymbol` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error GatewayCallFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientValue` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidChainName` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidCodeHash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidImplementation` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMessageType` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOwnerAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidProposedRoles` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LengthMismatch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAllRoles` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAnyOfRoles` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MulticallFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotApprovedByGateway` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInterchainTokenFactory` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotProxy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotRemoteService` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pause` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PostDeployFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenManagerDeploymentFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenManagerDoesNotExist` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UntrustedChain` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

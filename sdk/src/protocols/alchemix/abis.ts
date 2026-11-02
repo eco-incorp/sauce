@@ -772,84 +772,9 @@ export const AlchemistABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "AddUnderlyingToken",
-    type: "event",
-    inputs: [{ name: "underlyingToken", type: "address", indexed: true }],
-  },
-  {
-    name: "AddYieldToken",
-    type: "event",
-    inputs: [{ name: "yieldToken", type: "address", indexed: true }],
-  },
-  {
     name: "AdminUpdated",
     type: "event",
     inputs: [{ name: "admin", type: "address", indexed: false }],
-  },
-  {
-    name: "ApproveMint",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "spender", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "ApproveWithdraw",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "spender", type: "address", indexed: true },
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "Burn",
-    type: "event",
-    inputs: [
-      { name: "sender", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "recipient", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "CreditUnlockRateUpdated",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: false },
-      { name: "blocks", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "Deposit",
-    type: "event",
-    inputs: [
-      { name: "sender", type: "address", indexed: true },
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "recipient", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "Donate",
-    type: "event",
-    inputs: [
-      { name: "sender", type: "address", indexed: true },
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "Harvest",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "minimumAmountOut", type: "uint256", indexed: false },
-      { name: "totalHarvested", type: "uint256", indexed: false },
-      { name: "credit", type: "uint256", indexed: false },
-    ],
   },
   {
     name: "Initialized",
@@ -857,62 +782,9 @@ export const AlchemistABI = [
     inputs: [{ name: "version", type: "uint8", indexed: false }],
   },
   {
-    name: "KeeperSet",
-    type: "event",
-    inputs: [
-      { name: "sentinel", type: "address", indexed: false },
-      { name: "flag", type: "bool", indexed: false },
-    ],
-  },
-  {
-    name: "Liquidate",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "underlyingToken", type: "address", indexed: true },
-      { name: "shares", type: "uint256", indexed: false },
-      { name: "credit", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "LiquidationLimitUpdated",
-    type: "event",
-    inputs: [
-      { name: "underlyingToken", type: "address", indexed: true },
-      { name: "maximum", type: "uint256", indexed: false },
-      { name: "blocks", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "MaximumExpectedValueUpdated",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "maximumExpectedValue", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "MaximumLossUpdated",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "maximumLoss", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "MinimumCollateralizationUpdated",
     type: "event",
     inputs: [{ name: "minimumCollateralization", type: "uint256", indexed: false }],
-  },
-  {
-    name: "Mint",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "recipient", type: "address", indexed: false },
-    ],
   },
   {
     name: "MintingLimitUpdated",
@@ -928,105 +800,14 @@ export const AlchemistABI = [
     inputs: [{ name: "pendingAdmin", type: "address", indexed: false }],
   },
   {
-    name: "ProtocolFeeReceiverUpdated",
-    type: "event",
-    inputs: [{ name: "protocolFeeReceiver", type: "address", indexed: false }],
-  },
-  {
     name: "ProtocolFeeUpdated",
     type: "event",
     inputs: [{ name: "protocolFee", type: "uint256", indexed: false }],
   },
   {
-    name: "Repay",
-    type: "event",
-    inputs: [
-      { name: "sender", type: "address", indexed: true },
-      { name: "underlyingToken", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "recipient", type: "address", indexed: false },
-      { name: "credit", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "RepayLimitUpdated",
-    type: "event",
-    inputs: [
-      { name: "underlyingToken", type: "address", indexed: true },
-      { name: "maximum", type: "uint256", indexed: false },
-      { name: "blocks", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "SentinelSet",
-    type: "event",
-    inputs: [
-      { name: "sentinel", type: "address", indexed: false },
-      { name: "flag", type: "bool", indexed: false },
-    ],
-  },
-  {
-    name: "Snap",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "expectedValue", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "SweepRewardTokens",
-    type: "event",
-    inputs: [
-      { name: "rewardToken", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "SweepTokens",
-    type: "event",
-    inputs: [
-      { name: "token", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "TokenAdapterUpdated",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: false },
-      { name: "tokenAdapter", type: "address", indexed: false },
-    ],
-  },
-  {
     name: "TransmuterUpdated",
     type: "event",
     inputs: [{ name: "transmuter", type: "address", indexed: false }],
-  },
-  {
-    name: "UnderlyingTokenEnabled",
-    type: "event",
-    inputs: [
-      { name: "underlyingToken", type: "address", indexed: true },
-      { name: "enabled", type: "bool", indexed: false },
-    ],
-  },
-  {
-    name: "Withdraw",
-    type: "event",
-    inputs: [
-      { name: "owner", type: "address", indexed: true },
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "shares", type: "uint256", indexed: false },
-      { name: "recipient", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "YieldTokenEnabled",
-    type: "event",
-    inputs: [
-      { name: "yieldToken", type: "address", indexed: true },
-      { name: "enabled", type: "bool", indexed: false },
-    ],
   },
   {
     name: "ERC20CallFailed",
@@ -1037,71 +818,6 @@ export const AlchemistABI = [
       { name: "data", type: "bytes" },
     ],
   },
-  {
-    name: "ExpectedValueExceeded",
-    type: "error",
-    inputs: [
-      { name: "yieldToken", type: "address" },
-      { name: "expectedValue", type: "uint256" },
-      { name: "maximumExpectedValue", type: "uint256" },
-    ],
-  },
-  { name: "IllegalArgument", type: "error", inputs: [] },
   { name: "IllegalState", type: "error", inputs: [] },
-  {
-    name: "LiquidationLimitExceeded",
-    type: "error",
-    inputs: [
-      { name: "underlyingToken", type: "address" },
-      { name: "amount", type: "uint256" },
-      { name: "available", type: "uint256" },
-    ],
-  },
   { name: "LockAlreadyClaimed", type: "error", inputs: [] },
-  {
-    name: "LossExceeded",
-    type: "error",
-    inputs: [
-      { name: "yieldToken", type: "address" },
-      { name: "loss", type: "uint256" },
-      { name: "maximumLoss", type: "uint256" },
-    ],
-  },
-  {
-    name: "MintingLimitExceeded",
-    type: "error",
-    inputs: [
-      { name: "amount", type: "uint256" },
-      { name: "available", type: "uint256" },
-    ],
-  },
-  {
-    name: "MulticallFailed",
-    type: "error",
-    inputs: [
-      { name: "data", type: "bytes" },
-      { name: "result", type: "bytes" },
-    ],
-  },
-  {
-    name: "RepayLimitExceeded",
-    type: "error",
-    inputs: [
-      { name: "underlyingToken", type: "address" },
-      { name: "amount", type: "uint256" },
-      { name: "available", type: "uint256" },
-    ],
-  },
-  {
-    name: "SlippageExceeded",
-    type: "error",
-    inputs: [
-      { name: "amount", type: "uint256" },
-      { name: "minimumAmountOut", type: "uint256" },
-    ],
-  },
-  { name: "TokenDisabled", type: "error", inputs: [{ name: "token", type: "address" }] },
-  { name: "Unauthorized", type: "error", inputs: [] },
-  { name: "Undercollateralized", type: "error", inputs: [] },
-  { name: "UnsupportedToken", type: "error", inputs: [{ name: "token", type: "address" }] },
 ] as const;
