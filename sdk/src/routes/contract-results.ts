@@ -43,7 +43,7 @@ import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
-import { methodListing } from "./method-refusals.js";
+import { bySignatureHint, methodListing } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
 import {
@@ -312,9 +312,19 @@ export function rewriteContractResults(
         method,
         "its methods",
       );
+      // A function its ABI leaves out by name is called by signature on the contract bound to the
+      // result, as written by hand.
+      const hint = bySignatureHint(
+        contract.kind === "interface"
+          ? `${named(contract)}(${spelled(object)})`
+          : `${named(contract)}.at(${spelled(object)})`,
+        method,
+        contract,
+      );
       fail(
         `'${call}': ${spelled(object)} is ${isToken(contract) ? "a token" : `a ${named(contract)}`}, ` +
-          `whose ABI has no '${method}' ${methods}`,
+          `whose ABI has no '${method}' ${methods}` +
+          (hint === "" ? "" : `.${hint}`),
       );
     }
     const write = isToken(contract) && Object.hasOwn(SAFE_WRITES, method);

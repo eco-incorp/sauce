@@ -981,7 +981,6 @@ describe("registry ABI evidence: coverage", () => {
       const expected = bySignatureOf(slug, name).map(signature);
       for (const link of CONTRACT_LINKS) {
         if (link.protocol !== slug || !("abiExport" in link) || link.abiExport !== name) continue;
-        if (link.kind === "address-only") continue;
         const carried: readonly { name: string; inputs: readonly Param[] }[] =
           "bySignature" in link ? link.bySignature : [];
         if (JSON.stringify(carried.map(signature)) !== JSON.stringify(expected)) {
