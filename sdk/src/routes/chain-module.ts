@@ -186,7 +186,7 @@ function abiPath(descriptor: ContractDescriptor, full: ContractDescriptor): stri
   // constructor, the fallback or receive (the compiler refuses each alike with or without them),
   // so the compiler is not handed them; the descriptor, its JSON twin and every decoder keep them.
   const text = JSON.stringify(descriptor.abi.filter((entry) => entry.type === "function"));
-  path = descriptor === full ? `${name}.json` : `${name}-${hash(text)}.json`;
+  path = descriptor.abi === full.abi ? `${name}.json` : `${name}-${hash(text)}.json`;
   // Two ABIs exported under one name are kept apart by the contract's name.
   if (ABI_TEXT.has(path) && ABI_TEXT.get(path) !== text) {
     path = `abi/${descriptor.protocol}/${descriptor.contract}.json`;

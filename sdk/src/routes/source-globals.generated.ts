@@ -247,6 +247,7 @@ export interface AaveV3PoolMethods {
   "updateFlashloanPremium"(arg0: (bigint | number)): SauceCall<void>;
   "withdraw"(arg0: (bigint | number)): SauceCall<bigint>;
   "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
+  "configureEModeCategory(uint8,(uint16,uint16,uint16,string))"(arg0: (bigint | number), arg1: { "ltv": (bigint | number); "liquidationThreshold": (bigint | number); "liquidationBonus": (bigint | number); "label": (string | SauceBytes) }): SauceCall<void>;
 }
 
 export interface AaveV3PoolAddressesProviderMethods {
@@ -722,6 +723,7 @@ export interface AcrossSpokePoolMethods {
   "wrappedNativeToken"(): SauceCall<bigint>;
   "YIELD_RECIPIENT"(): SauceCall<bigint>;
   "zkUSDCBridge"(): SauceCall<bigint>;
+  "initialize(address,address,uint32,address,address)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): SauceCall<void>;
 }
 
 export interface AerodromePoolFactoryMethods {
@@ -747,6 +749,8 @@ export interface AerodromePoolFactoryMethods {
   "volatileFee"(): SauceCall<bigint>;
   "voter"(): SauceCall<bigint>;
   "ZERO_FEE_INDICATOR"(): SauceCall<bigint>;
+  "createPool(address,address,uint24)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
+  "getPool(address,address,uint24)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
 }
 
 export interface AerodromeRouterMethods {
@@ -887,6 +891,7 @@ export interface AerodromeSlipstreamSlipstreamCLFactoryMethods {
   "unstakedFeeManager"(): SauceCall<bigint>;
   "unstakedFeeModule"(): SauceCall<bigint>;
   "voter"(): SauceCall<bigint>;
+  "getPool(address,address,uint24)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
 }
 
 export interface AerodromeSlipstreamSlipstreamPositionManagerMethods {
@@ -1457,6 +1462,7 @@ export interface BeefyVaultMethods {
   "want"(): SauceCall<bigint & SauceReturnedToken>;
   "withdraw"(arg0: (bigint | number)): SauceCall<void>;
   "withdrawAll"(): SauceCall<void>;
+  "available()"(): SauceCall<bigint>;
 }
 
 export interface BenqiComptrollerMethods {
@@ -2417,6 +2423,7 @@ export interface ConnextEverclearSpokeMethods {
   "watchtower"(): SauceCall<bigint>;
   "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
   "withdrawTokens"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number)): SauceCall<void>;
+  "newIntent(uint32[],bytes32,address,bytes32,uint256,uint256,uint48,bytes)"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (string | SauceBytes)): SauceCall<[bigint, { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes }] & { "_intentId": bigint; "_intent": { "initiator": bigint; "receiver": bigint; "inputAsset": bigint; "outputAsset": bigint; "origin": bigint; "nonce": bigint; "timestamp": bigint; "ttl": bigint; "amount": bigint; "amountOutMin": bigint; "destinations": SauceArray<bigint>; "data": SauceBytes } }>;
 }
 
 export interface ConvexBaseRewardPoolMethods {
@@ -2989,6 +2996,7 @@ export interface EnsBaseRegistrarMethods {
   "supportsInterface"(arg0: (bigint | number)): SauceCall<boolean>;
   "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<void>;
   "transferOwnership"(arg0: (bigint | number)): SauceCall<void>;
+  "available(uint256)"(arg0: (bigint | number)): SauceCall<boolean>;
 }
 
 export interface EnsRegistryMethods {
@@ -3257,6 +3265,7 @@ export interface EtherfiLiquidityPoolMethods {
   "validatorSpawner"(arg0: (bigint | number)): SauceCall<boolean>;
   "withdraw"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<bigint>;
   "withdrawRequestNFT"(): SauceCall<bigint>;
+  "withdraw(uint256,uint256)"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
 }
 
 export interface EtherfiWeETHMethods {
@@ -5267,6 +5276,8 @@ export interface LifiDiamondMethods {
   "validateCalldata"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: boolean, arg7: boolean): SauceCall<boolean>;
   "validateDestinationCalldata"(arg0: (string | SauceBytes), arg1: (string | SauceBytes), arg2: (string | SauceBytes)): SauceCall<boolean>;
   "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<void>;
+  "startBridgeTokensViaStargate((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(uint256,uint256,uint256,uint256,uint256,address,bytes,bytes))"(arg0: { "transactionId": (bigint | number); "bridge": (string | SauceBytes); "integrator": (string | SauceBytes); "referrer": (bigint | number); "sendingAssetId": (bigint | number); "receiver": (bigint | number); "minAmount": (bigint | number); "destinationChainId": (bigint | number); "hasSourceSwaps": boolean; "hasDestinationCall": boolean }, arg1: { "srcPoolId": (bigint | number); "dstPoolId": (bigint | number); "minAmountLD": (bigint | number); "dstGasForCall": (bigint | number); "lzFee": (bigint | number); "refundAddress": (bigint | number); "callTo": (string | SauceBytes); "callData": (string | SauceBytes) }): SauceCall<void>;
+  "swapAndStartBridgeTokensViaStargate((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(address,address,address,address,uint256,bytes,bool)[],(uint256,uint256,uint256,uint256,uint256,address,bytes,bytes))"(arg0: { "transactionId": (bigint | number); "bridge": (string | SauceBytes); "integrator": (string | SauceBytes); "referrer": (bigint | number); "sendingAssetId": (bigint | number); "receiver": (bigint | number); "minAmount": (bigint | number); "destinationChainId": (bigint | number); "hasSourceSwaps": boolean; "hasDestinationCall": boolean }, arg1: (readonly ({ "callTo": (bigint | number); "approveTo": (bigint | number); "sendingAssetId": (bigint | number); "receivingAssetId": (bigint | number); "fromAmount": (bigint | number); "callData": (string | SauceBytes); "requiresDeposit": boolean })[] | SauceArray<{ "callTo": (bigint | number); "approveTo": (bigint | number); "sendingAssetId": (bigint | number); "receivingAssetId": (bigint | number); "fromAmount": (bigint | number); "callData": (string | SauceBytes); "requiresDeposit": boolean }>), arg2: { "srcPoolId": (bigint | number); "dstPoolId": (bigint | number); "minAmountLD": (bigint | number); "dstGasForCall": (bigint | number); "lzFee": (bigint | number); "refundAddress": (bigint | number); "callTo": (string | SauceBytes); "callData": (string | SauceBytes) }): SauceCall<void>;
 }
 
 export interface LineaBridgeLineaL1MessageServiceMethods {
@@ -5475,6 +5486,7 @@ export interface MakerPotMethods {
   "vat"(): SauceCall<bigint>;
   "vow"(): SauceCall<bigint>;
   "wards"(arg0: (bigint | number)): SauceCall<bigint>;
+  "file(bytes32,uint256)"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
 }
 
 export interface MakerSavingsDaiMethods {
@@ -6302,6 +6314,7 @@ export interface PancakeswapV3SmartRouterMethods {
   "unwrapWETH9WithFee"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
   "WETH9"(): SauceCall<bigint>;
   "wrapETH"(arg0: (bigint | number)): SauceCall<void>;
+  "multicall(bytes32,bytes[])"(arg0: (bigint | number), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<SauceArray<SauceBytes>>;
 }
 
 export interface PancakeswapV3PoolMethods {
@@ -6551,6 +6564,9 @@ export interface Permit2Permit2Methods {
   "permitWitnessTransferFrom"(arg0: { "permitted": { "token": (bigint | number); "amount": (bigint | number) }; "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: { "to": (bigint | number); "requestedAmount": (bigint | number) }, arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (string | SauceBytes)): SauceCall<void>;
   "transferFrom"(arg0: (readonly ({ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) }>)): SauceCall<void>;
   "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
+  "permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"(arg0: (bigint | number), arg1: { "details": (readonly ({ "token": (bigint | number); "amount": (bigint | number); "expiration": (bigint | number); "nonce": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number); "expiration": (bigint | number); "nonce": (bigint | number) }>); "spender": (bigint | number); "sigDeadline": (bigint | number) }, arg2: (string | SauceBytes)): SauceCall<void>;
+  "permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"(arg0: { "permitted": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: (readonly ({ "to": (bigint | number); "requestedAmount": (bigint | number) })[] | SauceArray<{ "to": (bigint | number); "requestedAmount": (bigint | number) }>), arg2: (bigint | number), arg3: (string | SauceBytes)): SauceCall<void>;
+  "permitWitnessTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes32,string,bytes)"(arg0: { "permitted": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: (readonly ({ "to": (bigint | number); "requestedAmount": (bigint | number) })[] | SauceArray<{ "to": (bigint | number); "requestedAmount": (bigint | number) }>), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (string | SauceBytes)): SauceCall<void>;
 }
 
 export interface PerpetualProtocolClearingHouseMethods {
@@ -6865,6 +6881,7 @@ export interface PythOracleMethods {
   "validTimePeriodSeconds"(): SauceCall<bigint>;
   "version"(): SauceCall<SauceBytes>;
   "wormhole"(): SauceCall<bigint>;
+  "getUpdateFee(uint256)"(arg0: (bigint | number)): SauceCall<bigint>;
 }
 
 export interface QuickswapV2RouterMethods {
@@ -8355,6 +8372,7 @@ export interface SynthraV3SwapRouter02Methods {
   "unwrapWETH9WithFee"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
   "WETH9"(): SauceCall<bigint>;
   "wrapETH"(arg0: (bigint | number)): SauceCall<void>;
+  "multicall(bytes32,bytes[])"(arg0: (bigint | number), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<SauceArray<SauceBytes>>;
 }
 
 export interface SynthraV3QuoterV2Methods {
@@ -9051,6 +9069,7 @@ export interface UniswapV3SwapRouter02Methods {
   "unwrapWETH9WithFee"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
   "WETH9"(): SauceCall<bigint>;
   "wrapETH"(arg0: (bigint | number)): SauceCall<void>;
+  "multicall(bytes32,bytes[])"(arg0: (bigint | number), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<SauceArray<SauceBytes>>;
 }
 
 export interface UniswapV3PoolMethods {
@@ -9114,6 +9133,8 @@ export interface UniswapV4PoolManagerMethods {
   "transferOwnership"(arg0: (bigint | number)): SauceCall<void>;
   "unlock"(arg0: (string | SauceBytes)): SauceCall<SauceBytes>;
   "updateDynamicLPFee"(arg0: { "currency0": (bigint | number); "currency1": (bigint | number); "fee": (bigint | number); "tickSpacing": Int256; "hooks": (bigint | number) }, arg1: (bigint | number)): SauceCall<void>;
+  "extsload(bytes32[])"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<SauceArray<bigint>>;
+  "exttload(bytes32[])"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<SauceArray<bigint>>;
 }
 
 export interface UniswapV4PositionManagerMethods {
@@ -9283,6 +9304,8 @@ export interface VelodromePoolFactoryMethods {
   "volatileFee"(): SauceCall<bigint>;
   "voter"(): SauceCall<bigint>;
   "ZERO_FEE_INDICATOR"(): SauceCall<bigint>;
+  "createPool(address,address,uint24)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
+  "getPool(address,address,uint24)"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
 }
 
 export interface VelodromeRouterMethods {

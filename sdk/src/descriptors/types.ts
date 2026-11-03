@@ -91,6 +91,15 @@ export interface ContractDescriptor {
    * carries each in place of `abi`'s.
    */
   readonly shapesOn: Readonly<Record<number, readonly AbiFunction[]>>;
+  /**
+   * The contract's functions its ABI leaves out for their name or arity alone, which a program
+   * calls by full signature only (see `ContractLink.bySignature`); `[]` for most. A chain's
+   * `descriptorOn` view leaves out those its deployment does not run (`bySignatureWithheldOn`).
+   */
+  readonly bySignature: readonly AbiFunction[];
+  /** Per chain id, the signatures of `bySignature` the chain's deployment does not run as declared
+   *  (see `ContractLink.bySignatureWithheld`); `{}` when every deployment runs them all. */
+  readonly bySignatureWithheldOn: Readonly<Record<number, readonly string[]>>;
 }
 
 export interface ResolvedContract {

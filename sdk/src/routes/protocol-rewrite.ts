@@ -17,10 +17,17 @@
  * And (G) a scalar method on a contract the names module binds, `<Protocol>.<Contract>.toBytesBe(n)`
  * or a local holding one: 2.6.0 takes `.toBytesBe`/`.toBytesLe` only on an address, which a binding
  * is everywhere else a value goes, so `.address` goes before the method (EVM only).
+ * And (H) a function called by its canonical signature, `<…>.<Contract>["<signature>"](...)` (or
+ * `Base.<…>`, a `const` holding the contract, `<…>.at(<address>)["<signature>"]`,
+ * `<…>.<Interface>(<address>)["<signature>"]`): the one way to reach a function the ABI leaves out
+ * for its name or arity alone (`ContractDescriptor.bySignature`, Permit2's batch
+ * `permitTransferFrom`), and a spelling of any other. It is bound to an ABI of that one function,
+ * named for the contract and the selector (`IPermit2_Permit2_edd9444b`), and called by its name:
+ * the same bytes as the call by name, where the name reaches it.
  * Bare `pot` is rewritten to `ctx.self()` in the same pass, and a bare `self` (the Pot's old name)
  * is refused, naming `pot`.
  *
- * Shapes E and F return a parsed-ABI `contracts` map. The route compiler merges it with caller
+ * Shapes E, F and H return a parsed-ABI `contracts` map. The route compiler merges it with caller
  * bindings, and `rs-compile.ts` adapts the map to the published compiler's `inlineContracts`
  * option. No temporary ABI files or filesystem imports are needed for these bindings.
  *
@@ -28,7 +35,7 @@
  * unsupported contracts, missing methods, widened ABIs, ambiguous family aliases, binding
  * collisions, and out-of-scope chains produce explicit errors.
  */
-import type { Address } from "viem";
+import { toFunctionSelector, type Abi, type AbiFunction, type Address } from "viem";
 import type { ContractsConfig } from "./compile-types.js";
 
 import { requireChain, type CanonicalChain, type ChainRef } from "../chains/canonical.js";
@@ -45,7 +52,14 @@ import {
   resolveNamespace,
   type Namespace,
 } from "./accessor-index.js";
-import { isWithheld, methodListing, withheldRefusal } from "./method-refusals.js";
+import {
+  bySignatureHint,
+  functionBySignature,
+  isWithheld,
+  methodListing,
+  signatureRefusal,
+  withheldRefusal,
+} from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { POT_NAME, RETIRED_POT_NAME, selfRefusal } from "./pot-sugar.js";
 import { shadowed as shadowedAt, walkScoped, type Scope } from "./lexical-scope.js";
@@ -85,7 +99,7 @@ export interface ProtocolRewriteResult {
   readonly rewrote: boolean;
   /** One entry per REFERENCED descriptor -- merge straight into `compile()`'s own `contracts`. */
   readonly contracts: ContractsConfig;
-  /** Count of contract bindings rewritten, shapes E and F (excludes `pot` sites). */
+  /** Count of contract bindings rewritten, shapes E, F and H (excludes `pot` sites). */
   readonly accessorSites: number;
   /** Count of `<Protocol>.<method>(...)` calls written through the protocol's default contract. */
   readonly defaultSites: number;
@@ -177,29 +191,51 @@ interface BoundCandidate {
   readonly head: string;
   /** The contract path, without the trailing `at`. */
   readonly path: readonly string[];
-  /** The method called on the bound contract. */
-  readonly method: string;
+  /** What the bound contract is called with: a method's name, or a function's signature. */
+  readonly called: Called;
+  /** Where the binding call ends: a signature, `["<signature>"]`, follows it to `called.end`. */
+  readonly bindingEnd: number;
   /** The binding as the program spells it, for messages: `UniswapV3.Pool.at` or `UniswapV3.Pool`. */
   readonly spelled: string;
 }
 
+/** How a call's callee names the function on its object: `.<method>`, or `["<signature>"]` (shape
+ *  H) ending at `end`, the callee's end. */
+type Called =
+  | { readonly method: string; readonly signature?: undefined }
+  | { readonly method?: undefined; readonly signature: string; readonly end: number };
+
+/** What `callee`, a call's, calls on its object, when it names a function: `.<method>` or
+ *  `["<signature>"]`, a string. */
+function calledBy(callee: AstNode | undefined): Called | undefined {
+  if (callee?.type !== "MemberExpression") return undefined;
+  const property = (callee as { property?: AstNode }).property;
+  if (!(callee as { computed?: boolean }).computed) {
+    return property?.type === "Identifier"
+      ? { method: (property as unknown as { name: string }).name }
+      : undefined;
+  }
+  const value = (property as { value?: unknown } | undefined)?.value;
+  return property?.type === "Literal" && typeof value === "string"
+    ? { signature: value, end: callee.end }
+    : undefined;
+}
+
 /**
  * Collects shape E, `<…>.<Contract>.at(<address>).<method>(...)`, and shape F,
- * `<…>.<Interface>(<address>).<method>(...)`. The binding call has to be the object of a method
- * call, because a bound contract is not a value Sauce can hold: anything else spelled
+ * `<…>.<Interface>(<address>).<method>(...)`, each with a function's signature instead of a method
+ * too (`<…>.<Interface>(<address>)["<signature>"](...)`). The binding call has to be the object of
+ * the call, because a bound contract is not a value Sauce can hold: anything else spelled
  * `<…>.<Contract>.at(...)` or `<…>.<Interface>(...)` on a recognized namespace is refused by name.
  */
 function collectBoundCandidates(program: AstNode, owned: Owned): BoundCandidate[] {
-  const calledOn = new Map<AstNode, string>();
+  const calledOn = new Map<AstNode, Called>();
   walk(program, (n) => {
     if (n.type !== "CallExpression") return;
     const callee = (n as { callee?: AstNode }).callee;
-    if (callee?.type !== "MemberExpression" || (callee as { computed?: boolean }).computed) return;
-    const object = (callee as { object?: AstNode }).object;
-    const property = (callee as { property?: AstNode }).property;
-    if (object?.type === "CallExpression" && property?.type === "Identifier") {
-      calledOn.set(object, (property as unknown as { name: string }).name);
-    }
+    const object = (callee as { object?: AstNode } | undefined)?.object;
+    const called = calledBy(callee);
+    if (object?.type === "CallExpression" && called !== undefined) calledOn.set(object, called);
   });
 
   const out: BoundCandidate[] = [];
@@ -215,11 +251,12 @@ function collectBoundCandidates(program: AstNode, owned: Owned): BoundCandidate[
     const viaAt = path.length >= 2 && path[path.length - 1] === "at";
     if (!viaAt && namedContractKind(head, path) !== "interface") return;
     const shown = `${head}.${path.join(".")}(...)`;
-    const method = calledOn.get(n);
-    if (method === undefined) {
+    const called = calledOn.get(n);
+    if (called === undefined) {
       fail(
         `'${shown}' binds a contract to an address, which is not a value — call a method on it in ` +
-          `the same expression: '${shown}.<method>(...)'`,
+          `the same expression: '${shown}.<method>(...)', or a function by its signature, ` +
+          `'${shown}["<signature>"](...)'`,
       );
     }
     if ((n as { arguments?: unknown[] }).arguments?.length !== 1) {
@@ -230,8 +267,102 @@ function collectBoundCandidates(program: AstNode, owned: Owned): BoundCandidate[
       calleeEnd: callee.end,
       head,
       path: viaAt ? path.slice(0, -1) : path,
-      method,
+      called,
+      bindingEnd: n.end,
       spelled: `${head}.${path.join(".")}`,
+    });
+  });
+  return out;
+}
+
+/** A function called by its signature on a contract the names module binds: shape H,
+ *  `<…>.<Contract>["<signature>"](...)`, the contract written there or held by a `const`. */
+interface SignatureCandidate {
+  readonly calleeStart: number;
+  readonly calleeEnd: number;
+  /** The callee's object, the contract as written: its name, or the local holding it. */
+  readonly holderStart: number;
+  readonly holderEnd: number;
+  /** The contract's name, `<Protocol>.<Contract>` or `<Chain>.<Protocol>.<Contract>`. */
+  readonly head: string;
+  readonly path: readonly string[];
+  readonly signature: string;
+}
+
+/**
+ * Collects shape H on a contract the names module binds: named where it is called
+ * (`Permit2.Permit2["<signature>"](…)`, `Base.Permit2.Permit2[…]`), or a `const` initialized to
+ * one, directly or through other such `const`s, each name resolved to the declaration in scope
+ * where it is read (`lexical-bindings.ts`). A `let` may hold another contract by the call, whose
+ * ABI the binding would not be, so it is not followed. A protocol called by signature, which has
+ * no default contract here, is refused naming the contract spelling.
+ */
+function collectSignatureCandidates(program: AstNode, owned: Owned): SignatureCandidate[] {
+  const bindings = lexicalBindings(program);
+  const constants = new Set<AstNode>();
+  walk(program, (n) => {
+    if (n.type === "VariableDeclaration" && (n as { kind?: string }).kind === "const") {
+      for (const declarator of (n as { declarations?: AstNode[] }).declarations ?? []) {
+        constants.add(declarator);
+      }
+    }
+  });
+  /** The contract name `node` is, or a `const` it reads holds, through each alias. */
+  const named = (
+    node: AstNode | null | undefined,
+    seen: ReadonlySet<AstNode> = new Set(),
+  ): { readonly head: string; readonly path: readonly string[] } | undefined => {
+    if (!node) return undefined;
+    const decomposed = decomposeMemberChain(node);
+    if (decomposed !== undefined && decomposed.path.length > 0) {
+      return owned(decomposed.head, node) ? undefined : decomposed;
+    }
+    if (node.type !== "Identifier") return undefined;
+    const declaration = bindings.declarationOf(node);
+    if (declaration === undefined || !constants.has(declaration) || seen.has(declaration)) {
+      return undefined;
+    }
+    return named(declaration.init as AstNode | null, new Set([...seen, declaration]));
+  };
+
+  const out: SignatureCandidate[] = [];
+  walk(program, (n) => {
+    if (n.type !== "CallExpression") return;
+    const callee = n.callee as AstNode | undefined;
+    const called = calledBy(callee);
+    if (callee === undefined || called?.signature === undefined) return;
+    const holder = callee.object as AstNode;
+    const contract = named(holder);
+    if (contract === undefined) {
+      // `<Protocol>["<signature>"](…)`, `<Chain>.<Protocol>[…]`: a protocol, not a contract.
+      const protocol = decomposeMemberChain(holder);
+      if (
+        protocol !== undefined &&
+        !owned(protocol.head, holder) &&
+        (isChainKey(protocol.head)
+          ? protocol.path.length === 1 && resolveNamespace(protocol.path[0]!) !== undefined
+          : protocol.path.length === 0 && resolveNamespace(protocol.head) !== undefined)
+      ) {
+        const shown = [protocol.head, ...protocol.path].join(".");
+        fail(
+          `'${shown}["${called.signature}"](...)' calls a protocol by signature: name its contract, ` +
+            `'${shown}.<Contract>["${called.signature}"](...)', or bind one to an address, ` +
+            `'${shown}.<Contract>.at(<address>)["${called.signature}"](...)'`,
+        );
+      }
+      return;
+    }
+    const { head, path } = contract;
+    if (!isChainKey(head) && resolveNamespace(head) === undefined) return;
+    if (namedContractKind(head, path) === undefined) return;
+    out.push({
+      calleeStart: callee.start,
+      calleeEnd: callee.end,
+      holderStart: holder.start,
+      holderEnd: holder.end,
+      head,
+      path,
+      signature: called.signature,
     });
   });
   return out;
@@ -354,13 +485,42 @@ function methodByName(descriptor: ContractDescriptor, name: string): DescriptorM
   return descriptor.methods.find((m) => m.name === name);
 }
 
-function bindingOpFor(method: DescriptorMethod): "at" | "view" {
+function bindingOpFor(method: { readonly stateMutability: string }): "at" | "view" {
   return method.stateMutability === "view" || method.stateMutability === "pure" ? "view" : "at";
 }
 
 interface ResolvedSite extends Splice {
   readonly bindingName: string;
-  readonly descriptor: ContractDescriptor;
+  /** The ABI the binding is: the contract's on the chain, or one function's (shape H). */
+  readonly abi: Abi;
+  /** A second edit of the same site: a bound contract's `["<signature>"]`, written `.<name>`. */
+  readonly also?: Splice;
+}
+
+/** Each function's one-entry ABI, made once, so every compile binding it hands over the same one. */
+const FUNCTION_ABIS = new WeakMap<AbiFunction, Abi>();
+
+/**
+ * The binding a call of `full`'s function by `signature` on `chain` is made through (shape H):
+ * an ABI of that function alone, as `view` (the contract as the chain's deployment runs it)
+ * declares it, named for the contract and the selector — and for the chain, where its deployment
+ * declares the function otherwise than `full` does (`shapesOn`) — with the call's `.at`/`.view`
+ * and the function's name. `signatureRefusal` has found it on `view`.
+ */
+function signatureBinding(
+  full: ContractDescriptor,
+  view: ContractDescriptor,
+  chain: CanonicalChain,
+  signature: string,
+): { readonly bindingName: string; readonly abi: Abi; readonly op: string; readonly name: string } {
+  const fragment = functionBySignature(view, signature)!;
+  let abi = FUNCTION_ABIS.get(fragment);
+  if (abi === undefined) FUNCTION_ABIS.set(fragment, (abi = [fragment]));
+  const bindingName =
+    `I${pascalOfSlug(full.protocol)}_${full.contract}_${toFunctionSelector(fragment).slice(2)}` +
+    (fragment === functionBySignature(full, signature) ? "" : `_On${pascalOfSlug(chain.slug)}`);
+
+  return { bindingName, abi, op: bindingOpFor(fragment), name: fragment.name };
 }
 
 export interface AccessorTarget {
@@ -500,9 +660,12 @@ function resolveBound(
   chainScope: ReadonlySet<number> | undefined,
   allowWidenedSelectors: boolean,
 ): ResolvedSite {
-  const { path, method, spelled } = candidate;
+  const { path, called, spelled } = candidate;
   const head = candidate.head;
-  const shown = `'${spelled}(...).${method}(...)'`;
+  const shown =
+    called.signature === undefined
+      ? `'${spelled}(...).${called.method}(...)'`
+      : `'${spelled}(...)["${called.signature}"](...)'`;
   // A bound contract is always named: `<Protocol>.<Contract>`, never a protocol's default.
   if (path.length !== (isChainKey(head) ? 2 : 1)) {
     fail(`${shown} -- expected '<Protocol>.<Contract>.at(<address>).<method>(...)'`);
@@ -534,6 +697,31 @@ function resolveBound(
   }
   // The ABI the chain's deployment runs, where the chain has the contract (`descriptorOn`).
   const descriptor = descriptorOn(full, chain.id);
+  if (called.signature !== undefined) {
+    const refusal = signatureRefusal(
+      `${spelled}(…)["${called.signature}"](…)`,
+      called.signature,
+      full,
+      descriptor,
+      chain,
+    );
+    if (refusal !== undefined) fail(refusal);
+    const { bindingName, abi, op, name } = signatureBinding(
+      full,
+      descriptor,
+      chain,
+      called.signature,
+    );
+    return {
+      start: candidate.calleeStart,
+      end: candidate.calleeEnd,
+      replacement: `${bindingName}.${op}`,
+      bindingName,
+      abi,
+      also: { start: candidate.bindingEnd, end: called.end, replacement: `.${name}` },
+    };
+  }
+  const { method } = called;
   const methodDescriptor = methodByName(descriptor, method);
   if (methodDescriptor === undefined) {
     if (isWithheld(full, descriptor, method)) {
@@ -543,18 +731,75 @@ function resolveBound(
       descriptor.methods.map((m) => m.name),
       method,
     );
-    fail(`'${method}' is not in ${protocol}.${contract}'s vendored ABI ${known}`);
+    const hint = bySignatureHint(`${spelled}(…)`, method, full);
+    fail(
+      `'${method}' is not in ${protocol}.${contract}'s vendored ABI ${known}` +
+        (hint === "" ? "" : `.${hint}`),
+    );
   }
   // Another chain's view of the ABI is another binding: two chains in one program never share one.
   const bindingName =
     `I${pascalOfSlug(protocol)}_${contract}` +
-    (descriptor === full ? "" : `_On${pascalOfSlug(chain.slug)}`);
+    (descriptor.abi === full.abi ? "" : `_On${pascalOfSlug(chain.slug)}`);
   return {
     start: candidate.calleeStart,
     end: candidate.calleeEnd,
     replacement: `${bindingName}.${bindingOpFor(methodDescriptor)}`,
     bindingName,
-    descriptor,
+    abi: descriptor.abi,
+  };
+}
+
+/**
+ * Resolves shape H on a contract the names module binds: the function `full` has by the
+ * signature, as the chain's deployment runs it, called through a binding of that function alone
+ * at the contract as written (its name, or the `const` holding it).
+ */
+function resolveSignature(
+  candidate: SignatureCandidate,
+  source: string,
+  enclosingChain: CanonicalChain,
+  chainScope: ReadonlySet<number> | undefined,
+  allowWidenedSelectors: boolean,
+): ResolvedSite {
+  const { head, path, signature } = candidate;
+  const holder = source.slice(candidate.holderStart, candidate.holderEnd);
+  const target = resolveAccessorTarget(
+    head,
+    path,
+    false,
+    enclosingChain,
+    chainScope,
+    allowWidenedSelectors,
+  );
+  const { descriptor: full } = resolveContractReference(
+    head,
+    path,
+    enclosingChain,
+    chainScope,
+    `'${holder}'`,
+    "",
+  );
+  const refusal = signatureRefusal(
+    `${holder}["${signature}"](…)`,
+    signature,
+    full,
+    target.descriptor,
+    target.chain,
+  );
+  if (refusal !== undefined) fail(refusal);
+  const { bindingName, abi, op, name } = signatureBinding(
+    full,
+    target.descriptor,
+    target.chain,
+    signature,
+  );
+  return {
+    start: candidate.calleeStart,
+    end: candidate.calleeEnd,
+    replacement: `${bindingName}.${op}(${holder}).${name}`,
+    bindingName,
+    abi,
   };
 }
 
@@ -727,20 +972,25 @@ export function rewriteProtocolAccessors(
   const defaults = collectDefaultCandidates(program, owned).map(throughDefault);
   const addressReads = chain.kind === "evm" ? collectAddressReads(program, owned) : [];
   const allowWidenedSelectors = opts.allowWidenedSelectors ?? false;
-  const resolved = collectBoundCandidates(program, owned).map((c) =>
-    resolveBound(c, chain, chainScope, allowWidenedSelectors),
-  );
+  const resolved = [
+    ...collectBoundCandidates(program, owned).map((c) =>
+      resolveBound(c, chain, chainScope, allowWidenedSelectors),
+    ),
+    ...collectSignatureCandidates(program, owned).map((c) =>
+      resolveSignature(c, source, chain, chainScope, allowWidenedSelectors),
+    ),
+  ];
 
   const contracts: ContractsConfig = { ...(opts.existingContracts ?? {}) };
   for (const site of resolved) {
     const existing = opts.existingContracts?.[site.bindingName];
-    if (existing !== undefined && existing.abi !== site.descriptor.abi) {
+    if (existing !== undefined && existing.abi !== site.abi) {
       fail(
         `synthesized binding name '${site.bindingName}' collides with a caller-supplied ` +
           "compile.contracts entry of the same name but a DIFFERENT abi",
       );
     }
-    contracts[site.bindingName] = { abi: site.descriptor.abi };
+    contracts[site.bindingName] = { abi: site.abi };
   }
 
   // Binding-name collision with a user identifier anywhere in the program (declared or merely
@@ -781,7 +1031,13 @@ export function rewriteProtocolAccessors(
         }))
       : [];
 
-  const allSites = [...defaults, ...addressReads, ...resolved, ...potSites];
+  const allSites = [
+    ...defaults,
+    ...addressReads,
+    ...resolved,
+    ...resolved.flatMap((site) => (site.also === undefined ? [] : [site.also])),
+    ...potSites,
+  ];
   if (allSites.length === 0) {
     return {
       source,

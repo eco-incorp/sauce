@@ -225,6 +225,42 @@ for (const [slug, { abis, deployments }] of registry) {
   }
 }
 
+// --- what a program calls by signature ----------------------------------------------------------
+
+/**
+ * The functions an export's deployments run that its ABI leaves out for their name or their arity
+ * alone (a second overload of one arity, an overload that would mix reads and writes, a name the
+ * SDK reads as its own): `omitted.json` carries each one's ABI entry (`gen-registry-abis.mjs`), and
+ * a program calls it by its full signature, `<Contract>["<signature>"](…)` (`protocol-rewrite.ts`).
+ * They are `bySignature` on every contract of the export, and, per chain, those a role's deployment
+ * does not run as that entry declares them are `bySignatureWithheld` there, as `withheld` is for
+ * the ABI's own. The twins and the names callable by name are untouched.
+ */
+const omittedExports = JSON.parse(
+  readFileSync(resolve(sdk, "test/fixtures/registry-abi/omitted.json"), "utf8"),
+).exports;
+for (const [slug, { deployments }] of registry) {
+  for (const c of registry.get(slug).contracts) {
+    if (c.abiExport === undefined || c.kind === "address-only") continue;
+    const functions = (omittedExports[`${slug}.${c.abiExport}`] ?? []).flatMap((o) =>
+      o.function === undefined ? [] : [o.function],
+    );
+    if (functions.length === 0) continue;
+    c.bySignature = functions;
+    if (c.kind !== "singleton") continue;
+    const withheld = {};
+    for (const d of deployments) {
+      const address = d.addresses[c.roleKey];
+      if (!evmChainIds.has(d.chainId) || !/^0x[0-9a-fA-F]{40}$/.test(address ?? "")) continue;
+      if (c.chains !== undefined && !c.chains.includes(d.chainId)) continue;
+      const row = rowOf.get(`${slug}|${c.abiExport}|${d.chainId}|${address.toLowerCase()}`);
+      const lacking = functions.filter((fn) => runs(row, fn) !== true).map(signatureOf);
+      if (lacking.length > 0) withheld[d.chainId] = lacking;
+    }
+    if (Object.keys(withheld).length > 0) c.bySignatureWithheld = withheld;
+  }
+}
+
 /** `getPool(address,address,uint24)` -> that and `[]`; `poolInfo(uint256).crvRewards` -> `["crvRewards"]`. */
 function returnKey(key) {
   let depth = 0;
@@ -439,18 +475,22 @@ function resultType(outputs, returns) {
 
 /** Method declarations of one ABI. A function whose types Sauce has no source spelling for is
  *  declared over `unknown`, so it stays callable from a typed closure and the compiler decides.
- *  `returnsOf(signature)` maps an annotated function's field paths to the contract types. */
-function sourceMethods(abi, returnsOf) {
-  return abi
-    .filter((entry) => entry.type === "function")
-    .map((method) => {
-      const inputs = method.inputs.map((field) => valueType(field, true));
-      const output = resultType(method.outputs ?? [], returnsOf(signatureOf(method)));
-      const args = method.inputs
-        .map((_, index) => `arg${index}: ${inputs[index] ?? "unknown"}`)
-        .join(", ");
-      return `  ${JSON.stringify(method.name)}(${args}): SauceCall<${output ?? "unknown"}>;`;
-    });
+ *  `returnsOf(signature)` maps an annotated function's field paths to the contract types. Each of
+ *  `bySignature`, a function a program calls by its full signature only, is declared under that
+ *  signature: `"permitTransferFrom(((address,uint256)[],uint256,uint256),…)"(…)`. */
+function sourceMethods(abi, returnsOf, bySignature = []) {
+  const declare = (key, method) => {
+    const inputs = method.inputs.map((field) => valueType(field, true));
+    const output = resultType(method.outputs ?? [], returnsOf(signatureOf(method)));
+    const args = method.inputs
+      .map((_, index) => `arg${index}: ${inputs[index] ?? "unknown"}`)
+      .join(", ");
+    return `  ${JSON.stringify(key)}(${args}): SauceCall<${output ?? "unknown"}>;`;
+  };
+  return [
+    ...abi.filter((entry) => entry.type === "function").map((m) => declare(m.name, m)),
+    ...bySignature.map((m) => declare(signatureOf(m), m)),
+  ];
 }
 
 const methodsInterface = new Map(); // `${slug}:${abiExport}` -> interface name
@@ -476,8 +516,11 @@ for (const [key, name] of methodsInterface) {
         (r) => r.protocol === slug && r.abiExport === abiExport && r.signature === signature,
       ).map((r) => [r.path.join("."), returnedType(r)]),
     );
+  const bySignature = (omittedExports[`${slug}.${abiExport}`] ?? []).flatMap((o) =>
+    o.function === undefined ? [] : [o.function],
+  );
   sourceDefinitions.push(
-    `export interface ${name} {\n${sourceMethods(registry.get(slug).abis[abiExport], returnsOf).join("\n")}\n}`,
+    `export interface ${name} {\n${sourceMethods(registry.get(slug).abis[abiExport], returnsOf, bySignature).join("\n")}\n}`,
   );
 }
 if (RETURNED.some((r) => r.abi === TOKEN_ABI)) {

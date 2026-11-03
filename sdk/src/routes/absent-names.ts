@@ -72,7 +72,14 @@ import {
   type Scope,
 } from "./lexical-scope.js";
 import { lexicalBindings } from "./lexical-bindings.js";
-import { isWithheld, listed, methodListing, withheldRefusal } from "./method-refusals.js";
+import {
+  bySignatureHint,
+  isWithheld,
+  listed,
+  methodListing,
+  signatureRefusal,
+  withheldRefusal,
+} from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
@@ -1104,7 +1111,8 @@ export function checkNames(
         property,
         `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${protocol}.${contract}'s vendored ABI ` +
           `${methodListing(methods, read)}.` +
-          meant(read, methods),
+          meant(read, methods) +
+          bySignatureHint(owner.shown, read, full),
       );
     }
     // Read, the binding's address, or a balance: of the native coin, or of a token the chain has.
@@ -1135,6 +1143,34 @@ export function checkNames(
         ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +
         `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
     );
+  };
+
+  /**
+   * `<contract>["<signature>"](…)` of a registry contract, `node`: a function its deployment on the
+   * contract's chain runs, by its canonical signature, one its ABI has or one it leaves out for its
+   * name or arity alone (`bySignature`). Refused, naming the nearest signatures or the chains whose
+   * deployment runs it, otherwise.
+   */
+  const contractSignature = (node: AstNode, signature: string, at: Scope | undefined): void => {
+    let owner: Reference | undefined;
+    try {
+      owner = referenceOf(prop(node, "object"), at, ".[…]");
+    } catch {
+      return;
+    }
+    if (owner?.kind !== "contract" || owner.viaDefault !== undefined) return;
+    const { entry } = owner;
+    if (entry.kind !== "deployed" && entry.kind !== "absent") return;
+    // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+    const full = entry.kind === "deployed" ? entry.full : entry.descriptor;
+    const refusal = signatureRefusal(
+      `${owner.shown}["${signature}"](…)`,
+      signature,
+      full,
+      validating ? full : entry.descriptor,
+      owner.chain,
+    );
+    if (refusal !== undefined) fail(prop(node, "property"), refusal);
   };
 
   /** Visits the statements of a list in its own scope; the rest after a decided `if` that always
@@ -1504,8 +1540,13 @@ export function checkNames(
           );
         }
         visit(object, "value", `.${read}`, at);
-        if (prop<boolean>(node, "computed")) visit(property, "value", "value", at);
-        else if (read !== "[…]") contractMember(node, read, role, at);
+        if (prop<boolean>(node, "computed")) {
+          visit(property, "value", "value", at);
+          const signature = property.type === "Literal" ? prop<unknown>(property, "value") : 0;
+          if (role === "callee" && typeof signature === "string") {
+            contractSignature(node, signature, at);
+          }
+        } else if (read !== "[…]") contractMember(node, read, role, at);
         return;
       }
       case "Property":

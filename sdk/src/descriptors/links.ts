@@ -58,6 +58,19 @@ export interface ContractLink {
    * as `withheld` is.
    */
   readonly shapes?: Readonly<Record<number, readonly AbiFunction[]>>;
+  /**
+   * The functions the contract's deployments run that its ABI leaves out for their name or arity
+   * alone — a second overload taking as many arguments (Permit2's batch `permitTransferFrom`), an
+   * overload that would mix reads and writes, a name the SDK reads as its own (`available()`) —
+   * which a program calls by their full signature through the namespace:
+   * `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),…)"](…)`
+   * (`protocol-rewrite.ts`). Not in the ABI or its twin, and not callable by name. GENERATED from
+   * `test/fixtures/registry-abi/omitted.json`, which carries each one's entry.
+   */
+  readonly bySignature?: readonly AbiFunction[];
+  /** Per chain id, the signatures of `bySignature` the chain's deployment does not run as
+   *  declared, as `withheld` is for the ABI's functions. Singletons only. GENERATED. */
+  readonly bySignatureWithheld?: Readonly<Record<number, readonly string[]>>;
 }
 
 /**
