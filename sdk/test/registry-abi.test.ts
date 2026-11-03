@@ -16,7 +16,10 @@
  *   - an interface's instance (or a role export's representative `instances`) whose verified ABI
  *     declares it otherwise is an `exempt` entry with its reason.
  * And every function, event and error the export's deployments verifiably declare is either in the
- * registry ABI or in `omitted.json`: nothing is trimmed silently.
+ * registry ABI or in `omitted.json`: nothing is trimmed silently. A function left out for its name
+ * or its arity alone carries its ABI item there (`function`) and is called by its signature
+ * through the namespace (`ContractLink.bySignature`): it is checked like every function above, its
+ * per-chain withholding `bySignatureWithheld`, and no deployment serves it declared otherwise.
  *
  * OFFLINE. The evidence is `fixtures/registry-abi/evidence.json`, captured by
  * `scripts/capture-registry-abi.mjs` only when asked to (see CLAUDE.md). A registry edit the
@@ -171,7 +174,12 @@ interface Target {
   readonly unresolved?: Readonly<Record<string, string>>;
 }
 interface Omitted {
-  readonly exports: Readonly<Record<string, readonly { signature: string; reason: string }[]>>;
+  readonly exports: Readonly<
+    Record<
+      string,
+      readonly { signature: string; reason: string; function?: AbiFunction | undefined }[]
+    >
+  >;
   /** `<slug>.<Export>` -> `<chainId>:<address>` -> the shipped events and errors its code lacks. */
   readonly uncarried: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
   /** `<slug>.<Export>` -> the deployments whose verified ABI is a partial earlier capture's. */
@@ -316,13 +324,32 @@ function linkOf(slug: string, exportName: string, instance: Instance) {
   );
 }
 
-/** The functions a role's deployment on a chain withholds, by the contract the role is. */
-function withheldOn(slug: string, exportName: string, instance: Instance): ReadonlySet<string> {
+/** The functions a role's deployment on a chain withholds, by the contract the role is: of its
+ *  ABI, or with `bySignature`, of those it calls by signature only. */
+function withheldOn(
+  slug: string,
+  exportName: string,
+  instance: Instance,
+  bySignature = false,
+): ReadonlySet<string> {
   const link = linkOf(slug, exportName, instance);
-  if (link === undefined || !("withheld" in link)) return new Set();
-  const byChain: Readonly<Record<number, readonly string[]>> = link.withheld;
-  return new Set(byChain[instance.chainId] ?? []);
+  if (link === undefined) return new Set();
+  const byChain: Readonly<Record<number, readonly string[]>> | undefined = bySignature
+    ? "bySignatureWithheld" in link
+      ? link.bySignatureWithheld
+      : undefined
+    : "withheld" in link
+      ? link.withheld
+      : undefined;
+  return new Set(byChain?.[instance.chainId] ?? []);
 }
+
+/** The functions `slug`'s `exportName` leaves out for their name or arity alone, which a program
+ *  calls by signature (`omitted.json` entries carrying their ABI item). */
+const bySignatureOf = (slug: string, exportName: string): readonly AbiFunction[] =>
+  (omitted[`${slug}.${exportName}`] ?? []).flatMap((o) =>
+    o.function === undefined ? [] : [o.function],
+  );
 
 /** The functions a role's deployment on a chain is served as it declares them, by signature. */
 function shapedOn(
@@ -347,8 +374,16 @@ const declared = (f: Pick<Fragment, "inputs" | "outputs" | "stateMutability">): 
   JSON.stringify([params(f.inputs), params(f.outputs), f.stateMutability ?? "nonpayable"]);
 const isRead = (m: string | undefined): boolean => mutability(m) === "view";
 
-/** Everything wrong with one registry function, against its export's evidence. */
-function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[] {
+/**
+ * Everything wrong with one registry function, against its export's evidence: one of its ABI, or
+ * with `bySignature`, one it calls by signature only, which no chain serves declared otherwise.
+ */
+function problemsOf(
+  slug: string,
+  exportName: string,
+  fn: AbiFunction,
+  bySignature = false,
+): string[] {
   const target = targets[slug]![exportName]!;
   const sig = signature(fn);
   const selector = toFunctionSelector(sig);
@@ -408,8 +443,8 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
       // A role's deployment: one that dispatches the selector and declares this signature
       // otherwise is served its declaration on its chain, unless that would mix reads and writes
       // among the name's overloads; whatever else it lacks is withheld there; and only that.
-      const withheld = withheldOn(slug, exportName, instance).has(sig);
-      const shaped = shapedOn(slug, exportName, instance).get(sig);
+      const withheld = withheldOn(slug, exportName, instance, bySignature).has(sig);
+      const shaped = bySignature ? undefined : shapedOn(slug, exportName, instance).get(sig);
       const mixes =
         exact !== undefined &&
         registry[slug]![exportName]!.some(
@@ -418,7 +453,8 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
             signature(other) !== sig &&
             isRead(other.stateMutability) !== isRead(exact.stateMutability),
         );
-      const served = dispatch !== null && exact !== undefined && lacks.length > 0 && !mixes;
+      const served =
+        !bySignature && dispatch !== null && exact !== undefined && lacks.length > 0 && !mixes;
       if (exemption !== undefined) {
         problems.push(
           `${at}: stale exemption, a role's deployment withholds or declares instead: ${exemption}`,
@@ -641,9 +677,15 @@ describe("registry ABI evidence: coverage", () => {
           ...(registry[slug][name] ?? []).map(signature),
           ...(marks[slug][name] ?? []).map(markKey),
         ]);
+        // A function called by its signature is checked like the ABI's, exceptions included.
+        const checked = new Set([...sigs, ...bySignatureOf(slug, name).map(signature)]);
         for (const sig of [
           ...Object.keys(target.exempt ?? {}),
           ...Object.keys(target.unverified ?? {}),
+        ]) {
+          if (!checked.has(sig)) orphans.push(`${slug}.${name}: ${sig}`);
+        }
+        for (const sig of [
           ...Object.keys(target.required ?? {}),
           ...Object.keys(target.overloads ?? {}),
           ...(target.logs ?? []).map((event) => `event ${event}`),
@@ -921,6 +963,49 @@ describe("registry ABI evidence: coverage", () => {
       }),
     ).not.toThrow();
   });
+
+  it("a function is called by its signature exactly where omitted.json leaves it out for its name or arity, through every contract of its export", () => {
+    const wrong: string[] = [];
+    for (const [key, entries] of Object.entries(omitted)) {
+      const [slug, name] = key.split(".") as [string, string];
+      if (registry[slug] === undefined) continue; // another branch's protocol, see above
+      for (const entry of entries) {
+        const called = entry.reason.endsWith("called by its signature");
+        if (called !== (entry.function !== undefined)) {
+          wrong.push(`${key} ${entry.signature}: its reason and its \`function\` disagree`);
+        }
+        if (entry.function !== undefined && signature(entry.function) !== entry.signature) {
+          wrong.push(`${key} ${entry.signature}: its \`function\` is ${signature(entry.function)}`);
+        }
+      }
+      const expected = bySignatureOf(slug, name).map(signature);
+      for (const link of CONTRACT_LINKS) {
+        if (link.protocol !== slug || !("abiExport" in link) || link.abiExport !== name) continue;
+        if (link.kind === "address-only") continue;
+        const carried: readonly { name: string; inputs: readonly Param[] }[] =
+          "bySignature" in link ? link.bySignature : [];
+        if (JSON.stringify(carried.map(signature)) !== JSON.stringify(expected)) {
+          wrong.push(
+            `${slug}.${link.contract}: called by signature ${JSON.stringify(carried.map(signature))}, omitted.json leaves out ${JSON.stringify(expected)}`,
+          );
+        }
+      }
+    }
+    for (const link of CONTRACT_LINKS) {
+      if (!("bySignature" in link) || !("abiExport" in link)) continue;
+      if (omitted[`${link.protocol}.${link.abiExport}`] === undefined) {
+        wrong.push(`${link.protocol}.${link.contract}: called by signature, nothing left out`);
+      }
+    }
+    expect(wrong).toEqual([]);
+    // The 21 overloads taking as many arguments as the one called by name, and the 2 functions
+    // whose name the accessors keep (`available()`), over 23 exports.
+    expect(
+      Object.values(omitted)
+        .flat()
+        .filter((o) => o.function !== undefined),
+    ).toHaveLength(23);
+  });
 });
 
 for (const slug of slugs) {
@@ -942,6 +1027,12 @@ for (const slug of slugs) {
       it(`${exportName}: nothing its deployments declare is left out unlisted`, () => {
         expect(untold(slug, exportName)).toEqual([]);
       });
+      const bySignature = bySignatureOf(slug, exportName);
+      if (bySignature.length > 0) {
+        it(`${exportName}: every function called by its signature`, () => {
+          expect(bySignature.flatMap((fn) => problemsOf(slug, exportName, fn, true))).toEqual([]);
+        });
+      }
     }
   });
 }
