@@ -75,9 +75,9 @@ function main() {
 - `vow() view returns (address)`
 - `wards(address) view returns (uint256)`
 
-Left out of this ABI, though its deployments declare them:
+Left out of this ABI by name, and called by their signature through the namespace:
 
-- `file` taking `(bytes32,uint256)`: an overload of file(bytes32,address), which takes as many arguments: a call picks its overload by argument count.
+- `Maker.Pot["file(bytes32,uint256)"](…)`: `file(bytes32 what, uint256 data)`; an overload of file(bytes32,address), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
 
 ### `SavingsDaiABI`
 

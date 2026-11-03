@@ -639,8 +639,10 @@ function wording(skill, file) {
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
     // A name a chain lacks is zero there and a program tests it, `if (X)`: the call is removed. A
-    // runner is exempt: it compiles the call to pin the refusal, and teaches no program.
-    if (!file.endsWith(".mts") && /\bavailable\(/.test(line))
+    // runner is exempt: it compiles the call to pin the refusal, and teaches no program. So is a
+    // contract's own function of that name: in a signature (`["available()"]`) or a generated
+    // registry file's declaration.
+    if (!file.endsWith(".mts") && !isGenerated(file) && /(?<!["'.])\bavailable\(/.test(line))
       fail(where(i), "calls `available(...)`, which is removed; test the name itself, `if (X)`");
     // A skill named in code is one the package ships: a renamed or removed skill fails here.
     for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
@@ -650,7 +652,8 @@ function wording(skill, file) {
       if (!resolve(dirname(file), m[0]).startsWith(SKILLS_DIR + "/"))
         fail(where(i), `names ${m[0]}, a path that leaves the skills directory`);
     }
-    for (const m of line.matchAll(/\]\(([^)\s#]*)(?:#([^)\s]*))?\)/g)) {
+    // A link outside inline code: `X["<signature>"](…)` in a code span is a call, not a link.
+    for (const m of line.replace(/`[^`]*`/g, "``").matchAll(/\]\(([^)\s#]*)(?:#([^)\s]*))?\)/g)) {
       const [, path, fragment] = m;
       if (/^[a-z]+:/i.test(path)) continue;
       const target = path ? resolve(dirname(file), path) : file;

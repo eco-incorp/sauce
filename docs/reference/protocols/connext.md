@@ -112,6 +112,10 @@ function main() {
 - `withdraw(address _asset, uint256 _amount)`
 - `withdrawTokens(address[] _tokens, address _recipient)`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Connext.EverclearSpoke["newIntent(uint32[],bytes32,address,bytes32,uint256,uint256,uint48,bytes)"](…)`: `newIntent(uint32[] _destinations, bytes32 _receiver, address _inputAsset, bytes32 _outputAsset, uint256 _amount, uint256 _amountOutMin, uint48 _ttl, bytes _data) returns (bytes32 _intentId, (bytes32 initiator, bytes32 receiver, bytes32 inputAsset, bytes32 outputAsset, uint32 origin, uint64 nonce, uint48 timestamp, uint48 ttl, uint256 amount, uint256 amountOutMin, uint32[] destinations, bytes data) _intent)`; an overload of newIntent(uint32[],address,address,address,uint256,uint256,uint48,bytes), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
 - `error ECDSAInvalidSignatureS` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
@@ -142,7 +146,6 @@ Left out of this ABI, though its deployments declare them:
 - `event LighthouseUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event Settled` taking `(bytes32,address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event WatchtowerUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `newIntent` taking `(uint32[],bytes32,address,bytes32,uint256,uint256,uint48,bytes)`: an overload of newIntent(uint32[],address,address,address,uint256,uint256,uint48,bytes), which takes as many arguments: a call picks its overload by argument count.
 
 ## Next
 

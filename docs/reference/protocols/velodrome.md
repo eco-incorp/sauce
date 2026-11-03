@@ -159,13 +159,16 @@ Left out of this ABI, though its deployments declare them:
 - `voter() view returns (address)`
 - `ZERO_FEE_INDICATOR() view returns (uint256)`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Velodrome.PoolFactory["createPool(address,address,uint24)"](…)`: `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`; an overload of createPool(address,address,bool), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+- `Velodrome.PoolFactory["getPool(address,address,uint24)"](…)`: `getPool(address tokenA, address tokenB, uint24 fee) view returns (address)`; an overload of getPool(address,address,bool), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
-- `createPool` taking `(address,address,uint24)`: an overload of createPool(address,address,bool), which takes as many arguments: a call picks its overload by argument count.
 - `error InvalidPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `error NotSinkConverter` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `error PoolAlreadyExists` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `getPool` taking `(address,address,uint24)`: an overload of getPool(address,address,bool), which takes as many arguments: a call picks its overload by argument count.
 
 ### `VelodromeRouterABI`
 

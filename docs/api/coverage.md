@@ -49,8 +49,13 @@ of it fails to compile, naming the chain and listing the chains that have it; in
 
 Every registry ABI is its contract's verified ABI as its deployments run it: every function, event
 and error a deployment declares and dispatches, with the deployed types, so its selectors are the
-deployed ones. It leaves out only what the SDK cannot expose, such as the second of two overloads
-taking the same number of arguments or a name the SDK reads as its own. A function one chain's
+deployed ones. It leaves out only what the SDK cannot expose by name, such as the second of two
+overloads taking the same number of arguments or a name the SDK reads as its own. A program calls
+those by their canonical signature, its name and parameter types with tuples in parentheses and no
+names or spaces, on the namespace contract: `UniswapV4.PoolManager["extsload(bytes32[])"](slots)`,
+after `.at(address)`, or on an interface bound in the same expression,
+`Beefy.Vault(vault)["available()"]()`. That compiles to the same program as a call by name, and
+each protocol's reference page lists those functions with their spelling. A function one chain's
 deployment does not run is refused for that chain, naming the chains that run it, and one it
 declares otherwise (an older release returning fewer fields) is called there as that deployment
 declares it; each protocol's [reference page](../reference/protocols.md) lists both per deployment.

@@ -86,6 +86,10 @@ function main() {
 - `version() pure returns (string)`
 - `wormhole() view returns (address)`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Pyth.Oracle["getUpdateFee(uint256)"](…)`: `getUpdateFee(uint256 updateDataSize) view returns (uint256 feeAmount)`; an overload of getUpdateFee(bytes[]), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
 - `error InsufficientFee` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
@@ -99,4 +103,3 @@ Left out of this ABI, though its deployments declare them:
 - `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event TwapPriceFeedUpdate` taking `(bytes32,uint64,uint64,int64,uint64,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `getUpdateFee` taking `(uint256)`: an overload of getUpdateFee(bytes[]), which takes as many arguments: a call picks its overload by argument count.

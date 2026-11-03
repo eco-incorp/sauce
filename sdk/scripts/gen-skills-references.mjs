@@ -341,12 +341,27 @@ export async function skillsReferences(api, documented) {
   // which a program compiled for that chain calls as it declares them (`contracts.generated.ts`).
   const withheld = new Map();
   const shapes = new Map();
+  // The functions a contract's ABI leaves out for their name or arity alone, which a program calls
+  // by their signature (`ContractLink.bySignature`): the contracts of each export that carry them,
+  // and per role deployment those its chain does not run as declared.
+  const bySignatureLinks = new Map();
+  const bySignatureAbsent = new Map();
   for (const link of sdk.contracts.CONTRACT_LINKS) {
     for (const [chainId, signatures] of Object.entries(link.withheld ?? {})) {
       withheld.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, signatures);
     }
     for (const [chainId, functions] of Object.entries(link.shapes ?? {})) {
       shapes.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, functions);
+    }
+    for (const [chainId, signatures] of Object.entries(link.bySignatureWithheld ?? {})) {
+      bySignatureAbsent.set(
+        `${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`,
+        signatures,
+      );
+    }
+    if ((link.bySignature ?? []).length > 0) {
+      const key = `${link.protocol}|${link.abiExport}`;
+      bySignatureLinks.set(key, [...(bySignatureLinks.get(key) ?? []), link]);
     }
   }
   const globals = globalsIndex(sdk, support);
@@ -420,6 +435,11 @@ export async function skillsReferences(api, documented) {
                 name: f.name,
                 text: functionText(f),
               }));
+        // The ABI's functions called by signature that this deployment does not run as declared.
+        const bySignatureWithheld =
+          abi === undefined
+            ? []
+            : (bySignatureAbsent.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []);
         deployed.push({
           chain: chain.slug,
           role,
@@ -428,6 +448,7 @@ export async function skillsReferences(api, documented) {
           abi,
           absent,
           declared,
+          bySignatureWithheld,
         });
       }
     }
@@ -452,7 +473,36 @@ export async function skillsReferences(api, documented) {
         name: e.name,
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
-        omitted: omitted[`${info.slug}.${e.name}`] ?? [],
+        // What the deployments declare that this ABI leaves out, and why: the functions left out
+        // for their name or arity alone (they carry their ABI item) are called by signature.
+        omitted: (omitted[`${info.slug}.${e.name}`] ?? []).filter((o) => o.function === undefined),
+        bySignature: (omitted[`${info.slug}.${e.name}`] ?? [])
+          .filter((o) => o.function !== undefined)
+          .map((o) => {
+            const carrying = (bySignatureLinks.get(`${info.slug}|${e.name}`) ?? []).filter((l) =>
+              l.bySignature.some(
+                (f) => `${f.name}(${(f.inputs ?? []).map(canonicalOf).join(",")})` === o.signature,
+              ),
+            );
+            if (carrying.length === 0 || namespace === undefined) {
+              throw new Error(
+                `${info.slug}.${e.name}: ${o.signature} is called by signature, but no contract of a namespace carries it`,
+              );
+            }
+
+            return {
+              signature: o.signature,
+              text: functionText(o.function),
+              reason: o.reason,
+              // How a program calls it on each contract of the export: a singleton by its
+              // namespace member, an interface bound to the address it is given.
+              spellings: carrying.map((l) =>
+                l.kind === "interface"
+                  ? `${namespace.name}.${l.contract}(<address>)["${o.signature}"](…)`
+                  : `${namespace.name}.${l.contract}["${o.signature}"](…)`,
+              ),
+            };
+          }),
         // Deployments whose verified ABI is carried, in part, from an earlier capture.
         partial: (omittedFile.partial?.[`${info.slug}.${e.name}`] ?? []).flatMap((c) => {
           const [chainId, address] = c.deployment.split(":");
@@ -1795,7 +1845,9 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
           // held to the chain's deployment.
           (e.served && e.roles.length
             ? " The import is the registry's ABI for this contract, the functions listed here" +
-              (e.omitted.length ? " and none of those left out below" : "") +
+              (e.omitted.length || e.bySignature.length
+                ? " and none of those left out below"
+                : "") +
               ": the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment" +
               (p.namespace
                 ? `. Call the contract through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.`
@@ -1837,6 +1889,32 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
               "",
             ];
           }),
+        // What a program calls by signature: the functions this ABI leaves out for their name or
+        // arity alone, and the deployments that do not run each.
+        ...(e.bySignature.length
+          ? [
+              "Left out of this ABI by name, and called by their signature through the namespace:",
+              "",
+              ...e.bySignature.map((o) => {
+                const absent = p.deployed.filter(
+                  (d) => d.abi === e.name && d.bySignatureWithheld.includes(o.signature),
+                );
+                const where = absent.map(
+                  (d) =>
+                    `${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)})`,
+                );
+                const chains = [...new Set(absent.map((d) => chainsBySlug.get(d.chain).name))];
+
+                return (
+                  `- ${o.spellings.map(code).join(", ")}: \`${o.text}\`; ${o.reason}.` +
+                  (absent.length
+                    ? ` Not run by ${where.join(", ")}: a program compiled for ${chains.join(", ")} is refused it.`
+                    : "")
+                );
+              }),
+              "",
+            ]
+          : []),
         // What the deployments declare that this ABI leaves out, and why.
         ...(e.omitted.length
           ? [

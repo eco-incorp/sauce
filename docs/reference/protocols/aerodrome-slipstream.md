@@ -201,9 +201,9 @@ Not on Base's clFactoryGaugeCaps (`0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a`),
 
 Not on Base's clFactoryGaugesV3 (`0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef`), whose code does not dispatch them or does not declare them as listed here: `clPoolTape`, `clPoolTapeManager`, `createPool`, `defaultSwapHook`, `discountRegistry`, `discountRegistryManager`, `getPoolSwapHook`, `poolByTokenIndex`, `poolByTokenIndexLength`, `poolByTokenIndexPaginated`, `poolsIndex`, `poolsIndexLength`, `poolsIndexPaginated`, `poolSwapHook`, `setClPoolTape`, `setClPoolTapeManager`, `setDefaultSwapHook`, `setDiscountRegistry`, `setDiscountRegistryManager`, `setPoolSwapHook`, `setVoter`, `tokenIndexLength`, `tokenIndexPaginated`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Left out of this ABI, though its deployments declare them:
+Left out of this ABI by name, and called by their signature through the namespace:
 
-- `getPool` taking `(address,address,uint24)`: an overload of getPool(address,address,int24), which takes as many arguments: a call picks its overload by argument count.
+- `AerodromeSlipstream.CLFactory["getPool(address,address,uint24)"](…)`, `AerodromeSlipstream.CLFactoryGaugeCaps["getPool(address,address,uint24)"](…)`, `AerodromeSlipstream.CLFactoryGaugesV3["getPool(address,address,uint24)"](…)`: `getPool(address tokenA, address tokenB, uint24 tickSpacing) view returns (address)`; an overload of getPool(address,address,int24), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature. Not run by Base's clFactory (`0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A`), Base's clFactoryGaugeCaps (`0xaDe65c38CD4849aDBA595a4323a8C7DdfE89716a`), Base's clFactoryGaugesV3 (`0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef`): a program compiled for Base is refused it.
 
 ### `SlipstreamPositionManagerABI`
 

@@ -198,6 +198,6 @@ functions, and its writes are SafeERC20.
 - `WETH9() view returns (address)`
 - `wrapETH(uint256 value) payable`
 
-Left out of this ABI, though its deployments declare them:
+Left out of this ABI by name, and called by their signature through the namespace:
 
-- `multicall` taking `(bytes32,bytes[])`: an overload of multicall(uint256,bytes[]), which takes as many arguments: a call picks its overload by argument count.
+- `PancakeswapV3.SmartRouter["multicall(bytes32,bytes[])"](…)`: `multicall(bytes32 previousBlockhash, bytes[] data) payable returns (bytes[])`; an overload of multicall(uint256,bytes[]), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.

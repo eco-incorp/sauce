@@ -185,7 +185,10 @@ Left out of this ABI, though its deployments declare them:
 - `WETH9() view returns (address)`
 - `wrapETH(uint256 value) payable`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `SynthraV3.SwapRouter02["multicall(bytes32,bytes[])"](…)`: `multicall(bytes32 previousBlockhash, bytes[] data) payable returns (bytes[])`; an overload of multicall(uint256,bytes[]), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
-- `multicall` taking `(bytes32,bytes[])`: an overload of multicall(uint256,bytes[]), which takes as many arguments: a call picks its overload by argument count.
 - `uniswapV3SwapCallback` taking `(int256,int256,bytes)`: no captured deployment dispatches it.

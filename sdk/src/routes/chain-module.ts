@@ -45,7 +45,8 @@
  *
  * What a module cannot hold stays a rewrite (`protocol-rewrite.ts`): an interface called with an
  * address (`UniswapV3.Pool(pool)`), a contract's ABI at another address (`.at(address)`) and a
- * protocol's default contract (`Lido.submit(…)`), all of which need a function as a value.
+ * protocol's default contract (`Lido.submit(…)`), all of which need a function as a value, and a
+ * function called by its signature (`Permit2.Permit2["<signature>"](…)`), which no binding names.
  */
 import type { ContractDescriptor } from "../descriptors/types.js";
 

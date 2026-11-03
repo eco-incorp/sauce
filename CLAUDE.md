@@ -660,6 +660,34 @@ and a function or event an interface's instances declare differently. A registry
 would be left out for its name fails the generator instead. A function the deployments drop stays
 in `abis.ts` until removed by hand: the test fails it (no deployment dispatches it).
 
+A FUNCTION LEFT OUT FOR ITS NAME OR ITS ARITY ALONE IS STILL CALLED, BY ITS SIGNATURE. Its
+`omitted.json` entry carries its ABI item (`function`; its reason ends "called by its signature"),
+and `gen-source-globals.mjs` writes it into `CONTRACT_LINKS` as `bySignature` on every contract of
+the export, with `bySignatureWithheld` per chain for the signatures that chain's role deployment
+does not run as declared (`descriptorOn(chain)` drops them from its `bySignature`). Today that is
+21 same-arity overloads and 2 accessor-name collisions (Beefy `Vault.available()`, ENS
+`BaseRegistrar.available(uint256)`) at export level, carried on 25 contracts. A program calls any
+function of a namespace contract by its canonical signature (name and parameter types, tuples in
+parentheses, no names or spaces): `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](…)`,
+chain-qualified (`Base.<Namespace>.<Contract>[…]`), on a `const` holding the contract, after
+`.at(addr)`, or on an interface bound in the same expression (`Beefy.Vault(v)["available()"]()`).
+`protocol-rewrite.ts` (shape H) lowers it to a binding of that one function,
+`I<Protocol>_<Contract>_<selector>` (`_On<Chain>` after it where that chain's deployment declares the
+function otherwise, `shapes`), so the bytes equal the call by name where the name reaches the
+function. Refused: through a protocol's default contract (`Permit2["…"](…)`) and on a bound
+interface held in a local (both by the rewrite, the latter at the binding); a signature not the
+contract's (naming the nearest five) and one the chain's deployment withholds (naming the chains
+that run it), by `method-refusals.ts#signatureRefusal`, which the names check (`absent-names.ts`)
+applies to a namespace contract and the rewrite to a bound one; a call by name to a function only
+reachable by signature gets `bySignatureHint`'s spelling. `source-globals.generated.ts` declares
+them as string-keyed members for TypeScript closures. They are not in the `<X>ABI.json` twin.
+`registry-abi.test.ts` checks each against the evidence like every other function — dispatch,
+outputs, mutability, struct field names, `unverified` where no verified source declares it, and
+per-chain withholding (`bySignatureWithheld`; none is served declared otherwise) — and holds
+`bySignature` on each contract of the export to `omitted.json`. The registry documents list them
+under each ABI, apart from the rest left out, with each contract's spelling and the deployments
+that withhold them.
+
 A ROLE'S DEPLOYMENT ON ONE CHAIN MAY NOT RUN ALL OF ITS UNION AS DECLARED. `gen-source-globals.mjs`
 writes, per singleton contract and chain, two tables in `CONTRACT_LINKS`. `shapes`: each function
 that chain's deployment dispatches and its verified ABI declares with the same signature and other
@@ -678,7 +706,8 @@ twin import would declare it otherwise. An interface (a by-address contract) has
 filter by: it is its representative instances' union. Withholding and reshaping apply to
 NAMESPACE names only. An explicit twin import (`import X from "./protocols/<slug>/<Export>.json"`)
 and a caller's `contracts` are the registry's ABI for the contract — what `omitted.json` leaves
-out is not in it — with the same entries on every chain and no per-chain withholding or
+out is not in it, and what it leaves out for name or arity is reached only through the namespace,
+by signature — with the same entries on every chain and no per-chain withholding or
 reshaping, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin is bound
 to is matched against a deployment, and none is to be added. The registry documents say so beside
 each twin's import line, list each deployment's withheld and reshaped functions, and say of an

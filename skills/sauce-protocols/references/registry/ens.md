@@ -63,9 +63,12 @@ function main() {
 - `transferFrom(address from, address to, uint256 tokenId)`
 - `transferOwnership(address newOwner)`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Ens.BaseRegistrar["available(uint256)"](…)`: `available(uint256 id) view returns (bool)`; its name is an accessor's own property, so it is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
-- `available` taking `(uint256)`: its name is an accessor's own property.
 - `event NameMigrated` taking `(uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `ENSRegistryABI`

@@ -302,9 +302,12 @@ Not on Avalanche C-Chain's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), 
 
 Not on Scroll's pool (`0x11fCfe756c05AD438e312a7fd934381537D3cFfe`), whose code does not dispatch them or does not declare them as listed here: `dropReserve`, `resetIsolationModeTotalDebt`. Do not call them there: a program compiled for Scroll is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `AaveV3.Pool["configureEModeCategory(uint8,(uint16,uint16,uint16,string))"](…)`: `configureEModeCategory(uint8 id, (uint16 ltv, uint16 liquidationThreshold, uint16 liquidationBonus, string label) category)`; an overload of configureEModeCategory(uint8,(uint16,uint16,uint16,bool,string)), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature. Not run by Ethereum's pool (`0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`), Optimism's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), BNB Chain's pool (`0x6807dc923806fE8Fd134338EABCA509979a7e0cB`), Gnosis's pool (`0xb50201558B00496A145fE76f7424749556E326D8`), Polygon's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), Monad's pool (`0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef`), Fantom's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), Base's pool (`0xA238Dd80C259a72e81d7e4664a9801593F98d1c5`), Arbitrum One's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), Avalanche C-Chain's pool (`0x794a61358D6845594F94dc1DB02A252b5b4814aD`), Scroll's pool (`0x11fCfe756c05AD438e312a7fd934381537D3cFfe`): a program compiled for Ethereum, Optimism, BNB Chain, Gnosis, Polygon, Monad, Fantom, Base, Arbitrum One, Avalanche C-Chain, Scroll is refused it.
+
 Left out of this ABI, though its deployments declare them:
 
-- `configureEModeCategory` taking `(uint8,(uint16,uint16,uint16,string))`: an overload of configureEModeCategory(uint8,(uint16,uint16,uint16,bool,string)), which takes as many arguments: a call picks its overload by argument count.
 - `error CallerNotPositionManager` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event ReserveUsedAsCollateralEnabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 

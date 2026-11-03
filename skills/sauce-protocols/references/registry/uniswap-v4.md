@@ -117,10 +117,10 @@ functions, and its writes are SafeERC20.
 - `unlock(bytes data) returns (bytes result)`
 - `updateDynamicLPFee((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint24 newDynamicLPFee)`
 
-Left out of this ABI, though its deployments declare them:
+Left out of this ABI by name, and called by their signature through the namespace:
 
-- `extsload` taking `(bytes32[])`: an overload of extsload(bytes32), which takes as many arguments: a call picks its overload by argument count.
-- `exttload` taking `(bytes32[])`: an overload of exttload(bytes32), which takes as many arguments: a call picks its overload by argument count.
+- `UniswapV4.PoolManager["extsload(bytes32[])"](…)`: `extsload(bytes32[] slots) view returns (bytes32[])`; an overload of extsload(bytes32), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+- `UniswapV4.PoolManager["exttload(bytes32[])"](…)`: `exttload(bytes32[] slots) view returns (bytes32[])`; an overload of exttload(bytes32), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
 
 ### `UniswapV4PositionManagerABI`
 

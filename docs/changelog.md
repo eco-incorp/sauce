@@ -141,6 +141,26 @@ nothing moves.
   gives, is the registry's ABI for the contract (the functions its reference page lists, and none
   of those it lists as left out), with the same entries on every chain and nothing withheld for
   one chain's deployment.
+- **Added** (EVM): **a function is called by its signature.** A namespace contract's function is
+  called by its canonical signature, its name and parameter types with a tuple's in parentheses
+  and no names or spaces:
+  `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](permit, transfers, owner, signature)`,
+  chain-qualified (`Base.Permit2.Permit2["…"](…)`), on a `const` holding the contract, after
+  `.at(address)`, or on an interface in the same expression (`Beefy.Vault(vault)["available()"]()`).
+  It compiles to the same program as the call by name, and it reaches what a call by name cannot:
+  the 21 overloads that take as many arguments as the one an ABI keeps (Permit2's batch `permit`,
+  `permitTransferFrom` and `permitWitnessTransferFrom`, Uniswap V4's `extsload(bytes32[])`, …) and
+  the 2 functions whose name an accessor keeps (Beefy's `Vault.available()`, ENS's
+  `BaseRegistrar.available(uint256)`). Each protocol's reference page lists them under each ABI with
+  their spelling; the ABI's twin import does not carry them. A call by name to one of them is
+  refused, naming the spelling ("It is called by its signature:
+  `Ens.BaseRegistrar["available(uint256)"](…)`."). A signature the contract does not have is
+  refused, naming the nearest five ("`permitTransferFrom(uint256)` is not the signature of a
+  function of permit2.Permit2 (15 functions; nearest: …)"), and so is one the chain's deployment
+  does not run ("`getPool(address,address,uint24)` is a function of
+  aerodrome-slipstream.CLFactory, called by its signature, but its deployment on base does not run
+  it (as declared); it is on: arc."). Through a protocol's default contract (`Permit2["…"](…)`) or
+  on a bound interface held in a `const`, a call by signature is refused.
 - **Changed** (EVM): **a function the chain's deployment declares otherwise is called as it
   declares it.** Where a chain's deployment runs a function with the ABI's arguments and other
   outputs or mutability, a program compiled for that chain calls it as that deployment's verified

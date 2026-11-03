@@ -162,13 +162,16 @@ Left out of this ABI, though its deployments declare them:
 - `withdraw(address _recipient, uint256 _amount) returns (uint256)`
 - `withdrawRequestNFT() view returns (address)`
 
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Etherfi.LiquidityPool["withdraw(uint256,uint256)"](…)`: `withdraw(uint256 _amount, uint256 _share)`; an overload of withdraw(address,uint256), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
+
 Left out of this ABI, though its deployments declare them:
 
 - `error InvalidAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `error Reentrancy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `withdraw` taking `(uint256,uint256)`: an overload of withdraw(address,uint256), which takes as many arguments: a call picks its overload by argument count.
 
 ### `WeETHABI`
 

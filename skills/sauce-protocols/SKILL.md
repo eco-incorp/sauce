@@ -52,6 +52,17 @@ a function the chain's deployment does not run compiles, does not run the functi
 revert. Its line in the registry file says so. Call a recorded contract through its namespace to
 have that call refused, and a function its deployment declares otherwise called as declared.
 
+A function the namespace leaves out by name (an overload taking as many arguments as the one it
+keeps, or a name the namespace keeps for itself) is called by its **canonical signature**, its name
+and parameter types with tuples in parentheses and no names or spaces:
+`Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](…)`,
+`Base.Permit2.Permit2["…"](…)`, `AaveV3.Pool.at(pool)["…"](…)`, or on an interface
+`Beefy.Vault(vault)["available()"]()`. The registry file lists them under each ABI ("Left out of
+this ABI by name, and called by their signature through the namespace"), each with its spelling
+and the deployments that do not run it: a program compiled for that chain is refused it. Any other
+function may be called the same way, and compiles to the same program as its call by name. The ABI
+import does not carry them; `sauce-script` has a compiled example.
+
 ## Choosing
 
 | Question                     | Answer                                                                                                   |

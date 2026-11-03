@@ -257,6 +257,41 @@ function main(vault: Address, shares: Uint256): Uint256 {
 }
 ```
 
+### A function called by its signature
+
+A namespace calls a function by name, picking among overloads by argument count. A function it
+leaves out by name (an overload taking as many arguments as the one it keeps, or a name the
+namespace keeps for itself, such as `available`) is called by its **canonical signature**: its
+name and parameter types, a tuple's in parentheses, with no names or spaces. Its contract's
+registry file in `sauce-protocols` lists each one with its exact spelling.
+
+- `Permit2.Permit2["permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"](…)`
+  on a namespace contract, `Base.Permit2.Permit2["…"](…)` qualified by chain, or on a `const`
+  holding it: `const f = UniswapV3.Factory; f["getPool(address,address,uint24)"](…)`;
+- `UniswapV3.Factory.at(factory)["getPool(address,address,uint24)"](…)` on another deployment;
+- `Beefy.Vault(vault)["available()"]()` on an interface, with the address in the same expression.
+
+The compiled program is the same as a call by name where the name reaches the function. Not
+through a protocol's default contract (`Permit2["…"](…)`), and not on a bound interface held in a
+`const`. A misspelled signature is refused, naming the nearest of the contract's own; one the
+chain's deployment does not run is refused for that chain, naming the chains that run it.
+
+```sauce chain=ethereum
+function main(
+  permitted: { token: Address; amount: Uint256 }[],
+  nonce: Uint256,
+  deadline: Uint256,
+  transfers: { to: Address; requestedAmount: Uint256 }[],
+  owner: Address,
+  signature: bytes,
+) {
+  // The batch overload takes as many arguments as the single one, so it is called by signature.
+  Permit2.Permit2[
+    "permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"
+  ]({ permitted, nonce, deadline }, transfers, owner, signature);
+}
+```
+
 ### Who receives what a call produces
 
 Every call comes from the Pot. A call that credits its caller, or names `pot` as its
