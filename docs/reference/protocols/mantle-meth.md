@@ -52,7 +52,7 @@ function main() {
 
 ### `METHABI`
 
-`import METHABI from "./protocols/mantle-meth/METHABI.json";` Speaks for: mETH. The import is the contract's full ABI across every deployment; call it through the `MantleMeth` namespace to have a function a chain's deployment does not run refused.
+`import METHABI from "./protocols/mantle-meth/METHABI.json";` Speaks for: mETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `MantleMeth` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `ADD_BLOCK_LIST_CONTRACT_ROLE() view returns (bytes32)`
 - `addBlockListContract(address blockListAddress)`
@@ -101,7 +101,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `METHStakingABI`
 
-`import METHStakingABI from "./protocols/mantle-meth/METHStakingABI.json";` Speaks for: staking. The import is the contract's full ABI across every deployment; call it through the `MantleMeth` namespace to have a function a chain's deployment does not run refused.
+`import METHStakingABI from "./protocols/mantle-meth/METHStakingABI.json";` Speaks for: staking. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `MantleMeth` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allocatedETHForDeposits() view returns (uint256)`
 - `allocateETH(uint256 allocateToUnstakeRequestsManager, uint256 allocateToDeposits, uint256 allocateToLiquidityBuffer)`

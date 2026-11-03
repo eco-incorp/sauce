@@ -76,7 +76,8 @@ export const ACCESSOR_PROPERTIES = new Set([
  * One protocol's contracts: `{ protocol, contract, kind, roleKey?, abiExport?, chains?, caveats? }`
  * for each binding of `spec` (its `targets.json` entry) and each EVM role no binding claims.
  * `evmChainIds` are the canonical EVM chains. A role's deployment that does not run a function of
- * its ABI as declared is the evidence's to say, per chain (`gen-source-globals.mjs`'s `withheld`).
+ * its ABI as declared is the evidence's to say, per chain (`gen-source-globals.mjs`'s `withheld`
+ * and `shapes`).
  */
 export function protocolContracts({ slug, info, deployments, spec, evmChainIds, fail }) {
   // Roles with an EVM address on a canonical EVM chain, in first-seen order.

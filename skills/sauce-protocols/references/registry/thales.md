@@ -82,7 +82,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SpeedMarketsAMMABI`
 
-`import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";` Speaks for: speedMarketsAMM. The import is the contract's full ABI across every deployment; call it through the `Thales` namespace to have a function a chain's deployment does not run refused.
+`import SpeedMarketsAMMABI from "./protocols/thales/SpeedMarketsAMMABI.json";` Speaks for: speedMarketsAMM. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Thales` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `activeMarkets(uint256 index, uint256 pageSize) view returns (address[])`
@@ -167,7 +167,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `ThalesAMMABI`
 
-`import ThalesAMMABI from "./protocols/thales/ThalesAMMABI.json";` Speaks for: thalesAMM. The import is the contract's full ABI across every deployment; call it through the `Thales` namespace to have a function a chain's deployment does not run refused.
+`import ThalesAMMABI from "./protocols/thales/ThalesAMMABI.json";` Speaks for: thalesAMM. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Thales` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `availableToBuyFromAMM(address market, uint8 position) view returns (uint256 _available)`

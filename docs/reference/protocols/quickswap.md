@@ -63,7 +63,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV2FactoryABI`
 
-`import QuickSwapV2FactoryABI from "./protocols/quickswap/QuickSwapV2FactoryABI.json";` Speaks for: v2Factory. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
+`import QuickSwapV2FactoryABI from "./protocols/quickswap/QuickSwapV2FactoryABI.json";` Speaks for: v2Factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Quickswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allPairs(uint256) view returns (address)`
 - `allPairsLength() view returns (uint256)`
@@ -108,7 +108,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV2RouterABI`
 
-`import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";` Speaks for: v2Router. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
+`import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";` Speaks for: v2Router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Quickswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`
@@ -137,7 +137,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV3FactoryABI`
 
-`import QuickSwapV3FactoryABI from "./protocols/quickswap/QuickSwapV3FactoryABI.json";` Speaks for: v3Factory. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
+`import QuickSwapV3FactoryABI from "./protocols/quickswap/QuickSwapV3FactoryABI.json";` Speaks for: v3Factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Quickswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `baseFeeConfiguration() view returns (uint16 alpha1, uint16 alpha2, uint32 beta1, uint32 beta2, uint16 gamma1, uint16 gamma2, uint32 volumeBeta, uint16 volumeGamma, uint16 baseFee)`
 - `createPool(address tokenA, address tokenB) returns (address pool)`
@@ -186,7 +186,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV3SwapRouterABI`
 
-`import QuickSwapV3SwapRouterABI from "./protocols/quickswap/QuickSwapV3SwapRouterABI.json";` Speaks for: v3SwapRouter. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
+`import QuickSwapV3SwapRouterABI from "./protocols/quickswap/QuickSwapV3SwapRouterABI.json";` Speaks for: v3SwapRouter. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Quickswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `algebraSwapCallback(int256 amount0Delta, int256 amount1Delta, bytes _data)`
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`

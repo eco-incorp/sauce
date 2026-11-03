@@ -34,7 +34,7 @@ function main() {
 
 ### `CrocSwapDexABI`
 
-`import CrocSwapDexABI from "./protocols/ambient/CrocSwapDexABI.json";` Speaks for: crocSwapDex. The import is the contract's full ABI across every deployment; call it through the `Ambient` namespace to have a function a chain's deployment does not run refused.
+`import CrocSwapDexABI from "./protocols/ambient/CrocSwapDexABI.json";` Speaks for: crocSwapDex. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Ambient` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptCrocDex() pure returns (bool)`
 - `protocolCmd(uint16 callpath, bytes cmd, bool sudo) payable`

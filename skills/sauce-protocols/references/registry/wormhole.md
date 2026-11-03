@@ -45,7 +45,7 @@ function main() {
 
 ### `WormholeCoreBridgeABI`
 
-`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
+`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Wormhole` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `chainId() view returns (uint16)`
 - `evmChainId() view returns (uint256)`
@@ -85,7 +85,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `WormholeTokenBridgeABI`
 
-`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
+`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Wormhole` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_parseTransferCommon(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer)`
 - `attestToken(address tokenAddress, uint32 nonce) payable returns (uint64 sequence)`

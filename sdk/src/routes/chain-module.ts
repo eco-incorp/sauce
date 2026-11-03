@@ -25,10 +25,12 @@
  * so a call on a contract the chain lacks compiles there as long as a test of it rules the call out.
  *
  * EACH CHAIN'S OWN ABI. A registry ABI is the union of what a role's deployments run, so one
- * chain's deployment may lack some functions (`ContractDescriptor.withheldOn`). The module binds
- * the contract with the ABI that chain's deployment runs (`descriptorOn`), imported under a path of
- * its own (`abi/<protocol>/<Export>-<hash of its text>.json`), so a call to a function it lacks is
- * refused there (`absent-names.ts`) and compiles where the deployment runs it.
+ * chain's deployment may lack some functions (`ContractDescriptor.withheldOn`) or declare some
+ * otherwise (`shapesOn`: Ethereum's `CometRewards.rewardConfig` returns three fields to the ABI's
+ * four). The module binds the contract with the ABI that chain's deployment runs (`descriptorOn`),
+ * imported under a path of its own (`abi/<protocol>/<Export>-<hash of its text>.json`), so a call
+ * to a function it lacks is refused there (`absent-names.ts`), one it declares otherwise is
+ * compiled as it declares it, and the rest compiles as the ABI declares it.
  *
  * A ZERO IS NEVER A CONTRACT AT RUN TIME. The compiler takes a zero anywhere a value goes, so a use
  * of a name the chain lacks outside a branch its test rules out would compile to a call to, or a
@@ -107,7 +109,8 @@ export type NameEntry =
   | {
       readonly kind: "deployed";
       /** The contract as this chain's deployment runs it (`descriptorOn`): the ABI the module
-       *  binds, without the functions the deployment withholds. */
+       *  binds, without the functions the deployment withholds and with those it declares
+       *  otherwise as it declares them. */
       readonly descriptor: ContractDescriptor;
       /** The contract with every chain's deployments' ABI, which names what this one withholds. */
       readonly full: ContractDescriptor;

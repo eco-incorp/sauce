@@ -54,7 +54,7 @@ function main() {
 
 ### `EETHABI`
 
-`import EETHABI from "./protocols/etherfi/EETHABI.json";` Speaks for: eETH. The import is the contract's full ABI across every deployment; call it through the `Etherfi` namespace to have a function a chain's deployment does not run refused.
+`import EETHABI from "./protocols/etherfi/EETHABI.json";` Speaks for: eETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Etherfi` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allowance(address _owner, address _spender) view returns (uint256)`
 - `allowances(address, address) view returns (uint256)`
@@ -111,7 +111,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `LiquidityPoolABI`
 
-`import LiquidityPoolABI from "./protocols/etherfi/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the contract's full ABI across every deployment; call it through the `Etherfi` namespace to have a function a chain's deployment does not run refused.
+`import LiquidityPoolABI from "./protocols/etherfi/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Etherfi` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addEthAmountLockedForWithdrawal(uint128 _amount)`
 - `amountForShare(uint256 _share) view returns (uint256)`
@@ -191,7 +191,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `WeETHABI`
 
-`import WeETHABI from "./protocols/etherfi/WeETHABI.json";` Speaks for: weETH. The import is the contract's full ABI across every deployment; call it through the `Etherfi` namespace to have a function a chain's deployment does not run refused.
+`import WeETHABI from "./protocols/etherfi/WeETHABI.json";` Speaks for: weETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Etherfi` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

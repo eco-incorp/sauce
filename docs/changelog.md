@@ -132,13 +132,25 @@ nothing moves.
   contract can run different releases, and the registry records which functions each one's code
   dispatches. A call to one the chain's deployment does not run is refused when the program
   compiles, naming the chains that run it, where it used to compile. Calls that compiled before
-  and are refused now: `Cbeth.CbETH.exchangeRate` and `mint` on Base,
+  and are refused now: `Cbeth.CbETH.exchangeRate` on Base,
   `Lifi.LiFiDiamond.startBridgeTokensViaAcrossV4` on Gnosis, Fantom and Avalanche, and
   `Paraswap.AugustusV5.simpleSwap` on Base. The message: "`Cbeth.CbETH.exchangeRate(…)`:
   `exchangeRate` is in cbeth.CbETH's ABI, but its deployment on base does not run it (as
   declared); it is on: ethereum." Each protocol's reference page lists what each deployment does
   not run. Only a namespace call is refused: an explicit twin import, or a contract a caller
-  gives, is the raw ABI across every deployment.
+  gives, is the registry's ABI for the contract (the functions its reference page lists, and none
+  of those it lists as left out), with the same entries on every chain and nothing withheld for
+  one chain's deployment.
+- **Changed** (EVM): **a function the chain's deployment declares otherwise is called as it
+  declares it.** Where a chain's deployment runs a function with the ABI's arguments and other
+  outputs or mutability, a program compiled for that chain calls it as that deployment's verified
+  source declares it. `Cbeth.CbETH.mint` on Base no longer decodes a `bool` that Base's deployment
+  does not return, and `CompoundV3.CometRewards.rewardConfig` returns three fields on Ethereum and
+  Polygon, where reading `multiplier` fails to compile ("`multiplier` is not a field of this tuple
+  — its named fields are `token`, `rescaleFactor`, `shouldUpscale`"), and four elsewhere. The ABI,
+  its twin and the TypeScript types keep the ABI's declaration; a TypeScript call made on such a
+  chain decodes the deployment's, and its `toSauceScript()` is refused. Each protocol's reference
+  page lists these per deployment.
 - **Changed**: a method a contract does not have is refused with a shorter list. A contract with
   more than six methods is listed by its count and the five names nearest the one written:
   "`getPol` is not in uniswap-v3.Factory's vendored ABI (7 known methods; nearest: getPool,

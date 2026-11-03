@@ -51,7 +51,7 @@ function main() {
 
 ### `CrvUSDERC20ABI`
 
-`import CrvUSDERC20ABI from "./protocols/crvusd/CrvUSDERC20ABI.json";` Speaks for: crvusd. The import is the contract's full ABI across every deployment; call it through the `Crvusd` namespace to have a function a chain's deployment does not run refused.
+`import CrvUSDERC20ABI from "./protocols/crvusd/CrvUSDERC20ABI.json";` Speaks for: crvusd. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Crvusd` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allowance(address arg0, address arg1) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

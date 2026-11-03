@@ -163,7 +163,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `AerodromePoolFactoryABI`
 
-`import AerodromePoolFactoryABI from "./protocols/aerodrome/AerodromePoolFactoryABI.json";` Speaks for: poolFactory. The import is the contract's full ABI across every deployment; call it through the `Aerodrome` namespace to have a function a chain's deployment does not run refused.
+`import AerodromePoolFactoryABI from "./protocols/aerodrome/AerodromePoolFactoryABI.json";` Speaks for: poolFactory. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Aerodrome` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allPools(uint256) view returns (address)`
 - `allPoolsLength() view returns (uint256)`
@@ -197,7 +197,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `AerodromeRouterABI`
 
-`import AerodromeRouterABI from "./protocols/aerodrome/AerodromeRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Aerodrome` namespace to have a function a chain's deployment does not run refused.
+`import AerodromeRouterABI from "./protocols/aerodrome/AerodromeRouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Aerodrome` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, bool stable, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`

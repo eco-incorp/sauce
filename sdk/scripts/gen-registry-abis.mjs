@@ -7,7 +7,8 @@
 //     (the implementation behind a proxy, every facet of a diamond or selector router), their union
 //     where the deployments run different releases. A function no deployment dispatches is left
 //     out: nothing could call it. A chain's deployment that does not run one of the union's
-//     functions is the evidence's to say, and `gen-source-globals.mjs` withholds it on that chain;
+//     functions, or declares it otherwise, is the evidence's to say: `gen-source-globals.mjs`
+//     withholds it on that chain, or serves it there as that deployment declares it;
 //   - for a contract with no verified source, the functions of its reference interface
 //     (`reference/index.json`) the deployed code dispatches, each recorded under `unverified`;
 //   - for an ERC standard (`standard` in its target: an interface whose deployments are examples),
@@ -247,11 +248,11 @@ function fullAbi(slug, exportName, today, target, contracts) {
         continue;
       }
     }
-    // Every deployment's verified declaration must agree where none can be withheld from: a
+    // Every deployment's verified declaration must agree where no chain can be told apart: a
     // standard's examples and an interface's are all one contract, and so is a role's instance
     // that only represents others (`instances`). A verified ABI that declares the name only with
-    // other parameters disagrees too. A role's own deployment that disagrees is withheld on its
-    // chain instead.
+    // other parameters disagrees too. A role's own deployment that disagrees is served its own
+    // declaration on its chain instead, or withheld there (`gen-source-globals.mjs`).
     const key = functionKey(item);
     const differing = rows.filter((row) => {
       if (row.role !== undefined) return false;

@@ -34,7 +34,7 @@ function main() {
 
 ### `ClearinghouseABI`
 
-`import ClearinghouseABI from "./protocols/vertex/ClearinghouseABI.json";` Speaks for: clearinghouse. The import is the contract's full ABI across every deployment; call it through the `Vertex` namespace to have a function a chain's deployment does not run refused.
+`import ClearinghouseABI from "./protocols/vertex/ClearinghouseABI.json";` Speaks for: clearinghouse. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Vertex` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_isAboveInitial(bytes32 subaccount) view returns (bool)`
 - `_isUnderInitial(bytes32 subaccount) view returns (bool)`
@@ -80,7 +80,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `EndpointABI`
 
-`import EndpointABI from "./protocols/vertex/EndpointABI.json";` Speaks for: endpoint. The import is the contract's full ABI across every deployment; call it through the `Vertex` namespace to have a function a chain's deployment does not run refused.
+`import EndpointABI from "./protocols/vertex/EndpointABI.json";` Speaks for: endpoint. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Vertex` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `clearinghouse() view returns (address)`
 - `depositCollateral(bytes12 subaccountName, uint32 productId, uint128 amount)`

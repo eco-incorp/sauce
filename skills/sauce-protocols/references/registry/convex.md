@@ -80,7 +80,7 @@ functions, and its writes are SafeERC20.
 
 ### `BoosterABI`
 
-`import BoosterABI from "./protocols/convex/BoosterABI.json";` Speaks for: booster. The import is the contract's full ABI across every deployment; call it through the `Convex` namespace to have a function a chain's deployment does not run refused.
+`import BoosterABI from "./protocols/convex/BoosterABI.json";` Speaks for: booster. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Convex` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addPool(address _lptoken, address _gauge, uint256 _stashVersion) returns (bool)`
 - `claimRewards(uint256 _pid, address _gauge) returns (bool)`

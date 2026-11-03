@@ -41,7 +41,7 @@ functions, and its writes are SafeERC20.
 
 ### `SynthraV3FactoryABI`
 
-`import SynthraV3FactoryABI from "./protocols/synthra-v3/SynthraV3FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `SynthraV3` namespace to have a function a chain's deployment does not run refused.
+`import SynthraV3FactoryABI from "./protocols/synthra-v3/SynthraV3FactoryABI.json";` Speaks for: factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthraV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
 - `enableFeeAmount(uint24 fee, int24 tickSpacing)`
@@ -53,7 +53,7 @@ functions, and its writes are SafeERC20.
 
 ### `SynthraV3NonfungiblePositionManagerABI`
 
-`import SynthraV3NonfungiblePositionManagerABI from "./protocols/synthra-v3/SynthraV3NonfungiblePositionManagerABI.json";` Speaks for: nonfungiblePositionManager. The import is the contract's full ABI across every deployment; call it through the `SynthraV3` namespace to have a function a chain's deployment does not run refused.
+`import SynthraV3NonfungiblePositionManagerABI from "./protocols/synthra-v3/SynthraV3NonfungiblePositionManagerABI.json";` Speaks for: nonfungiblePositionManager. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthraV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `approve(address to, uint256 tokenId)`
 - `balanceOf(address owner) view returns (uint256)`
@@ -130,7 +130,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SynthraV3QuoterV2ABI`
 
-`import SynthraV3QuoterV2ABI from "./protocols/synthra-v3/SynthraV3QuoterV2ABI.json";` Speaks for: quoterV2. The import is the contract's full ABI across every deployment; call it through the `SynthraV3` namespace to have a function a chain's deployment does not run refused.
+`import SynthraV3QuoterV2ABI from "./protocols/synthra-v3/SynthraV3QuoterV2ABI.json";` Speaks for: quoterV2. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthraV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `factory() view returns (address)`
 - `quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)`
@@ -145,7 +145,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SynthraV3SwapRouter02ABI`
 
-`import SynthraV3SwapRouter02ABI from "./protocols/synthra-v3/SynthraV3SwapRouter02ABI.json";` Speaks for: swapRouter02. The import is the contract's full ABI across every deployment; call it through the `SynthraV3` namespace to have a function a chain's deployment does not run refused.
+`import SynthraV3SwapRouter02ABI from "./protocols/synthra-v3/SynthraV3SwapRouter02ABI.json";` Speaks for: swapRouter02. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthraV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `approveMax(address token) payable`
 - `approveMaxMinusOne(address token) payable`

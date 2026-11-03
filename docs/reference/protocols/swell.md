@@ -50,7 +50,7 @@ function main() {
 
 ### `RswETHABI`
 
-`import RswETHABI from "./protocols/swell/RswETHABI.json";` Speaks for: rswETH. The import is the contract's full ABI across every deployment; call it through the `Swell` namespace to have a function a chain's deployment does not run refused.
+`import RswETHABI from "./protocols/swell/RswETHABI.json";` Speaks for: rswETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Swell` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `AccessControlManager() view returns (address)`
 - `addToWhitelist(address _address)`
@@ -112,7 +112,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SwETHABI`
 
-`import SwETHABI from "./protocols/swell/SwETHABI.json";` Speaks for: swETH. The import is the contract's full ABI across every deployment; call it through the `Swell` namespace to have a function a chain's deployment does not run refused.
+`import SwETHABI from "./protocols/swell/SwETHABI.json";` Speaks for: swETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Swell` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `AccessControlManager() view returns (address)`
 - `addToWhitelist(address _address)`

@@ -57,7 +57,7 @@ function main() {
 
 ### `SafeABI`
 
-`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130. The import is the contract's full ABI across every deployment; call it through the `Safe` namespace to have a function a chain's deployment does not run refused.
+`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Safe` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addOwnerWithThreshold(address owner, uint256 _threshold)`
 - `approvedHashes(address, bytes32) view returns (uint256)`
@@ -91,9 +91,9 @@ function main() {
 - `swapOwner(address prevOwner, address oldOwner, address newOwner)`
 - `VERSION() view returns (string)`
 
-Not on Ethereum's safeV141 (`0x41675C099F32341bf84BFc5382aF534df5C7461a`), whose code does not dispatch them or declares them otherwise: `requiredTxGas`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's safeV141 (`0x41675C099F32341bf84BFc5382aF534df5C7461a`), whose code does not dispatch them or does not declare them as listed here: `requiredTxGas`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arc's safeV141 (`0x41675C099F32341bf84BFc5382aF534df5C7461a`), whose code does not dispatch them or declares them otherwise: `requiredTxGas`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arc's safeV141 (`0x41675C099F32341bf84BFc5382aF534df5C7461a`), whose code does not dispatch them or does not declare them as listed here: `requiredTxGas`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 

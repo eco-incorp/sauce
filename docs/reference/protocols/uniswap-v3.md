@@ -149,7 +149,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV3FactoryABI`
 
-`import UniswapV3FactoryABI from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `UniswapV3` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV3FactoryABI from "./protocols/uniswap-v3/UniswapV3FactoryABI.json";` Speaks for: factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
 - `enableFeeAmount(uint24 fee, int24 tickSpacing)`
@@ -161,7 +161,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV3NonfungiblePositionManagerABI`
 
-`import UniswapV3NonfungiblePositionManagerABI from "./protocols/uniswap-v3/UniswapV3NonfungiblePositionManagerABI.json";` Speaks for: nonfungiblePositionManager. The import is the contract's full ABI across every deployment; call it through the `UniswapV3` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV3NonfungiblePositionManagerABI from "./protocols/uniswap-v3/UniswapV3NonfungiblePositionManagerABI.json";` Speaks for: nonfungiblePositionManager. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `approve(address to, uint256 tokenId)`
 - `balanceOf(address owner) view returns (uint256)`
@@ -235,7 +235,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV3QuoterV2ABI`
 
-`import UniswapV3QuoterV2ABI from "./protocols/uniswap-v3/UniswapV3QuoterV2ABI.json";` Speaks for: quoterV2. The import is the contract's full ABI across every deployment; call it through the `UniswapV3` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV3QuoterV2ABI from "./protocols/uniswap-v3/UniswapV3QuoterV2ABI.json";` Speaks for: quoterV2. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `factory() view returns (address)`
 - `quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut, uint160[] sqrtPriceX96AfterList, uint32[] initializedTicksCrossedList, uint256 gasEstimate)`
@@ -247,7 +247,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV3SwapRouter02ABI`
 
-`import UniswapV3SwapRouter02ABI from "./protocols/uniswap-v3/UniswapV3SwapRouter02ABI.json";` Speaks for: swapRouter02. The import is the contract's full ABI across every deployment; call it through the `UniswapV3` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV3SwapRouter02ABI from "./protocols/uniswap-v3/UniswapV3SwapRouter02ABI.json";` Speaks for: swapRouter02. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `approveMax(address token) payable`
 - `approveMaxMinusOne(address token) payable`
@@ -294,7 +294,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `UniswapV3SwapRouterABI`
 
-`import UniswapV3SwapRouterABI from "./protocols/uniswap-v3/UniswapV3SwapRouterABI.json";` Speaks for: swapRouter. The import is the contract's full ABI across every deployment; call it through the `UniswapV3` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV3SwapRouterABI from "./protocols/uniswap-v3/UniswapV3SwapRouterABI.json";` Speaks for: swapRouter. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`

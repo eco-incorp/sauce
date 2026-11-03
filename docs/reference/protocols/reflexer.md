@@ -55,7 +55,7 @@ function main() {
 
 ### `CoinJoinABI`
 
-`import CoinJoinABI from "./protocols/reflexer/CoinJoinABI.json";` Speaks for: coinJoin. The import is the contract's full ABI across every deployment; call it through the `Reflexer` namespace to have a function a chain's deployment does not run refused.
+`import CoinJoinABI from "./protocols/reflexer/CoinJoinABI.json";` Speaks for: coinJoin. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addAuthorization(address account)`
 - `authorizedAccounts(address) view returns (uint256)`
@@ -70,7 +70,7 @@ function main() {
 
 ### `ETHJoinABI`
 
-`import ETHJoinABI from "./protocols/reflexer/ETHJoinABI.json";` Speaks for: ethJoin. The import is the contract's full ABI across every deployment; call it through the `Reflexer` namespace to have a function a chain's deployment does not run refused.
+`import ETHJoinABI from "./protocols/reflexer/ETHJoinABI.json";` Speaks for: ethJoin. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addAuthorization(address account)`
 - `authorizedAccounts(address) view returns (uint256)`
@@ -86,7 +86,7 @@ function main() {
 
 ### `SAFEEngineABI`
 
-`import SAFEEngineABI from "./protocols/reflexer/SAFEEngineABI.json";` Speaks for: safeEngine. The import is the contract's full ABI across every deployment; call it through the `Reflexer` namespace to have a function a chain's deployment does not run refused.
+`import SAFEEngineABI from "./protocols/reflexer/SAFEEngineABI.json";` Speaks for: safeEngine. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addAuthorization(address account)`
 - `approveSAFEModification(address account)`

@@ -36,7 +36,7 @@ function main() {
 
 ### `AlchemistABI`
 
-`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH. The import is the contract's full ABI across every deployment; call it through the `Alchemix` namespace to have a function a chain's deployment does not run refused.
+`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Alchemix` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptAdmin()`
 - `accounts(address owner) view returns (int256 debt, address[] depositedTokens)`

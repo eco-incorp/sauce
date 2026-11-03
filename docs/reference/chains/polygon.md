@@ -78,7 +78,7 @@ address.
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Compound V3](../protocols/compound-v3.md) | cUSDCv3 | `0xF25212E676D1F7F89Cd72fFEe66158f541246445` | `CompoundV3.CUSDCv3` |
-| [Compound V3](../protocols/compound-v3.md) | cometRewards | `0x45939657d1CA34A8FA39A924B71D28Fe8431e581` | `CompoundV3.CometRewards`; not on this deployment: `rewardConfig`, `setRewardConfigWithMultiplier`, `setRewardsClaimed` |
+| [Compound V3](../protocols/compound-v3.md) | cometRewards | `0x45939657d1CA34A8FA39A924B71D28Fe8431e581` | `CompoundV3.CometRewards`; not on this deployment: `setRewardConfigWithMultiplier`, `setRewardsClaimed`; declared otherwise by this deployment: `rewardConfig` |
 | [Curve Finance](../protocols/curve.md) | addressProvider | `0x0000000022D53366457F9d5E68Ec105046FC4383` | `Curve.AddressProvider` |
 | [deBridge](../protocols/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
 | [deBridge](../protocols/debridge.md) | dlnSource | `0xeF4fB24aD0916217251F553c0596F8Edc630EB66` | `Debridge.DlnSource` |

@@ -54,7 +54,7 @@ function main() {
 
 ### `StargatePoolABI`
 
-`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT. The import is the contract's full ABI across every deployment; call it through the `Stargate` namespace to have a function a chain's deployment does not run refused.
+`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Stargate` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addTreasuryFee(uint256 _amountLD) payable`
 - `allowBurn(address _burnAdmin, uint64 _burnAllowanceSD)`
@@ -106,19 +106,19 @@ function main() {
 - `withdrawPlannerFee()`
 - `withdrawTreasuryFee(address _to, uint64 _amountSD)`
 
-Not on Ethereum's poolNative (`0x77b2043768d28E9C9aB44E1aBfC95944bcE57931`), whose code does not dispatch them or declares them otherwise: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's poolNative (`0x77b2043768d28E9C9aB44E1aBfC95944bcE57931`), whose code does not dispatch them or does not declare them as listed here: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Ethereum's poolUSDC (`0xc026395860Db2d07ee33e05fE50ed7bD583189C7`), whose code does not dispatch them or declares them otherwise: `burnLocked`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's poolUSDC (`0xc026395860Db2d07ee33e05fE50ed7bD583189C7`), whose code does not dispatch them or does not declare them as listed here: `burnLocked`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Ethereum's poolUSDT (`0x933597a323Eb81cAe705C5bC29985172fd5A3973`), whose code does not dispatch them or declares them otherwise: `burnLockedUSDC`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's poolUSDT (`0x933597a323Eb81cAe705C5bC29985172fd5A3973`), whose code does not dispatch them or does not declare them as listed here: `burnLockedUSDC`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Base's poolNative (`0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7`), whose code does not dispatch them or declares them otherwise: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Base's poolNative (`0xdc181Bd607330aeeBEF6ea62e03e5e1Fb4B6F7C7`), whose code does not dispatch them or does not declare them as listed here: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Base's poolUSDC (`0x27a16dc786820B16E5c9028b75B99F6f604b5d26`), whose code does not dispatch them or declares them otherwise: `burnLocked`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Base's poolUSDC (`0x27a16dc786820B16E5c9028b75B99F6f604b5d26`), whose code does not dispatch them or does not declare them as listed here: `burnLocked`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arbitrum One's poolNative (`0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F`), whose code does not dispatch them or declares them otherwise: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arbitrum One's poolNative (`0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F`), whose code does not dispatch them or does not declare them as listed here: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arbitrum One's poolUSDC (`0xe8CDF27AcD73a434D661C84887215F7598e7d0d3`), whose code does not dispatch them or declares them otherwise: `burnLocked`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arbitrum One's poolUSDC (`0xe8CDF27AcD73a434D661C84887215F7598e7d0d3`), whose code does not dispatch them or does not declare them as listed here: `burnLocked`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 

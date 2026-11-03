@@ -208,7 +208,8 @@ Call a contract by name, in this order of preference:
 1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
    `AaveV3.Pool.supply(...)`, typed by the contract's whole verified ABI, at the chain's address.
    Which namespaces, members and aliases exist is `sauce-globals`'s; a function the chain's own
-   deployment does not run is refused for that chain, naming the chains that run it.
+   deployment does not run is refused for that chain, naming the chains that run it, and one it
+   declares otherwise is called there as it declares it.
    - **A contract a call returns**: where the registry records which contract an address a
      function returns is (a factory's pool, a pool's tokens, a vault's asset; the function's line
      in its `sauce-protocols` registry file says so), call that contract's methods on the result,
@@ -224,10 +225,11 @@ Call a contract by name, in this order of preference:
 2. **A registry ABI import**, where the chain has no namespace for it: the protocol's registry file
    in `sauce-protocols` gives the line, such as
    `import VaultABI from "./protocols/erc4626/VaultABI.json"`, then
-   `VaultABI.at(vault).convertToAssets(shares)`. The import is the contract's full ABI across every
-   deployment, the same on every chain: like an `IERC20` import, it is the raw ABI, and it refuses
-   no function. Only a namespace name refuses a function the chain's deployment does not run, so
-   call a contract the chain records through its namespace.
+   `VaultABI.at(vault).convertToAssets(shares)`. The import is the registry's ABI for the
+   contract: the functions its registry file lists, and none of those it lists as left out, with
+   the same entries on every chain and nothing withheld for one chain's deployment. Like an
+   `IERC20` import, it refuses no function it lists. Only a namespace name refuses a function the
+   chain's deployment does not run, so call a contract the chain records through its namespace.
 3. **The program's own ABI**, for a contract no registry records, such as an NFT collection: a
    JSON ABI file beside the program, holding only the functions the program calls, with the
    deployed contract's types from its verified source or the interface it implements, imported by

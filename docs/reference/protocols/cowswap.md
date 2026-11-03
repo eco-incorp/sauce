@@ -55,7 +55,7 @@ function main() {
 
 ### `GPv2SettlementABI`
 
-`import GPv2SettlementABI from "./protocols/cowswap/GPv2SettlementABI.json";` Speaks for: gpv2Settlement. The import is the contract's full ABI across every deployment; call it through the `Cowswap` namespace to have a function a chain's deployment does not run refused.
+`import GPv2SettlementABI from "./protocols/cowswap/GPv2SettlementABI.json";` Speaks for: gpv2Settlement. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Cowswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `authenticator() view returns (address)`
 - `domainSeparator() view returns (bytes32)`

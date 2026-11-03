@@ -53,7 +53,7 @@ function main() {
 
 ### `AggregatorV3ABI`
 
-`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed. The import is the contract's full ABI across every deployment; call it through the `Chainlink` namespace to have a function a chain's deployment does not run refused.
+`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Chainlink` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `accessController() view returns (address)`
@@ -86,7 +86,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `FeedRegistryABI`
 
-`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry. The import is the contract's full ABI across every deployment; call it through the `Chainlink` namespace to have a function a chain's deployment does not run refused.
+`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Chainlink` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `confirmFeed(address base, address quote, address aggregator)`

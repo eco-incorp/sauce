@@ -49,7 +49,7 @@ function main() {
 
 ### `CErc20ABI`
 
-`import CErc20ABI from "./protocols/compound-v2/CErc20ABI.json";` Speaks for: cUSDC. The import is the contract's full ABI across every deployment; call it through the `CompoundV2` namespace to have a function a chain's deployment does not run refused.
+`import CErc20ABI from "./protocols/compound-v2/CErc20ABI.json";` Speaks for: cUSDC. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `CompoundV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_acceptAdmin() returns (uint256)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
@@ -100,7 +100,7 @@ function main() {
 
 ### `ComptrollerABI`
 
-`import ComptrollerABI from "./protocols/compound-v2/ComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `CompoundV2` namespace to have a function a chain's deployment does not run refused.
+`import ComptrollerABI from "./protocols/compound-v2/ComptrollerABI.json";` Speaks for: comptroller. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `CompoundV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_become(address unitroller)`
 - `_borrowGuardianPaused() view returns (bool)`

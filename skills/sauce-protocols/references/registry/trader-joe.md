@@ -43,7 +43,7 @@ functions, and its writes are SafeERC20.
 
 ### `LBFactoryABI`
 
-`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
+`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `TraderJoe` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `addQuoteAsset(address quoteAsset)`
@@ -91,11 +91,11 @@ functions, and its writes are SafeERC20.
 - `supportsInterface(bytes4 interfaceId) view returns (bool)`
 - `transferOwnership(address newOwner)`
 
-Not on BNB Chain's lbFactory (`0x8e42f2F4101563bF679975178e880FD87d3eFd4e`), whose code does not dispatch them or declares them otherwise: `acceptOwnership`, `DEFAULT_ADMIN_ROLE`, `getRoleAdmin`, `grantRole`, `hasRole`, `LB_HOOKS_MANAGER_ROLE`, `removeLBHooksOnPair`, `renounceRole`, `revokeRole`, `setLBHooksParametersOnPair`, `supportsInterface`, `transferOwnership`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on BNB Chain's lbFactory (`0x8e42f2F4101563bF679975178e880FD87d3eFd4e`), whose code does not dispatch them or does not declare them as listed here: `acceptOwnership`, `DEFAULT_ADMIN_ROLE`, `getRoleAdmin`, `grantRole`, `hasRole`, `LB_HOOKS_MANAGER_ROLE`, `removeLBHooksOnPair`, `renounceRole`, `revokeRole`, `setLBHooksParametersOnPair`, `supportsInterface`, `transferOwnership`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arbitrum One's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), whose code does not dispatch them or declares them otherwise: `becomeOwner`, `revokePendingOwner`, `setPendingOwner`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arbitrum One's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), whose code does not dispatch them or does not declare them as listed here: `becomeOwner`, `revokePendingOwner`, `setPendingOwner`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), whose code does not dispatch them or declares them otherwise: `becomeOwner`, `revokePendingOwner`, `setPendingOwner`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), whose code does not dispatch them or does not declare them as listed here: `becomeOwner`, `revokePendingOwner`, `setPendingOwner`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 
@@ -194,7 +194,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `LBRouterABI`
 
-`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
+`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `TraderJoe` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`
 - `addLiquidityNATIVE((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) payable returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`
@@ -223,7 +223,7 @@ Left out of this ABI, though its deployments declare them:
 - `sweep(address token, address to, uint256 amount)`
 - `sweepLBToken(address lbToken, address to, uint256[] ids, uint256[] amounts)`
 
-Not on BNB Chain's lbRouter (`0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30`), whose code does not dispatch them or declares them otherwise: `getFactoryV2_1`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on BNB Chain's lbRouter (`0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30`), whose code does not dispatch them or does not declare them as listed here: `getFactoryV2_1`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 

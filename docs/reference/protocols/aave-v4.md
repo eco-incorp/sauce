@@ -71,7 +71,7 @@ function main() {
 
 ### `AaveV4HubABI`
 
-`import AaveV4HubABI from "./protocols/aave-v4/AaveV4HubABI.json";` Speaks for: coreHub, plusHub, primeHub, globalDollarHub, equitiesHub. The import is the contract's full ABI across every deployment; call it through the `AaveV4` namespace to have a function a chain's deployment does not run refused.
+`import AaveV4HubABI from "./protocols/aave-v4/AaveV4HubABI.json";` Speaks for: coreHub, plusHub, primeHub, globalDollarHub, equitiesHub. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `AaveV4` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `add(uint256 assetId, uint256 amount) returns (uint256)`
 - `addAsset(address underlying, uint8 decimals, address feeReceiver, address irStrategy, bytes irData) returns (uint256)`
@@ -146,7 +146,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `AaveV4SpokeABI`
 
-`import AaveV4SpokeABI from "./protocols/aave-v4/AaveV4SpokeABI.json";` Speaks for: mainSpoke, forexSpoke, bluechipSpoke, ethenaCorrelatedSpoke, ethenaEcosystemSpoke, goldSpoke, paxgGoldSpoke, lombardBtcSpoke, usdgPendleSpoke, etherfiESpoke, kelpESpoke, lidoESpoke, usdgMapleESpoke, mag7Spoke, avaxCorrelatedSpoke. The import is the contract's full ABI across every deployment; call it through the `AaveV4` namespace to have a function a chain's deployment does not run refused.
+`import AaveV4SpokeABI from "./protocols/aave-v4/AaveV4SpokeABI.json";` Speaks for: mainSpoke, forexSpoke, bluechipSpoke, ethenaCorrelatedSpoke, ethenaEcosystemSpoke, goldSpoke, paxgGoldSpoke, lombardBtcSpoke, usdgPendleSpoke, etherfiESpoke, kelpESpoke, lidoESpoke, usdgMapleESpoke, mag7Spoke, avaxCorrelatedSpoke. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `AaveV4` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addDynamicReserveConfig(uint256 reserveId, (uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee) dynamicConfig) returns (uint32)`
 - `addReserve(address hub, uint256 assetId, address priceSource, (uint24 collateralRisk, bool paused, bool frozen, bool borrowable, bool receiveSharesEnabled) config, (uint16 collateralFactor, uint32 maxLiquidationBonus, uint16 liquidationFee) dynamicConfig) returns (uint256)`

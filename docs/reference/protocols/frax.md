@@ -50,7 +50,7 @@ function main() {
 
 ### `FraxERC20ABI`
 
-`import FraxERC20ABI from "./protocols/frax/FraxERC20ABI.json";` Speaks for: frax. The import is the contract's full ABI across every deployment; call it through the `Frax` namespace to have a function a chain's deployment does not run refused.
+`import FraxERC20ABI from "./protocols/frax/FraxERC20ABI.json";` Speaks for: frax. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Frax` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addPool(address pool_address)`
 - `allowance(address owner, address spender) view returns (uint256)`

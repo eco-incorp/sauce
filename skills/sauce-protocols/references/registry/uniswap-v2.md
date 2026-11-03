@@ -57,7 +57,7 @@ functions, and its writes are SafeERC20.
 
 ### `UniswapV2FactoryABI`
 
-`import UniswapV2FactoryABI from "./protocols/uniswap-v2/UniswapV2FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `UniswapV2` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV2FactoryABI from "./protocols/uniswap-v2/UniswapV2FactoryABI.json";` Speaks for: factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allPairs(uint256) view returns (address)`
 - `allPairsLength() view returns (uint256)`
@@ -69,23 +69,23 @@ functions, and its writes are SafeERC20.
 - `setFeeTo(address _feeTo)`
 - `setFeeToSetter(address _feeToSetter)`
 
-Not on Ethereum's factory (`0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's factory (`0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Optimism's factory (`0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Optimism is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Optimism's factory (`0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Optimism is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on BNB Chain's factory (`0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on BNB Chain's factory (`0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Polygon's factory (`0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Polygon's factory (`0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arc's factory (`0x89e5DB8B5aA49aA85AC63f691524311AEB649eba`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arc's factory (`0x89e5DB8B5aA49aA85AC63f691524311AEB649eba`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Base's factory (`0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Base's factory (`0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Base is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Arbitrum One's factory (`0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arbitrum One's factory (`0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Avalanche C-Chain's factory (`0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Avalanche C-Chain's factory (`0x9e5A52f57b3038F1B8EeE45F28b3C1967e22799C`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Blast's factory (`0x5C346464d33F90bABaf70dB6388507CC889C1070`), whose code does not dispatch them or declares them otherwise: `INIT_CODE_HASH`. Do not call them there: a program compiled for Blast is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Blast's factory (`0x5C346464d33F90bABaf70dB6388507CC889C1070`), whose code does not dispatch them or does not declare them as listed here: `INIT_CODE_HASH`. Do not call them there: a program compiled for Blast is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 ### `UniswapV2PairABI`
 
@@ -121,7 +121,7 @@ Not on Blast's factory (`0x5C346464d33F90bABaf70dB6388507CC889C1070`), whose cod
 
 ### `UniswapV2RouterABI`
 
-`import UniswapV2RouterABI from "./protocols/uniswap-v2/UniswapV2RouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `UniswapV2` namespace to have a function a chain's deployment does not run refused.
+`import UniswapV2RouterABI from "./protocols/uniswap-v2/UniswapV2RouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`

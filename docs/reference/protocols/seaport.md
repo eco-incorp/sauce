@@ -56,7 +56,7 @@ function main() {
 
 ### `SeaportABI`
 
-`import SeaportABI from "./protocols/seaport/SeaportABI.json";` Speaks for: seaportV16. The import is the contract's full ABI across every deployment; call it through the `Seaport` namespace to have a function a chain's deployment does not run refused.
+`import SeaportABI from "./protocols/seaport/SeaportABI.json";` Speaks for: seaportV16. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Seaport` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `__activateTstore()`
 - `cancel((address offerer, address zone, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount)[] offer, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount, address recipient)[] consideration, uint8 orderType, uint256 startTime, uint256 endTime, bytes32 zoneHash, uint256 salt, bytes32 conduitKey, uint256 counter)[] orders) returns (bool cancelled)`

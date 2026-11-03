@@ -72,7 +72,7 @@ function main() {
 
 ### `CurveAddressProviderABI`
 
-`import CurveAddressProviderABI from "./protocols/curve/CurveAddressProviderABI.json";` Speaks for: addressProvider. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
+`import CurveAddressProviderABI from "./protocols/curve/CurveAddressProviderABI.json";` Speaks for: addressProvider. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Curve` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `add_new_id(address _address, string _description) returns (uint256)`
 - `admin() view returns (address)`
@@ -90,7 +90,7 @@ function main() {
 
 ### `CurveRouterNGABI`
 
-`import CurveRouterNGABI from "./protocols/curve/CurveRouterNGABI.json";` Speaks for: routerNG. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
+`import CurveRouterNGABI from "./protocols/curve/CurveRouterNGABI.json";` Speaks for: routerNG. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Curve` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy) payable returns (uint256)`
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools) payable returns (uint256)`
@@ -179,7 +179,7 @@ Not every contract reached through this interface runs every function listed: th
 
 ### `CurveThreePoolABI`
 
-`import CurveThreePoolABI from "./protocols/curve/CurveThreePoolABI.json";` Speaks for: threePool. The import is the contract's full ABI across every deployment; call it through the `Curve` namespace to have a function a chain's deployment does not run refused.
+`import CurveThreePoolABI from "./protocols/curve/CurveThreePoolABI.json";` Speaks for: threePool. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Curve` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `A() view returns (uint256)`
 - `add_liquidity(uint256[3] amounts, uint256 min_mint_amount)`

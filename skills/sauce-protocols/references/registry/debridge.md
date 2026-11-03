@@ -48,7 +48,7 @@ function main() {
 
 ### `DlnDestinationABI`
 
-`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
+`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Debridge` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`
@@ -108,7 +108,7 @@ On Base, no source could give the verified ABI of `0xe7351fd770a37282b91d153ee69
 
 ### `DlnSourceABI`
 
-`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
+`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Debridge` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`

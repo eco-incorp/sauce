@@ -34,7 +34,7 @@ function main() {
 
 ### `LiquidityPoolABI`
 
-`import LiquidityPoolABI from "./protocols/level-finance/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the contract's full ABI across every deployment; call it through the `LevelFinance` namespace to have a function a chain's deployment does not run refused.
+`import LiquidityPoolABI from "./protocols/level-finance/LiquidityPoolABI.json";` Speaks for: liquidityPool. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `LevelFinance` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `accrualInterval() view returns (uint256)`
 - `accrueInterest(address _token) returns (uint256)`
@@ -118,7 +118,7 @@ function main() {
 - `virtualPoolValue() view returns (uint256)`
 - `withdrawFee(address _token, address _recipient)`
 
-Not on BNB Chain's liquidityPool (`0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874`), whose code does not dispatch them or declares them otherwise: `accrueInterest`, `addToken`, `borrowIndices`, `canSwap`, `daoFee`, `delistToken`, `feeReserves`, `getAllAssets`, `getAllTranches`, `globalShortSize`, `interestRate`, `interestRateModel`, `isValidLeverageTokenPair`, `lastAccrualTimestamps`, `liquidatePositionAllowed`, `liquidationFee`, `liquidityCalculator`, `pause`, `paused`, `poolBalances`, `positionFee`, `positionRevisions`, `reinit_setFeeDiscount`, `setController`, `setDaoFee`, `setFeeDistributor`, `setInterestRateModel`, `setLiquidityCalculator`, `setMaxLeverage`, `setOracle`, `setOrderManager`, `setPoolHook`, `setPositionFee`, `setRiskFactor`, `unpause`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on BNB Chain's liquidityPool (`0xA5aBFB56a78D2BD4689b25B8A77fd49Bb0675874`), whose code does not dispatch them or does not declare them as listed here: `accrueInterest`, `addToken`, `borrowIndices`, `canSwap`, `daoFee`, `delistToken`, `feeReserves`, `getAllAssets`, `getAllTranches`, `globalShortSize`, `interestRate`, `interestRateModel`, `isValidLeverageTokenPair`, `lastAccrualTimestamps`, `liquidatePositionAllowed`, `liquidationFee`, `liquidityCalculator`, `pause`, `paused`, `poolBalances`, `positionFee`, `positionRevisions`, `reinit_setFeeDiscount`, `setController`, `setDaoFee`, `setFeeDistributor`, `setInterestRateModel`, `setLiquidityCalculator`, `setMaxLeverage`, `setOracle`, `setOrderManager`, `setPoolHook`, `setPositionFee`, `setRiskFactor`, `unpause`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 

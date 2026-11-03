@@ -123,7 +123,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `MoonwellComptrollerABI`
 
-`import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Moonwell` namespace to have a function a chain's deployment does not run refused.
+`import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";` Speaks for: comptroller. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Moonwell` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_become(address unitroller)`
 - `_rescueFunds(address _tokenAddress, uint256 _amount)`

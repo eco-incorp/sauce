@@ -303,9 +303,9 @@ const fragmentsOf = (instance: Instance) =>
   (instance.verified ?? []).map((id) => evidence.fragments[id]!);
 const where = (instance: Instance) => `${instance.chainId}:${instance.address}`;
 
-/** The functions a role's deployment on a chain withholds, by the contract the role is. */
-function withheldOn(slug: string, exportName: string, instance: Instance): ReadonlySet<string> {
-  const link = CONTRACT_LINKS.find(
+/** The contract a role's deployment is: the link of its role and export on its chain. */
+function linkOf(slug: string, exportName: string, instance: Instance) {
+  return CONTRACT_LINKS.find(
     (l) =>
       l.protocol === slug &&
       "abiExport" in l &&
@@ -314,10 +314,38 @@ function withheldOn(slug: string, exportName: string, instance: Instance): Reado
       l.roleKey === instance.role &&
       (!("chains" in l) || l.chains.some((chainId: number) => chainId === instance.chainId)),
   );
+}
+
+/** The functions a role's deployment on a chain withholds, by the contract the role is. */
+function withheldOn(slug: string, exportName: string, instance: Instance): ReadonlySet<string> {
+  const link = linkOf(slug, exportName, instance);
   if (link === undefined || !("withheld" in link)) return new Set();
   const byChain: Readonly<Record<number, readonly string[]>> = link.withheld;
   return new Set(byChain[instance.chainId] ?? []);
 }
+
+/** The functions a role's deployment on a chain is served as it declares them, by signature. */
+function shapedOn(
+  slug: string,
+  exportName: string,
+  instance: Instance,
+): ReadonlyMap<string, AbiFunction> {
+  const link = linkOf(slug, exportName, instance);
+  if (link === undefined || !("shapes" in link)) return new Map();
+  const byChain: Readonly<Record<number, readonly AbiFunction[]>> = link.shapes;
+  return new Map((byChain[instance.chainId] ?? []).map((f) => [signature(f), f]));
+}
+
+/** A declaration whole: its parameters' names, types and fields, and its mutability. */
+const params = (list: readonly Param[] | undefined): unknown[] =>
+  (list ?? []).map((p) => ({
+    name: p.name ?? "",
+    type: p.type,
+    ...(p.components ? { components: params(p.components) } : {}),
+  }));
+const declared = (f: Pick<Fragment, "inputs" | "outputs" | "stateMutability">): string =>
+  JSON.stringify([params(f.inputs), params(f.outputs), f.stateMutability ?? "nonpayable"]);
+const isRead = (m: string | undefined): boolean => mutability(m) === "view";
 
 /** Everything wrong with one registry function, against its export's evidence. */
 function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[] {
@@ -377,16 +405,50 @@ function problemsOf(slug: string, exportName: string, fn: AbiFunction): string[]
     }
 
     if (instance.role !== undefined) {
-      // A role's deployment: what it lacks is withheld on its chain, and only that.
+      // A role's deployment: one that dispatches the selector and declares this signature
+      // otherwise is served its declaration on its chain, unless that would mix reads and writes
+      // among the name's overloads; whatever else it lacks is withheld there; and only that.
       const withheld = withheldOn(slug, exportName, instance).has(sig);
+      const shaped = shapedOn(slug, exportName, instance).get(sig);
+      const mixes =
+        exact !== undefined &&
+        registry[slug]![exportName]!.some(
+          (other) =>
+            other.name === fn.name &&
+            signature(other) !== sig &&
+            isRead(other.stateMutability) !== isRead(exact.stateMutability),
+        );
+      const served = dispatch !== null && exact !== undefined && lacks.length > 0 && !mixes;
       if (exemption !== undefined) {
         problems.push(
-          `${at}: stale exemption, a role's deployment withholds instead: ${exemption}`,
+          `${at}: stale exemption, a role's deployment withholds or declares instead: ${exemption}`,
         );
-      } else if (lacks.length > 0 && !withheld) {
-        problems.push(...lacks.map((lack) => `${at}: ${lack}, and it is not withheld there`));
-      } else if (lacks.length === 0 && withheld) {
-        problems.push(`${at}: withheld on chain ${instance.chainId}, but its deployment runs it`);
+      } else if (served) {
+        if (withheld) {
+          problems.push(
+            `${at}: withheld on chain ${instance.chainId}, but its deployment runs it as it declares it`,
+          );
+        }
+        if (shaped === undefined) {
+          problems.push(
+            ...lacks.map((lack) => `${at}: ${lack}, and it is not served there as declared`),
+          );
+        } else if (declared(shaped) !== declared(exact)) {
+          problems.push(
+            `${at}: served on chain ${instance.chainId} as ${declared(shaped)}, but its deployment declares ${declared(exact)}`,
+          );
+        }
+      } else {
+        if (shaped !== undefined) {
+          problems.push(
+            `${at}: served on chain ${instance.chainId} as its deployment declares it, but it ${lacks.length > 0 ? "must be withheld there" : "runs the registry's declaration"}`,
+          );
+        }
+        if (lacks.length > 0 && !withheld) {
+          problems.push(...lacks.map((lack) => `${at}: ${lack}, and it is not withheld there`));
+        } else if (lacks.length === 0 && withheld) {
+          problems.push(`${at}: withheld on chain ${instance.chainId}, but its deployment runs it`);
+        }
       }
       continue;
     }

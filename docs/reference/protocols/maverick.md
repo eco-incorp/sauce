@@ -65,7 +65,7 @@ functions, and its writes are SafeERC20.
 
 ### `MaverickV2FactoryABI`
 
-`import MaverickV2FactoryABI from "./protocols/maverick/MaverickV2FactoryABI.json";` Speaks for: v2Factory. The import is the contract's full ABI across every deployment; call it through the `Maverick` namespace to have a function a chain's deployment does not run refused.
+`import MaverickV2FactoryABI from "./protocols/maverick/MaverickV2FactoryABI.json";` Speaks for: v2Factory. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Maverick` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `claimProtocolFeeForPool(address pool)`
 - `claimProtocolFeeForPool(address pool, bool isTokenA)`
@@ -133,7 +133,7 @@ functions, and its writes are SafeERC20.
 
 ### `MaverickV2RouterABI`
 
-`import MaverickV2RouterABI from "./protocols/maverick/MaverickV2RouterABI.json";` Speaks for: v2Router. The import is the contract's full ABI across every deployment; call it through the `Maverick` namespace to have a function a chain's deployment does not run refused.
+`import MaverickV2RouterABI from "./protocols/maverick/MaverickV2RouterABI.json";` Speaks for: v2Router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Maverick` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `checkDeadline(uint256 deadline) payable`
 - `checkSqrtPrice(address pool, uint256 minSqrtPrice, uint256 maxSqrtPrice) payable`

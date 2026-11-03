@@ -34,7 +34,7 @@ function main() {
 
 ### `VBNBABI`
 
-`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
+`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Venus` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_acceptAdmin() returns (uint256)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
@@ -174,7 +174,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `VenusComptrollerABI`
 
-`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
+`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Venus` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `_become(address unitroller)`
 - `_grantXVS(address recipient, uint256 amount)`

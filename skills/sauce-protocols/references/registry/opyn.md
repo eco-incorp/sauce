@@ -34,7 +34,7 @@ function main() {
 
 ### `ControllerABI`
 
-`import ControllerABI from "./protocols/opyn/ControllerABI.json";` Speaks for: controller. The import is the contract's full ABI across every deployment; call it through the `Opyn` namespace to have a function a chain's deployment does not run refused.
+`import ControllerABI from "./protocols/opyn/ControllerABI.json";` Speaks for: controller. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Opyn` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `applyFunding()`
 - `burnPowerPerpAmount(uint256 _vaultId, uint256 _powerPerpAmount, uint256 _withdrawAmount) returns (uint256 wPowerPerpAmount)`

@@ -63,7 +63,7 @@ function main() {
 
 ### `KyberSwapMetaAggregationRouterABI`
 
-`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap-aggregator/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouter. The import is the contract's full ABI across every deployment; call it through the `KyberswapAggregator` namespace to have a function a chain's deployment does not run refused.
+`import KyberSwapMetaAggregationRouterABI from "./protocols/kyberswap-aggregator/KyberSwapMetaAggregationRouterABI.json";` Speaks for: metaAggregationRouter. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `KyberswapAggregator` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `isWhitelist(address) view returns (bool)`
 - `owner() view returns (address)`
@@ -76,7 +76,7 @@ function main() {
 - `updateWhitelist(address[] addr, bool[] value)`
 - `WETH() view returns (address)`
 
-Not on Arc's metaAggregationRouter (`0x6131B5fae19EA4f9D964eAc0408E4408b66337b5`), whose code does not dispatch them or declares them otherwise: `isWhitelist`, `swapGeneric`, `updateWhitelist`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arc's metaAggregationRouter (`0x6131B5fae19EA4f9D964eAc0408E4408b66337b5`), whose code does not dispatch them or does not declare them as listed here: `isWhitelist`, `swapGeneric`, `updateWhitelist`. Do not call them there: a program compiled for Arc is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

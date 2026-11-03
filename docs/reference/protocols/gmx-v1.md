@@ -59,7 +59,7 @@ function main() {
 
 ### `PositionRouterABI`
 
-`import PositionRouterABI from "./protocols/gmx-v1/PositionRouterABI.json";` Speaks for: positionRouter. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
+`import PositionRouterABI from "./protocols/gmx-v1/PositionRouterABI.json";` Speaks for: positionRouter. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `GmxV1` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `admin() view returns (address)`
 - `approve(address _token, address _spender, uint256 _amount)`
@@ -120,7 +120,7 @@ function main() {
 
 ### `RouterABI`
 
-`import RouterABI from "./protocols/gmx-v1/RouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
+`import RouterABI from "./protocols/gmx-v1/RouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `GmxV1` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addPlugin(address _plugin)`
 - `approvedPlugins(address, address) view returns (bool)`
@@ -149,7 +149,7 @@ function main() {
 
 ### `VaultABI`
 
-`import VaultABI from "./protocols/gmx-v1/VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
+`import VaultABI from "./protocols/gmx-v1/VaultABI.json";` Speaks for: vault. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `GmxV1` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addRouter(address _router)`
 - `adjustForDecimals(uint256 _amount, address _tokenDiv, address _tokenMul) view returns (uint256)`
@@ -278,9 +278,9 @@ function main() {
 - `whitelistedTokens(address) view returns (bool)`
 - `withdrawFees(address _token, address _receiver) returns (uint256)`
 
-Not on Arbitrum One's vault (`0x489ee077994B6658eAfA855C308275EAd8097C4A`), whose code does not dispatch them or declares them otherwise: `getEntryFundingRate`, `getFundingFee`, `getPositionFee`, `maxGlobalShortSizes`, `setMaxGlobalShortSize`, `setVaultUtils`, `updateCumulativeFundingRate`, `vaultUtils`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Arbitrum One's vault (`0x489ee077994B6658eAfA855C308275EAd8097C4A`), whose code does not dispatch them or does not declare them as listed here: `getEntryFundingRate`, `getFundingFee`, `getPositionFee`, `maxGlobalShortSizes`, `setMaxGlobalShortSize`, `setVaultUtils`, `updateCumulativeFundingRate`, `vaultUtils`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Avalanche C-Chain's vault (`0x9ab2De34A33fB459b538c43f251eB825645e8595`), whose code does not dispatch them or declares them otherwise: `getFundingFee`, `getPositionFee`, `updateCumulativeFundingRate`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Avalanche C-Chain's vault (`0x9ab2De34A33fB459b538c43f251eB825645e8595`), whose code does not dispatch them or does not declare them as listed here: `getFundingFee`, `getPositionFee`, `updateCumulativeFundingRate`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

@@ -4,6 +4,7 @@ import {
   toFunctionSignature,
   type Abi,
   type AbiFunction,
+  type AbiParameter,
   type Address,
 } from "viem";
 import type { ChainDeployment, ProtocolInfo } from "../core/types.js";
@@ -158,6 +159,29 @@ function lazy<T>(target: object, key: string, compute: () => T): void {
 
 /** A descriptor whose every deployment runs its whole ABI. */
 const NOTHING_WITHHELD: Readonly<Record<number, readonly string[]>> = Object.freeze({});
+/** A descriptor whose every deployment declares its ABI's functions as the ABI does. */
+const NOTHING_RESHAPED: Readonly<Record<number, readonly AbiFunction[]>> = Object.freeze({});
+
+/** A tuple parameter's fields; `undefined` for any other parameter. */
+const componentsOf = (p: AbiParameter | undefined): readonly AbiParameter[] | undefined =>
+  p !== undefined && "components" in p ? p.components : undefined;
+
+/** The output parameter `path` leads to: the one output, or a field of the record returned. */
+export function outputAt(
+  outputs: readonly AbiParameter[],
+  path: readonly string[],
+): AbiParameter | undefined {
+  if (path.length === 0) return outputs.length === 1 ? outputs[0] : undefined;
+  let fields =
+    outputs.length === 1 && outputs[0]!.type === "tuple" ? componentsOf(outputs[0]) : outputs;
+  let found: AbiParameter | undefined;
+  for (const name of path) {
+    found = fields?.find((field) => field.name === name);
+    if (found === undefined) return undefined;
+    fields = componentsOf(found);
+  }
+  return found;
+}
 
 /**
  * Assembles one full ContractDescriptor from a link entry plus the protocol's already-resolved data.
@@ -182,6 +206,7 @@ export function buildDescriptor(
     abiExport: link.abiExport,
     abi: resolvedAbi,
     withheldOn: link.withheld ?? NOTHING_WITHHELD,
+    shapesOn: link.shapes ?? NOTHING_RESHAPED,
     ...(link.default === true ? { isDefault: true as const } : {}),
   };
   lazy(descriptor, "methods", () => withReturns(resolvedAbi, returns));
@@ -202,14 +227,18 @@ const chainViews = new WeakMap<ContractDescriptor, Map<number, ContractDescripto
 
 /**
  * `descriptor` as the deployment on `chainId` runs it. The registry's ABI for a role is the union
- * of what its deployments run, so one chain's may lack some functions (`withheldOn`). Where the
- * chain's deployment runs the whole ABI (or there is none), this is `descriptor` itself; otherwise
- * a view, built once per descriptor and chain, whose `abi` and `methods` leave those functions
- * out. Events and errors stay, and everything else is the descriptor's.
+ * of what its deployments run, so one chain's may lack some functions (`withheldOn`) or declare
+ * some otherwise (`shapesOn`). Where the chain's deployment runs the whole ABI as declared (or
+ * there is none), this is `descriptor` itself; otherwise a view, built once per descriptor and
+ * chain, whose `abi` and `methods` leave the functions it lacks out and carry those it declares
+ * otherwise as it declares them, in their place (keeping the contract an address output is only
+ * where that output is still an address). Events and errors stay, and everything else is the
+ * descriptor's.
  */
 export function descriptorOn(descriptor: ContractDescriptor, chainId: number): ContractDescriptor {
-  const withheld = descriptor.withheldOn[chainId];
-  if (withheld === undefined || withheld.length === 0) return descriptor;
+  const withheld = descriptor.withheldOn[chainId] ?? [];
+  const declared = descriptor.shapesOn[chainId] ?? [];
+  if (withheld.length === 0 && declared.length === 0) return descriptor;
   let views = chainViews.get(descriptor);
   if (views === undefined) {
     views = new Map();
@@ -218,12 +247,24 @@ export function descriptorOn(descriptor: ContractDescriptor, chainId: number): C
   let view = views.get(chainId);
   if (view === undefined) {
     const lacking = new Set(withheld);
+    const own = new Map(declared.map((fn) => [toFunctionSignature(fn), fn]));
+    const ownMethods = new Map(buildMethods(declared).map((m) => [m.signature, m]));
     view = {
       ...descriptor,
-      abi: descriptor.abi.filter(
-        (item) => item.type !== "function" || !lacking.has(toFunctionSignature(item)),
-      ),
-      methods: descriptor.methods.filter((method) => !lacking.has(method.signature)),
+      abi: descriptor.abi.flatMap((item): Abi[number][] => {
+        if (item.type !== "function") return [item];
+        const signature = toFunctionSignature(item);
+        return lacking.has(signature) ? [] : [own.get(signature) ?? item];
+      }),
+      methods: descriptor.methods.flatMap((method) => {
+        if (lacking.has(method.signature)) return [];
+        const ownMethod = ownMethods.get(method.signature);
+        if (ownMethod === undefined) return [method];
+        const returns = method.returns?.filter(
+          (r) => outputAt(ownMethod.outputs, r.path)?.type === "address",
+        );
+        return [returns?.length ? { ...ownMethod, returns } : ownMethod];
+      }),
     };
     views.set(chainId, view);
   }

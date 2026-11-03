@@ -1,4 +1,4 @@
-import type { Address, Hex, Abi, AbiParameter } from "viem";
+import type { Address, Hex, Abi, AbiFunction, AbiParameter } from "viem";
 import type { CanonicalChain, ChainSlug } from "../chains/canonical.js";
 
 /**
@@ -43,8 +43,9 @@ export interface ContractCoverage {
    * "partial": the registry ABI is its deployments' full verified ABI less what cannot be exposed
    * (each export's omissions, with why, are `test/fixtures/registry-abi/omitted.json`); a `standard`
    * or `common` interface is only what every instance runs; and a chain's `descriptorOn` view also
-   * drops what that chain's deployment does not run (`withheldOn`). No shipped record says which
-   * exports omit nothing, so none is claimed "full".
+   * drops what that chain's deployment does not run (`withheldOn`) and carries what it declares
+   * otherwise as it declares it (`shapesOn`). No shipped record says which exports omit nothing, so
+   * none is claimed "full".
    */
   readonly completeness: "partial" | "unknown";
   /** "widened" means the selectors computed here will NOT match the deployed contract's real selectors. */
@@ -84,6 +85,12 @@ export interface ContractDescriptor {
    * chain's own.
    */
   readonly withheldOn: Readonly<Record<number, readonly string[]>>;
+  /**
+   * Per chain id, the functions of `abi` the chain's deployment declares otherwise, as it declares
+   * them (see `ContractLink.shapes`); `{}` when none does. `descriptorOn(descriptor, chainId)`
+   * carries each in place of `abi`'s.
+   */
+  readonly shapesOn: Readonly<Record<number, readonly AbiFunction[]>>;
 }
 
 export interface ResolvedContract {

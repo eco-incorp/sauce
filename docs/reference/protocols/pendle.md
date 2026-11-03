@@ -146,7 +146,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `PendleRouterABI`
 
-`import PendleRouterABI from "./protocols/pendle/PendleRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Pendle` namespace to have a function a chain's deployment does not run refused.
+`import PendleRouterABI from "./protocols/pendle/PendleRouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Pendle` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidityDualSyAndPt(address receiver, address market, uint256 netSyDesired, uint256 netPtDesired, uint256 minLpOut) returns (uint256 netLpOut, uint256 netSyUsed, uint256 netPtUsed)`
 - `addLiquidityDualTokenAndPt(address receiver, address market, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, uint256 netPtDesired, uint256 minLpOut) payable returns (uint256 netLpOut, uint256 netPtUsed, uint256 netSyInterm)`

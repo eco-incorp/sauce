@@ -34,7 +34,7 @@ function main() {
 
 ### `RETHABI`
 
-`import RETHABI from "./protocols/rocket-pool/RETHABI.json";` Speaks for: rETH. The import is the contract's full ABI across every deployment; call it through the `RocketPool` namespace to have a function a chain's deployment does not run refused.
+`import RETHABI from "./protocols/rocket-pool/RETHABI.json";` Speaks for: rETH. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `RocketPool` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -60,7 +60,7 @@ function main() {
 
 ### `RocketDepositPoolABI`
 
-`import RocketDepositPoolABI from "./protocols/rocket-pool/RocketDepositPoolABI.json";` Speaks for: rocketDepositPool. The import is the contract's full ABI across every deployment; call it through the `RocketPool` namespace to have a function a chain's deployment does not run refused.
+`import RocketDepositPoolABI from "./protocols/rocket-pool/RocketDepositPoolABI.json";` Speaks for: rocketDepositPool. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `RocketPool` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `assignDeposits()`
 - `deposit() payable`

@@ -105,7 +105,7 @@ function main() {
 
 ### `UniProxyABI`
 
-`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
+`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Gamma` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `deposit(uint256 deposit0, uint256 deposit1, address to, address pos, uint256[4] minIn) returns (uint256 shares)`
 - `getDepositAmount(address pos, address token, uint256 _deposit) view returns (uint256 amountStart, uint256 amountEnd)`
@@ -114,7 +114,7 @@ On Polygon, no source could give the verified ABI of `0xa42d55074869491d60ac0549
 
 ### `UniProxyLegacyABI`
 
-`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
+`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Gamma` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addPosition(address pos, uint8 version)`
 - `appendList(address pos, address[] listed)`

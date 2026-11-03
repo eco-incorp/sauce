@@ -39,15 +39,18 @@ A namespace carries its contract's **full verified ABI**: every function, event 
 deployed contract declares and runs, its own reads and admin functions included, so a program
 calls any of them by name and needs no ABI of its own for a recorded contract. Deployments of one
 contract can run different releases: a function a chain's deployment does not run is refused for
-that chain when the program compiles, naming the chains that do run it. The registry file lists
-them, per deployment ("not on this deployment" in its Deployments table, and "Not on" under each
-ABI).
+that chain when the program compiles, naming the chains that do run it, and one it declares
+otherwise (an older release returning fewer fields) is called there as that deployment declares
+it. The registry file lists both, per deployment ("not on this deployment" and "declared otherwise
+by this deployment" in its Deployments table, "Not on" and "Declared otherwise by" under each ABI).
 
-Only a namespace name is held to the chain's deployment. An ABI import is the contract's full ABI
-across every deployment, the same on every chain: like an `IERC20` import, it is the raw ABI, an
-escape hatch that refuses no function. A call through it to a function the contract does not run
-compiles, does not run the function, and need not revert. Its line in the registry file says so.
-Call a recorded contract through its namespace to have that call refused.
+Only a namespace name is held to the chain's deployment. An ABI import is the registry's ABI for
+the contract: the functions its registry file lists under that ABI, and none of those it lists as
+left out, with the same entries on every chain and nothing withheld or declared otherwise for one
+chain's deployment. Like an `IERC20` import, it refuses no function it lists: a call through it to
+a function the chain's deployment does not run compiles, does not run the function, and need not
+revert. Its line in the registry file says so. Call a recorded contract through its namespace to
+have that call refused, and a function its deployment declares otherwise called as declared.
 
 ## Choosing
 

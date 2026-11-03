@@ -41,7 +41,7 @@ function main() {
 
 ### `Permit2ABI`
 
-`import Permit2ABI from "./protocols/permit2/Permit2ABI.json";` Speaks for: permit2. The import is the contract's full ABI across every deployment; call it through the `Permit2` namespace to have a function a chain's deployment does not run refused.
+`import Permit2ABI from "./protocols/permit2/Permit2ABI.json";` Speaks for: permit2. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Permit2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allowance(address, address, address) view returns (uint160 amount, uint48 expiration, uint48 nonce)`
 - `approve(address token, address spender, uint160 amount, uint48 expiration)`

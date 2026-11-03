@@ -50,7 +50,7 @@ function main() {
 
 ### `LRTDepositPoolABI`
 
-`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool. The import is the contract's full ABI across every deployment; call it through the `Kelp` namespace to have a function a chain's deployment does not run refused.
+`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Kelp` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addNodeDelegatorContractToQueue(address[] nodeDelegatorContracts)`
 - `depositAsset(address asset, uint256 depositAmount, uint256 minRSETHAmountExpected, string referralId)`
@@ -98,7 +98,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `RsETHABI`
 
-`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH. The import is the contract's full ABI across every deployment; call it through the `Kelp` namespace to have a function a chain's deployment does not run refused.
+`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Kelp` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addPermanentExemptions(address[] accounts)`
 - `allowance(address owner, address spender) view returns (uint256)`

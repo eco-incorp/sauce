@@ -337,11 +337,16 @@ export async function skillsReferences(api, documented) {
     return sets.some((set) => set.size !== sets[0].size || [...set].some((s) => !sets[0].has(s)));
   };
   // Per role deployment, the functions of its ABI it does not run as declared: withheld on its
-  // chain, so a program compiled for that chain cannot call them (`contracts.generated.ts`).
+  // chain, so a program compiled for that chain cannot call them; and those it declares otherwise,
+  // which a program compiled for that chain calls as it declares them (`contracts.generated.ts`).
   const withheld = new Map();
+  const shapes = new Map();
   for (const link of sdk.contracts.CONTRACT_LINKS) {
     for (const [chainId, signatures] of Object.entries(link.withheld ?? {})) {
       withheld.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, signatures);
+    }
+    for (const [chainId, functions] of Object.entries(link.shapes ?? {})) {
+      shapes.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, functions);
     }
   }
   const globals = globalsIndex(sdk, support);
@@ -406,6 +411,15 @@ export async function skillsReferences(api, documented) {
                   ),
                 ),
               ];
+        // The ABI's functions this deployment declares otherwise: an older release returning
+        // fewer fields. The page gives its declaration beside the deployment.
+        const declared =
+          abi === undefined
+            ? []
+            : (shapes.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map((f) => ({
+                name: f.name,
+                text: functionText(f),
+              }));
         deployed.push({
           chain: chain.slug,
           role,
@@ -413,6 +427,7 @@ export async function skillsReferences(api, documented) {
           namespace: named === undefined ? undefined : `${namespace.name}.${named.name}`,
           abi,
           absent,
+          declared,
         });
       }
     }
@@ -900,7 +915,10 @@ const spelling = (d) =>
     : d.abi !== undefined
       ? `${code(`${d.abi}.at(${d.address})`)}`
       : "no registry ABI") +
-  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "");
+  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "") +
+  (d.declared?.length
+    ? `; declared otherwise by this deployment: ${d.declared.map((f) => code(f.name)).join(", ")}`
+    : "");
 
 function renderGlobals(data) {
   const { globals } = data;
@@ -1773,11 +1791,14 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
           ? `\`import ${e.name} from "./protocols/${p.slug}/${e.name}.json";\``
           : "Not served for import: a program calls it by selector.") +
           (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : "") +
-          // An import is the raw ABI, unfiltered per chain: only a namespace name is withheld.
+          // An import is the registry's ABI, the same on every chain: only a namespace name is
+          // held to the chain's deployment.
           (e.served && e.roles.length
-            ? " The import is the contract's full ABI across every deployment" +
+            ? " The import is the registry's ABI for this contract, the functions listed here" +
+              (e.omitted.length ? " and none of those left out below" : "") +
+              ": the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment" +
               (p.namespace
-                ? `; call it through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused.`
+                ? `. Call the contract through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.`
                 : ".")
             : ""),
         "",
@@ -1794,9 +1815,28 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
           .flatMap((d) => [
-            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them or declares them otherwise: ${d.absent.map(code).join(", ")}. Do not call them there: a program compiled for ${chainsBySlug.get(d.chain).name} is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.`,
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them or does not declare them as listed here: ${d.absent.map(code).join(", ")}. Do not call them there: a program compiled for ${chainsBySlug.get(d.chain).name} is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.`,
             "",
           ]),
+        // Where a deployment of a role this ABI speaks for declares some of its functions otherwise.
+        ...p.deployed
+          .filter((d) => d.abi === e.name && d.declared.length)
+          .flatMap((d) => {
+            const chain = chainsBySlug.get(d.chain).name;
+            return [
+              `Declared otherwise by ${chain}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), and called as it declares them by a program compiled for ${chain}${p.namespace ? ` through the \`${p.namespace.name}\` namespace` : ""}:`,
+              "",
+              ...d.declared.map((f) => `- \`${f.text}\``),
+              "",
+              (e.served
+                ? `The import above declares them as listed for this ABI, which that deployment does not run as declared${p.namespace ? `: on ${chain}, call them through the namespace` : ""}.`
+                : `That deployment does not run them as listed for this ABI.`) +
+                (site === DOCS_SITE
+                  ? ` The TypeScript SDK's types declare them as listed for this ABI too, while a call made on ${chain} through its accessor decodes the deployment's declaration, so a result field the two do not share is absent at run time.`
+                  : ""),
+              "",
+            ];
+          }),
         // What the deployments declare that this ABI leaves out, and why.
         ...(e.omitted.length
           ? [

@@ -35,7 +35,7 @@ function main() {
 
 ### `LendingPoolABI`
 
-`import LendingPoolABI from "./protocols/aave-v2/LendingPoolABI.json";` Speaks for: lendingPool. The import is the contract's full ABI across every deployment; call it through the `AaveV2` namespace to have a function a chain's deployment does not run refused.
+`import LendingPoolABI from "./protocols/aave-v2/LendingPoolABI.json";` Speaks for: lendingPool. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `AaveV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`
@@ -69,9 +69,9 @@ function main() {
 - `swapToVariable(address asset, address user)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
 
-Not on Polygon's lendingPool (`0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf`), whose code does not dispatch them or declares them otherwise: `swapToVariable`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Polygon's lendingPool (`0x8dFf5E27EA6b7AC08EbFdf9eB090F32ee9a30fcf`), whose code does not dispatch them or does not declare them as listed here: `swapToVariable`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Avalanche C-Chain's lendingPool (`0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C`), whose code does not dispatch them or declares them otherwise: `swapToVariable`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Avalanche C-Chain's lendingPool (`0x4F01AeD16D97E3aB5ab2B501154DC9bb0F1A5A2C`), whose code does not dispatch them or does not declare them as listed here: `swapToVariable`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Left out of this ABI, though its deployments declare them:
 

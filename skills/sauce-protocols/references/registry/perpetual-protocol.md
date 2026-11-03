@@ -34,7 +34,7 @@ function main() {
 
 ### `ClearingHouseABI`
 
-`import ClearingHouseABI from "./protocols/perpetual-protocol/ClearingHouseABI.json";` Speaks for: clearingHouse. The import is the contract's full ABI across every deployment; call it through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused.
+`import ClearingHouseABI from "./protocols/perpetual-protocol/ClearingHouseABI.json";` Speaks for: clearingHouse. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity((address baseToken, uint256 base, uint256 quote, int24 lowerTick, int24 upperTick, uint256 minBase, uint256 minQuote, bool useTakerBalance, uint256 deadline) params) returns ((uint256 base, uint256 quote, uint256 fee, uint256 liquidity))`
 - `cancelAllExcessOrders(address maker, address baseToken)`
@@ -80,7 +80,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `VaultABI`
 
-`import VaultABI from "./protocols/perpetual-protocol/VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused.
+`import VaultABI from "./protocols/perpetual-protocol/VaultABI.json";` Speaks for: vault. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `candidate() view returns (address)`
 - `decimals() view returns (uint8)`

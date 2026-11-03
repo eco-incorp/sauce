@@ -45,7 +45,7 @@ function main() {
 
 ### `AxelarGasServiceABI`
 
-`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
+`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `addExpressGas(bytes32 txHash, uint256 logIndex, address gasToken, uint256 gasFeeAmount, address refundAddress)`
@@ -85,7 +85,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `AxelarGatewayABI`
 
-`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
+`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allTokensFrozen() pure returns (bool)`
 - `approveContractCall(bytes params, bytes32 commandId)`
@@ -138,7 +138,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `AxelarITSABI`
 
-`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its. The import is the contract's full ABI across every deployment; call it through the `Axelar` namespace to have a function a chain's deployment does not run refused.
+`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOperatorship(address fromOperator)`
 - `acceptOwnership()`

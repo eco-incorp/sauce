@@ -1,10 +1,11 @@
 /**
  * A registry ABI is the union of what a role's deployments run, so one chain's deployment may lack
- * some of it (`ContractDescriptor.withheldOn`). A program, and a host accessor, is held to what
- * the chain's own deployment runs (`descriptorOn`): the names module binds that ABI, a call to
- * what it withholds is refused naming the chains that run it, and the rest compiles as ever.
+ * some of it (`ContractDescriptor.withheldOn`), or declare some of it otherwise (`shapesOn`). A
+ * program, and a host accessor, is held to what the chain's own deployment runs (`descriptorOn`):
+ * the names module binds that ABI, a call to what it withholds is refused naming the chains that
+ * run it, what it declares otherwise is called as it declares it, and the rest compiles as ever.
  */
-import type { Abi } from "viem";
+import { toFunctionSignature, type Abi } from "viem";
 import { requireChain } from "../src/chains/canonical.js";
 import { chainContracts, type ContractAccessor } from "../src/descriptors/accessors.js";
 import type { ContractCall } from "../src/descriptors/call.js";
@@ -69,8 +70,22 @@ describe("descriptorOn: a contract as one chain's deployment runs it", () => {
     expect(descriptorOn(CBETH, ETHEREUM.id)).not.toBe(onBase);
     const withheld = new Set(CBETH.withheldOn[BASE.id]);
     expect(withheld.has("exchangeRate()")).toBe(true);
-    expect(onBase.methods).toEqual(CBETH.methods.filter((m) => !withheld.has(m.signature)));
+    // Base's deployment declares `mint` with no return value: the view carries its declaration.
+    const [baseMint, ...more] = CBETH.shapesOn[BASE.id]!;
+    expect(more).toEqual([]);
+    expect(toFunctionSignature(baseMint!)).toBe("mint(address,uint256)");
+    expect(baseMint!.outputs).toEqual([]);
+    expect(onBase.methods).toEqual(
+      CBETH.methods
+        .filter((m) => !withheld.has(m.signature))
+        .map((m) =>
+          m.signature === "mint(address,uint256)"
+            ? { ...m, inputs: baseMint!.inputs, outputs: baseMint!.outputs }
+            : m,
+        ),
+    );
     expect(functionNames(onBase.abi)).toEqual(onBase.methods.map((m) => m.name));
+    expect(onBase.abi).toContain(baseMint);
     // Events and errors stay; everything else is the descriptor's.
     expect(onBase.abi.filter((item) => item.type !== "function")).toEqual(
       CBETH.abi.filter((item) => item.type !== "function"),
@@ -78,22 +93,115 @@ describe("descriptorOn: a contract as one chain's deployment runs it", () => {
     expect(onBase.perChainAddress).toBe(CBETH.perChainAddress);
     expect(onBase.coverage).toBe(CBETH.coverage);
     expect(onBase.withheldOn).toBe(CBETH.withheldOn);
+    expect(onBase.shapesOn).toBe(CBETH.shapesOn);
   });
 
-  it("withholds only functions of the descriptor's own ABI, on chains it is deployed on", () => {
+  it("withholds, and serves declared otherwise, only functions of the descriptor's own ABI, on chains it is deployed on", () => {
     let withholding = 0;
+    let reshaping = 0;
     for (const descriptor of DESCRIPTORS) {
       const entries = Object.entries(descriptor.withheldOn);
-      if (entries.length === 0) continue;
-      withholding++;
+      const shaped = Object.entries(descriptor.shapesOn);
+      if (entries.length === 0 && shaped.length === 0) continue;
       expect(descriptor.kind).toBe("singleton");
       const signatures = new Set(descriptor.methods.map((m) => m.signature));
+      if (entries.length > 0) withholding++;
       for (const [id, lacking] of entries) {
         expect(descriptor.perChainAddress[Number(id)]).toBeDefined();
         expect(lacking.filter((signature) => !signatures.has(signature))).toEqual([]);
       }
+      if (shaped.length > 0) reshaping++;
+      for (const [id, declared] of shaped) {
+        expect(descriptor.perChainAddress[Number(id)]).toBeDefined();
+        const lacking = new Set(descriptor.withheldOn[Number(id)] ?? []);
+        for (const fn of declared) {
+          const signature = toFunctionSignature(fn);
+          // A function of the ABI, not withheld there, declared otherwise than the ABI does.
+          expect(signatures.has(signature)).toBe(true);
+          expect(lacking.has(signature)).toBe(false);
+          const own = descriptor.methods.find((m) => m.signature === signature)!;
+          expect([fn.outputs, fn.stateMutability, fn.inputs]).not.toEqual([
+            own.outputs,
+            own.stateMutability,
+            own.inputs,
+          ]);
+        }
+      }
     }
     expect(withholding).toBeGreaterThan(0);
+    expect(reshaping).toBeGreaterThan(0);
+  });
+});
+
+describe("a function a chain's deployment declares otherwise is called as it declares it", () => {
+  const REWARDS = getDescriptor("compound-v3", "CometRewards")!;
+  const POLYGON = requireChain("polygon");
+  /** A program returning one field of `rewardConfig(comet)` (a `bool` is a number to the compiler). */
+  const field = (name: string): string =>
+    `function main(comet: Address): Uint256 { const config = CompoundV3.CometRewards.rewardConfig(comet); return config.${name}; }`;
+
+  it("Ethereum's and Polygon's CometRewards declare rewardConfig with three fields, Base's with four", () => {
+    const fields = (chainId: number): string[] =>
+      descriptorOn(REWARDS, chainId)
+        .methods.find((m) => m.name === "rewardConfig")!
+        .outputs.map((o) => o.name ?? "");
+    expect(fields(ETHEREUM.id)).toEqual(["token", "rescaleFactor", "shouldUpscale"]);
+    expect(fields(POLYGON.id)).toEqual(["token", "rescaleFactor", "shouldUpscale"]);
+    expect(fields(BASE.id)).toEqual(["token", "rescaleFactor", "shouldUpscale", "multiplier"]);
+    // The ABI, its twin and the host types keep the four-field declaration.
+    expect(REWARDS.methods.find((m) => m.name === "rewardConfig")!.outputs).toHaveLength(4);
+    expect(REWARDS.withheldOn[ETHEREUM.id]).not.toContain("rewardConfig(address)");
+  });
+
+  it("on Ethereum, rewardConfig(comet) compiles and its third field reads; a fourth is refused", () => {
+    const call = "function main(comet: Address) { CompoundV3.CometRewards.rewardConfig(comet); }";
+    expect(hex("ethereum", call)).toContain("2289b6b8");
+    expect(hex("ethereum", field("shouldUpscale"))).toContain("2289b6b8");
+    expect(hex("ethereum", field("rescaleFactor"))).toContain("2289b6b8");
+    const fourth =
+      "`multiplier` is not a field of this tuple — its named fields are `token`, `rescaleFactor`, `shouldUpscale`";
+    expect(refusal("ethereum", field("multiplier"))).toContain(fourth);
+    expect(refusal("polygon", field("multiplier"))).toContain(fourth);
+  });
+
+  it("on Base, the four-field form compiles", () => {
+    expect(hex("base", field("multiplier"))).toContain("2289b6b8");
+    expect(hex("base", field("shouldUpscale"))).toContain("2289b6b8");
+  });
+
+  it("each chain's names module imports its deployment's declaration", () => {
+    const [ethereumPath, ethereumText] = boundAbi("ethereum", "CompoundV3", "CometRewards");
+    expect(ethereumPath).toMatch(/^abi\/compound-v3\/CometRewardsABI-[0-9a-f]{8}\.json$/);
+    const served = (text: string) =>
+      (JSON.parse(text) as Abi).find(
+        (item) => item.type === "function" && item.name === "rewardConfig",
+      );
+    expect(served(ethereumText)).toEqual(REWARDS.shapesOn[ETHEREUM.id]![0]);
+    expect(boundAbi("polygon", "CompoundV3", "CometRewards")[0]).toBe(ethereumPath);
+    const [, baseText] = boundAbi("base", "CompoundV3", "CometRewards");
+    expect(served(baseText)).toEqual(
+      REWARDS.abi.find((item) => item.type === "function" && item.name === "rewardConfig"),
+    );
+  });
+
+  it("Base's CbETH mint, which its deployment declares with no return value, compiles there", () => {
+    const mint = "function main(to: Address, amount: Uint256) { Cbeth.CbETH.mint(to, amount); }";
+    expect(hex("base", mint)).toContain("40c10f19");
+    expect(hex("ethereum", mint)).toContain("40c10f19");
+  });
+
+  it("a host accessor calls the chain's declaration, and toSauceScript refuses it", () => {
+    const comet = `0x${"11".repeat(20)}`;
+    const ethereum = chainContracts("ethereum").CompoundV3
+      .CometRewards as unknown as ContractAccessor;
+    const call = invoke(ethereum, "rewardConfig", comet);
+    expect(call.data.slice(0, 10)).toBe("0x2289b6b8");
+    expect(call.method.outputs).toHaveLength(3);
+    expect(() => call.toSauceScript()).toThrow(
+      /^toSauceScript: compound-v3\.CometRewards\.rewardConfig: its deployment on ethereum declares rewardConfig\(address\) otherwise than CometRewardsABI\.json/,
+    );
+    const base = chainContracts("base").CompoundV3.CometRewards as unknown as ContractAccessor;
+    expect(invoke(base, "rewardConfig", comet).method.outputs).toHaveLength(4);
   });
 });
 

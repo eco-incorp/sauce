@@ -101,7 +101,8 @@ function buildAccessor(
   chain: CanonicalChain,
   addressOverride?: Address,
 ): Contract {
-  // The contract as the chain's deployment runs it: a method it withholds is refused, naming it.
+  // The contract as the chain's deployment runs it: a method it withholds is refused, naming it,
+  // and one it declares otherwise is called as it declares it.
   const descriptor = descriptorOn(full, chain.id);
   const isInterface = descriptor.kind === "interface";
   const resolvedAddress: Address | undefined =
@@ -142,7 +143,8 @@ function buildAccessor(
             `${overloads.map((candidate) => candidate.inputs.length).join(" or ")} arguments, got ${args.length}`,
         );
       }
-      if (!descriptor.methods.includes(method)) {
+      const own = descriptor.methods.find((m) => m.signature === method.signature);
+      if (own === undefined) {
         throw new Error(
           withheldRefusal(
             `${pascalOfSlug(chain.slug)}.${pascalOfSlug(full.protocol)}.${full.contract}.${name}(…)`,
@@ -170,7 +172,7 @@ function buildAccessor(
           `${descriptor.protocol}.${descriptor.contract}: no address resolved on '${chain.slug}'`,
         );
       }
-      return makeContractCall(descriptor, chain, address, method, args);
+      return makeContractCall(descriptor, chain, address, own, args);
     };
   }
 

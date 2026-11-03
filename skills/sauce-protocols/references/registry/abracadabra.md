@@ -85,7 +85,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `DegenBoxABI`
 
-`import DegenBoxABI from "./protocols/abracadabra/DegenBoxABI.json";` Speaks for: degenBox. The import is the contract's full ABI across every deployment; call it through the `Abracadabra` namespace to have a function a chain's deployment does not run refused.
+`import DegenBoxABI from "./protocols/abracadabra/DegenBoxABI.json";` Speaks for: degenBox. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Abracadabra` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `balanceOf(address token, address user) view returns (uint256)`
 - `batch(bytes[] calls, bool revertOnFail) payable returns (bool[] successes, bytes[] results)`

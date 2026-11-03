@@ -39,7 +39,7 @@ function main() {
 
 ### `GelatoAutomateABI`
 
-`import GelatoAutomateABI from "./protocols/gelato/GelatoAutomateABI.json";` Speaks for: automate. The import is the contract's full ABI across every deployment; call it through the `Gelato` namespace to have a function a chain's deployment does not run refused.
+`import GelatoAutomateABI from "./protocols/gelato/GelatoAutomateABI.json";` Speaks for: automate. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Gelato` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `cancelTask(bytes32 taskId)`
 - `createTask(address execAddress, bytes execDataOrSelector, (uint8[] modules, bytes[] args) moduleData, address feeToken) returns (bytes32 taskId)`

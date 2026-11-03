@@ -660,26 +660,39 @@ and a function or event an interface's instances declare differently. A registry
 would be left out for its name fails the generator instead. A function the deployments drop stays
 in `abis.ts` until removed by hand: the test fails it (no deployment dispatches it).
 
-A ROLE'S DEPLOYMENT ON ONE CHAIN MAY NOT RUN ALL OF ITS UNION. `gen-source-globals.mjs` writes, per
-singleton contract and chain, the functions that chain's deployment does not run as declared (it
-does not dispatch the selector, or its verified ABI declares the function otherwise) as
-`withheld` in `CONTRACT_LINKS`; the descriptor's `descriptorOn(chain)` view drops them, the chain's
-names module imports that view's ABI, and a program compiled for the chain that calls one is
+A ROLE'S DEPLOYMENT ON ONE CHAIN MAY NOT RUN ALL OF ITS UNION AS DECLARED. `gen-source-globals.mjs`
+writes, per singleton contract and chain, two tables in `CONTRACT_LINKS`. `shapes`: each function
+that chain's deployment dispatches and its verified ABI declares with the same signature and other
+outputs, mutability or struct field names, as that verified fragment (Ethereum's and Polygon's
+`CometRewards.rewardConfig`, three fields to the ABI's four; Base's `CbETH.mint`, no return value).
+`withheld`: every other function it does not run as declared (it does not dispatch the selector,
+its verified ABI declares only another overload of the name, or its declaration would mix reads
+and writes among the name's overloads). The descriptor's `descriptorOn(chain)` view drops the
+withheld and carries the reshaped in place of the ABI's (`shapesOn`), the chain's names module
+imports that view's ABI, and a program compiled for the chain that calls a withheld one is
 refused, naming the chains that run it (`AaveV3.Pool`'s L2-only `supply(bytes32)` on Ethereum,
-`CbETH.exchangeRate()` on Base). An interface (a by-address contract) has no chain to filter by: it
-is its representative instances' union. Withholding applies to NAMESPACE names only. An explicit
-twin import (`import X from "./protocols/<slug>/<Export>.json"`) and a caller's `contracts` stay the
-raw, unfiltered ABI, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin
-is bound to is matched against a deployment, and none is to be added. The registry documents say
-so beside each twin's import line, and say of an interface whose captured instances do not all
-dispatch the same selectors that not every contract it reaches runs every function listed
-(`gen-skills-references.mjs`, reading `evidence.json` at generation time).
+`CbETH.exchangeRate()` on Base), while a reshaped one compiles as its deployment declares it. The
+host accessors call the view too, so their TypeScript types (the ABI's declaration) can differ
+from what a call on that chain decodes, and `toSauceScript()` refuses a reshaped method, whose
+twin import would declare it otherwise. An interface (a by-address contract) has no chain to
+filter by: it is its representative instances' union. Withholding and reshaping apply to
+NAMESPACE names only. An explicit twin import (`import X from "./protocols/<slug>/<Export>.json"`)
+and a caller's `contracts` are the registry's ABI for the contract — what `omitted.json` leaves
+out is not in it — with the same entries on every chain and no per-chain withholding or
+reshaping, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin is bound
+to is matched against a deployment, and none is to be added. The registry documents say so beside
+each twin's import line, list each deployment's withheld and reshaped functions, and say of an
+interface whose captured instances do not all dispatch the same selectors that not every contract
+it reaches runs every function listed (`gen-skills-references.mjs`, reading `evidence.json` at
+generation time).
 
 `test/registry-abi.test.ts` checks each function, event and custom error of each export against the
 evidence: some deployment must dispatch each function's selector (after resolving EIP-1167 clones,
 EIP-1967/beacon/legacy proxy slots, `implementation()` getters, `delegates`, and diamond or selector
 routers), and where a verified ABI exists, its outputs, mutability and struct field names must
-match; a role's deployment that does not match must withhold it, and one that does must not; an
+match; a role's deployment that does not match must withhold it, or carry its verified declaration
+under `shapes` where it dispatches the selector and declares the signature otherwise, and one that
+does match must do neither; an
 interface instance that declares it otherwise needs an `exempt`. An event or error ships only where
 some deployment's code carries it (a PUSH32 before its LOG, an anonymous event's LOG of as many
 topics as it indexes, a constant before its REVERT), `unverified` or not: the generator leaves the

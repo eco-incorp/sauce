@@ -33,7 +33,7 @@ function main() {
 
 ### `SyncSwapRouterABI`
 
-`import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Syncswap` namespace to have a function a chain's deployment does not run refused.
+`import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Syncswap` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addLiquidity(address pool, (address token, uint256 amount)[] inputs, bytes data, uint256 minLiquidity, address callback, bytes callbackData) payable returns (uint256 liquidity)`
 - `addLiquidity2(address pool, (address token, uint256 amount)[] inputs, bytes data, uint256 minLiquidity, address callback, bytes callbackData) payable returns (uint256 liquidity)`

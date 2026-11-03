@@ -106,7 +106,7 @@ functions, and its writes are SafeERC20.
 
 ### `LayerBankCoreABI`
 
-`import LayerBankCoreABI from "./protocols/layerbank/LayerBankCoreABI.json";` Speaks for: core. The import is the contract's full ABI across every deployment; call it through the `Layerbank` namespace to have a function a chain's deployment does not run refused.
+`import LayerBankCoreABI from "./protocols/layerbank/LayerBankCoreABI.json";` Speaks for: core. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Layerbank` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `accountLiquidityOf(address account) view returns (uint256 collateralInUSD, uint256 supplyInUSD, uint256 borrowInUSD)`
 - `allMarkets() view returns (address[])`

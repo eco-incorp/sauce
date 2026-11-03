@@ -43,7 +43,7 @@ function main() {
 
 ### `LayerZeroEndpointV2ABI`
 
-`import LayerZeroEndpointV2ABI from "./protocols/layerzero/LayerZeroEndpointV2ABI.json";` Speaks for: endpointV2. The import is the contract's full ABI across every deployment; call it through the `Layerzero` namespace to have a function a chain's deployment does not run refused.
+`import LayerZeroEndpointV2ABI from "./protocols/layerzero/LayerZeroEndpointV2ABI.json";` Speaks for: endpointV2. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Layerzero` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `blockedLibrary() view returns (address)`
 - `burn(address _oapp, uint32 _srcEid, bytes32 _sender, uint64 _nonce, bytes32 _payloadHash)`

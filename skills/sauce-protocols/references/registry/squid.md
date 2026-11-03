@@ -39,7 +39,7 @@ function main() {
 
 ### `SquidRouterABI`
 
-`import SquidRouterABI from "./protocols/squid/SquidRouterABI.json";` Speaks for: squidRouter. The import is the contract's full ABI across every deployment; call it through the `Squid` namespace to have a function a chain's deployment does not run refused.
+`import SquidRouterABI from "./protocols/squid/SquidRouterABI.json";` Speaks for: squidRouter. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Squid` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `acceptPauser()`

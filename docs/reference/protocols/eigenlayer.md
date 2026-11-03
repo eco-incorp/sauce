@@ -56,7 +56,7 @@ function main() {
 
 ### `DelegationManagerABI`
 
-`import DelegationManagerABI from "./protocols/eigenlayer/DelegationManagerABI.json";` Speaks for: delegationManager. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
+`import DelegationManagerABI from "./protocols/eigenlayer/DelegationManagerABI.json";` Speaks for: delegationManager. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `allocationManager() view returns (address)`
 - `beaconChainETHStrategy() view returns (address)`
@@ -128,7 +128,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `StrategyABI`
 
-`import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";` Speaks for: stETHStrategy, rETHStrategy, cbETHStrategy. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
+`import StrategyABI from "./protocols/eigenlayer/StrategyABI.json";` Speaks for: stETHStrategy, rETHStrategy, cbETHStrategy. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `beforeAddShares(address, uint256)`
 - `beforeRemoveShares(address, uint256)`
@@ -170,7 +170,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `StrategyManagerABI`
 
-`import StrategyManagerABI from "./protocols/eigenlayer/StrategyManagerABI.json";` Speaks for: strategyManager. The import is the contract's full ABI across every deployment; call it through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused.
+`import StrategyManagerABI from "./protocols/eigenlayer/StrategyManagerABI.json";` Speaks for: strategyManager. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Eigenlayer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addShares(address staker, address strategy, uint256 shares) returns (uint256, uint256)`
 - `addStrategiesToDepositWhitelist(address[] strategiesToWhitelist)`

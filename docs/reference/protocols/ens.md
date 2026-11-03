@@ -52,7 +52,7 @@ function main() {
 
 ### `BaseRegistrarABI`
 
-`import BaseRegistrarABI from "./protocols/ens/BaseRegistrarABI.json";` Speaks for: baseRegistrar. The import is the contract's full ABI across every deployment; call it through the `Ens` namespace to have a function a chain's deployment does not run refused.
+`import BaseRegistrarABI from "./protocols/ens/BaseRegistrarABI.json";` Speaks for: baseRegistrar. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Ens` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addController(address controller)`
 - `approve(address to, uint256 tokenId)`
@@ -88,7 +88,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `ENSRegistryABI`
 
-`import ENSRegistryABI from "./protocols/ens/ENSRegistryABI.json";` Speaks for: registry. The import is the contract's full ABI across every deployment; call it through the `Ens` namespace to have a function a chain's deployment does not run refused.
+`import ENSRegistryABI from "./protocols/ens/ENSRegistryABI.json";` Speaks for: registry. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Ens` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `isApprovedForAll(address owner, address operator) view returns (bool)`
 - `old() view returns (address)`

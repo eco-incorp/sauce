@@ -122,15 +122,21 @@ const canonicalType = (p) =>
     : p.type;
 const signatureOf = (f) => `${f.name}(${f.inputs.map(canonicalType).join(",")})`;
 
-// --- what a chain's deployment does not run ------------------------------------------------------
+// --- what a chain's deployment does not run, and what it declares otherwise --------------------
 
 /**
  * A registry ABI is the union of what its deployments run (`gen-registry-abis.mjs`), so a role's
- * deployment on one chain may lack a function another chain's has. Per chain, the functions its
- * deployment does not run as declared — it does not dispatch the selector, or its verified ABI
- * declares the function otherwise (other outputs, a write for a read, other struct fields, or
- * another overload of the name and not this one) — are `withheld` there: a program compiled for
- * that chain cannot call them. `registry-abi.test.ts` checks the table against the evidence.
+ * deployment on one chain may lack a function another chain's has, or declare it otherwise. Per
+ * chain:
+ *  - a function its deployment DECLARES OTHERWISE — it dispatches the selector, and its verified ABI
+ *    declares the same signature with other outputs, another mutability or other struct field
+ *    names — is served there as that deployment declares it: its verified fragment is in `shapes`,
+ *    and the chain's view of the contract carries it in place of the export's (`descriptorOn`);
+ *  - every other function its deployment does not run as declared — it does not dispatch the
+ *    selector, or its verified ABI declares only another overload of the name, or its declaration
+ *    would mix reads and writes among the name's overloads — is `withheld` there: a program
+ *    compiled for that chain cannot call it.
+ * `registry-abi.test.ts` checks both tables against the evidence.
  */
 const evidence = JSON.parse(
   readFileSync(resolve(sdk, "test/fixtures/registry-abi/evidence.json"), "utf8"),
@@ -152,7 +158,18 @@ const declaration = (f) =>
     f.stateMutability === "pure" ? "view" : (f.stateMutability ?? "nonpayable"),
     fieldNames(f.inputs ?? []),
   ]);
-/** Whether `row`, one deployment's evidence, runs `fn` as the registry declares it. */
+const isRead = (f) => f.stateMutability === "view" || f.stateMutability === "pure";
+/** A verified fragment's parameter as an ABI parameter. */
+const abiParam = (p) => ({
+  name: p.name ?? "",
+  type: p.type,
+  ...(p.components ? { components: p.components.map(abiParam) } : {}),
+});
+/**
+ * How `row`, one deployment's evidence, runs `fn`: `true` as the registry declares it; where it
+ * dispatches the selector and its verified ABI declares the signature otherwise, that declaration
+ * as an ABI item; else `false`.
+ */
 function runs(row, fn) {
   if (row === undefined || row.error !== undefined) return false;
   const sig = signatureOf(fn);
@@ -164,23 +181,47 @@ function runs(row, fn) {
     .filter((f) => f.type === undefined && f.signature.startsWith(name));
   if (overloads.length === 0) return true;
   const exact = overloads.find((f) => f.signature === sig);
-  return exact !== undefined && declaration(exact) === declaration(fn);
+  if (exact === undefined) return false;
+  if (declaration(exact) === declaration(fn)) return true;
+  return {
+    name: fn.name,
+    type: "function",
+    stateMutability: exact.stateMutability ?? "nonpayable",
+    inputs: (exact.inputs ?? []).map(abiParam),
+    outputs: (exact.outputs ?? []).map(abiParam),
+  };
 }
 for (const [slug, { abis, deployments }] of registry) {
   for (const c of registry.get(slug).contracts) {
     if (c.kind !== "singleton") continue;
+    const functions = abis[c.abiExport].filter((item) => item.type === "function");
     const withheld = {};
+    const shapes = {};
     for (const d of deployments) {
       const address = d.addresses[c.roleKey];
       if (!evmChainIds.has(d.chainId) || !/^0x[0-9a-fA-F]{40}$/.test(address ?? "")) continue;
       if (c.chains !== undefined && !c.chains.includes(d.chainId)) continue;
       const row = rowOf.get(`${slug}|${c.abiExport}|${d.chainId}|${address.toLowerCase()}`);
-      const lacking = abis[c.abiExport]
-        .filter((item) => item.type === "function" && !runs(row, item))
-        .map(signatureOf);
+      const lacking = [];
+      const declared = [];
+      for (const fn of functions) {
+        const how = runs(row, fn);
+        if (how === true) continue;
+        // A name's overloads are all reads or all writes (`descriptors-linkage.test.ts`): a
+        // declaration that would make them mix is withheld instead.
+        const mixes =
+          how !== false &&
+          functions.some(
+            (other) => other !== fn && other.name === fn.name && isRead(other) !== isRead(how),
+          );
+        if (how === false || mixes) lacking.push(signatureOf(fn));
+        else declared.push(how);
+      }
       if (lacking.length > 0) withheld[d.chainId] = lacking;
+      if (declared.length > 0) shapes[d.chainId] = declared;
     }
     if (Object.keys(withheld).length > 0) c.withheld = withheld;
+    if (Object.keys(shapes).length > 0) c.shapes = shapes;
   }
 }
 

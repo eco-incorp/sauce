@@ -38,7 +38,7 @@ function main() {
 
 ### `HopL1BridgeABI`
 
-`import HopL1BridgeABI from "./protocols/hop/HopL1BridgeABI.json";` Speaks for: l1EthBridge, l1UsdcBridge. The import is the contract's full ABI across every deployment; call it through the `Hop` namespace to have a function a chain's deployment does not run refused.
+`import HopL1BridgeABI from "./protocols/hop/HopL1BridgeABI.json";` Speaks for: l1EthBridge, l1UsdcBridge. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Hop` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `addBonder(address bonder)`
 - `bondTransferRoot(bytes32 rootHash, uint256 destinationChainId, uint256 totalAmount)`
@@ -90,13 +90,13 @@ function main() {
 - `unstake(uint256 amount)`
 - `withdraw(address recipient, uint256 amount, bytes32 transferNonce, uint256 bonderFee, uint256 amountOutMin, uint256 deadline, bytes32 rootHash, uint256 transferRootTotalAmount, uint256 transferIdTreeIndex, bytes32[] siblings, uint256 totalLeaves)`
 
-Not on Ethereum's l1EthBridge (`0xb8901acB165ed027E32754E0FFe830802919727f`), whose code does not dispatch them or declares them otherwise: `challengeTransferBond`, `l1CanonicalToken`, `resolveChallenge`, `transferRootCommittedAt`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's l1EthBridge (`0xb8901acB165ed027E32754E0FFe830802919727f`), whose code does not dispatch them or does not declare them as listed here: `challengeTransferBond`, `l1CanonicalToken`, `resolveChallenge`, `transferRootCommittedAt`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
-Not on Ethereum's l1UsdcBridge (`0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a`), whose code does not dispatch them or declares them otherwise: `challengeTransferBond`, `resolveChallenge`, `transferRootCommittedAt`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+Not on Ethereum's l1UsdcBridge (`0x3666f603Cc164936C1b87e207F36BEBa4AC5f18a`), whose code does not dispatch them or does not declare them as listed here: `challengeTransferBond`, `resolveChallenge`, `transferRootCommittedAt`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 ### `HopL2AmmWrapperABI`
 
-`import HopL2AmmWrapperABI from "./protocols/hop/HopL2AmmWrapperABI.json";` Speaks for: l2AmmWrapper. The import is the contract's full ABI across every deployment; call it through the `Hop` namespace to have a function a chain's deployment does not run refused.
+`import HopL2AmmWrapperABI from "./protocols/hop/HopL2AmmWrapperABI.json";` Speaks for: l2AmmWrapper. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Hop` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `attemptSwap(address recipient, uint256 amount, uint256 amountOutMin, uint256 deadline)`
 - `bridge() view returns (address)`

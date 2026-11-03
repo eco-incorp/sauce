@@ -34,7 +34,7 @@ function main() {
 
 ### `CoreProxyABI`
 
-`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
+`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `acceptPoolOwnership(uint128 poolId)`
@@ -220,7 +220,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `PerpsMarketProxyABI`
 
-`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
+`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `acceptOwnership()`
 - `addSettlementStrategy(uint128 marketId, (uint8 strategyType, uint256 settlementDelay, uint256 settlementWindowDuration, address priceVerificationContract, bytes32 feedId, uint256 settlementReward, bool disabled, uint256 commitmentPriceDelay) strategy) returns (uint256 strategyId)`
