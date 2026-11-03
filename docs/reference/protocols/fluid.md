@@ -122,6 +122,11 @@ functions, and its writes are SafeERC20.
 - `VAULT_FACTORY() view returns (address)`
 - `VAULT_ID() view returns (uint256)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event LogAbsorb` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LogRebalance` taking `(int256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ## Next
 
 - [Protocols](../protocols.md): the other protocols, by what they do.

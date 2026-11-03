@@ -244,7 +244,6 @@ export const ScrollL1MessengerABI = [
     ],
   },
   { name: "ErrorForbidToCallMessageQueue", type: "error", inputs: [] },
-  { name: "ErrorZeroAddress", type: "error", inputs: [] },
 ] as const;
 
 export const ScrollL1GatewayRouterABI = [
@@ -452,50 +451,6 @@ export const ScrollL1GatewayRouterABI = [
     outputs: [],
   },
   {
-    name: "DepositERC20",
-    type: "event",
-    inputs: [
-      { name: "l1Token", type: "address", indexed: true },
-      { name: "l2Token", type: "address", indexed: true },
-      { name: "from", type: "address", indexed: true },
-      { name: "to", type: "address", indexed: false },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "data", type: "bytes", indexed: false },
-    ],
-  },
-  {
-    name: "DepositETH",
-    type: "event",
-    inputs: [
-      { name: "from", type: "address", indexed: true },
-      { name: "to", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "data", type: "bytes", indexed: false },
-    ],
-  },
-  {
-    name: "FinalizeWithdrawERC20",
-    type: "event",
-    inputs: [
-      { name: "l1Token", type: "address", indexed: true },
-      { name: "l2Token", type: "address", indexed: true },
-      { name: "from", type: "address", indexed: true },
-      { name: "to", type: "address", indexed: false },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "data", type: "bytes", indexed: false },
-    ],
-  },
-  {
-    name: "FinalizeWithdrawETH",
-    type: "event",
-    inputs: [
-      { name: "from", type: "address", indexed: true },
-      { name: "to", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "data", type: "bytes", indexed: false },
-    ],
-  },
-  {
     name: "Initialized",
     type: "event",
     inputs: [{ name: "version", type: "uint8", indexed: false }],
@@ -506,23 +461,6 @@ export const ScrollL1GatewayRouterABI = [
     inputs: [
       { name: "previousOwner", type: "address", indexed: true },
       { name: "newOwner", type: "address", indexed: true },
-    ],
-  },
-  {
-    name: "RefundERC20",
-    type: "event",
-    inputs: [
-      { name: "token", type: "address", indexed: true },
-      { name: "recipient", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
-    name: "RefundETH",
-    type: "event",
-    inputs: [
-      { name: "recipient", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
     ],
   },
   {

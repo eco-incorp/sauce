@@ -812,11 +812,6 @@
       "inputs": []
     },
     {
-      "name": "CallerNotLRTConfigAdmin",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "CallerNotLRTConfigAllowedRole",
       "type": "error",
       "inputs": [
@@ -838,11 +833,6 @@
     },
     {
       "name": "CallerNotLRTConfigOperator",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ETHNotSupported",
       "type": "error",
       "inputs": []
     },

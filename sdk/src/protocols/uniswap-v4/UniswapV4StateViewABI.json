@@ -302,11 +302,6 @@
           "type": "address"
         }
       ]
-    },
-    {
-      "name": "NotPoolManager",
-      "type": "error",
-      "inputs": []
     }
   ]
 }

@@ -1055,11 +1055,6 @@
       ]
     },
     {
-      "name": "EIP712DomainChanged",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "LockedAmountRedistributed",
       "type": "event",
       "inputs": [
@@ -1088,27 +1083,6 @@
           "name": "amount",
           "type": "uint256",
           "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "RoleAdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "role",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "previousAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "newAdminRole",
-          "type": "bytes32",
-          "indexed": true
         }
       ]
     },
@@ -1247,11 +1221,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidZeroAddress",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "MinSharesViolation",
       "type": "error",
       "inputs": []
@@ -1270,16 +1239,6 @@
       "name": "StillVesting",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
-        }
-      ]
     }
   ]
 }

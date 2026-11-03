@@ -593,27 +593,6 @@
       ]
     },
     {
-      "name": "ClaimRewards",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "user",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "rewardTokens",
-          "type": "address[]",
-          "indexed": false
-        },
-        {
-          "name": "rewardAmounts",
-          "type": "uint256[]",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "Deposit",
       "type": "event",
       "inputs": [

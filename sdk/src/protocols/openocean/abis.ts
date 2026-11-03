@@ -313,9 +313,4 @@ export const OpenOceanExchangeV2ABI = [
       { name: "referrer", type: "address", indexed: false },
     ],
   },
-  {
-    name: "Unpaused",
-    type: "event",
-    inputs: [{ name: "account", type: "address", indexed: false }],
-  },
 ] as const;

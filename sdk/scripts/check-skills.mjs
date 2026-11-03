@@ -429,9 +429,6 @@ const inlineCode = (skill) =>
 // than in the skills, where a marker would mean nothing to the agent reading them, and an entry the
 // skill no longer needs fails the check, so the list cannot outlive its reason.
 const UNDECLARED_NAMES = {
-  "sauce-script": {
-    arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
-  },
   "sauce-cli": {
     get_wallets:
       "Coinbase Wallet MCP's tool that gives the user's wallet addresses, a third-party MCP server's, not the package's",

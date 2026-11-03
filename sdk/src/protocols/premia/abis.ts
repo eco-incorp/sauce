@@ -1046,35 +1046,18 @@ export const DiamondABI = [
       { name: "protocolFee", type: "uint256", indexed: false },
     ],
   },
-  { name: "AddressUtils__NotContract", type: "error", inputs: [] },
   { name: "DiamondWritable__InvalidInitializationParameters", type: "error", inputs: [] },
-  { name: "DiamondWritable__RemoveTargetNotZeroAddress", type: "error", inputs: [] },
-  { name: "DiamondWritable__ReplaceTargetIsIdentical", type: "error", inputs: [] },
-  { name: "DiamondWritable__SelectorAlreadyAdded", type: "error", inputs: [] },
   { name: "DiamondWritable__SelectorIsImmutable", type: "error", inputs: [] },
-  { name: "DiamondWritable__SelectorNotFound", type: "error", inputs: [] },
   { name: "DiamondWritable__SelectorNotSpecified", type: "error", inputs: [] },
-  { name: "DiamondWritable__TargetHasNoCode", type: "error", inputs: [] },
-  { name: "DoublyLinkedList__InvalidInput", type: "error", inputs: [] },
-  { name: "DoublyLinkedList__NonExistentEntry", type: "error", inputs: [] },
   { name: "ECDSA__InvalidS", type: "error", inputs: [] },
-  { name: "ECDSA__InvalidSignature", type: "error", inputs: [] },
-  { name: "ECDSA__InvalidV", type: "error", inputs: [] },
   { name: "EnumerableSet__IndexOutOfBounds", type: "error", inputs: [] },
-  { name: "ERC1155Base__ArrayLengthMismatch", type: "error", inputs: [] },
   { name: "ERC1155Base__BalanceQueryZeroAddress", type: "error", inputs: [] },
   { name: "ERC1155Base__BurnExceedsBalance", type: "error", inputs: [] },
   { name: "ERC1155Base__BurnFromZeroAddress", type: "error", inputs: [] },
   { name: "ERC1155Base__ERC1155ReceiverNotImplemented", type: "error", inputs: [] },
   { name: "ERC1155Base__ERC1155ReceiverRejected", type: "error", inputs: [] },
-  { name: "ERC1155Base__MintToZeroAddress", type: "error", inputs: [] },
-  { name: "ERC1155Base__NotOwnerOrApproved", type: "error", inputs: [] },
-  { name: "ERC1155Base__SelfApproval", type: "error", inputs: [] },
-  { name: "ERC1155Base__TransferExceedsBalance", type: "error", inputs: [] },
   { name: "ERC1155Base__TransferToZeroAddress", type: "error", inputs: [] },
-  { name: "ERC165Base__InvalidInterfaceId", type: "error", inputs: [] },
   { name: "Ownable__NotOwner", type: "error", inputs: [] },
-  { name: "Ownable__NotTransitiveOwner", type: "error", inputs: [] },
   {
     name: "Pool__AboveMaxSlippage",
     type: "error",
@@ -1084,70 +1067,9 @@ export const DiamondABI = [
       { name: "maximum", type: "uint256" },
     ],
   },
-  {
-    name: "Pool__AboveQuoteSize",
-    type: "error",
-    inputs: [
-      { name: "size", type: "uint256" },
-      { name: "quoteSize", type: "uint256" },
-    ],
-  },
-  {
-    name: "Pool__ActionNotAuthorized",
-    type: "error",
-    inputs: [
-      { name: "user", type: "address" },
-      { name: "sender", type: "address" },
-      { name: "action", type: "uint8" },
-    ],
-  },
-  {
-    name: "Pool__CostExceedsPayout",
-    type: "error",
-    inputs: [
-      { name: "cost", type: "uint256" },
-      { name: "payout", type: "uint256" },
-    ],
-  },
-  {
-    name: "Pool__CostNotAuthorized",
-    type: "error",
-    inputs: [
-      { name: "costInWrappedNative", type: "uint256" },
-      { name: "authorizedCostInWrappedNative", type: "uint256" },
-    ],
-  },
-  {
-    name: "Pool__DifferenceOfSizeAndContractDeltaTooLarge",
-    type: "error",
-    inputs: [
-      { name: "diff", type: "uint256" },
-      { name: "size", type: "uint256" },
-    ],
-  },
-  { name: "Pool__FlashLoanCallbackFailed", type: "error", inputs: [] },
-  { name: "Pool__FlashLoanNotRepayed", type: "error", inputs: [] },
-  { name: "Pool__InsufficientAskLiquidity", type: "error", inputs: [] },
   { name: "Pool__InsufficientBidLiquidity", type: "error", inputs: [] },
   { name: "Pool__InsufficientFunds", type: "error", inputs: [] },
   { name: "Pool__InsufficientLiquidity", type: "error", inputs: [] },
-  {
-    name: "Pool__InvalidAssetUpdate",
-    type: "error",
-    inputs: [
-      { name: "deltaLongs", type: "int256" },
-      { name: "deltaShorts", type: "int256" },
-    ],
-  },
-  {
-    name: "Pool__InvalidBelowPrice",
-    type: "error",
-    inputs: [
-      { name: "price", type: "uint256" },
-      { name: "priceBelow", type: "uint256" },
-    ],
-  },
-  { name: "Pool__InvalidMonth", type: "error", inputs: [{ name: "month", type: "uint256" }] },
   {
     name: "Pool__InvalidPositionState",
     type: "error",
@@ -1157,30 +1079,6 @@ export const DiamondABI = [
     ],
   },
   { name: "Pool__InvalidQuoteOBSignature", type: "error", inputs: [] },
-  { name: "Pool__InvalidQuoteOBTaker", type: "error", inputs: [] },
-  {
-    name: "Pool__InvalidRange",
-    type: "error",
-    inputs: [
-      { name: "lower", type: "uint256" },
-      { name: "upper", type: "uint256" },
-    ],
-  },
-  {
-    name: "Pool__InvalidReconciliation",
-    type: "error",
-    inputs: [{ name: "crossings", type: "uint256" }],
-  },
-  {
-    name: "Pool__InvalidSize",
-    type: "error",
-    inputs: [
-      { name: "lower", type: "uint256" },
-      { name: "upper", type: "uint256" },
-      { name: "depositSize", type: "uint256" },
-    ],
-  },
-  { name: "Pool__InvalidTickPrice", type: "error", inputs: [] },
   { name: "Pool__InvalidTickUpdate", type: "error", inputs: [] },
   { name: "Pool__InvalidTransfer", type: "error", inputs: [] },
   {
@@ -1191,15 +1089,11 @@ export const DiamondABI = [
       { name: "size", type: "uint256" },
     ],
   },
-  { name: "Pool__NotPoolToken", type: "error", inputs: [{ name: "token", type: "address" }] },
-  { name: "Pool__NotWrappedNativeTokenPool", type: "error", inputs: [] },
   {
     name: "Pool__OperatorNotAuthorized",
     type: "error",
     inputs: [{ name: "sender", type: "address" }],
   },
-  { name: "Pool__OptionExpired", type: "error", inputs: [] },
-  { name: "Pool__OptionNotExpired", type: "error", inputs: [] },
   { name: "Pool__OutOfBoundsPrice", type: "error", inputs: [{ name: "price", type: "uint256" }] },
   {
     name: "Pool__PositionCantHoldLongAndShort",
@@ -1209,16 +1103,7 @@ export const DiamondABI = [
       { name: "shorts", type: "uint256" },
     ],
   },
-  {
-    name: "Pool__PositionDoesNotExist",
-    type: "error",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "tokenId", type: "uint256" },
-    ],
-  },
   { name: "Pool__QuoteOBCancelled", type: "error", inputs: [] },
-  { name: "Pool__QuoteOBExpired", type: "error", inputs: [] },
   {
     name: "Pool__QuoteOBOverfilled",
     type: "error",
@@ -1229,7 +1114,6 @@ export const DiamondABI = [
     ],
   },
   { name: "Pool__SettlementFailed", type: "error", inputs: [] },
-  { name: "Pool__SettlementPriceAlreadyCached", type: "error", inputs: [] },
   {
     name: "Pool__TickDeltaNotZero",
     type: "error",
@@ -1239,38 +1123,7 @@ export const DiamondABI = [
   { name: "Pool__TickOutOfRange", type: "error", inputs: [{ name: "price", type: "uint256" }] },
   { name: "Pool__TickWidthInvalid", type: "error", inputs: [{ name: "price", type: "uint256" }] },
   { name: "Pool__UseTransferPositionToTransferLPTokens", type: "error", inputs: [] },
-  {
-    name: "Pool__WithdrawalDelayNotElapsed",
-    type: "error",
-    inputs: [{ name: "unlockTime", type: "uint256" }],
-  },
   { name: "Pool__ZeroSize", type: "error", inputs: [] },
-  { name: "Position__InvalidOrderType", type: "error", inputs: [] },
-  {
-    name: "Position__InvalidPositionUpdate",
-    type: "error",
-    inputs: [
-      { name: "currentBalance", type: "uint256" },
-      { name: "amount", type: "int256" },
-    ],
-  },
-  {
-    name: "Position__LowerGreaterOrEqualUpper",
-    type: "error",
-    inputs: [
-      { name: "lower", type: "uint256" },
-      { name: "upper", type: "uint256" },
-    ],
-  },
-  {
-    name: "PRBMath_MulDiv_Overflow",
-    type: "error",
-    inputs: [
-      { name: "x", type: "uint256" },
-      { name: "y", type: "uint256" },
-      { name: "denominator", type: "uint256" },
-    ],
-  },
   {
     name: "PRBMath_MulDiv18_Overflow",
     type: "error",
@@ -1294,35 +1147,6 @@ export const DiamondABI = [
       { name: "y", type: "int256" },
     ],
   },
-  {
-    name: "PRBMath_UD60x18_IntoSD59x18_Overflow",
-    type: "error",
-    inputs: [{ name: "x", type: "uint256" }],
-  },
-  { name: "Pricing__PriceCannotBeComputedWithinTickRange", type: "error", inputs: [] },
-  {
-    name: "Pricing__PriceOutOfRange",
-    type: "error",
-    inputs: [
-      { name: "lower", type: "uint256" },
-      { name: "upper", type: "uint256" },
-      { name: "marketPrice", type: "uint256" },
-    ],
-  },
-  {
-    name: "Pricing__UpperNotGreaterThanLower",
-    type: "error",
-    inputs: [
-      { name: "lower", type: "uint256" },
-      { name: "upper", type: "uint256" },
-    ],
-  },
-  { name: "Proxy__ImplementationIsNotContract", type: "error", inputs: [] },
-  { name: "ReentrancyGuard__ReentrantCall", type: "error", inputs: [] },
-  { name: "SafeERC20__OperationFailed", type: "error", inputs: [] },
   { name: "SafeOwnable__NotNomineeOwner", type: "error", inputs: [] },
   { name: "SD49x28_Abs_MinSD49x28", type: "error", inputs: [] },
-  { name: "SD49x28_IntoUD50x28_Underflow", type: "error", inputs: [{ name: "x", type: "int256" }] },
-  { name: "UD50x28_IntoSD49x28_Overflow", type: "error", inputs: [{ name: "x", type: "uint256" }] },
-  { name: "UD60x18_IntoUD50x28_Overflow", type: "error", inputs: [{ name: "x", type: "uint256" }] },
 ] as const;

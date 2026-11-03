@@ -867,16 +867,6 @@
           "indexed": true
         }
       ]
-    },
-    {
-      "name": "ErrNotClone",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ErrOverflow",
-      "type": "error",
-      "inputs": []
     }
   ]
 }

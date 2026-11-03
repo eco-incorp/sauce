@@ -57,7 +57,7 @@ function main() {
 
 ### `HyperlaneMailboxABI`
 
-`import HyperlaneMailboxABI from "./protocols/hyperlane/HyperlaneMailboxABI.json";` Speaks for: mailbox.
+`import HyperlaneMailboxABI from "./protocols/hyperlane/HyperlaneMailboxABI.json";` Speaks for: mailbox. The import is the contract's full ABI across every deployment; call it through the `Hyperlane` namespace to have a function a chain's deployment does not run refused.
 
 - `defaultHook() view returns (address)`
 - `defaultIsm() view returns (address)`

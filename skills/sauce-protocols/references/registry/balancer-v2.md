@@ -40,7 +40,7 @@ function main() {
 
 ### `BalancerV2VaultABI`
 
-`import BalancerV2VaultABI from "./protocols/balancer-v2/BalancerV2VaultABI.json";` Speaks for: vault.
+`import BalancerV2VaultABI from "./protocols/balancer-v2/BalancerV2VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `BalancerV2` namespace to have a function a chain's deployment does not run refused.
 
 - `batchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, int256[] limits, uint256 deadline) payable returns (int256[] assetDeltas)`
 - `deregisterTokens(bytes32 poolId, address[] tokens)`

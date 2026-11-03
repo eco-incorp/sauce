@@ -565,8 +565,6 @@ export const SquidRouterABI = [
   { name: "ApprovalFailed", type: "error", inputs: [] },
   { name: "ContractIsPaused", type: "error", inputs: [] },
   { name: "ExpressExecutorAlreadySet", type: "error", inputs: [] },
-  { name: "InsufficientValue", type: "error", inputs: [] },
-  { name: "InvalidAddress", type: "error", inputs: [] },
   { name: "InvalidCodeHash", type: "error", inputs: [] },
   { name: "InvalidImplementation", type: "error", inputs: [] },
   { name: "InvalidOwner", type: "error", inputs: [] },

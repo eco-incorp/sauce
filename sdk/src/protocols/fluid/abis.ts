@@ -725,14 +725,6 @@ export const FluidVaultABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "LogAbsorb",
-    type: "event",
-    inputs: [
-      { name: "colAbsorbedRaw_", type: "uint256", indexed: false },
-      { name: "debtAbsorbedRaw_", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "LogLiquidate",
     type: "event",
     inputs: [
@@ -751,14 +743,6 @@ export const FluidVaultABI = [
       { name: "colAmt_", type: "int256", indexed: false },
       { name: "debtAmt_", type: "int256", indexed: false },
       { name: "to_", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "LogRebalance",
-    type: "event",
-    inputs: [
-      { name: "colAmt_", type: "int256", indexed: false },
-      { name: "debtAmt_", type: "int256", indexed: false },
     ],
   },
   {

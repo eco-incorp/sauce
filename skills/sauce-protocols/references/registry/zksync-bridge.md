@@ -34,7 +34,7 @@ function main() {
 
 ### `ZkSyncDiamondProxyABI`
 
-`import ZkSyncDiamondProxyABI from "./protocols/zksync-bridge/ZkSyncDiamondProxyABI.json";` Speaks for: diamondProxy.
+`import ZkSyncDiamondProxyABI from "./protocols/zksync-bridge/ZkSyncDiamondProxyABI.json";` Speaks for: diamondProxy. The import is the contract's full ABI across every deployment; call it through the `ZksyncBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `allowEvmEmulation() returns (bytes32 canonicalTxHash)`
@@ -128,4 +128,7 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error CantExecuteUnprovenBatches` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransactionNotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BridgeMint` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `getName` taking `()`: no captured deployment dispatches it.

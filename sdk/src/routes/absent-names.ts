@@ -1090,18 +1090,21 @@ export function checkNames(
     const descriptor = validating ? full : entry.descriptor;
     const { protocol, contract } = descriptor;
     const methods = [...new Set(descriptor.methods.map((method) => method.name))];
-    const known = `${protocol}.${contract}'s vendored ABI ${methodListing(methods, read)}`;
-    const withheld = isWithheld(full, descriptor, read);
     const property = prop<AstNode>(node, "property");
+    // The listing (an edit distance to every method name, for a large contract) and the withheld
+    // lookup are built only in the refusals below: a call, a balance or an address read that
+    // succeeds pays for neither. A withheld method is absent from `methods`, so none returns early.
     if (role === "callee") {
       // A scalar method reads the contract's address (`protocol-rewrite.ts`, shape G).
       if (methods.includes(read) || SCALAR_METHODS.has(read)) return;
-      if (withheld) {
+      if (isWithheld(full, descriptor, read)) {
         fail(property, withheldRefusal(`${owner.shown}.${read}(…)`, read, full, owner.chain));
       }
       fail(
         property,
-        `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${known}.` + meant(read, methods),
+        `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${protocol}.${contract}'s vendored ABI ` +
+          `${methodListing(methods, read)}.` +
+          meant(read, methods),
       );
     }
     // Read, the binding's address, or a balance: of the native coin, or of a token the chain has.
@@ -1121,11 +1124,12 @@ export function checkNames(
           `\`${owner.shown}.${read}(…)\`.`,
       );
     }
-    if (withheld)
+    if (isWithheld(full, descriptor, read))
       fail(property, withheldRefusal(`${owner.shown}.${read}`, read, full, owner.chain));
     fail(
       property,
-      `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${known} nor a token ` +
+      `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${protocol}.${contract}'s ` +
+        `vendored ABI ${methodListing(methods, read)} nor a token ` +
         `${validating ? "any chain" : chain.slug} registers.` +
         meant(read, [...methods, ...names.tokens.keys(), BALANCE_MEMBER]) +
         ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +

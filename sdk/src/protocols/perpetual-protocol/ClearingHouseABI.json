@@ -979,28 +979,6 @@
       ]
     },
     {
-      "name": "TrustedForwarderChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "forwarder",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
-      "name": "TrustedForwarderUpdated",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "trustedForwarder",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "Unpaused",
       "type": "event",
       "inputs": [

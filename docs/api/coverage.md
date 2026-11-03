@@ -49,13 +49,14 @@ of it fails to compile, naming the chain and listing the chains that have it; in
 
 Every registry ABI is its contract's verified ABI as its deployments run it: every function, event
 and error a deployment declares and dispatches, with the deployed types, so its selectors are the
-deployed ones. It leaves out only what it cannot bind unambiguously, such as the second of two
-overloads taking the same number of arguments. A function one chain's deployment does not run is
-refused for that chain, naming the chains that run it. A `coverage.caveats` entry records a
-deployment the evidence shows differs from its ABI — a bridged token without the L1 token's
-functions, a function whose selector is checked but whose source is not verified. The compile
-option `accessors.allowWidenedSelectors` lets a program use a contract whose ABI's selectors do not
-match its deployment; no shipped descriptor needs it.
+deployed ones. It leaves out only what the SDK cannot expose, such as the second of two overloads
+taking the same number of arguments or a name the SDK reads as its own. A function one chain's
+deployment does not run is refused for that chain, naming the chains that run it; that holds for a
+namespace name only, and an explicit twin import is the raw ABI across every deployment. A
+`coverage.caveats` entry records a deployment the evidence shows differs from its ABI — a bridged
+token without the L1 token's functions, a function whose selector is checked but whose source is not
+verified. The compile option `accessors.allowWidenedSelectors` lets a program use a contract whose
+ABI's selectors do not match its deployment; no shipped descriptor needs it.
 
 ## Tokens
 

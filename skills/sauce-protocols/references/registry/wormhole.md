@@ -45,7 +45,7 @@ function main() {
 
 ### `WormholeCoreBridgeABI`
 
-`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge.
+`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
 
 - `chainId() view returns (uint16)`
 - `evmChainId() view returns (uint256)`
@@ -77,9 +77,15 @@ function main() {
 - `verifySignatures(bytes32 hash, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, (address[] keys, uint32 expirationTime) guardianSet) pure returns (bool valid, string reason)`
 - `verifyVM((uint8 version, uint32 timestamp, uint32 nonce, uint16 emitterChainId, bytes32 emitterAddress, uint64 sequence, uint8 consistencyLevel, bytes payload, uint32 guardianSetIndex, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, bytes32 hash) vm) view returns (bool valid, string reason)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GuardianSetAdded` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `WormholeTokenBridgeABI`
 
-`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge.
+`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge. The import is the contract's full ABI across every deployment; call it through the `Wormhole` namespace to have a function a chain's deployment does not run refused.
 
 - `_parseTransferCommon(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer)`
 - `attestToken(address tokenAddress, uint32 nonce) payable returns (uint64 sequence)`
@@ -124,3 +130,7 @@ function main() {
 - `wrapAndTransferETH(uint16 recipientChain, bytes32 recipient, uint256 arbiterFee, uint32 nonce) payable returns (uint64 sequence)`
 - `wrapAndTransferETHWithPayload(uint16 recipientChain, bytes32 recipient, uint32 nonce, bytes payload) payable returns (uint64 sequence)`
 - `wrappedAsset(uint16 tokenChainId, bytes32 tokenAddress) view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

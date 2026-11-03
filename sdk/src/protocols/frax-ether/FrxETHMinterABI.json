@@ -586,11 +586,6 @@
       ]
     },
     {
-      "name": "KeysCleared",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "OwnerChanged",
       "type": "event",
       "inputs": [

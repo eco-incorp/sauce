@@ -40,7 +40,7 @@ functions, and its writes are SafeERC20.
 
 ### `UnitFlowV3FactoryABI`
 
-`import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";` Speaks for: factory.
+`import UnitFlowV3FactoryABI from "./protocols/unitflow-v3/UnitFlowV3FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `UnitflowV3` namespace to have a function a chain's deployment does not run refused.
 
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
 - `enableFeeAmount(uint24 fee, int24 tickSpacing)`
@@ -83,7 +83,7 @@ functions, and its writes are SafeERC20.
 
 ### `UnitFlowV3QuoterABI`
 
-`import UnitFlowV3QuoterABI from "./protocols/unitflow-v3/UnitFlowV3QuoterABI.json";` Speaks for: quoter.
+`import UnitFlowV3QuoterABI from "./protocols/unitflow-v3/UnitFlowV3QuoterABI.json";` Speaks for: quoter. The import is the contract's full ABI across every deployment; call it through the `UnitflowV3` namespace to have a function a chain's deployment does not run refused.
 
 - `factory() view returns (address)`
 - `quoteExactInput(bytes path, uint256 amountIn) returns (uint256 amountOut)`
@@ -95,7 +95,7 @@ functions, and its writes are SafeERC20.
 
 ### `UnitFlowV3RouterABI`
 
-`import UnitFlowV3RouterABI from "./protocols/unitflow-v3/UnitFlowV3RouterABI.json";` Speaks for: router.
+`import UnitFlowV3RouterABI from "./protocols/unitflow-v3/UnitFlowV3RouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `UnitflowV3` namespace to have a function a chain's deployment does not run refused.
 
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`
 - `exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) payable returns (uint256 amountOut)`

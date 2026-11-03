@@ -1432,11 +1432,6 @@
       ]
     },
     {
-      "name": "EIP712DomainChanged",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "EpochIncreased",
       "type": "event",
       "inputs": [
@@ -1603,11 +1598,6 @@
       "inputs": []
     },
     {
-      "name": "MakingAmountTooLow",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "MismatchArraysLengths",
       "type": "error",
       "inputs": []
@@ -1678,20 +1668,6 @@
       "inputs": []
     },
     {
-      "name": "ReturnAmountIsNotEnough",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "result",
-          "type": "uint256"
-        },
-        {
-          "name": "minReturn",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "SafeTransferFailed",
       "type": "error",
       "inputs": []
@@ -1712,16 +1688,6 @@
         {
           "name": "res",
           "type": "bytes"
-        }
-      ]
-    },
-    {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
         }
       ]
     },
@@ -1752,11 +1718,6 @@
     },
     {
       "name": "WrongSeriesNonce",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroAddress",
       "type": "error",
       "inputs": []
     },

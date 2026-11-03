@@ -715,28 +715,6 @@
           "indexed": false
         }
       ]
-    },
-    {
-      "name": "SetZeroExAddress",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "_zeroExAddress",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "SetZeroExAddressAtInit",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "_zeroExAddress",
-          "type": "address",
-          "indexed": false
-        }
-      ]
     }
   ]
 }

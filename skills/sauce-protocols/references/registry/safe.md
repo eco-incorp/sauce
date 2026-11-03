@@ -40,7 +40,7 @@ function main() {
 
 ### `SafeABI`
 
-`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130.
+`import SafeABI from "./protocols/safe/SafeABI.json";` Speaks for: safeV141, safeL2V130. The import is the contract's full ABI across every deployment; call it through the `Safe` namespace to have a function a chain's deployment does not run refused.
 
 - `addOwnerWithThreshold(address owner, uint256 _threshold)`
 - `approvedHashes(address, bytes32) view returns (uint256)`
@@ -80,11 +80,12 @@ Not on Arc's safeV141 (`0x41675C099F32341bf84BFc5382aF534df5C7461a`), whose code
 
 Left out of this ABI, though its deployments declare them:
 
-- `event AddedOwner` taking `(address)`: its deployments declare it with different indexed parameters.
-- `event ChangedFallbackHandler` taking `(address)`: its deployments declare it with different indexed parameters.
-- `event ChangedGuard` taking `(address)`: its deployments declare it with different indexed parameters.
-- `event DisabledModule` taking `(address)`: its deployments declare it with different indexed parameters.
-- `event EnabledModule` taking `(address)`: its deployments declare it with different indexed parameters.
-- `event ExecutionFailure` taking `(bytes32,uint256)`: its deployments declare it with different indexed parameters.
-- `event ExecutionSuccess` taking `(bytes32,uint256)`: its deployments declare it with different indexed parameters.
-- `event RemovedOwner` taking `(address)`: its deployments declare it with different indexed parameters.
+- `event AddedOwner` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event ChangedFallbackHandler` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event ChangedGuard` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event DisabledModule` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event EnabledModule` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event ExecutionFailure` taking `(bytes32,uint256)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event ExecutionSuccess` taking `(bytes32,uint256)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event RemovedOwner` taking `(address)`: its deployments declare it with different indexed parameters, or anonymous in one.
+- `event SignMsg` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

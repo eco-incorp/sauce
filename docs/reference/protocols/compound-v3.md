@@ -97,7 +97,7 @@ function main() {
 
 ### `CometABI`
 
-`import CometABI from "./protocols/compound-v3/CometABI.json";` Speaks for: cUSDCv3, cWETHv3, cUSDTv3.
+`import CometABI from "./protocols/compound-v3/CometABI.json";` Speaks for: cUSDCv3, cWETHv3, cUSDTv3. The import is the contract's full ABI across every deployment; call it through the `CompoundV3` namespace to have a function a chain's deployment does not run refused.
 
 - `absorb(address absorber, address[] accounts)`
 - `accrueAccount(address account)`
@@ -221,9 +221,50 @@ Not on Ethereum's cUSDTv3 (`0x3Afdc9BCA9213A35503b077a6072F3D0d5AB0840`), whose 
 
 Not on Ethereum's cWETHv3 (`0xA17581A9E3356d9A858b789D68B4d866e593aE94`), whose code does not dispatch them or declares them otherwise: `activateCollateral`, `collateralsSupplyPauseFlags`, `collateralsTransferPauseFlags`, `collateralsWithdrawPauseFlags`, `deactivateCollateral`, `deactivatedCollaterals`, `extendedPauseFlags`, `isBaseSupplyPaused`, `isBorrowersTransferPaused`, `isBorrowersWithdrawPaused`, `isCollateralAssetSupplyPaused`, `isCollateralAssetTransferPaused`, `isCollateralAssetWithdrawPaused`, `isCollateralDeactivated`, `isCollateralSupplyPaused`, `isCollateralTransferPaused`, `isCollateralWithdrawPaused`, `isLendersTransferPaused`, `isLendersWithdrawPaused`, `MAX_SUPPORTED_UTILIZATION`, `pauseBaseSupply`, `pauseBorrowersTransfer`, `pauseBorrowersWithdraw`, `pauseCollateralAssetSupply`, `pauseCollateralAssetTransfer`, `pauseCollateralAssetWithdraw`, `pauseCollateralSupply`, `pauseCollateralTransfer`, `pauseCollateralWithdraw`, `pauseLendersTransfer`, `pauseLendersWithdraw`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI, though its deployments declare them:
+
+- `error Absurd` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AlreadyInitialized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BadDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BadDiscount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BadMinimum` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BadNonce` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BadSignatory` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BaseSupplyPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowCFTooLarge` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowersTransferPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowersWithdrawPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowTooSmall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralAssetOffsetStatusAlreadySet` taking `(uint24,uint24,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralAssetSupplyPaused` taking `(uint24)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralIsDeactivated` taking `(uint24)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DeactivatedCollateralBorrowBlocked` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DeactivatedCollateralTransferBlocked` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientReserves` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidUInt104` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidUInt128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidUInt64` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LendersTransferPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LendersWithdrawPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LiqPenaltyTooHigh` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LiquidateCFTooLarge` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NegativeNumber` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotCollateralized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotLiquidatable` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OffsetStatusAlreadySet` taking `(uint24,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyGovernor` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyPauseGuardian` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyPauseGuardianOrGovernor` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Paused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReentrantCallBlocked` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SupplyCapExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TooManyAssets` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferInFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `CometRewardsABI`
 
-`import CometRewardsABI from "./protocols/compound-v3/CometRewardsABI.json";` Speaks for: cometRewards.
+`import CometRewardsABI from "./protocols/compound-v3/CometRewardsABI.json";` Speaks for: cometRewards. The import is the contract's full ABI across every deployment; call it through the `CompoundV3` namespace to have a function a chain's deployment does not run refused.
 
 - `claim(address comet, address src, bool shouldAccrue)`
 - `claimTo(address comet, address src, address to, bool shouldAccrue)`
@@ -240,6 +281,12 @@ Not on Ethereum's cWETHv3 (`0xA17581A9E3356d9A858b789D68B4d866e593aE94`), whose 
 Not on Ethereum's cometRewards (`0x1B0e765F6224C21223AeA2af16c1C46E38885a40`), whose code does not dispatch them or declares them otherwise: `rewardConfig`, `setRewardConfigWithMultiplier`, `setRewardsClaimed`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Not on Polygon's cometRewards (`0x45939657d1CA34A8FA39A924B71D28Fe8431e581`), whose code does not dispatch them or declares them otherwise: `rewardConfig`, `setRewardConfigWithMultiplier`, `setRewardsClaimed`. Do not call them there: a program compiled for Polygon is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidUInt64` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotPermitted` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSupported` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

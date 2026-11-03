@@ -52,7 +52,7 @@ function main() {
 
 ### `ScrollL1GatewayRouterABI`
 
-`import ScrollL1GatewayRouterABI from "./protocols/scroll-bridge/ScrollL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter.
+`import ScrollL1GatewayRouterABI from "./protocols/scroll-bridge/ScrollL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter. The import is the contract's full ABI across every deployment; call it through the `ScrollBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `defaultERC20Gateway() view returns (address)`
 - `depositERC20(address _token, uint256 _amount, uint256 _gasLimit) payable`
@@ -77,9 +77,18 @@ function main() {
 - `setETHGateway(address _newEthGateway)`
 - `transferOwnership(address newOwner)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event DepositERC20` taking `(address,address,address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event DepositETH` taking `(address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FinalizeWithdrawERC20` taking `(address,address,address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FinalizeWithdrawETH` taking `(address,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RefundERC20` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RefundETH` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `ScrollL1MessengerABI`
 
-`import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger.
+`import ScrollL1MessengerABI from "./protocols/scroll-bridge/ScrollL1MessengerABI.json";` Speaks for: l1ScrollMessenger. The import is the contract's full ABI across every deployment; call it through the `ScrollBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `counterpart() view returns (address)`
 - `enforcedTxGateway() view returns (address)`
@@ -103,6 +112,10 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `updateFeeVault(address _newFeeVault)`
 - `xDomainMessageSender() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ErrorZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

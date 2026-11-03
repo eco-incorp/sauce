@@ -11,7 +11,12 @@
 //   - for a contract with no verified source, the functions of its reference interface
 //     (`reference/index.json`) the deployed code dispatches, each recorded under `unverified`;
 //   - for an ERC standard (`standard` in its target: an interface whose deployments are examples),
-//     its reference interface alone, where every example dispatches each function.
+//     its reference interface alone, where every example dispatches each function;
+//   - of the events and errors, only those some deployment's code carries (`events`/`errors` in the
+//     evidence): one no code carries is left out, and a shipped one a deployment does not carry is
+//     listed against it under `uncarried` in `omitted.json`. An anonymous event stays anonymous.
+//   - a deployment whose verified ABI is carried from a capture that kept only the registry's
+//     names (`carried.partial`) is listed under `partial` in `omitted.json`: its ABI may lack more.
 //
 // What the registry declares already is kept exactly as written, comments included, so every
 // program that compiles keeps compiling. What cannot be exposed is left out and listed, with why,
@@ -117,9 +122,14 @@ const functionKey = (f) =>
   ]);
 const indexing = (inputs) =>
   inputs.map((p) => `${p.indexed ? "indexed " : ""}${canonical(p)}`).join(", ");
-/** An event's or error's: its types, and an event's `indexed` flags. */
+/** An event's or error's: its types, an event's `indexed` flags, and whether it is anonymous. */
 const markKey = (m) =>
-  JSON.stringify([m.type, signature(m), m.type === "event" ? indexing(m.inputs) : ""]);
+  JSON.stringify([
+    m.type,
+    signature(m),
+    m.type === "event" ? indexing(m.inputs) : "",
+    m.type === "event" && m.anonymous === true,
+  ]);
 const markId = (m) =>
   m.type === "event" ? toEventSelector(signature(m)) : toFunctionSelector(signature(m));
 const exceptionKey = (item) =>
@@ -149,6 +159,8 @@ function abiItem(f, type = f.type ?? "function") {
   return {
     name,
     type,
+    // An anonymous event's log carries no topic0: its topics are its indexed parameters alone.
+    ...(type === "event" && f.anonymous === true ? { anonymous: true } : {}),
     inputs: (f.inputs ?? []).map((p) => param(p, true, type === "event")),
   };
 }
@@ -160,7 +172,8 @@ function abiItem(f, type = f.type ?? "function") {
  * is the export as `abis.ts` writes it; `contracts` the protocol's.
  */
 function fullAbi(slug, exportName, today, target, contracts) {
-  if (target.unverifiable !== undefined) return { items: today, omitted: [] };
+  if (target.unverifiable !== undefined)
+    return { items: today, omitted: [], uncarried: {}, partial: [] };
   const linked = contracts.filter((c) => c.abiExport === exportName);
   for (const key of ["standard", "common"]) {
     if (target[key] !== undefined && linked.some((c) => c.kind !== "interface")) {
@@ -354,9 +367,46 @@ function fullAbi(slug, exportName, today, target, contracts) {
     }
   }
 
-  // Events and errors: the registry's as written, then the union's.
-  const todayMarks = today.filter((i) => i.type === "event" || i.type === "error");
-  const todayMarkIds = new Set(todayMarks.map((m) => `${m.type} ${markId(m)}`));
+  // Events and errors: the registry's as written, then the union's, each only where some
+  // deployment's code carries it (an event's topic before its LOG, an error's selector before its
+  // REVERT, an anonymous event the LOG its indexed parameters take): a contract whose code carries
+  // none never logs or reverts with it. A shipped one a deployment's code does not carry is recorded
+  // against that deployment (`uncarried`), as a function a chain's deployment lacks is withheld.
+  const at = (row) => `${row.chainId}:${row.address}`;
+  const locatedOn = (row, m) => (m.type === "event" ? row.events : row.errors)?.[markId(m)];
+  const carriers = (m) => {
+    const missing = rows.filter((row) => locatedOn(row, m) === undefined);
+    if (missing.length > 0) {
+      fail(
+        `${slug}.${exportName}: ${exceptionKey(m)} was not located on ${missing.map(at).join(", ")} — recapture ${slug}`,
+      );
+    }
+    return rows.filter((row) => locatedOn(row, m) !== null);
+  };
+  const NOT_CARRIED =
+    "no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library";
+  const shippedMarks = [];
+  for (const written of today.filter((i) => i.type === "event" || i.type === "error")) {
+    // An event its verified declarations make anonymous is written so, the rest as it was.
+    let m = written;
+    if (m.type === "event" && m.anonymous !== true) {
+      const declared = rows
+        .flatMap(verifiedOf)
+        .filter((f) => f.type === "event" && f.signature === signature(m));
+      const anonymous = declared.filter((f) => f.anonymous === true).length;
+      if (anonymous > 0 && anonymous < declared.length) {
+        fail(`${slug}.${exportName}: the deployments declare ${signature(m)} anonymous and not`);
+      }
+      if (anonymous > 0) m = { name: m.name, type: m.type, anonymous: true, inputs: m.inputs };
+    }
+    if (carriers(m).length === 0) omit(m, NOT_CARRIED);
+    else shippedMarks.push(m);
+  }
+  const todayMarkIds = new Set(
+    today
+      .filter((i) => i.type === "event" || i.type === "error")
+      .map((m) => `${m.type} ${markId(m)}`),
+  );
   const marks = new Map();
   const markSources = standard
     ? [ref.filter((i) => i.type === "event" || i.type === "error").map((m) => abiItem(m, m.type))]
@@ -375,20 +425,51 @@ function fullAbi(slug, exportName, today, target, contracts) {
       marks.set(id, entry);
     }
   }
-  const addedMarks = [];
   for (const [, byJson] of [...marks].sort((a, b) => a[0].localeCompare(b[0]))) {
     const ranked = [...byJson].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     const best = JSON.parse(ranked[0][0]);
+    if (carriers(best).length === 0) {
+      omit(best, NOT_CARRIED);
+      continue;
+    }
     const keys = new Set(ranked.map(([json]) => markKey(JSON.parse(json))));
     if (keys.size > 1) {
-      omit(best, "its deployments declare it with different indexed parameters");
+      omit(
+        best,
+        "its deployments declare it with different indexed parameters, or anonymous in one",
+      );
       continue;
     }
     if (common && ranked.reduce((n, [, count]) => n + count, 0) < rows.length) {
       omit(best, "not every deployment declares it");
       continue;
     }
-    addedMarks.push(best);
+    shippedMarks.push(best);
+  }
+  /** `<chainId>:<address>` -> the shipped events and errors that deployment's code does not carry. */
+  const uncarried = {};
+  for (const m of shippedMarks) {
+    for (const row of rows) {
+      if (locatedOn(row, m) === null) (uncarried[at(row)] ??= []).push(exceptionKey(m));
+    }
+  }
+  for (const list of Object.values(uncarried)) list.sort();
+
+  // Deployments whose verified ABI could not be fetched, carried from a capture that kept only
+  // what the registry declared then: this ABI may lack what they run.
+  const partial = [];
+  for (const row of rows) {
+    for (const source of row.abiSources ?? []) {
+      if (source.carried === undefined) continue;
+      if (typeof source.carried !== "object" || typeof source.carried.partial !== "boolean") {
+        fail(
+          `${slug}.${exportName}: ${at(row)} carries ${source.address} unflagged — recapture ${slug}`,
+        );
+      }
+      if (source.carried.partial) {
+        partial.push({ deployment: at(row), source: source.address, date: source.carried.date });
+      }
+    }
   }
 
   const byOrder = (a, b) =>
@@ -397,11 +478,11 @@ function fullAbi(slug, exportName, today, target, contracts) {
     signature(a).localeCompare(signature(b));
   const items = [
     ...functions.sort(byOrder),
-    ...[...todayMarks, ...addedMarks].filter((m) => m.type === "event").sort(byOrder),
-    ...[...todayMarks, ...addedMarks].filter((m) => m.type === "error").sort(byOrder),
+    ...shippedMarks.filter((m) => m.type === "event").sort(byOrder),
+    ...shippedMarks.filter((m) => m.type === "error").sort(byOrder),
   ];
   omitted.sort((a, b) => a.signature.localeCompare(b.signature));
-  return { items, omitted };
+  return { items, omitted, uncarried, partial };
 }
 
 // --- abis.ts, rewritten in place --------------------------------------------------------------------
@@ -470,6 +551,8 @@ function rewrite(path, text, abis, full) {
 
 const writes = [];
 const omittedByExport = {};
+const uncarriedByExport = {};
+const partialByExport = {};
 for (const info of [...listProtocols()].sort((a, b) => a.slug.localeCompare(b.slug))) {
   const slug = info.slug;
   const dir = join(sdk, "src", "protocols", slug);
@@ -483,9 +566,17 @@ for (const info of [...listProtocols()].sort((a, b) => a.slug.localeCompare(b.sl
   for (const [name, today] of Object.entries(abis)) {
     if (!Array.isArray(today)) continue;
     if (spec[name] === undefined) fail(`${slug}.${name} has no binding in targets.json`);
-    const { items, omitted } = fullAbi(slug, name, today, spec[name], contracts);
+    const { items, omitted, uncarried, partial } = fullAbi(
+      slug,
+      name,
+      today,
+      spec[name],
+      contracts,
+    );
     full.set(name, items);
     if (omitted.length > 0) omittedByExport[`${slug}.${name}`] = omitted;
+    if (Object.keys(uncarried).length > 0) uncarriedByExport[`${slug}.${name}`] = uncarried;
+    if (partial.length > 0) partialByExport[`${slug}.${name}`] = partial;
     writes.push([
       join(dir, `${name}.json`),
       `${JSON.stringify({ abi: items }, null, 2)}\n`,
@@ -501,9 +592,14 @@ writes.push([
     {
       note:
         "Generated by sdk/scripts/gen-registry-abis.mjs from evidence.json, targets.json and reference/: " +
-        "each function, event and error of an export's deployments that its registry ABI does not " +
-        "declare, and why. Do not edit by hand.",
+        "exports: each function, event and error of an export's deployments that its registry ABI does " +
+        "not declare, and why. uncarried: per deployment, the events and errors the ABI declares that " +
+        "the deployment's code does not carry. partial: the deployments whose verified ABI could not " +
+        "be fetched and is carried from a capture that kept only what the registry then declared, so " +
+        "the ABI may lack what they run. Do not edit by hand.",
       exports: omittedByExport,
+      uncarried: uncarriedByExport,
+      partial: partialByExport,
     },
     null,
     2,

@@ -1231,27 +1231,6 @@
       ]
     },
     {
-      "name": "RoleAdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "role",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "previousAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "newAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "RoleGranted",
       "type": "event",
       "inputs": [
@@ -1431,11 +1410,6 @@
       ]
     },
     {
-      "name": "AdminBadRole",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "AllowOnlyForBeneficiary",
       "type": "error",
       "inputs": [
@@ -1447,11 +1421,6 @@
     },
     {
       "name": "AttemptToCancelWithoutBeneficiary",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CallProxyBadRole",
       "type": "error",
       "inputs": []
     },
@@ -1510,25 +1479,6 @@
       "inputs": []
     },
     {
-      "name": "NativeSenderBadRole",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "nativeSender",
-          "type": "bytes"
-        },
-        {
-          "name": "chainIdFrom",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "NotSupportedDstChain",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "PermitFailure",
       "type": "error",
       "inputs": []
@@ -1540,21 +1490,6 @@
     },
     {
       "name": "TransferAmountNotCoverFees",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Unauthorized",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UnexpectedBatchSize",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UnknownEngine",
       "type": "error",
       "inputs": []
     },
@@ -1585,11 +1520,6 @@
     },
     {
       "name": "WrongToken",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroAddress",
       "type": "error",
       "inputs": []
     }

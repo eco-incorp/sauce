@@ -384,5 +384,4 @@ export const SafeABI = [
       { name: "fallbackHandler", type: "address", indexed: false },
     ],
   },
-  { name: "SignMsg", type: "event", inputs: [{ name: "msgHash", type: "bytes32", indexed: true }] },
 ] as const;

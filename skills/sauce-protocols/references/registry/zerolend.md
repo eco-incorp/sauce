@@ -33,7 +33,7 @@ function main() {
 
 ### `ZeroLendPoolABI`
 
-`import ZeroLendPoolABI from "./protocols/zerolend/ZeroLendPoolABI.json";` Speaks for: pool.
+`import ZeroLendPoolABI from "./protocols/zerolend/ZeroLendPoolABI.json";` Speaks for: pool. The import is the contract's full ABI across every deployment; call it through the `Zerolend` namespace to have a function a chain's deployment does not run refused.
 
 - `ADDRESSES_PROVIDER() view returns (address)`
 - `backUnbacked(address asset, uint256 amount, uint256 fee) returns (uint256)`
@@ -58,6 +58,7 @@ function main() {
 - `getUserConfiguration(address user) view returns ((uint256 data))`
 - `getUserEMode(address user) view returns (uint256)`
 - `initialize(address provider)`
+- `initialize(address _logic, bytes _data) payable`
 - `initReserve(address asset, address aTokenAddress, address stableDebtAddress, address variableDebtAddress, address interestRateStrategyAddress)`
 - `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
 - `MAX_NUMBER_RESERVES() view returns (uint16)`
@@ -81,3 +82,22 @@ function main() {
 - `updateBridgeProtocolFee(uint256 protocolFee)`
 - `updateFlashloanPremiums(uint128 flashLoanPremiumTotal, uint128 flashLoanPremiumToProtocol)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event BackUnbacked` taking `(address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Borrow` taking `(address,address,address,uint256,uint8,uint256,uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FlashLoan` taking `(address,address,address,uint256,uint8,uint256,uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event IsolationModeTotalDebtUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiquidationCall` taking `(address,address,address,uint256,uint256,address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MintedToTreasury` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MintUnbacked` taking `(address,address,address,uint256,uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RebalanceStableBorrowRate` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Repay` taking `(address,address,address,uint256,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ReserveDataUpdated` taking `(address,uint256,uint256,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ReserveUsedAsCollateralDisabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ReserveUsedAsCollateralEnabled` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Supply` taking `(address,address,address,uint256,uint16)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SwapBorrowRateMode` taking `(address,address,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UserEModeSet` taking `(address,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Withdraw` taking `(address,address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -230,15 +230,6 @@ export const HegicABI = [
     inputs: [{ name: "amount", type: "uint256", indexed: false }],
   },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [

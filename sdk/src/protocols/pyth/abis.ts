@@ -676,19 +676,6 @@ export const PythOracleABI = [
     outputs: [{ name: "", type: "address" }],
   },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
-  },
-  {
     name: "ContractUpgraded",
     type: "event",
     inputs: [
@@ -793,18 +780,6 @@ export const PythOracleABI = [
     ],
   },
   {
-    name: "TwapPriceFeedUpdate",
-    type: "event",
-    inputs: [
-      { name: "id", type: "bytes32", indexed: true },
-      { name: "startTime", type: "uint64", indexed: false },
-      { name: "endTime", type: "uint64", indexed: false },
-      { name: "twapPrice", type: "int64", indexed: false },
-      { name: "twapConf", type: "uint64", indexed: false },
-      { name: "downSlotsRatio", type: "uint32", indexed: false },
-    ],
-  },
-  {
     name: "Upgraded",
     type: "event",
     inputs: [{ name: "implementation", type: "address", indexed: true }],
@@ -825,20 +800,12 @@ export const PythOracleABI = [
       { name: "newWormholeAddress", type: "address", indexed: false },
     ],
   },
-  { name: "InsufficientFee", type: "error", inputs: [] },
   { name: "InvalidArgument", type: "error", inputs: [] },
   { name: "InvalidGovernanceDataSource", type: "error", inputs: [] },
   { name: "InvalidGovernanceMessage", type: "error", inputs: [] },
   { name: "InvalidGovernanceTarget", type: "error", inputs: [] },
-  { name: "InvalidTwapUpdateData", type: "error", inputs: [] },
-  { name: "InvalidTwapUpdateDataSet", type: "error", inputs: [] },
-  { name: "InvalidUpdateData", type: "error", inputs: [] },
   { name: "InvalidUpdateDataSource", type: "error", inputs: [] },
-  { name: "InvalidWormholeAddressToSet", type: "error", inputs: [] },
   { name: "InvalidWormholeVaa", type: "error", inputs: [] },
-  { name: "NoFreshUpdate", type: "error", inputs: [] },
   { name: "OldGovernanceMessage", type: "error", inputs: [] },
-  { name: "PriceFeedNotFound", type: "error", inputs: [] },
   { name: "PriceFeedNotFoundWithinRange", type: "error", inputs: [] },
-  { name: "StalePrice", type: "error", inputs: [] },
 ] as const;

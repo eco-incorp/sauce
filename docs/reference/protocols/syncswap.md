@@ -54,7 +54,7 @@ function main() {
 
 ### `SyncSwapRouterABI`
 
-`import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";` Speaks for: router.
+`import SyncSwapRouterABI from "./protocols/syncswap/SyncSwapRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Syncswap` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address pool, (address token, uint256 amount)[] inputs, bytes data, uint256 minLiquidity, address callback, bytes callbackData) payable returns (uint256 liquidity)`
 - `addLiquidity2(address pool, (address token, uint256 amount)[] inputs, bytes data, uint256 minLiquidity, address callback, bytes callbackData) payable returns (uint256 liquidity)`

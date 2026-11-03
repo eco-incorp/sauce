@@ -1002,11 +1002,6 @@
       ]
     },
     {
-      "name": "EIP712DomainChanged",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "Fees",
       "type": "event",
       "inputs": [
@@ -1122,21 +1117,6 @@
       ]
     },
     {
-      "name": "BelowMinimumK",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DepositsNotEqual",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "FactoryAlreadySet",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InsufficientInputAmount",
       "type": "error",
       "inputs": []
@@ -1152,17 +1132,7 @@
       "inputs": []
     },
     {
-      "name": "InsufficientLiquidityMinted",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InsufficientOutputAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidTo",
       "type": "error",
       "inputs": []
     },
@@ -1180,16 +1150,6 @@
       "name": "NotEmergencyCouncil",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
-        }
-      ]
     }
   ]
 }

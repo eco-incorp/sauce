@@ -337,15 +337,6 @@ export const SwETHABI = [
     ],
   },
   {
-    name: "ETHWithdrawn",
-    type: "event",
-    inputs: [
-      { name: "to", type: "address", indexed: true },
-      { name: "swETHBurned", type: "uint256", indexed: false },
-      { name: "ethReturned", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "Initialized",
     type: "event",
     inputs: [{ name: "version", type: "uint8", indexed: false }],
@@ -427,44 +418,15 @@ export const SwETHABI = [
     type: "error",
     inputs: [{ name: "_address", type: "address" }],
   },
-  { name: "CannotBeZeroAddress", type: "error", inputs: [] },
-  { name: "CannotBurnZeroSwETH", type: "error", inputs: [] },
   { name: "CannotReferSelf", type: "error", inputs: [] },
-  { name: "CannotRepriceWithZeroSwETHSupply", type: "error", inputs: [] },
   { name: "CoreMethodsPaused", type: "error", inputs: [] },
   { name: "InvalidETHDeposit", type: "error", inputs: [] },
-  { name: "InvalidMethodCall", type: "error", inputs: [] },
-  { name: "InvalidPreRewardETHReserves", type: "error", inputs: [] },
-  {
-    name: "NotEnoughTimeElapsedForReprice",
-    type: "error",
-    inputs: [{ name: "remainingTime", type: "uint256" }],
-  },
-  { name: "NotInWhitelist", type: "error", inputs: [] },
-  { name: "NoTokensToWithdraw", type: "error", inputs: [] },
-  {
-    name: "PRBMath_MulDiv_Overflow",
-    type: "error",
-    inputs: [
-      { name: "x", type: "uint256" },
-      { name: "y", type: "uint256" },
-      { name: "denominator", type: "uint256" },
-    ],
-  },
   {
     name: "PRBMath_MulDiv18_Overflow",
     type: "error",
     inputs: [
       { name: "x", type: "uint256" },
       { name: "y", type: "uint256" },
-    ],
-  },
-  {
-    name: "RepriceDifferenceTooLarge",
-    type: "error",
-    inputs: [
-      { name: "repriceDiff", type: "uint256" },
-      { name: "maximumRepriceDiff", type: "uint256" },
     ],
   },
   {
@@ -839,15 +801,6 @@ export const RswETHABI = [
     ],
   },
   {
-    name: "ETHWithdrawn",
-    type: "event",
-    inputs: [
-      { name: "to", type: "address", indexed: true },
-      { name: "rswETHBurned", type: "uint256", indexed: false },
-      { name: "ethReturned", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "Initialized",
     type: "event",
     inputs: [{ name: "version", type: "uint8", indexed: false }],
@@ -929,8 +882,6 @@ export const RswETHABI = [
     type: "error",
     inputs: [{ name: "_address", type: "address" }],
   },
-  { name: "CannotBeZeroAddress", type: "error", inputs: [] },
-  { name: "CannotBurnZeroRswETH", type: "error", inputs: [] },
   { name: "CannotReferSelf", type: "error", inputs: [] },
   { name: "CannotRepriceWithZeroRswETHSupply", type: "error", inputs: [] },
   { name: "CoreMethodsPaused", type: "error", inputs: [] },
@@ -943,47 +894,13 @@ export const RswETHABI = [
     ],
   },
   { name: "InvalidETHDeposit", type: "error", inputs: [] },
-  { name: "InvalidMethodCall", type: "error", inputs: [] },
-  { name: "InvalidPreRewardETHReserves", type: "error", inputs: [] },
-  {
-    name: "NotEnoughTimeElapsedForReprice",
-    type: "error",
-    inputs: [{ name: "remainingTime", type: "uint256" }],
-  },
-  { name: "NotInWhitelist", type: "error", inputs: [] },
-  { name: "NoTokensToWithdraw", type: "error", inputs: [] },
   { name: "OnlyDepositManager", type: "error", inputs: [] },
-  {
-    name: "PRBMath_MulDiv_Overflow",
-    type: "error",
-    inputs: [
-      { name: "x", type: "uint256" },
-      { name: "y", type: "uint256" },
-      { name: "denominator", type: "uint256" },
-    ],
-  },
   {
     name: "PRBMath_MulDiv18_Overflow",
     type: "error",
     inputs: [
       { name: "x", type: "uint256" },
       { name: "y", type: "uint256" },
-    ],
-  },
-  {
-    name: "RepriceDifferenceTooLarge",
-    type: "error",
-    inputs: [
-      { name: "repriceDiff", type: "uint256" },
-      { name: "maximumRepriceDiff", type: "uint256" },
-    ],
-  },
-  {
-    name: "RepriceRswETHDifferenceTooLarge",
-    type: "error",
-    inputs: [
-      { name: "repriceRswETHDiff", type: "uint256" },
-      { name: "maximumRswETHRepriceDiff", type: "uint256" },
     ],
   },
   { name: "RewardPercentageTotalOverflow", type: "error", inputs: [] },

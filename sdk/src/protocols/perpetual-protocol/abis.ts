@@ -457,16 +457,6 @@ export const ClearingHouseABI = [
     inputs: [{ name: "referralCode", type: "bytes32", indexed: true }],
   },
   {
-    name: "TrustedForwarderChanged",
-    type: "event",
-    inputs: [{ name: "forwarder", type: "address", indexed: true }],
-  },
-  {
-    name: "TrustedForwarderUpdated",
-    type: "event",
-    inputs: [{ name: "trustedForwarder", type: "address", indexed: false }],
-  },
-  {
     name: "Unpaused",
     type: "event",
     inputs: [{ name: "account", type: "address", indexed: false }],

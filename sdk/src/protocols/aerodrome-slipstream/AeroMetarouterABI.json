@@ -401,11 +401,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidNativeErc20Decimals",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidNftSender",
       "type": "error",
       "inputs": []
@@ -616,16 +611,6 @@
     },
     {
       "name": "UnregisteredDomain",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WethIsNativeErc20",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ZeroAddress",
       "type": "error",
       "inputs": []
     },

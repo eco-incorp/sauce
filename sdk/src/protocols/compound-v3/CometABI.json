@@ -2300,16 +2300,6 @@
       ]
     },
     {
-      "name": "Absurd",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "AlreadyInitialized",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "BadAmount",
       "type": "error",
       "inputs": []
@@ -2320,87 +2310,9 @@
       "inputs": []
     },
     {
-      "name": "BadDecimals",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BadDiscount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BadMinimum",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BadNonce",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "BadPrice",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "BadSignatory",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BaseSupplyPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowCFTooLarge",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowersTransferPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowersWithdrawPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BorrowTooSmall",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CollateralAssetOffsetStatusAlreadySet",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "offset",
-          "type": "uint24"
-        },
-        {
-          "name": "assetIndex",
-          "type": "uint24"
-        },
-        {
-          "name": "status",
-          "type": "bool"
-        }
-      ]
-    },
-    {
-      "name": "CollateralAssetSupplyPaused",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "assetIndex",
-          "type": "uint24"
-        }
-      ]
     },
     {
       "name": "CollateralAssetTransferPaused",
@@ -2433,16 +2345,6 @@
       ]
     },
     {
-      "name": "CollateralIsDeactivated",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "assetIndex",
-          "type": "uint24"
-        }
-      ]
-    },
-    {
       "name": "CollateralSupplyPaused",
       "type": "error",
       "inputs": []
@@ -2458,22 +2360,7 @@
       "inputs": []
     },
     {
-      "name": "DeactivatedCollateralBorrowBlocked",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "DeactivatedCollateralTransferBlocked",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ExceedsSupportedUtilization",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientReserves",
       "type": "error",
       "inputs": []
     },
@@ -2493,21 +2380,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidUInt104",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidUInt128",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidUInt64",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidValueS",
       "type": "error",
       "inputs": []
@@ -2518,37 +2390,7 @@
       "inputs": []
     },
     {
-      "name": "LendersTransferPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LendersWithdrawPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LiqPenaltyTooHigh",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LiquidateCFTooLarge",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NegativeNumber",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NoSelfTransfer",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotCollateralized",
       "type": "error",
       "inputs": []
     },
@@ -2558,56 +2400,7 @@
       "inputs": []
     },
     {
-      "name": "NotLiquidatable",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OffsetStatusAlreadySet",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "offset",
-          "type": "uint24"
-        },
-        {
-          "name": "status",
-          "type": "bool"
-        }
-      ]
-    },
-    {
-      "name": "OnlyGovernor",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyPauseGuardian",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyPauseGuardianOrGovernor",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Paused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ReentrantCallBlocked",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "SignatureExpired",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SupplyCapExceeded",
       "type": "error",
       "inputs": []
     },
@@ -2627,27 +2420,12 @@
       ]
     },
     {
-      "name": "TooManyAssets",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "TooMuchSlippage",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "TransferInFailed",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "TransferOutFailed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "Unauthorized",
       "type": "error",
       "inputs": []
     }

@@ -703,11 +703,6 @@ export const ThalesAMMABI = [
     inputs: [{ name: "_priceFeed", type: "address", indexed: false }],
   },
   {
-    name: "SetSafeBox",
-    type: "event",
-    inputs: [{ name: "_safeBox", type: "address", indexed: false }],
-  },
-  {
     name: "SetSafeBoxImpact",
     type: "event",
     inputs: [{ name: "_safeBoxImpact", type: "uint256", indexed: false }],
@@ -1104,16 +1099,6 @@ export const PositionalMarketABI = [
     name: "SetsUSD",
     type: "event",
     inputs: [{ name: "_address", type: "address", indexed: false }],
-  },
-  {
-    name: "SetZeroExAddress",
-    type: "event",
-    inputs: [{ name: "_zeroExAddress", type: "address", indexed: false }],
-  },
-  {
-    name: "SetZeroExAddressAtInit",
-    type: "event",
-    inputs: [{ name: "_zeroExAddress", type: "address", indexed: false }],
   },
 ] as const;
 
@@ -1818,23 +1803,8 @@ export const SpeedMarketsAMMABI = [
     inputs: [{ name: "_sUSD", type: "address", indexed: false }],
   },
   { name: "AssetNotSupported", type: "error", inputs: [] },
-  { name: "BonusTooHigh", type: "error", inputs: [] },
-  { name: "CanNotResolve", type: "error", inputs: [] },
   { name: "CanOnlyBeCalledFromResolverOrOwner", type: "error", inputs: [] },
-  { name: "CollateralNotSupported", type: "error", inputs: [] },
-  { name: "EtherTransferFailed", type: "error", inputs: [] },
   { name: "InvalidBuyinAmount", type: "error", inputs: [] },
-  { name: "InvalidOffRampCollateral", type: "error", inputs: [] },
-  { name: "InvalidPrice", type: "error", inputs: [] },
-  { name: "InvalidStrikeTime", type: "error", inputs: [] },
   { name: "InvalidWhitelistAddress", type: "error", inputs: [] },
-  { name: "MismatchedLengths", type: "error", inputs: [] },
-  { name: "MulticollateralOnrampDisabled", type: "error", inputs: [] },
-  { name: "NotEnoughReceivedViaOnramp", type: "error", inputs: [] },
-  { name: "OnlyCreatorAllowed", type: "error", inputs: [] },
-  { name: "OnlyMarketOwner", type: "error", inputs: [] },
-  { name: "RiskPerAssetExceeded", type: "error", inputs: [] },
   { name: "RiskPerDirectionExceeded", type: "error", inputs: [] },
-  { name: "SkewSlippageExceeded", type: "error", inputs: [] },
-  { name: "TimeTooFarIntoFuture", type: "error", inputs: [] },
 ] as const;

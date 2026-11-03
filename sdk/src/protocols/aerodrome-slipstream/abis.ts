@@ -994,16 +994,6 @@ export const AerodromeSlipstreamPoolABI = [
     ],
   },
   {
-    name: "SetFeeProtocol",
-    type: "event",
-    inputs: [
-      { name: "feeProtocol0Old", type: "uint8", indexed: false },
-      { name: "feeProtocol1Old", type: "uint8", indexed: false },
-      { name: "feeProtocol0New", type: "uint8", indexed: false },
-      { name: "feeProtocol1New", type: "uint8", indexed: false },
-    ],
-  },
-  {
     name: "Swap",
     type: "event",
     inputs: [
@@ -1718,7 +1708,6 @@ export const AeroMetarouterABI = [
   { name: "InvalidGaugeType", type: "error", inputs: [] },
   { name: "InvalidHookMetadata", type: "error", inputs: [] },
   { name: "InvalidInterchainAccountConfig", type: "error", inputs: [] },
-  { name: "InvalidNativeErc20Decimals", type: "error", inputs: [] },
   { name: "InvalidNftSender", type: "error", inputs: [] },
   { name: "InvalidPath", type: "error", inputs: [] },
   { name: "InvalidPayer", type: "error", inputs: [] },
@@ -1759,7 +1748,5 @@ export const AeroMetarouterABI = [
   { name: "UnauthorizedRelayVpm", type: "error", inputs: [] },
   { name: "UnexpectedNftSender", type: "error", inputs: [] },
   { name: "UnregisteredDomain", type: "error", inputs: [] },
-  { name: "WethIsNativeErc20", type: "error", inputs: [] },
-  { name: "ZeroAddress", type: "error", inputs: [] },
   { name: "ZeroAmount", type: "error", inputs: [] },
 ] as const;

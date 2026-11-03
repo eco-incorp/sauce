@@ -673,15 +673,6 @@ export const DlnSourceABI = [
   },
   { name: "Paused", type: "event", inputs: [{ name: "account", type: "address", indexed: false }] },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [
@@ -758,7 +749,6 @@ export const DlnSourceABI = [
       { name: "beneficiary", type: "address", indexed: false },
     ],
   },
-  { name: "AdminBadRole", type: "error", inputs: [] },
   { name: "CallProxyBadRole", type: "error", inputs: [] },
   {
     name: "CriticalMismatchTakeChainId",
@@ -773,8 +763,6 @@ export const DlnSourceABI = [
   { name: "FeeCollectorBadRole", type: "error", inputs: [] },
   { name: "GovMonitoringBadRole", type: "error", inputs: [] },
   { name: "IncorrectOrderStatus", type: "error", inputs: [] },
-  { name: "IntentManagerBadRole", type: "error", inputs: [] },
-  { name: "MismatchedOrderId", type: "error", inputs: [] },
   { name: "MismatchedTransferAmount", type: "error", inputs: [] },
   { name: "MismatchNativeGiveAmount", type: "error", inputs: [] },
   {
@@ -788,13 +776,10 @@ export const DlnSourceABI = [
   { name: "NotSupportedDstChain", type: "error", inputs: [] },
   { name: "PermitFailure", type: "error", inputs: [] },
   { name: "SignatureInvalidV", type: "error", inputs: [] },
-  { name: "Unauthorized", type: "error", inputs: [] },
-  { name: "UnknownEngine", type: "error", inputs: [] },
   { name: "WrongAddressLength", type: "error", inputs: [] },
   { name: "WrongAffiliateFeeLength", type: "error", inputs: [] },
   { name: "WrongArgument", type: "error", inputs: [] },
   { name: "WrongArgumentLength", type: "error", inputs: [] },
-  { name: "WrongChain", type: "error", inputs: [] },
   { name: "WrongExternalCallHash", type: "error", inputs: [] },
   {
     name: "WrongFixedFee",
@@ -1341,15 +1326,6 @@ export const DlnDestinationABI = [
   },
   { name: "Paused", type: "event", inputs: [{ name: "account", type: "address", indexed: false }] },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [
@@ -1420,14 +1396,12 @@ export const DlnDestinationABI = [
     type: "event",
     inputs: [{ name: "account", type: "address", indexed: false }],
   },
-  { name: "AdminBadRole", type: "error", inputs: [] },
   {
     name: "AllowOnlyForBeneficiary",
     type: "error",
     inputs: [{ name: "expectedBeneficiary", type: "bytes" }],
   },
   { name: "AttemptToCancelWithoutBeneficiary", type: "error", inputs: [] },
-  { name: "CallProxyBadRole", type: "error", inputs: [] },
   { name: "EthTransferFailed", type: "error", inputs: [] },
   { name: "GovMonitoringBadRole", type: "error", inputs: [] },
   { name: "IncorrectOrderStatus", type: "error", inputs: [] },
@@ -1444,26 +1418,13 @@ export const DlnDestinationABI = [
   { name: "MismatchedTransferAmount", type: "error", inputs: [] },
   { name: "MismatchGiveChainId", type: "error", inputs: [] },
   { name: "MismatchNativeFulfillAmount", type: "error", inputs: [] },
-  {
-    name: "NativeSenderBadRole",
-    type: "error",
-    inputs: [
-      { name: "nativeSender", type: "bytes" },
-      { name: "chainIdFrom", type: "uint256" },
-    ],
-  },
-  { name: "NotSupportedDstChain", type: "error", inputs: [] },
   { name: "PermitFailure", type: "error", inputs: [] },
   { name: "SignatureInvalidV", type: "error", inputs: [] },
   { name: "TransferAmountNotCoverFees", type: "error", inputs: [] },
-  { name: "Unauthorized", type: "error", inputs: [] },
-  { name: "UnexpectedBatchSize", type: "error", inputs: [] },
-  { name: "UnknownEngine", type: "error", inputs: [] },
   { name: "WrongAddressLength", type: "error", inputs: [] },
   { name: "WrongArgument", type: "error", inputs: [] },
   { name: "WrongArgumentLength", type: "error", inputs: [] },
   { name: "WrongChain", type: "error", inputs: [] },
   { name: "WrongExternalCallHash", type: "error", inputs: [] },
   { name: "WrongToken", type: "error", inputs: [] },
-  { name: "ZeroAddress", type: "error", inputs: [] },
 ] as const;

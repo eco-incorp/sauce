@@ -97,7 +97,7 @@ functions, and its writes are SafeERC20.
 
 ### `MorphoABI`
 
-`import MorphoABI from "./protocols/morpho-blue/MorphoABI.json";` Speaks for: morpho.
+`import MorphoABI from "./protocols/morpho-blue/MorphoABI.json";` Speaks for: morpho. The import is the contract's full ABI across every deployment; call it through the `MorphoBlue` namespace to have a function a chain's deployment does not run refused.
 
 - `accrueInterest((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams)`
 - `borrow((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv) marketParams, uint256 assets, uint256 shares, address onBehalf, address receiver) returns (uint256 assetsBorrowed, uint256 sharesBorrowed)`

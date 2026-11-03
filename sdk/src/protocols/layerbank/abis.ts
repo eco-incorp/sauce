@@ -970,17 +970,6 @@ export const LayerBankCoreABI = [
     ],
   },
   {
-    name: "FlashLoan",
-    type: "event",
-    inputs: [
-      { name: "target", type: "address", indexed: true },
-      { name: "initiator", type: "address", indexed: true },
-      { name: "asset", type: "address", indexed: true },
-      { name: "amount", type: "uint256", indexed: false },
-      { name: "premium", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "KeeperUpdated",
     type: "event",
     inputs: [{ name: "newKeeper", type: "address", indexed: false }],

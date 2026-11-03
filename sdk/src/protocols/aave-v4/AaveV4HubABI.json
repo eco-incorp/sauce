@@ -2009,20 +2009,6 @@
       ]
     },
     {
-      "name": "AccessManagedRequiredDelay",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "caller",
-          "type": "address"
-        },
-        {
-          "name": "delay",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
       "name": "AccessManagedUnauthorized",
       "type": "error",
       "inputs": [

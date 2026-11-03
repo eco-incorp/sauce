@@ -54,7 +54,7 @@ function main() {
 
 ### `StakedUSDeABI`
 
-`import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";` Speaks for: susde.
+`import StakedUSDeABI from "./protocols/ethena/StakedUSDeABI.json";` Speaks for: susde. The import is the contract's full ABI across every deployment; call it through the `Ethena` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `addToBlacklist(address target, bool isFullBlacklisting)`
@@ -114,9 +114,16 @@ function main() {
 - `vestingAmount() view returns (uint256)`
 - `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `USDeABI`
 
-`import USDeABI from "./protocols/ethena/USDeABI.json";` Speaks for: usde.
+`import USDeABI from "./protocols/ethena/USDeABI.json";` Speaks for: usde. The import is the contract's full ABI across every deployment; call it through the `Ethena` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `allowance(address owner, address spender) view returns (uint256)`
@@ -143,6 +150,12 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
 - `transferOwnership(address newOwner)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddressException` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

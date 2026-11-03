@@ -97,9 +97,13 @@ functions, and its writes are SafeERC20.
 - `withdraw(uint256 _shares)`
 - `withdrawAll()`
 
+Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.
+
 Left out of this ABI, though its deployments declare them:
 
 - `available` taking `()`: its name is an accessor's own property.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

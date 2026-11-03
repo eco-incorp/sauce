@@ -436,11 +436,6 @@
       ]
     },
     {
-      "name": "EIP712DomainChanged",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "MinterUpdated",
       "type": "event",
       "inputs": [
@@ -521,21 +516,6 @@
     },
     {
       "name": "OnlyMinter",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "ZeroAddressException",
       "type": "error",
       "inputs": []
     }

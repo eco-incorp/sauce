@@ -80,16 +80,4 @@ export const CrocSwapDexABI = [
     ],
     outputs: [{ name: "", type: "bytes" }],
   },
-  {
-    name: "CrocKnockoutCross",
-    type: "event",
-    inputs: [
-      { name: "pool", type: "bytes32", indexed: true },
-      { name: "tick", type: "int24", indexed: true },
-      { name: "isBid", type: "bool", indexed: false },
-      { name: "pivotTime", type: "uint32", indexed: false },
-      { name: "feeMileage", type: "uint64", indexed: false },
-      { name: "commitEntropy", type: "uint160", indexed: false },
-    ],
-  },
 ] as const;

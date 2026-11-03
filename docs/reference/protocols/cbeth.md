@@ -51,7 +51,7 @@ function main() {
 
 ### `CbETHABI`
 
-`import CbETHABI from "./protocols/cbeth/CbETHABI.json";` Speaks for: cbETH.
+`import CbETHABI from "./protocols/cbeth/CbETHABI.json";` Speaks for: cbETH. The import is the contract's full ABI across every deployment; call it through the `Cbeth` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`

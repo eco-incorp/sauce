@@ -1066,15 +1066,6 @@ export const LineaL1MessageServiceABI = [
     ],
   },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [
@@ -1160,30 +1151,9 @@ export const LineaL1MessageServiceABI = [
     inputs: [{ name: "emptyBlobIndex", type: "uint256" }],
   },
   { name: "BlobSubmissionDataIsMissing", type: "error", inputs: [] },
-  {
-    name: "BytesLengthNotMultipleOfTwo",
-    type: "error",
-    inputs: [{ name: "bytesLength", type: "uint256" }],
-  },
   { name: "CallerIsNotYieldManager", type: "error", inputs: [] },
   { name: "CallerNotLSTWithdrawalRecipient", type: "error", inputs: [] },
   { name: "EmptyBlobDataAtIndex", type: "error", inputs: [{ name: "index", type: "uint256" }] },
-  { name: "FeePaymentFailed", type: "error", inputs: [{ name: "recipient", type: "address" }] },
-  { name: "FeeTooLow", type: "error", inputs: [] },
-  { name: "FinalBlockStateEqualsZeroHash", type: "error", inputs: [] },
-  {
-    name: "FinalizationDataMissingForcedTransaction",
-    type: "error",
-    inputs: [{ name: "nextForcedTransactionNumber", type: "uint256" }],
-  },
-  {
-    name: "FinalizationInTheFuture",
-    type: "error",
-    inputs: [
-      { name: "l2BlockTimestamp", type: "uint256" },
-      { name: "currentBlockTimestamp", type: "uint256" },
-    ],
-  },
   {
     name: "FinalizationStateIncorrect",
     type: "error",
@@ -1201,21 +1171,6 @@ export const LineaL1MessageServiceABI = [
       { name: "value", type: "bytes32" },
     ],
   },
-  { name: "FinalStateRootHashIsZeroHash", type: "error", inputs: [] },
-  {
-    name: "ForcedTransactionExistsForBlockOrIsTooLow",
-    type: "error",
-    inputs: [{ name: "blockNumber", type: "uint256" }],
-  },
-  {
-    name: "InitializedVersionWrong",
-    type: "error",
-    inputs: [
-      { name: "expected", type: "uint256" },
-      { name: "actual", type: "uint256" },
-    ],
-  },
-  { name: "InvalidMerkleProof", type: "error", inputs: [] },
   { name: "InvalidProof", type: "error", inputs: [] },
   {
     name: "InvalidProofOrProofVerificationRanOutOfGas",
@@ -1223,16 +1178,6 @@ export const LineaL1MessageServiceABI = [
     inputs: [{ name: "errorReason", type: "string" }],
   },
   { name: "InvalidProofType", type: "error", inputs: [] },
-  { name: "IsNotPaused", type: "error", inputs: [{ name: "pauseType", type: "uint8" }] },
-  { name: "IsPaused", type: "error", inputs: [{ name: "pauseType", type: "uint8" }] },
-  {
-    name: "L1RollingHashDoesNotExistOnL1",
-    type: "error",
-    inputs: [
-      { name: "messageNumber", type: "uint256" },
-      { name: "rollingHash", type: "bytes32" },
-    ],
-  },
   {
     name: "L2MerkleRootAlreadyAnchored",
     type: "error",
@@ -1249,12 +1194,6 @@ export const LineaL1MessageServiceABI = [
     ],
   },
   { name: "LimitIsZero", type: "error", inputs: [] },
-  { name: "LSTWithdrawalRequiresDeficit", type: "error", inputs: [] },
-  {
-    name: "MessageAlreadyClaimed",
-    type: "error",
-    inputs: [{ name: "messageIndex", type: "uint256" }],
-  },
   {
     name: "MessageDoesNotExistOrHasAlreadyBeenClaimed",
     type: "error",
@@ -1265,40 +1204,10 @@ export const LineaL1MessageServiceABI = [
     type: "error",
     inputs: [{ name: "destination", type: "address" }],
   },
-  {
-    name: "MissingMessageNumberForRollingHash",
-    type: "error",
-    inputs: [{ name: "rollingHash", type: "bytes32" }],
-  },
-  {
-    name: "MissingRollingHashForForcedTransactionNumber",
-    type: "error",
-    inputs: [{ name: "forcedTransactionNumber", type: "uint256" }],
-  },
-  {
-    name: "MissingRollingHashForMessageNumber",
-    type: "error",
-    inputs: [{ name: "messageNumber", type: "uint256" }],
-  },
   { name: "NoEthSent", type: "error", inputs: [] },
   { name: "OnlyNonLivenessRecoveryOperator", type: "error", inputs: [] },
-  {
-    name: "OnlySecurityCouncilCanUnpauseIndefinitePause",
-    type: "error",
-    inputs: [{ name: "pauseType", type: "uint8" }],
-  },
-  {
-    name: "ParentShnarfNotSubmitted",
-    type: "error",
-    inputs: [{ name: "shnarf", type: "bytes32" }],
-  },
   { name: "PauseNotExpired", type: "error", inputs: [{ name: "expiryEnd", type: "uint256" }] },
   { name: "PauseTypeNotUsed", type: "error", inputs: [] },
-  {
-    name: "PauseUnavailableDueToCooldown",
-    type: "error",
-    inputs: [{ name: "cooldownEnd", type: "uint256" }],
-  },
   { name: "PeriodIsZero", type: "error", inputs: [] },
   { name: "PointEvaluationFailed", type: "error", inputs: [] },
   {
@@ -1329,20 +1238,6 @@ export const LineaL1MessageServiceABI = [
   { name: "RateLimitExceeded", type: "error", inputs: [] },
   { name: "ReentrantCall", type: "error", inputs: [] },
   { name: "RolesNotDifferent", type: "error", inputs: [] },
-  {
-    name: "SafeCastOverflowedUintDowncast",
-    type: "error",
-    inputs: [
-      { name: "bits", type: "uint8" },
-      { name: "value", type: "uint256" },
-    ],
-  },
-  { name: "ShnarfAlreadySubmitted", type: "error", inputs: [{ name: "shnarf", type: "bytes32" }] },
-  { name: "ShnarfSubmissionIsZeroHash", type: "error", inputs: [] },
-  { name: "StartingRootHashDoesNotMatch", type: "error", inputs: [] },
-  { name: "ValueSentTooLow", type: "error", inputs: [] },
-  { name: "ZeroAddressNotAllowed", type: "error", inputs: [] },
   { name: "ZeroHashNotAllowed", type: "error", inputs: [] },
   { name: "ZeroLengthNotAllowed", type: "error", inputs: [] },
-  { name: "ZeroValueNotAllowed", type: "error", inputs: [] },
 ] as const;

@@ -54,7 +54,7 @@ function main() {
 
 ### `StargatePoolABI`
 
-`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT.
+`import StargatePoolABI from "./protocols/stargate/StargatePoolABI.json";` Speaks for: poolNative, poolUSDC, poolUSDT. The import is the contract's full ABI across every deployment; call it through the `Stargate` namespace to have a function a chain's deployment does not run refused.
 
 - `addTreasuryFee(uint256 _amountLD) payable`
 - `allowBurn(address _burnAdmin, uint64 _burnAllowanceSD)`
@@ -119,6 +119,14 @@ Not on Base's poolUSDC (`0x27a16dc786820B16E5c9028b75B99F6f604b5d26`), whose cod
 Not on Arbitrum One's poolNative (`0xA45B5130f36CDcA45667738e2a258AB09f4A5f7F`), whose code does not dispatch them or declares them otherwise: `allowBurn`, `burnAdmin`, `burnAllowanceSD`, `burnLocked`, `burnLockedUSDC`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Not on Arbitrum One's poolUSDC (`0xe8CDF27AcD73a434D661C84887215F7598e7d0d3`), whose code does not dispatch them or declares them otherwise: `burnLocked`. Do not call them there: a program compiled for Arbitrum One is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidLocalDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SlippageExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Stargate_InvalidTokenDecimals` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Transfer_ApproveFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UnreceivedTokenCached` taking `(bytes32,uint8,uint32,address,uint256,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

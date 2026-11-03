@@ -43,7 +43,7 @@ functions, and its writes are SafeERC20.
 
 ### `LBFactoryABI`
 
-`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory.
+`import LBFactoryABI from "./protocols/trader-joe/LBFactoryABI.json";` Speaks for: lbFactory. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addQuoteAsset(address quoteAsset)`
@@ -97,6 +97,27 @@ Not on Arbitrum One's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), 
 
 Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0c`), whose code does not dispatch them or declares them otherwise: `becomeOwner`, `revokePendingOwner`, `setPendingOwner`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AccessControlBadConfirmation` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EnumerableMapNonexistentKey` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__AddressZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__BinStepHasNoPreset` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__CannotGrantDefaultAdminRole` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__ImplementationNotSet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__LBPairDoesNotExist` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__LBPairIgnoredIsAlreadyInTheSameState` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__LBPairSafetyCheckFailed` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__PresetIsLockedForUsers` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__PresetOpenStateIsAlreadyInTheSameState` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__SameFlashLoanFee` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__SameHooksImplementation` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBFactory__SameImplementation` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OwnableInvalidOwner` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PendingOwnable__NotPendingOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Uint128x128Math__PowUnderflow` taking `(uint256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `LBPairABI`
 
 `import LBPairABI from "./protocols/trader-joe/LBPairABI.json";`
@@ -139,9 +160,41 @@ Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0
 - `symbol() view returns (string)`
 - `totalSupply(uint256 id) view returns (uint256)`
 
+Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AddressHelper__CallFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AddressHelper__NonContract` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BinHelper__CompositionFactorFlawed` taking `(uint24)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__AddressZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__FlashLoanInsufficientAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__InsufficientAmountOut` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__InvalidStaticFeeParameters` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__MaxTotalFeeExceeded` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__OnlyProtocolFeeRecipient` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__OutOfLiquidity` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__TokenNotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__ZeroBorrowAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBPair__ZeroShares` taking `(uint24)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBToken__AddressThisOrZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBToken__BurnExceedsBalance` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBToken__InvalidLength` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LiquidityConfigurations__InvalidConfig` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInitializing` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OracleHelper__LookUpTimestampTooOld` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OracleHelper__NewLengthTooSmall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PackedUint128Math__MultiplierTooLarge` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReentrancyGuard__ReentrantCall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeCast__Exceeds128Bits` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeCast__Exceeds40Bits` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenHelper__TransferFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Uint128x128Math__LogUnderflow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Uint128x128Math__PowUnderflow` taking `(uint256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `LBRouterABI`
 
-`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter.
+`import LBRouterABI from "./protocols/trader-joe/LBRouterABI.json";` Speaks for: lbRouter. The import is the contract's full ABI across every deployment; call it through the `TraderJoe` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`
 - `addLiquidityNATIVE((address tokenX, address tokenY, uint256 binStep, uint256 amountX, uint256 amountY, uint256 amountXMin, uint256 amountYMin, uint256 activeIdDesired, uint256 idSlippage, int256[] deltaIds, uint256[] distributionX, uint256[] distributionY, address to, address refundTo, uint256 deadline) liquidityParameters) payable returns (uint256 amountXAdded, uint256 amountYAdded, uint256 amountXLeft, uint256 amountYLeft, uint256[] depositIds, uint256[] liquidityMinted)`
@@ -171,3 +224,25 @@ Not on Avalanche C-Chain's lbFactory (`0xb43120c4745967fa9b93E79C149E66B0f2D6Fe0
 - `sweepLBToken(address lbToken, address to, uint256[] ids, uint256[] amounts)`
 
 Not on BNB Chain's lbRouter (`0xb4315e873dBcf96Ffd0acd8EA43f689D8c20fB30`), whose code does not dispatch them or declares them otherwise: `getFactoryV2_1`. Do not call them there: a program compiled for BNB Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AddressHelper__CallFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AddressHelper__NonContract` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__AmountSlippageBPTooBig` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__AmountSlippageCaught` taking `(uint256,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__BinReserveOverflows` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__BrokenSwapSafetyCheck` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__FailedToSendNATIVE` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__IdDesiredOverflows` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__IdOverflows` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__IdSlippageCaught` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__InsufficientAmountOut` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__InvalidVersion` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__MaxAmountInExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__NotFactoryOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__PairNotCreated` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__SwapOverflows` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__TooMuchTokensIn` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LBRouter__WrongAmounts` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenHelper__TransferFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

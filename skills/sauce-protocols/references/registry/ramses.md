@@ -33,7 +33,7 @@ function main() {
 
 ### `RamsesRouterABI`
 
-`import RamsesRouterABI from "./protocols/ramses/RamsesRouterABI.json";` Speaks for: router.
+`import RamsesRouterABI from "./protocols/ramses/RamsesRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Ramses` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, bool stable, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`
@@ -42,6 +42,7 @@ function main() {
 - `getAmountsOut(uint256 amountIn, (address from, address to, bool stable)[] routes) view returns (uint256[] amounts)`
 - `getReserves(address tokenA, address tokenB, bool stable) view returns (uint256 reserveA, uint256 reserveB)`
 - `initialize(address _factory, address _weth)`
+- `initialize(address _logic, address admin_, bytes _data) payable`
 - `isPair(address pair) view returns (bool)`
 - `pairFor(address tokenA, address tokenB, bool stable) view returns (address pair)`
 - `quoteAddLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired) view returns (uint256 amountA, uint256 amountB, uint256 liquidity)`

@@ -512,7 +512,6 @@ export const StakedUSDeABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "LockedAmountRedistributed",
     type: "event",
@@ -526,15 +525,6 @@ export const StakedUSDeABI = [
     name: "RewardsReceived",
     type: "event",
     inputs: [{ name: "amount", type: "uint256", indexed: false }],
-  },
-  {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
   },
   {
     name: "RoleGranted",
@@ -582,12 +572,10 @@ export const StakedUSDeABI = [
   { name: "InvalidCooldown", type: "error", inputs: [] },
   { name: "InvalidShortString", type: "error", inputs: [] },
   { name: "InvalidToken", type: "error", inputs: [] },
-  { name: "InvalidZeroAddress", type: "error", inputs: [] },
   { name: "MinSharesViolation", type: "error", inputs: [] },
   { name: "NotPendingAdmin", type: "error", inputs: [] },
   { name: "OperationNotAllowed", type: "error", inputs: [] },
   { name: "StillVesting", type: "error", inputs: [] },
-  { name: "StringTooLong", type: "error", inputs: [{ name: "str", type: "string" }] },
 ] as const;
 
 export const USDeABI = [
@@ -810,7 +798,6 @@ export const USDeABI = [
       { name: "value", type: "uint256", indexed: false },
     ],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "MinterUpdated",
     type: "event",
@@ -847,6 +834,4 @@ export const USDeABI = [
   { name: "CantRenounceOwnership", type: "error", inputs: [] },
   { name: "InvalidShortString", type: "error", inputs: [] },
   { name: "OnlyMinter", type: "error", inputs: [] },
-  { name: "StringTooLong", type: "error", inputs: [{ name: "str", type: "string" }] },
-  { name: "ZeroAddressException", type: "error", inputs: [] },
 ] as const;

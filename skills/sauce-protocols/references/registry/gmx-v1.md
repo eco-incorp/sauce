@@ -38,7 +38,7 @@ function main() {
 
 ### `PositionRouterABI`
 
-`import PositionRouterABI from "./protocols/gmx-v1/PositionRouterABI.json";` Speaks for: positionRouter.
+`import PositionRouterABI from "./protocols/gmx-v1/PositionRouterABI.json";` Speaks for: positionRouter. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
 
 - `admin() view returns (address)`
 - `approve(address _token, address _spender, uint256 _amount)`
@@ -99,7 +99,7 @@ function main() {
 
 ### `RouterABI`
 
-`import RouterABI from "./protocols/gmx-v1/RouterABI.json";` Speaks for: router.
+`import RouterABI from "./protocols/gmx-v1/RouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
 
 - `addPlugin(address _plugin)`
 - `approvedPlugins(address, address) view returns (bool)`
@@ -128,7 +128,7 @@ function main() {
 
 ### `VaultABI`
 
-`import VaultABI from "./protocols/gmx-v1/VaultABI.json";` Speaks for: vault.
+`import VaultABI from "./protocols/gmx-v1/VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `GmxV1` namespace to have a function a chain's deployment does not run refused.
 
 - `addRouter(address _router)`
 - `adjustForDecimals(uint256 _amount, address _tokenDiv, address _tokenMul) view returns (uint256)`

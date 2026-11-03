@@ -916,6 +916,22 @@
       "outputs": []
     },
     {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_logic",
+          "type": "address"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "initReserve",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -1880,22 +1896,6 @@
       ]
     },
     {
-      "name": "ReserveUsedAsCollateralEnabled",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "reserve",
-          "type": "address",
-          "indexed": true
-        },
-        {
-          "name": "user",
-          "type": "address",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "Supply",
       "type": "event",
       "inputs": [
@@ -1995,11 +1995,6 @@
     },
     {
       "name": "CallerNotPoolConfigurator",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CallerNotPositionManager",
       "type": "error",
       "inputs": []
     },

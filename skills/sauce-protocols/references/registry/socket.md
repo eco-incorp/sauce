@@ -39,7 +39,7 @@ function main() {
 
 ### `SocketGatewayABI`
 
-`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway.
+`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway. The import is the contract's full ABI across every deployment; call it through the `Socket` namespace to have a function a chain's deployment does not run refused.
 
 - `addController(address controllerAddress) returns (uint32)`
 - `addressAt(uint32 routeId) view returns (address)`
@@ -67,3 +67,7 @@ function main() {
 - `routesCount() view returns (uint32)`
 - `setApprovalForRouters(address[] routeAddresses, address[] tokenAddresses, bool isMax)`
 - `swapAndMultiBridge((uint32 swapRouteId, bytes swapImplData, uint32[] bridgeRouteIds, bytes[] bridgeImplDataItems, uint256[] bridgeRatios, bytes[] eventDataItems) swapMultiBridgeRequest) payable`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event OwnershipTransferRequested` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

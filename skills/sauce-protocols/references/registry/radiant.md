@@ -33,7 +33,7 @@ function main() {
 
 ### `RadiantLendingPoolABI`
 
-`import RadiantLendingPoolABI from "./protocols/radiant/RadiantLendingPoolABI.json";` Speaks for: lendingPool.
+`import RadiantLendingPoolABI from "./protocols/radiant/RadiantLendingPoolABI.json";` Speaks for: lendingPool. The import is the contract's full ABI across every deployment; call it through the `Radiant` namespace to have a function a chain's deployment does not run refused.
 
 - `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`

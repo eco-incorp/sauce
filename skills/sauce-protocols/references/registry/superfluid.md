@@ -42,7 +42,7 @@ function main() {
 
 ### `CFAForwarderABI`
 
-`import CFAForwarderABI from "./protocols/superfluid/CFAForwarderABI.json";` Speaks for: cfaForwarder.
+`import CFAForwarderABI from "./protocols/superfluid/CFAForwarderABI.json";` Speaks for: cfaForwarder. The import is the contract's full ABI across every deployment; call it through the `Superfluid` namespace to have a function a chain's deployment does not run refused.
 
 - `createFlow(address token, address sender, address receiver, int96 flowrate, bytes userData) returns (bool)`
 - `deleteFlow(address token, address sender, address receiver, bytes userData) returns (bool)`

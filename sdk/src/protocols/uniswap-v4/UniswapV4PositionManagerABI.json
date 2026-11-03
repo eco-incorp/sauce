@@ -1048,11 +1048,6 @@
       "inputs": []
     },
     {
-      "name": "NoSelfPermit",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NotApproved",
       "type": "error",
       "inputs": [

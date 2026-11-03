@@ -711,19 +711,6 @@ export const ClearinghouseABI = [
     inputs: [{ name: "version", type: "uint8", indexed: false }],
   },
   {
-    name: "Liquidation",
-    type: "event",
-    inputs: [
-      { name: "liquidatorSubaccount", type: "bytes32", indexed: true },
-      { name: "liquidateeSubaccount", type: "bytes32", indexed: true },
-      { name: "mode", type: "uint8", indexed: true },
-      { name: "healthGroup", type: "uint32", indexed: false },
-      { name: "amount", type: "int128", indexed: false },
-      { name: "amountQuote", type: "int128", indexed: false },
-      { name: "insuranceCover", type: "int128", indexed: false },
-    ],
-  },
-  {
     name: "ModifyCollateral",
     type: "event",
     inputs: [
@@ -739,11 +726,6 @@ export const ClearinghouseABI = [
       { name: "previousOwner", type: "address", indexed: true },
       { name: "newOwner", type: "address", indexed: true },
     ],
-  },
-  {
-    name: "PRBMathSD59x18__SqrtNegativeInput",
-    type: "error",
-    inputs: [{ name: "x", type: "int256" }],
   },
   { name: "PRBMathSD59x18__SqrtOverflow", type: "error", inputs: [{ name: "x", type: "int256" }] },
 ] as const;

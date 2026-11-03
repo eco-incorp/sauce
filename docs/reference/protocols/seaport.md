@@ -56,7 +56,7 @@ function main() {
 
 ### `SeaportABI`
 
-`import SeaportABI from "./protocols/seaport/SeaportABI.json";` Speaks for: seaportV16.
+`import SeaportABI from "./protocols/seaport/SeaportABI.json";` Speaks for: seaportV16. The import is the contract's full ABI across every deployment; call it through the `Seaport` namespace to have a function a chain's deployment does not run refused.
 
 - `__activateTstore()`
 - `cancel((address offerer, address zone, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount)[] offer, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount, address recipient)[] consideration, uint8 orderType, uint256 startTime, uint256 endTime, bytes32 zoneHash, uint256 salt, bytes32 conduitKey, uint256 counter)[] orders) returns (bool cancelled)`
@@ -76,6 +76,12 @@ function main() {
 - `matchOrders(((address offerer, address zone, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount)[] offer, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount, address recipient)[] consideration, uint8 orderType, uint256 startTime, uint256 endTime, bytes32 zoneHash, uint256 salt, bytes32 conduitKey, uint256 totalOriginalConsiderationItems) parameters, bytes signature)[], ((uint256 orderIndex, uint256 itemIndex)[] offerComponents, (uint256 orderIndex, uint256 itemIndex)[] considerationComponents)[]) payable returns (((uint8 itemType, address token, uint256 identifier, uint256 amount, address recipient) item, address offerer, bytes32 conduitKey)[])`
 - `name() pure returns (string)`
 - `validate(((address offerer, address zone, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount)[] offer, (uint8 itemType, address token, uint256 identifierOrCriteria, uint256 startAmount, uint256 endAmount, address recipient)[] consideration, uint8 orderType, uint256 startTime, uint256 endTime, bytes32 zoneHash, uint256 salt, bytes32 conduitKey, uint256 totalOriginalConsiderationItems) parameters, bytes signature)[]) returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ERC1155BatchTransferGenericFailure` taking `(address,address,address,uint256[],uint256[])`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Invalid1155BatchTransferEncoding` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TloadTestContractDeploymentFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

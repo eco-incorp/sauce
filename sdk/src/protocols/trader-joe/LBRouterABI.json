@@ -965,69 +965,12 @@
       "outputs": []
     },
     {
-      "name": "AddressHelper__CallFailed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "AddressHelper__NonContract",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "JoeLibrary__InsufficientAmount",
       "type": "error",
       "inputs": []
     },
     {
       "name": "JoeLibrary__InsufficientLiquidity",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LBRouter__AmountSlippageBPTooBig",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountSlippage",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__AmountSlippageCaught",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountXMin",
-          "type": "uint256"
-        },
-        {
-          "name": "amountX",
-          "type": "uint256"
-        },
-        {
-          "name": "amountYMin",
-          "type": "uint256"
-        },
-        {
-          "name": "amountY",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__BinReserveOverflows",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__BrokenSwapSafetyCheck",
       "type": "error",
       "inputs": []
     },
@@ -1046,76 +989,6 @@
       ]
     },
     {
-      "name": "LBRouter__FailedToSendNATIVE",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "recipient",
-          "type": "address"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__IdDesiredOverflows",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "idDesired",
-          "type": "uint256"
-        },
-        {
-          "name": "idSlippage",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__IdOverflows",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "id",
-          "type": "int256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__IdSlippageCaught",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "activeIdDesired",
-          "type": "uint256"
-        },
-        {
-          "name": "idSlippage",
-          "type": "uint256"
-        },
-        {
-          "name": "activeId",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__InsufficientAmountOut",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountOutMin",
-          "type": "uint256"
-        },
-        {
-          "name": "amountOut",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "LBRouter__InvalidTokenPath",
       "type": "error",
       "inputs": [
@@ -1126,95 +999,14 @@
       ]
     },
     {
-      "name": "LBRouter__InvalidVersion",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "version",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "LBRouter__LengthsMismatch",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "LBRouter__MaxAmountInExceeded",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amountInMax",
-          "type": "uint256"
-        },
-        {
-          "name": "amountIn",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__NotFactoryOwner",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "LBRouter__PairNotCreated",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "tokenX",
-          "type": "address"
-        },
-        {
-          "name": "tokenY",
-          "type": "address"
-        },
-        {
-          "name": "binStep",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "LBRouter__SenderIsNotWNATIVE",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "LBRouter__SwapOverflows",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "id",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__TooMuchTokensIn",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "excess",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "LBRouter__WrongAmounts",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "reserve",
-          "type": "uint256"
-        }
-      ]
     },
     {
       "name": "LBRouter__WrongNativeLiquidityParameters",
@@ -1249,11 +1041,6 @@
     },
     {
       "name": "PackedUint128Math__SubUnderflow",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "TokenHelper__TransferFailed",
       "type": "error",
       "inputs": []
     }

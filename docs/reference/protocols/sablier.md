@@ -53,7 +53,7 @@ function main() {
 
 ### `LockupLinearABI`
 
-`import LockupLinearABI from "./protocols/sablier/LockupLinearABI.json";` Speaks for: lockupLinear.
+`import LockupLinearABI from "./protocols/sablier/LockupLinearABI.json";` Speaks for: lockupLinear. The import is the contract's full ABI across every deployment; call it through the `Sablier` namespace to have a function a chain's deployment does not run refused.
 
 - `admin() view returns (address)`
 - `approve(address to, uint256 tokenId)`
@@ -109,6 +109,15 @@ function main() {
 - `withdrawMax(uint256 streamId, address to)`
 - `withdrawMaxAndTransfer(uint256 streamId, address newRecipient)`
 - `withdrawMultiple(uint256[] streamIds, address to, uint128[] amounts)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CallerNotAdmin` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SablierV2Lockup_InvalidSenderWithdrawal` taking `(uint256,address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SablierV2Lockup_Null` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SablierV2Lockup_Overdraw` taking `(uint256,uint128,uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SablierV2Lockup_StreamNotCancelable` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SablierV2Lockup_StreamSettled` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

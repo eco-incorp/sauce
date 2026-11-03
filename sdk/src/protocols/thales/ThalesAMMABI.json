@@ -1405,17 +1405,6 @@
       ]
     },
     {
-      "name": "SetSafeBox",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "_safeBox",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "SetSafeBoxImpact",
       "type": "event",
       "inputs": [

@@ -204,6 +204,7 @@
     {
       "name": "LogNote",
       "type": "event",
+      "anonymous": true,
       "inputs": [
         {
           "name": "sig",

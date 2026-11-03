@@ -424,11 +424,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidPool",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NotFeeManager",
       "type": "error",
       "inputs": []
@@ -440,11 +435,6 @@
     },
     {
       "name": "NotVoter",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PoolAlreadyExists",
       "type": "error",
       "inputs": []
     },

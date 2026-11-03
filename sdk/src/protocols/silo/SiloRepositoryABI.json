@@ -1022,17 +1022,6 @@
       ]
     },
     {
-      "name": "LimitedMaxLiquidityToggled",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "newLimitedMaxLiquidityState",
-          "type": "bool",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "ManagerChanged",
       "type": "event",
       "inputs": [
@@ -1269,27 +1258,7 @@
       "inputs": []
     },
     {
-      "name": "AssetIsZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "BridgeAssetIsZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "ConfigDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "EmptyBridgeAssets",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "FeesDidNotChange",
       "type": "error",
       "inputs": []
     },
@@ -1319,22 +1288,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidLiquidationThreshold",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidLTV",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidNotificationReceiver",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidPriceProvidersRepository",
       "type": "error",
       "inputs": []
     },
@@ -1349,22 +1303,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidSiloFactory",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidSiloRouter",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidSiloVersion",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidTokensFactory",
       "type": "error",
       "inputs": []
     },
@@ -1375,11 +1314,6 @@
     },
     {
       "name": "LiquidationThresholdDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "ManagerDidNotChange",
       "type": "error",
       "inputs": []
     },
@@ -1399,17 +1333,7 @@
       "inputs": []
     },
     {
-      "name": "NoPriceProviderForAsset",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NotificationReceiverDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyManager",
       "type": "error",
       "inputs": []
     },
@@ -1420,21 +1344,6 @@
     },
     {
       "name": "PriceProviderRepositoryDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "RouterDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SiloAlreadyExistsForAsset",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SiloAlreadyExistsForBridgeAssets",
       "type": "error",
       "inputs": []
     },
@@ -1450,11 +1359,6 @@
     },
     {
       "name": "SiloMaxLiquidityDidNotChange",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SiloNotAllowedForBridgeAsset",
       "type": "error",
       "inputs": []
     },

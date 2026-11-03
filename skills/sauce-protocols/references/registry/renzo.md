@@ -34,7 +34,7 @@ function main() {
 
 ### `EzETHABI`
 
-`import EzETHABI from "./protocols/renzo/EzETHABI.json";` Speaks for: ezETH.
+`import EzETHABI from "./protocols/renzo/EzETHABI.json";` Speaks for: ezETH. The import is the contract's full ABI across every deployment; call it through the `Renzo` namespace to have a function a chain's deployment does not run refused.
 
 - `_deprecated_paused() view returns (bool)`
 - `allowance(address owner, address spender) view returns (uint256)`
@@ -53,9 +53,13 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error NotEzETHMinterBurner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `RestakeManagerABI`
 
-`import RestakeManagerABI from "./protocols/renzo/RestakeManagerABI.json";` Speaks for: restakeManager.
+`import RestakeManagerABI from "./protocols/renzo/RestakeManagerABI.json";` Speaks for: restakeManager. The import is the contract's full ABI across every deployment; call it through the `Renzo` namespace to have a function a chain's deployment does not run refused.
 
 - `_deprecated_maxDepositTVL() view returns (uint256)`
 - `addCollateralToken(address _newCollateralToken)`
@@ -91,3 +95,12 @@ function main() {
 - `setTokenTvlLimit(address _token, uint256 _limit)`
 - `stakeEthInOperatorDelegator(address operatorDelegator, bytes pubkey, bytes signature, bytes32 depositDataRoot) payable`
 - `strategyManager() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidTokenDecimals` taking `(uint8,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTVL` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxTokenTVLReached` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotDepositQueue` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UserWithdrawCompleted` taking `(bytes32,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UserWithdrawStarted` taking `(bytes32,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

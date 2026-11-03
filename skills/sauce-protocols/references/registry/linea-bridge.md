@@ -34,7 +34,7 @@ function main() {
 
 ### `LineaL1MessageServiceABI`
 
-`import LineaL1MessageServiceABI from "./protocols/linea-bridge/LineaL1MessageServiceABI.json";` Speaks for: l1MessageService.
+`import LineaL1MessageServiceABI from "./protocols/linea-bridge/LineaL1MessageServiceABI.json";` Speaks for: l1MessageService. The import is the contract's full ABI across every deployment; call it through the `LineaBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `addressFilter() view returns (address)`
 - `blobShnarfExists(bytes32 _shnarf) view returns (uint256 shnarfExists)`
@@ -131,3 +131,35 @@ function main() {
 - `verifiers(uint256 proofType) view returns (address verifierAddress)`
 - `YIELD_PROVIDER_STAKING_ROLE() view returns (bytes32)`
 - `yieldManager() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error BytesLengthNotMultipleOfTwo` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FeePaymentFailed` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FeeTooLow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FinalBlockStateEqualsZeroHash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FinalizationDataMissingForcedTransaction` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FinalizationInTheFuture` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FinalStateRootHashIsZeroHash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ForcedTransactionExistsForBlockOrIsTooLow` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InitializedVersionWrong` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMerkleProof` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IsNotPaused` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IsPaused` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error L1RollingHashDoesNotExistOnL1` taking `(uint256,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LSTWithdrawalRequiresDeficit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MessageAlreadyClaimed` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingMessageNumberForRollingHash` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingRollingHashForForcedTransactionNumber` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingRollingHashForMessageNumber` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlySecurityCouncilCanUnpauseIndefinitePause` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ParentShnarfNotSubmitted` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PauseUnavailableDueToCooldown` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SafeCastOverflowedUintDowncast` taking `(uint8,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ShnarfAlreadySubmitted` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ShnarfSubmissionIsZeroHash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StartingRootHashDoesNotMatch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ValueSentTooLow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddressNotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroValueNotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

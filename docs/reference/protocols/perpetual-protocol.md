@@ -54,7 +54,7 @@ function main() {
 
 ### `ClearingHouseABI`
 
-`import ClearingHouseABI from "./protocols/perpetual-protocol/ClearingHouseABI.json";` Speaks for: clearingHouse.
+`import ClearingHouseABI from "./protocols/perpetual-protocol/ClearingHouseABI.json";` Speaks for: clearingHouse. The import is the contract's full ABI across every deployment; call it through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity((address baseToken, uint256 base, uint256 quote, int24 lowerTick, int24 upperTick, uint256 minBase, uint256 minQuote, bool useTakerBalance, uint256 deadline) params) returns ((uint256 base, uint256 quote, uint256 fee, uint256 liquidity))`
 - `cancelAllExcessOrders(address maker, address baseToken)`
@@ -93,9 +93,14 @@ function main() {
 - `updateOwner()`
 - `versionRecipient() pure returns (string)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event TrustedForwarderChanged` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TrustedForwarderUpdated` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `VaultABI`
 
-`import VaultABI from "./protocols/perpetual-protocol/VaultABI.json";` Speaks for: vault.
+`import VaultABI from "./protocols/perpetual-protocol/VaultABI.json";` Speaks for: vault. The import is the contract's full ABI across every deployment; call it through the `PerpetualProtocol` namespace to have a function a chain's deployment does not run refused.
 
 - `candidate() view returns (address)`
 - `decimals() view returns (uint8)`

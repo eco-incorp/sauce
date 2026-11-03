@@ -466,6 +466,7 @@ export const PotABI = [
   {
     name: "LogNote",
     type: "event",
+    anonymous: true,
     inputs: [
       { name: "sig", type: "bytes4", indexed: true },
       { name: "usr", type: "address", indexed: true },

@@ -1562,27 +1562,6 @@
       ]
     },
     {
-      "name": "RoleAdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "role",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "previousAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        },
-        {
-          "name": "newAdminRole",
-          "type": "bytes32",
-          "indexed": true
-        }
-      ]
-    },
-    {
       "name": "RoleGranted",
       "type": "event",
       "inputs": [
@@ -1762,11 +1741,6 @@
       ]
     },
     {
-      "name": "AdminBadRole",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "CallProxyBadRole",
       "type": "error",
       "inputs": []
@@ -1810,16 +1784,6 @@
       "inputs": []
     },
     {
-      "name": "IntentManagerBadRole",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MismatchedOrderId",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "MismatchedTransferAmount",
       "type": "error",
       "inputs": []
@@ -1859,16 +1823,6 @@
       "inputs": []
     },
     {
-      "name": "Unauthorized",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UnknownEngine",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WrongAddressLength",
       "type": "error",
       "inputs": []
@@ -1885,11 +1839,6 @@
     },
     {
       "name": "WrongArgumentLength",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongChain",
       "type": "error",
       "inputs": []
     },

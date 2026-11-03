@@ -34,7 +34,7 @@ function main() {
 
 ### `ExchangeRouterABI`
 
-`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter.
+`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter. The import is the contract's full ABI across every deployment; call it through the `GmxV2` namespace to have a function a chain's deployment does not run refused.
 
 - `cancelDeposit(bytes32 key) payable`
 - `cancelOrder(bytes32 key) payable`
@@ -68,3 +68,11 @@ function main() {
 - `shiftHandler() view returns (address)`
 - `updateOrder(bytes32 key, uint256 sizeDeltaUsd, uint256 acceptablePrice, uint256 triggerPrice, uint256 minOutputAmount, uint256 validFromTime, bool autoCancel) payable`
 - `withdrawalHandler() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CollateralAlreadyClaimed` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyHoldingAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyTokenTranferGasLimit` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidClaimCollateralInput` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenTransferError` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

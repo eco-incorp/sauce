@@ -494,7 +494,6 @@ export const PufferVaultABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "ExitFeeBasisPointsSet",
     type: "event",
@@ -573,24 +572,6 @@ export const PufferVaultABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  {
-    name: "AccessManagedInvalidAuthority",
-    type: "error",
-    inputs: [{ name: "authority", type: "address" }],
-  },
-  {
-    name: "AccessManagedRequiredDelay",
-    type: "error",
-    inputs: [
-      { name: "caller", type: "address" },
-      { name: "delay", type: "uint32" },
-    ],
-  },
-  {
-    name: "AccessManagedUnauthorized",
-    type: "error",
-    inputs: [{ name: "caller", type: "address" }],
-  },
   { name: "AddressEmptyCode", type: "error", inputs: [{ name: "target", type: "address" }] },
   {
     name: "AddressInsufficientBalance",
@@ -604,111 +585,17 @@ export const PufferVaultABI = [
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
   },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
-  {
-    name: "EnumerableMapNonexistentKey",
-    type: "error",
-    inputs: [{ name: "key", type: "bytes32" }],
-  },
   {
     name: "ERC1967InvalidImplementation",
     type: "error",
     inputs: [{ name: "implementation", type: "address" }],
   },
   { name: "ERC1967NonPayable", type: "error", inputs: [] },
-  {
-    name: "ERC20InsufficientAllowance",
-    type: "error",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "allowance", type: "uint256" },
-      { name: "needed", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC20InsufficientBalance",
-    type: "error",
-    inputs: [
-      { name: "sender", type: "address" },
-      { name: "balance", type: "uint256" },
-      { name: "needed", type: "uint256" },
-    ],
-  },
   { name: "ERC20InvalidApprover", type: "error", inputs: [{ name: "approver", type: "address" }] },
   { name: "ERC20InvalidReceiver", type: "error", inputs: [{ name: "receiver", type: "address" }] },
-  { name: "ERC20InvalidSender", type: "error", inputs: [{ name: "sender", type: "address" }] },
-  { name: "ERC20InvalidSpender", type: "error", inputs: [{ name: "spender", type: "address" }] },
-  {
-    name: "ERC2612ExpiredSignature",
-    type: "error",
-    inputs: [{ name: "deadline", type: "uint256" }],
-  },
-  {
-    name: "ERC2612InvalidSigner",
-    type: "error",
-    inputs: [
-      { name: "signer", type: "address" },
-      { name: "owner", type: "address" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxDeposit",
-    type: "error",
-    inputs: [
-      { name: "receiver", type: "address" },
-      { name: "assets", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxMint",
-    type: "error",
-    inputs: [
-      { name: "receiver", type: "address" },
-      { name: "shares", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxRedeem",
-    type: "error",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "shares", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  {
-    name: "ERC4626ExceededMaxWithdraw",
-    type: "error",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "assets", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
   { name: "ETHTransferFailed", type: "error", inputs: [] },
-  { name: "FailedInnerCall", type: "error", inputs: [] },
-  {
-    name: "InvalidAccountNonce",
-    type: "error",
-    inputs: [
-      { name: "account", type: "address" },
-      { name: "currentNonce", type: "uint256" },
-    ],
-  },
   { name: "InvalidAddress", type: "error", inputs: [] },
-  { name: "InvalidExitFeeBasisPoints", type: "error", inputs: [] },
   { name: "InvalidInitialization", type: "error", inputs: [] },
-  { name: "InvalidWithdrawal", type: "error", inputs: [] },
   { name: "MathOverflowedMulDiv", type: "error", inputs: [] },
-  { name: "NotInitializing", type: "error", inputs: [] },
   { name: "SafeERC20FailedOperation", type: "error", inputs: [{ name: "token", type: "address" }] },
-  { name: "UUPSUnauthorizedCallContext", type: "error", inputs: [] },
-  {
-    name: "UUPSUnsupportedProxiableUUID",
-    type: "error",
-    inputs: [{ name: "slot", type: "bytes32" }],
-  },
-  { name: "WithdrawalsAreDisabled", type: "error", inputs: [] },
 ] as const;

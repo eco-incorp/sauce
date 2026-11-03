@@ -101,17 +101,26 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 1.0.0:
 nothing moves.
 
+### The `sauce` command and the MCP server
+
+- **Changed: `sauce globals --json` lists methods only for the namespace or interface `--protocol`
+  names**, as the text output does. Every other contract and interface keeps its name, address and
+  the rest. On Base the whole listing was 1.6 MB, most of it methods, and is now 49 KB; on Ethereum
+  it was 3.0 MB and is now 191 KB. `sauce_globals` drops an interface's methods the same way unless
+  `protocol` names it, as it already dropped a contract's: 33 KB on Base, from 322 KB.
+
 ### The registry
 
 - **Added** (EVM): **every protocol namespace carries its contract's full verified ABI.** A registry
-  ABI was the few functions a program was expected to call; it is now every function, event and
-  error the contract's deployments declare in their verified source and dispatch: 9,129 functions
-  over 240 contracts and interfaces, from 744 over 232, with 2,504 events (from 2) and 2,380 errors
-  (from 11). A program calls a recorded contract's other functions by name, its own reads and
-  admin functions included (`AaveV3.Pool.getReserveAToken(USDC)`,
+  ABI was the few functions a program was expected to call; it is now every function the contract's
+  deployments declare in their verified source and dispatch, and every event and error their code
+  carries: 9,303 functions over 240 contracts and interfaces, from 744 over 232, with 2,305 events
+  (from 2) and 1,540 errors (from 11). A program calls a recorded contract's other functions by name,
+  its own reads and admin functions included (`AaveV3.Pool.getReserveAToken(USDC)`,
   `BalancerV2.Vault.queryBatchSwap(…)`, `MorphoBlue.Morpho.idToMarketParams(id)`), with no ABI
-  file of its own. A function is left out only where it cannot be bound unambiguously, such as the
-  second of two overloads that take the same number of arguments.
+  file of its own. Only what the SDK cannot expose is left out, such as the second of two overloads
+  that take the same number of arguments or a name the SDK reads as its own; each protocol's
+  reference page lists what its ABIs leave out.
 - **Added** (EVM): **new contracts.** `AaveV3.PoolAddressesProvider`, an address only before, has
   its ABI; `AaveV3.Oracle` is new, and so are the `AaveV3.AToken` and `AaveV3.VariableDebtToken`
   interfaces, `CompoundV3.CometRewards`, the `MorphoBlue.Oracle` interface and the `Pendle.Market`
@@ -128,7 +137,8 @@ nothing moves.
   `Paraswap.AugustusV5.simpleSwap` on Base. The message: "`Cbeth.CbETH.exchangeRate(…)`:
   `exchangeRate` is in cbeth.CbETH's ABI, but its deployment on base does not run it (as
   declared); it is on: ethereum." Each protocol's reference page lists what each deployment does
-  not run.
+  not run. Only a namespace call is refused: an explicit twin import, or a contract a caller
+  gives, is the raw ABI across every deployment.
 - **Changed**: a method a contract does not have is refused with a shorter list. A contract with
   more than six methods is listed by its count and the five names nearest the one written:
   "`getPol` is not in uniswap-v3.Factory's vendored ABI (7 known methods; nearest: getPool,

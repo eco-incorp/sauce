@@ -937,14 +937,6 @@ export const ZkSyncDiamondProxyABI = [
     ],
   },
   {
-    name: "BridgeMint",
-    type: "event",
-    inputs: [
-      { name: "_account", type: "address", indexed: true },
-      { name: "_amount", type: "uint256", indexed: false },
-    ],
-  },
-  {
     name: "DiamondCut",
     type: "event",
     inputs: [
@@ -1172,7 +1164,6 @@ export const ZkSyncDiamondProxyABI = [
     ],
   },
   { name: "CanOnlyProcessOneBatch", type: "error", inputs: [] },
-  { name: "CantExecuteUnprovenBatches", type: "error", inputs: [] },
   { name: "CantRevertExecutedBatch", type: "error", inputs: [] },
   { name: "CommitBasedInteropNotSupported", type: "error", inputs: [] },
   { name: "ContractNotDeployed", type: "error", inputs: [] },
@@ -1451,7 +1442,6 @@ export const ZkSyncDiamondProxyABI = [
   { name: "TimestampError", type: "error", inputs: [] },
   { name: "TooManyFactoryDeps", type: "error", inputs: [] },
   { name: "TooMuchGas", type: "error", inputs: [] },
-  { name: "TransactionNotAllowed", type: "error", inputs: [] },
   { name: "TxHashMismatch", type: "error", inputs: [] },
   { name: "TxnBodyGasLimitNotEnoughGas", type: "error", inputs: [] },
   { name: "Unauthorized", type: "error", inputs: [{ name: "caller", type: "address" }] },

@@ -165,7 +165,9 @@ describe("a program is held to its chain's deployment", () => {
     const [basePath, baseText] = boundAbi("base", "Cbeth", "CbETH");
     expect(basePath).toMatch(/^abi\/cbeth\/CbETHABI-[0-9a-f]{8}\.json$/);
     expect(functionNames(JSON.parse(baseText) as Abi)).not.toContain("exchangeRate");
-    expect(JSON.parse(baseText)).toEqual(descriptorOn(CBETH, BASE.id).abi);
+    expect(JSON.parse(baseText)).toEqual(
+      descriptorOn(CBETH, BASE.id).abi.filter((item) => item.type === "function"),
+    );
     const [ethereumPath, ethereumText] = boundAbi("ethereum", "Cbeth", "CbETH");
     expect(ethereumPath).not.toBe(basePath);
     expect(functionNames(JSON.parse(ethereumText) as Abi)).toContain("exchangeRate");
@@ -182,7 +184,33 @@ describe("a program is held to its chain's deployment", () => {
     )!;
     const [wholePath, wholeText] = boundAbi(whole, "TraderJoe", "LBRouter");
     expect(wholePath).toBe("abi/trader-joe/LBRouterABI.json");
-    expect(JSON.parse(wholeText)).toEqual(router.abi);
+    expect(JSON.parse(wholeText)).toEqual(router.abi.filter((item) => item.type === "function"));
+  });
+
+  it("hands the compiler a contract's functions only: the descriptor keeps its events and errors", () => {
+    // Aave V3's Pool declares events and custom errors, and so does its JSON twin; the ABI the
+    // names module serves for it is its functions alone.
+    const pool = getDescriptor("aave-v3", "Pool")!;
+    const kinds = new Set(pool.abi.map((item) => item.type));
+    expect(kinds.has("event")).toBe(true);
+    expect(kinds.has("error")).toBe(true);
+    const [, poolText] = boundAbi("ethereum", "AaveV3", "Pool");
+    expect(JSON.parse(poolText)).toEqual(
+      descriptorOn(pool, ETHEREUM.id).abi.filter((item) => item.type === "function"),
+    );
+    for (const chain of ["ethereum", "base"]) {
+      const { text } = chainNames(requireChain(chain));
+      const paths = [...text.matchAll(/^import ABI_\d+ from "\.\/(.*)";$/gm)].map((m) => m[1]!);
+      expect(paths.length).toBeGreaterThan(50);
+      for (const path of paths) {
+        const served = JSON.parse(chainModuleText(`${CHAIN_MODULE_ROOT}/${path}`)!) as Abi;
+        expect(served.filter((item) => item.type !== "function")).toEqual([]);
+      }
+    }
+    // A program calling a function compiles as ever.
+    expect(() =>
+      hex("ethereum", "function main(x: Address): Uint256 { return Cbeth.CbETH.balanceOf(x); }"),
+    ).not.toThrow();
   });
 
   it("the chain's listing shows the methods its deployment runs", () => {

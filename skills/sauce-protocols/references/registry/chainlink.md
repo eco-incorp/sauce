@@ -36,7 +36,7 @@ function main() {
 
 ### `AggregatorV3ABI`
 
-`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed.
+`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed. The import is the contract's full ABI across every deployment; call it through the `Chainlink` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `accessController() view returns (address)`
@@ -62,9 +62,14 @@ function main() {
 - `transferOwnership(address _to)`
 - `version() view returns (uint256)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event AnswerUpdated` taking `(int256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event NewRound` taking `(uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `FeedRegistryABI`
 
-`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry.
+`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry. The import is the contract's full ABI across every deployment; call it through the `Chainlink` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `confirmFeed(address base, address quote, address aggregator)`

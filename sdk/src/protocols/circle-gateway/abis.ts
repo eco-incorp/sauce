@@ -661,7 +661,6 @@ export const GatewayWalletABI = [
       { name: "value", type: "uint256", indexed: false },
     ],
   },
-  { name: "EIP712DomainChanged", type: "event", inputs: [] },
   {
     name: "FeeRecipientChanged",
     type: "event",
@@ -776,31 +775,13 @@ export const GatewayWalletABI = [
       { name: "withdrawalBlock", type: "uint256", indexed: false },
     ],
   },
-  { name: "AccountDenylisted", type: "error", inputs: [{ name: "addr", type: "address" }] },
   { name: "AddressEmptyCode", type: "error", inputs: [{ name: "target", type: "address" }] },
-  { name: "BatchIdUsed", type: "error", inputs: [{ name: "batchId", type: "bytes32" }] },
-  {
-    name: "BurnFeeTooHighAtIndex",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "maxFee", type: "uint256" },
-      { name: "actualFee", type: "uint256" },
-    ],
-  },
-  { name: "CannotDelegateToSelf", type: "error", inputs: [] },
   {
     name: "ContractSignerNeverAllowlisted",
     type: "error",
     inputs: [{ name: "contractAddr", type: "address" }],
   },
-  { name: "CursorOutOfBounds", type: "error", inputs: [] },
   { name: "DeltaMustBeNonZero", type: "error", inputs: [{ name: "depositor", type: "address" }] },
-  {
-    name: "DepositorIsBlacklisted",
-    type: "error",
-    inputs: [{ name: "depositor", type: "address" }],
-  },
   { name: "DepositValueMustBePositive", type: "error", inputs: [] },
   { name: "ECDSAInvalidSignature", type: "error", inputs: [] },
   {
@@ -808,7 +789,6 @@ export const GatewayWalletABI = [
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
   },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
   { name: "EnforcedPause", type: "error", inputs: [] },
   {
     name: "ERC1967InvalidImplementation",
@@ -819,20 +799,6 @@ export const GatewayWalletABI = [
   { name: "ExpectedPause", type: "error", inputs: [] },
   { name: "FailedCall", type: "error", inputs: [] },
   { name: "InputArrayLengthMismatch", type: "error", inputs: [] },
-  {
-    name: "IntentExpiredAtIndex",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "maxBlockHeight", type: "uint256" },
-      { name: "currentBlock", type: "uint256" },
-    ],
-  },
-  {
-    name: "IntentValueMustBePositiveAtIndex",
-    type: "error",
-    inputs: [{ name: "index", type: "uint32" }],
-  },
   { name: "InvalidAddress", type: "error", inputs: [] },
   { name: "InvalidBatchSigner", type: "error", inputs: [] },
   { name: "InvalidBurnSigner", type: "error", inputs: [] },
@@ -846,41 +812,10 @@ export const GatewayWalletABI = [
       { name: "expectedContract", type: "address" },
     ],
   },
-  {
-    name: "InvalidIntentSourceSignerAtIndex",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "intentSigner", type: "address" },
-      { name: "actualSigner", type: "address" },
-    ],
-  },
   { name: "InvalidSignature", type: "error", inputs: [] },
-  {
-    name: "InvalidTransferPayloadMagic",
-    type: "error",
-    inputs: [{ name: "actualMagic", type: "bytes4" }],
-  },
-  {
-    name: "InvalidTransferSpecMagic",
-    type: "error",
-    inputs: [{ name: "actualMagic", type: "bytes4" }],
-  },
-  {
-    name: "InvalidTransferSpecVersion",
-    type: "error",
-    inputs: [{ name: "actualVersion", type: "uint32" }],
-  },
-  { name: "MismatchedBurn", type: "error", inputs: [] },
-  { name: "MustHaveAtLeastOneBurnIntent", type: "error", inputs: [] },
-  { name: "MustHaveAtLeastOneDelta", type: "error", inputs: [] },
-  { name: "MustNetToZero", type: "error", inputs: [{ name: "totalDelta", type: "int256" }] },
   { name: "NoRelevantBurnIntents", type: "error", inputs: [] },
-  { name: "NotAllSameToken", type: "error", inputs: [] },
   { name: "NotAuthorized", type: "error", inputs: [] },
-  { name: "NotInitializing", type: "error", inputs: [] },
   { name: "NoWithdrawingBalance", type: "error", inputs: [] },
-  { name: "OwnableInvalidOwner", type: "error", inputs: [{ name: "owner", type: "address" }] },
   {
     name: "OwnableUnauthorizedAccount",
     type: "error",
@@ -889,90 +824,11 @@ export const GatewayWalletABI = [
   { name: "RenounceOwnershipDisabled", type: "error", inputs: [] },
   { name: "SafeERC20FailedOperation", type: "error", inputs: [{ name: "token", type: "address" }] },
   {
-    name: "TransferPayloadDataTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadOverallLengthMismatch",
-    type: "error",
-    inputs: [
-      { name: "expectedTotalLength", type: "uint256" },
-      { name: "actualTotalLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetElementHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "actualSetLength", type: "uint256" },
-      { name: "requiredOffset", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetElementTooShort",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "actualSetLength", type: "uint256" },
-      { name: "requiredOffset", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
     name: "TransferPayloadSetInvalidElementMagic",
     type: "error",
     inputs: [
       { name: "index", type: "uint32" },
       { name: "actualMagic", type: "bytes4" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetOverallLengthMismatch",
-    type: "error",
-    inputs: [
-      { name: "expectedTotalLength", type: "uint256" },
-      { name: "actualTotalLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferSpecHashUsed",
-    type: "error",
-    inputs: [{ name: "transferSpecHash", type: "bytes32" }],
-  },
-  {
-    name: "TransferSpecHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferSpecInvalidHookData",
-    type: "error",
-    inputs: [
-      { name: "expectedHookDataLength", type: "uint256" },
-      { name: "transferSpecLength", type: "uint256" },
     ],
   },
   {
@@ -983,19 +839,7 @@ export const GatewayWalletABI = [
       { name: "actualTotalLength", type: "uint256" },
     ],
   },
-  {
-    name: "UnauthorizedContractSignerAllowlister",
-    type: "error",
-    inputs: [{ name: "addr", type: "address" }],
-  },
-  {
-    name: "UnauthorizedContractSignerDisallowlister",
-    type: "error",
-    inputs: [{ name: "addr", type: "address" }],
-  },
-  { name: "UnauthorizedDenylister", type: "error", inputs: [{ name: "addr", type: "address" }] },
   { name: "UnauthorizedPauser", type: "error", inputs: [{ name: "caller", type: "address" }] },
-  { name: "UnsupportedToken", type: "error", inputs: [{ name: "token", type: "address" }] },
   {
     name: "UnsupportedTokenAtIndex",
     type: "error",
@@ -1004,17 +848,8 @@ export const GatewayWalletABI = [
       { name: "sourceToken", type: "address" },
     ],
   },
-  { name: "UUPSUnauthorizedCallContext", type: "error", inputs: [] },
-  {
-    name: "UUPSUnsupportedProxiableUUID",
-    type: "error",
-    inputs: [{ name: "slot", type: "bytes32" }],
-  },
-  { name: "WithdrawalNotYetAvailable", type: "error", inputs: [] },
   { name: "WithdrawalValueExceedsAvailableBalance", type: "error", inputs: [] },
-  { name: "WithdrawalValueMustBePositive", type: "error", inputs: [] },
   { name: "WrongDomain", type: "error", inputs: [] },
-  { name: "WrongGatewayContract", type: "error", inputs: [] },
   { name: "ZeroAddressAllowlister", type: "error", inputs: [] },
   { name: "ZeroAddressContractSigner", type: "error", inputs: [] },
   { name: "ZeroAddressDisallowlister", type: "error", inputs: [] },
@@ -1320,7 +1155,6 @@ export const GatewayMinterABI = [
     type: "event",
     inputs: [{ name: "implementation", type: "address", indexed: true }],
   },
-  { name: "AccountDenylisted", type: "error", inputs: [{ name: "addr", type: "address" }] },
   { name: "AddressEmptyCode", type: "error", inputs: [{ name: "target", type: "address" }] },
   {
     name: "AttestationExpiredAtIndex",
@@ -1336,14 +1170,12 @@ export const GatewayMinterABI = [
     type: "error",
     inputs: [{ name: "index", type: "uint32" }],
   },
-  { name: "CursorOutOfBounds", type: "error", inputs: [] },
   { name: "ECDSAInvalidSignature", type: "error", inputs: [] },
   {
     name: "ECDSAInvalidSignatureLength",
     type: "error",
     inputs: [{ name: "length", type: "uint256" }],
   },
-  { name: "ECDSAInvalidSignatureS", type: "error", inputs: [{ name: "s", type: "bytes32" }] },
   { name: "EnforcedPause", type: "error", inputs: [] },
   {
     name: "ERC1967InvalidImplementation",
@@ -1361,15 +1193,6 @@ export const GatewayMinterABI = [
       { name: "index", type: "uint32" },
       { name: "attestationCaller", type: "address" },
       { name: "actualCaller", type: "address" },
-    ],
-  },
-  {
-    name: "InvalidAttestationDestinationContractAtIndex",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "attestationContract", type: "address" },
-      { name: "expectedContract", type: "address" },
     ],
   },
   {
@@ -1392,79 +1215,11 @@ export const GatewayMinterABI = [
     ],
   },
   { name: "InvalidInitialization", type: "error", inputs: [] },
-  {
-    name: "InvalidTransferPayloadMagic",
-    type: "error",
-    inputs: [{ name: "actualMagic", type: "bytes4" }],
-  },
-  {
-    name: "InvalidTransferSpecMagic",
-    type: "error",
-    inputs: [{ name: "actualMagic", type: "bytes4" }],
-  },
-  {
-    name: "InvalidTransferSpecVersion",
-    type: "error",
-    inputs: [{ name: "actualVersion", type: "uint32" }],
-  },
-  { name: "MismatchedLengthTokenAndTokenMintAuthorities", type: "error", inputs: [] },
   { name: "MustHaveAtLeastOneAttestation", type: "error", inputs: [] },
-  { name: "NotInitializing", type: "error", inputs: [] },
-  { name: "OwnableInvalidOwner", type: "error", inputs: [{ name: "owner", type: "address" }] },
   {
     name: "OwnableUnauthorizedAccount",
     type: "error",
     inputs: [{ name: "account", type: "address" }],
-  },
-  {
-    name: "TransferPayloadDataTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadOverallLengthMismatch",
-    type: "error",
-    inputs: [
-      { name: "expectedTotalLength", type: "uint256" },
-      { name: "actualTotalLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetElementHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "actualSetLength", type: "uint256" },
-      { name: "requiredOffset", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetElementTooShort",
-    type: "error",
-    inputs: [
-      { name: "index", type: "uint32" },
-      { name: "actualSetLength", type: "uint256" },
-      { name: "requiredOffset", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferPayloadSetHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
   },
   {
     name: "TransferPayloadSetInvalidElementMagic",
@@ -1475,27 +1230,6 @@ export const GatewayMinterABI = [
     ],
   },
   {
-    name: "TransferPayloadSetOverallLengthMismatch",
-    type: "error",
-    inputs: [
-      { name: "expectedTotalLength", type: "uint256" },
-      { name: "actualTotalLength", type: "uint256" },
-    ],
-  },
-  {
-    name: "TransferSpecHashUsed",
-    type: "error",
-    inputs: [{ name: "transferSpecHash", type: "bytes32" }],
-  },
-  {
-    name: "TransferSpecHeaderTooShort",
-    type: "error",
-    inputs: [
-      { name: "expectedMinimumLength", type: "uint256" },
-      { name: "actualLength", type: "uint256" },
-    ],
-  },
-  {
     name: "TransferSpecOverallLengthMismatch",
     type: "error",
     inputs: [
@@ -1503,9 +1237,7 @@ export const GatewayMinterABI = [
       { name: "actualTotalLength", type: "uint256" },
     ],
   },
-  { name: "UnauthorizedDenylister", type: "error", inputs: [{ name: "addr", type: "address" }] },
   { name: "UnauthorizedPauser", type: "error", inputs: [{ name: "caller", type: "address" }] },
-  { name: "UnsupportedToken", type: "error", inputs: [{ name: "token", type: "address" }] },
   {
     name: "UnsupportedTokenAtIndex",
     type: "error",
@@ -1513,11 +1245,5 @@ export const GatewayMinterABI = [
       { name: "index", type: "uint32" },
       { name: "destinationToken", type: "address" },
     ],
-  },
-  { name: "UUPSUnauthorizedCallContext", type: "error", inputs: [] },
-  {
-    name: "UUPSUnsupportedProxiableUUID",
-    type: "error",
-    inputs: [{ name: "slot", type: "bytes32" }],
   },
 ] as const;

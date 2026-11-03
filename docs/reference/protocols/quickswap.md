@@ -63,7 +63,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV2FactoryABI`
 
-`import QuickSwapV2FactoryABI from "./protocols/quickswap/QuickSwapV2FactoryABI.json";` Speaks for: v2Factory.
+`import QuickSwapV2FactoryABI from "./protocols/quickswap/QuickSwapV2FactoryABI.json";` Speaks for: v2Factory. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
 
 - `allPairs(uint256) view returns (address)`
 - `allPairsLength() view returns (uint256)`
@@ -78,14 +78,37 @@ functions, and its writes are SafeERC20.
 
 `import QuickSwapV2PairABI from "./protocols/quickswap/QuickSwapV2PairABI.json";`
 
+- `allowance(address, address) view returns (uint256)`
+- `approve(address spender, uint256 value) returns (bool)`
+- `balanceOf(address) view returns (uint256)`
+- `burn(address to) returns (uint256 amount0, uint256 amount1)`
+- `decimals() view returns (uint8)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `factory() view returns (address)`
 - `getReserves() view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast)`
+- `initialize(address _token0, address _token1)`
+- `kLast() view returns (uint256)`
+- `MINIMUM_LIQUIDITY() view returns (uint256)`
+- `mint(address to) returns (uint256 liquidity)`
+- `name() view returns (string)`
+- `nonces(address) view returns (uint256)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `PERMIT_TYPEHASH() view returns (bytes32)`
+- `price0CumulativeLast() view returns (uint256)`
+- `price1CumulativeLast() view returns (uint256)`
+- `skim(address to)`
 - `swap(uint256 amount0Out, uint256 amount1Out, address to, bytes data)`
+- `symbol() view returns (string)`
+- `sync()`
 - `token0() view returns (address)`: the address is a token
 - `token1() view returns (address)`: the address is a token
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 value) returns (bool)`
+- `transferFrom(address from, address to, uint256 value) returns (bool)`
 
 ### `QuickSwapV2RouterABI`
 
-`import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";` Speaks for: v2Router.
+`import QuickSwapV2RouterABI from "./protocols/quickswap/QuickSwapV2RouterABI.json";` Speaks for: v2Router. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`
@@ -114,7 +137,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV3FactoryABI`
 
-`import QuickSwapV3FactoryABI from "./protocols/quickswap/QuickSwapV3FactoryABI.json";` Speaks for: v3Factory.
+`import QuickSwapV3FactoryABI from "./protocols/quickswap/QuickSwapV3FactoryABI.json";` Speaks for: v3Factory. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
 
 - `baseFeeConfiguration() view returns (uint16 alpha1, uint16 alpha2, uint32 beta1, uint32 beta2, uint16 gamma1, uint16 gamma2, uint32 volumeBeta, uint16 volumeGamma, uint16 baseFee)`
 - `createPool(address tokenA, address tokenB) returns (address pool)`
@@ -163,7 +186,7 @@ functions, and its writes are SafeERC20.
 
 ### `QuickSwapV3SwapRouterABI`
 
-`import QuickSwapV3SwapRouterABI from "./protocols/quickswap/QuickSwapV3SwapRouterABI.json";` Speaks for: v3SwapRouter.
+`import QuickSwapV3SwapRouterABI from "./protocols/quickswap/QuickSwapV3SwapRouterABI.json";` Speaks for: v3SwapRouter. The import is the contract's full ABI across every deployment; call it through the `Quickswap` namespace to have a function a chain's deployment does not run refused.
 
 - `algebraSwapCallback(int256 amount0Delta, int256 amount1Delta, bytes _data)`
 - `exactInput((bytes path, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum) params) payable returns (uint256 amountOut)`

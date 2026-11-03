@@ -54,7 +54,7 @@ function main() {
 
 ### `BorrowerOperationsABI`
 
-`import BorrowerOperationsABI from "./protocols/liquity-v1/BorrowerOperationsABI.json";` Speaks for: borrowerOperations.
+`import BorrowerOperationsABI from "./protocols/liquity-v1/BorrowerOperationsABI.json";` Speaks for: borrowerOperations. The import is the contract's full ABI across every deployment; call it through the `LiquityV1` namespace to have a function a chain's deployment does not run refused.
 
 - `_100pct() view returns (uint256)`
 - `activePool() view returns (address)`

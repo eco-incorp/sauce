@@ -63,7 +63,7 @@ functions, and its writes are SafeERC20.
 
 ### `AcrossHubPoolABI`
 
-`import AcrossHubPoolABI from "./protocols/across/AcrossHubPoolABI.json";` Speaks for: hubPool.
+`import AcrossHubPoolABI from "./protocols/across/AcrossHubPoolABI.json";` Speaks for: hubPool. The import is the contract's full ABI across every deployment; call it through the `Across` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address l1Token, uint256 l1TokenAmount) payable`
 - `bondAmount() view returns (uint256)`
@@ -115,7 +115,7 @@ functions, and its writes are SafeERC20.
 
 ### `AcrossSpokePoolABI`
 
-`import AcrossSpokePoolABI from "./protocols/across/AcrossSpokePoolABI.json";` Speaks for: spokePool.
+`import AcrossSpokePoolABI from "./protocols/across/AcrossSpokePoolABI.json";` Speaks for: spokePool. The import is the contract's full ABI across every deployment; call it through the `Across` namespace to have a function a chain's deployment does not run refused.
 
 - `__OvmSpokePool_init(uint32 _initialDepositId, address _crossDomainAdmin, address _withdrawalRecipient, address _l2Eth)`
 - `__SpokePool_init(uint32 _initialDepositId, address _crossDomainAdmin, address _withdrawalRecipient)`
@@ -247,7 +247,29 @@ Not on Scroll's spokePool (`0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96`), whose 
 
 Left out of this ABI, though its deployments declare them:
 
+- `error CallValidatedAlreadySet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DisabledRoute` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidClaimedAmount` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPayoutAdjustmentPct` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotCrossChainCall` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotEOA` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotFxChild` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotHubPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OFTFeeUnderpaid` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OftIncorrectAmountReceivedLD` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OftIncorrectAmountSentLD` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OftLzFeeNotZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EnabledDepositRoute` taking `(address,uint256,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event FilledV3Relay` taking `(address,address,uint256,uint256,uint256,uint256,uint32,uint32,uint32,address,address,address,address,bytes,(address,bytes,uint256,uint8))`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RequestedSpeedUpV3Deposit` taking `(uint256,uint32,address,address,bytes,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RequestedV3SlowFill` taking `(address,address,uint256,uint256,uint256,uint32,uint32,uint32,address,address,address,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SetZkBridge` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event V3FundsDeposited` taking `(address,address,uint256,uint256,uint256,uint32,uint32,uint32,uint32,address,address,address,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `initialize` taking `(address,address,uint32,address,address)`: an overload of initialize(uint32,address,address,address,address), which takes as many arguments: a call picks its overload by argument count.
+
+On Base, no source could give the verified ABI of `0x09aea4b2242abc8bb4bb78d537a67a245a7bec64` when the registry was checked, so what it declares is kept from a check of 2026-10-27 that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.
 
 ## Next
 

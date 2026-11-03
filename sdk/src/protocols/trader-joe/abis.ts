@@ -423,31 +423,8 @@ export const LBRouterABI = [
     ],
     outputs: [],
   },
-  { name: "AddressHelper__CallFailed", type: "error", inputs: [] },
-  { name: "AddressHelper__NonContract", type: "error", inputs: [] },
   { name: "JoeLibrary__InsufficientAmount", type: "error", inputs: [] },
   { name: "JoeLibrary__InsufficientLiquidity", type: "error", inputs: [] },
-  {
-    name: "LBRouter__AmountSlippageBPTooBig",
-    type: "error",
-    inputs: [{ name: "amountSlippage", type: "uint256" }],
-  },
-  {
-    name: "LBRouter__AmountSlippageCaught",
-    type: "error",
-    inputs: [
-      { name: "amountXMin", type: "uint256" },
-      { name: "amountX", type: "uint256" },
-      { name: "amountYMin", type: "uint256" },
-      { name: "amountY", type: "uint256" },
-    ],
-  },
-  {
-    name: "LBRouter__BinReserveOverflows",
-    type: "error",
-    inputs: [{ name: "id", type: "uint256" }],
-  },
-  { name: "LBRouter__BrokenSwapSafetyCheck", type: "error", inputs: [] },
   {
     name: "LBRouter__DeadlineExceeded",
     type: "error",
@@ -457,83 +434,12 @@ export const LBRouterABI = [
     ],
   },
   {
-    name: "LBRouter__FailedToSendNATIVE",
-    type: "error",
-    inputs: [
-      { name: "recipient", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-  },
-  {
-    name: "LBRouter__IdDesiredOverflows",
-    type: "error",
-    inputs: [
-      { name: "idDesired", type: "uint256" },
-      { name: "idSlippage", type: "uint256" },
-    ],
-  },
-  { name: "LBRouter__IdOverflows", type: "error", inputs: [{ name: "id", type: "int256" }] },
-  {
-    name: "LBRouter__IdSlippageCaught",
-    type: "error",
-    inputs: [
-      { name: "activeIdDesired", type: "uint256" },
-      { name: "idSlippage", type: "uint256" },
-      { name: "activeId", type: "uint256" },
-    ],
-  },
-  {
-    name: "LBRouter__InsufficientAmountOut",
-    type: "error",
-    inputs: [
-      { name: "amountOutMin", type: "uint256" },
-      { name: "amountOut", type: "uint256" },
-    ],
-  },
-  {
     name: "LBRouter__InvalidTokenPath",
     type: "error",
     inputs: [{ name: "wrongToken", type: "address" }],
   },
-  {
-    name: "LBRouter__InvalidVersion",
-    type: "error",
-    inputs: [{ name: "version", type: "uint256" }],
-  },
   { name: "LBRouter__LengthsMismatch", type: "error", inputs: [] },
-  {
-    name: "LBRouter__MaxAmountInExceeded",
-    type: "error",
-    inputs: [
-      { name: "amountInMax", type: "uint256" },
-      { name: "amountIn", type: "uint256" },
-    ],
-  },
-  { name: "LBRouter__NotFactoryOwner", type: "error", inputs: [] },
-  {
-    name: "LBRouter__PairNotCreated",
-    type: "error",
-    inputs: [
-      { name: "tokenX", type: "address" },
-      { name: "tokenY", type: "address" },
-      { name: "binStep", type: "uint256" },
-    ],
-  },
   { name: "LBRouter__SenderIsNotWNATIVE", type: "error", inputs: [] },
-  { name: "LBRouter__SwapOverflows", type: "error", inputs: [{ name: "id", type: "uint256" }] },
-  {
-    name: "LBRouter__TooMuchTokensIn",
-    type: "error",
-    inputs: [{ name: "excess", type: "uint256" }],
-  },
-  {
-    name: "LBRouter__WrongAmounts",
-    type: "error",
-    inputs: [
-      { name: "amount", type: "uint256" },
-      { name: "reserve", type: "uint256" },
-    ],
-  },
   {
     name: "LBRouter__WrongNativeLiquidityParameters",
     type: "error",
@@ -547,7 +453,6 @@ export const LBRouterABI = [
   },
   { name: "LBRouter__WrongTokenOrder", type: "error", inputs: [] },
   { name: "PackedUint128Math__SubUnderflow", type: "error", inputs: [] },
-  { name: "TokenHelper__TransferFailed", type: "error", inputs: [] },
 ] as const;
 
 export const LBFactoryABI = [
@@ -1056,15 +961,6 @@ export const LBFactoryABI = [
     inputs: [{ name: "quoteAsset", type: "address", indexed: true }],
   },
   {
-    name: "RoleAdminChanged",
-    type: "event",
-    inputs: [
-      { name: "role", type: "bytes32", indexed: true },
-      { name: "previousAdminRole", type: "bytes32", indexed: true },
-      { name: "newAdminRole", type: "bytes32", indexed: true },
-    ],
-  },
-  {
     name: "RoleGranted",
     type: "event",
     inputs: [
@@ -1082,7 +978,6 @@ export const LBFactoryABI = [
       { name: "sender", type: "address", indexed: true },
     ],
   },
-  { name: "AccessControlBadConfirmation", type: "error", inputs: [] },
   {
     name: "AccessControlUnauthorizedAccount",
     type: "error",
@@ -1092,22 +987,10 @@ export const LBFactoryABI = [
     ],
   },
   {
-    name: "EnumerableMapNonexistentKey",
-    type: "error",
-    inputs: [{ name: "key", type: "bytes32" }],
-  },
-  { name: "LBFactory__AddressZero", type: "error", inputs: [] },
-  {
-    name: "LBFactory__BinStepHasNoPreset",
-    type: "error",
-    inputs: [{ name: "binStep", type: "uint256" }],
-  },
-  {
     name: "LBFactory__BinStepTooLow",
     type: "error",
     inputs: [{ name: "binStep", type: "uint256" }],
   },
-  { name: "LBFactory__CannotGrantDefaultAdminRole", type: "error", inputs: [] },
   {
     name: "LBFactory__FlashLoanFeeAboveMax",
     type: "error",
@@ -1121,7 +1004,6 @@ export const LBFactoryABI = [
     type: "error",
     inputs: [{ name: "token", type: "address" }],
   },
-  { name: "LBFactory__ImplementationNotSet", type: "error", inputs: [] },
   { name: "LBFactory__InvalidHooksParameters", type: "error", inputs: [] },
   {
     name: "LBFactory__LBPairAlreadyExists",
@@ -1133,16 +1015,6 @@ export const LBFactoryABI = [
     ],
   },
   {
-    name: "LBFactory__LBPairDoesNotExist",
-    type: "error",
-    inputs: [
-      { name: "tokenX", type: "address" },
-      { name: "tokenY", type: "address" },
-      { name: "binStep", type: "uint256" },
-    ],
-  },
-  { name: "LBFactory__LBPairIgnoredIsAlreadyInTheSameState", type: "error", inputs: [] },
-  {
     name: "LBFactory__LBPairNotCreated",
     type: "error",
     inputs: [
@@ -1151,20 +1023,6 @@ export const LBFactoryABI = [
       { name: "binStep", type: "uint256" },
     ],
   },
-  {
-    name: "LBFactory__LBPairSafetyCheckFailed",
-    type: "error",
-    inputs: [{ name: "LBPairImplementation", type: "address" }],
-  },
-  {
-    name: "LBFactory__PresetIsLockedForUsers",
-    type: "error",
-    inputs: [
-      { name: "user", type: "address" },
-      { name: "binStep", type: "uint256" },
-    ],
-  },
-  { name: "LBFactory__PresetOpenStateIsAlreadyInTheSameState", type: "error", inputs: [] },
   {
     name: "LBFactory__QuoteAssetAlreadyWhitelisted",
     type: "error",
@@ -1181,26 +1039,10 @@ export const LBFactoryABI = [
     inputs: [{ name: "feeRecipient", type: "address" }],
   },
   {
-    name: "LBFactory__SameFlashLoanFee",
-    type: "error",
-    inputs: [{ name: "flashLoanFee", type: "uint256" }],
-  },
-  {
-    name: "LBFactory__SameHooksImplementation",
-    type: "error",
-    inputs: [{ name: "hooksImplementation", type: "address" }],
-  },
-  {
     name: "LBFactory__SameHooksParameters",
     type: "error",
     inputs: [{ name: "hooksParameters", type: "bytes32" }],
   },
-  {
-    name: "LBFactory__SameImplementation",
-    type: "error",
-    inputs: [{ name: "LBPairImplementation", type: "address" }],
-  },
-  { name: "OwnableInvalidOwner", type: "error", inputs: [{ name: "owner", type: "address" }] },
   {
     name: "OwnableUnauthorizedAccount",
     type: "error",
@@ -1210,17 +1052,8 @@ export const LBFactoryABI = [
   { name: "PendingOwnable__AddressZero", type: "error", inputs: [] },
   { name: "PendingOwnable__NoPendingOwner", type: "error", inputs: [] },
   { name: "PendingOwnable__NotOwner", type: "error", inputs: [] },
-  { name: "PendingOwnable__NotPendingOwner", type: "error", inputs: [] },
   { name: "PendingOwnable__PendingOwnerAlreadySet", type: "error", inputs: [] },
   { name: "SafeCast__Exceeds16Bits", type: "error", inputs: [] },
-  {
-    name: "Uint128x128Math__PowUnderflow",
-    type: "error",
-    inputs: [
-      { name: "x", type: "uint256" },
-      { name: "y", type: "int256" },
-    ],
-  },
 ] as const;
 
 // LBPair — a pair a program looks up through LBFactory. Its `swap` is called directly once the
@@ -1717,48 +1550,20 @@ export const LBPairABI = [
       { name: "amounts", type: "bytes32[]", indexed: false },
     ],
   },
-  { name: "AddressHelper__CallFailed", type: "error", inputs: [] },
-  { name: "AddressHelper__NonContract", type: "error", inputs: [] },
-  {
-    name: "BinHelper__CompositionFactorFlawed",
-    type: "error",
-    inputs: [{ name: "id", type: "uint24" }],
-  },
   { name: "BinHelper__LiquidityOverflow", type: "error", inputs: [] },
   { name: "BinHelper__MaxLiquidityPerBinExceeded", type: "error", inputs: [] },
   { name: "FeeHelper__FeeTooLarge", type: "error", inputs: [] },
   { name: "Hooks__CallFailed", type: "error", inputs: [] },
   { name: "InvalidInitialization", type: "error", inputs: [] },
-  { name: "LBPair__AddressZero", type: "error", inputs: [] },
   { name: "LBPair__AlreadyInitialized", type: "error", inputs: [] },
   { name: "LBPair__EmptyMarketConfigs", type: "error", inputs: [] },
   { name: "LBPair__FlashLoanCallbackFailed", type: "error", inputs: [] },
-  { name: "LBPair__FlashLoanInsufficientAmount", type: "error", inputs: [] },
   { name: "LBPair__InsufficientAmountIn", type: "error", inputs: [] },
-  { name: "LBPair__InsufficientAmountOut", type: "error", inputs: [] },
   { name: "LBPair__InvalidHooks", type: "error", inputs: [] },
   { name: "LBPair__InvalidInput", type: "error", inputs: [] },
-  { name: "LBPair__InvalidStaticFeeParameters", type: "error", inputs: [] },
-  { name: "LBPair__MaxTotalFeeExceeded", type: "error", inputs: [] },
   { name: "LBPair__OnlyFactory", type: "error", inputs: [] },
-  { name: "LBPair__OnlyProtocolFeeRecipient", type: "error", inputs: [] },
-  { name: "LBPair__OutOfLiquidity", type: "error", inputs: [] },
-  { name: "LBPair__TokenNotSupported", type: "error", inputs: [] },
   { name: "LBPair__ZeroAmount", type: "error", inputs: [{ name: "id", type: "uint24" }] },
   { name: "LBPair__ZeroAmountsOut", type: "error", inputs: [{ name: "id", type: "uint24" }] },
-  { name: "LBPair__ZeroBorrowAmount", type: "error", inputs: [] },
-  { name: "LBPair__ZeroShares", type: "error", inputs: [{ name: "id", type: "uint24" }] },
-  { name: "LBToken__AddressThisOrZero", type: "error", inputs: [] },
-  {
-    name: "LBToken__BurnExceedsBalance",
-    type: "error",
-    inputs: [
-      { name: "from", type: "address" },
-      { name: "id", type: "uint256" },
-      { name: "amount", type: "uint256" },
-    ],
-  },
-  { name: "LBToken__InvalidLength", type: "error", inputs: [] },
   { name: "LBToken__SelfApproval", type: "error", inputs: [{ name: "owner", type: "address" }] },
   {
     name: "LBToken__SpenderNotApproved",
@@ -1777,30 +1582,12 @@ export const LBPairABI = [
       { name: "amount", type: "uint256" },
     ],
   },
-  { name: "LiquidityConfigurations__InvalidConfig", type: "error", inputs: [] },
-  { name: "NotInitializing", type: "error", inputs: [] },
   { name: "OracleHelper__InvalidOracleId", type: "error", inputs: [] },
-  { name: "OracleHelper__LookUpTimestampTooOld", type: "error", inputs: [] },
-  { name: "OracleHelper__NewLengthTooSmall", type: "error", inputs: [] },
   { name: "PackedUint128Math__AddOverflow", type: "error", inputs: [] },
-  { name: "PackedUint128Math__MultiplierTooLarge", type: "error", inputs: [] },
   { name: "PackedUint128Math__SubUnderflow", type: "error", inputs: [] },
   { name: "PairParametersHelper__InvalidParameter", type: "error", inputs: [] },
-  { name: "ReentrancyGuard__ReentrantCall", type: "error", inputs: [] },
   { name: "ReentrancyGuardReentrantCall", type: "error", inputs: [] },
-  { name: "SafeCast__Exceeds128Bits", type: "error", inputs: [] },
   { name: "SafeCast__Exceeds24Bits", type: "error", inputs: [] },
-  { name: "SafeCast__Exceeds40Bits", type: "error", inputs: [] },
-  { name: "TokenHelper__TransferFailed", type: "error", inputs: [] },
-  { name: "Uint128x128Math__LogUnderflow", type: "error", inputs: [] },
-  {
-    name: "Uint128x128Math__PowUnderflow",
-    type: "error",
-    inputs: [
-      { name: "x", type: "uint256" },
-      { name: "y", type: "int256" },
-    ],
-  },
   { name: "Uint256x256Math__MulDivOverflow", type: "error", inputs: [] },
   { name: "Uint256x256Math__MulShiftOverflow", type: "error", inputs: [] },
 ] as const;

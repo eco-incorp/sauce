@@ -111,3 +111,25 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `userShareLockStartTime(address) view returns (uint256)`
 - `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error Cellar__AdaptorNotSetUp` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__AssetMismatch` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__ContractShutdown` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__DebtMismatch` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__DepositRestricted` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__ExternalInitiator` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__IlliquidWithdraw` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__InvalidFee` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__InvalidHoldingPosition` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__InvalidRebalanceDeviation` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__InvalidShareLockPeriod` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__NotApprovedToDepositOnBehalf` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__PositionAlreadyUsed` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__PositionNotEmpty` taking `(uint32,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__RemovingHoldingPosition` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__SharesAreLocked` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__TotalAssetDeviatedOutsideRange` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__TotalSharesMustRemainConstant` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Cellar__ZeroShares` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

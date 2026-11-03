@@ -466,14 +466,6 @@ export const ExchangeRouterABI = [
       { name: "returndata", type: "bytes", indexed: false },
     ],
   },
-  {
-    name: "CollateralAlreadyClaimed",
-    type: "error",
-    inputs: [
-      { name: "adjustedClaimableAmount", type: "uint256" },
-      { name: "claimedAmount", type: "uint256" },
-    ],
-  },
   { name: "DisabledFeature", type: "error", inputs: [{ name: "key", type: "bytes32" }] },
   {
     name: "EmptyAddressInMarketTokenBalanceValidation",
@@ -484,24 +476,9 @@ export const ExchangeRouterABI = [
     ],
   },
   { name: "EmptyDeposit", type: "error", inputs: [] },
-  { name: "EmptyHoldingAddress", type: "error", inputs: [] },
   { name: "EmptyOrder", type: "error", inputs: [] },
   { name: "EmptyReceiver", type: "error", inputs: [] },
-  {
-    name: "EmptyTokenTranferGasLimit",
-    type: "error",
-    inputs: [{ name: "token", type: "address" }],
-  },
   { name: "InvalidClaimableFactor", type: "error", inputs: [{ name: "value", type: "uint256" }] },
-  {
-    name: "InvalidClaimCollateralInput",
-    type: "error",
-    inputs: [
-      { name: "marketsLength", type: "uint256" },
-      { name: "tokensLength", type: "uint256" },
-      { name: "timeKeysLength", type: "uint256" },
-    ],
-  },
   {
     name: "InvalidMarketTokenBalance",
     type: "error",
@@ -538,15 +515,6 @@ export const ExchangeRouterABI = [
     inputs: [
       { name: "uiFeeFactor", type: "uint256" },
       { name: "maxUiFeeFactor", type: "uint256" },
-    ],
-  },
-  {
-    name: "TokenTransferError",
-    type: "error",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "receiver", type: "address" },
-      { name: "amount", type: "uint256" },
     ],
   },
   {

@@ -37,7 +37,7 @@ function main() {
 
 ### `PotABI`
 
-`import PotABI from "./protocols/maker/PotABI.json";` Speaks for: pot.
+`import PotABI from "./protocols/maker/PotABI.json";` Speaks for: pot. The import is the contract's full ABI across every deployment; call it through the `Maker` namespace to have a function a chain's deployment does not run refused.
 
 - `cage()`
 - `chi() view returns (uint256)`
@@ -62,7 +62,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `SavingsDaiABI`
 
-`import SavingsDaiABI from "./protocols/maker/SavingsDaiABI.json";` Speaks for: sDAI.
+`import SavingsDaiABI from "./protocols/maker/SavingsDaiABI.json";` Speaks for: sDAI. The import is the contract's full ABI across every deployment; call it through the `Maker` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address, address) view returns (uint256)`
 - `approve(address spender, uint256 value) returns (bool)`

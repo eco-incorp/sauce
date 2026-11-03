@@ -733,113 +733,24 @@ export const CellarABI = [
       { name: "shares", type: "uint256", indexed: false },
     ],
   },
-  {
-    name: "Cellar__AdaptorNotSetUp",
-    type: "error",
-    inputs: [{ name: "adaptor", type: "address" }],
-  },
-  {
-    name: "Cellar__AssetMismatch",
-    type: "error",
-    inputs: [
-      { name: "asset", type: "address" },
-      { name: "expectedAsset", type: "address" },
-    ],
-  },
   { name: "Cellar__CallerNotAavePool", type: "error", inputs: [] },
   { name: "Cellar__ContractNotShutdown", type: "error", inputs: [] },
-  { name: "Cellar__ContractShutdown", type: "error", inputs: [] },
-  { name: "Cellar__DebtMismatch", type: "error", inputs: [{ name: "position", type: "uint32" }] },
-  {
-    name: "Cellar__DepositRestricted",
-    type: "error",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "maxDeposit", type: "uint256" },
-    ],
-  },
-  { name: "Cellar__ExternalInitiator", type: "error", inputs: [] },
-  {
-    name: "Cellar__IlliquidWithdraw",
-    type: "error",
-    inputs: [{ name: "illiquidPosition", type: "address" }],
-  },
   {
     name: "Cellar__IncompleteWithdraw",
     type: "error",
     inputs: [{ name: "assetsOwed", type: "uint256" }],
   },
-  { name: "Cellar__InvalidFee", type: "error", inputs: [] },
   { name: "Cellar__InvalidFeeCut", type: "error", inputs: [] },
-  {
-    name: "Cellar__InvalidHoldingPosition",
-    type: "error",
-    inputs: [{ name: "positionId", type: "uint32" }],
-  },
-  {
-    name: "Cellar__InvalidRebalanceDeviation",
-    type: "error",
-    inputs: [
-      { name: "requested", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  { name: "Cellar__InvalidShareLockPeriod", type: "error", inputs: [] },
-  {
-    name: "Cellar__NotApprovedToDepositOnBehalf",
-    type: "error",
-    inputs: [{ name: "depositor", type: "address" }],
-  },
   { name: "Cellar__PayoutNotSet", type: "error", inputs: [] },
-  {
-    name: "Cellar__PositionAlreadyUsed",
-    type: "error",
-    inputs: [{ name: "position", type: "uint32" }],
-  },
   {
     name: "Cellar__PositionArrayFull",
     type: "error",
     inputs: [{ name: "maxPositions", type: "uint256" }],
   },
   {
-    name: "Cellar__PositionNotEmpty",
-    type: "error",
-    inputs: [
-      { name: "position", type: "uint32" },
-      { name: "sharesRemaining", type: "uint256" },
-    ],
-  },
-  {
     name: "Cellar__PositionNotUsed",
     type: "error",
     inputs: [{ name: "position", type: "uint32" }],
   },
-  { name: "Cellar__RemovingHoldingPosition", type: "error", inputs: [] },
-  {
-    name: "Cellar__SharesAreLocked",
-    type: "error",
-    inputs: [
-      { name: "timeSharesAreUnlocked", type: "uint256" },
-      { name: "currentBlock", type: "uint256" },
-    ],
-  },
-  {
-    name: "Cellar__TotalAssetDeviatedOutsideRange",
-    type: "error",
-    inputs: [
-      { name: "assets", type: "uint256" },
-      { name: "min", type: "uint256" },
-      { name: "max", type: "uint256" },
-    ],
-  },
-  {
-    name: "Cellar__TotalSharesMustRemainConstant",
-    type: "error",
-    inputs: [
-      { name: "current", type: "uint256" },
-      { name: "expected", type: "uint256" },
-    ],
-  },
   { name: "Cellar__ZeroAssets", type: "error", inputs: [] },
-  { name: "Cellar__ZeroShares", type: "error", inputs: [] },
 ] as const;

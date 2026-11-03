@@ -39,7 +39,7 @@ function main() {
 
 ### `OpenOceanExchangeV2ABI`
 
-`import OpenOceanExchangeV2ABI from "./protocols/openocean/OpenOceanExchangeV2ABI.json";` Speaks for: exchangeV2.
+`import OpenOceanExchangeV2ABI from "./protocols/openocean/OpenOceanExchangeV2ABI.json";` Speaks for: exchangeV2. The import is the contract's full ABI across every deployment; call it through the `Openocean` namespace to have a function a chain's deployment does not run refused.
 
 - `callUniswap(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools) payable returns (uint256 returnAmount)`
 - `callUniswapTo(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools, address recipient) payable returns (uint256 returnAmount)`
@@ -71,3 +71,7 @@ Not on Polygon's exchangeV2 (`0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`), whos
 Not on Fantom's exchangeV2 (`0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`), whose code does not dispatch them or declares them otherwise: `callUniswap`, `callUniswapTo`, `callUniswapToWithPermit`, `callUniswapWithPermit`, `permit2`, `permit2DomainSeperator`, `permit2NextNonce`, `permit2NextNonceAfter`, `setPermit2`, `simpleSwap`, `swapGmxV2`, `uniswapV3SwapCallback`, `uniswapV3SwapTo`, `uniswapV3SwapToWithPermit`. Do not call them there: a program compiled for Fantom is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 
 Not on Avalanche C-Chain's exchangeV2 (`0x6352a56caadC4F1E25CD6c75970Fa768A3304e64`), whose code does not dispatch them or declares them otherwise: `callUniswap`, `callUniswapTo`, `callUniswapToWithPermit`, `callUniswapWithPermit`, `swapGmxV2`, `uniswapV3SwapCallback`, `uniswapV3SwapTo`, `uniswapV3SwapToWithPermit`. Do not call them there: a program compiled for Avalanche C-Chain is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
+
+Left out of this ABI, though its deployments declare them:
+
+- `event Unpaused` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

@@ -55,7 +55,7 @@ function main() {
 
 ### `DiamondABI`
 
-`import DiamondABI from "./protocols/gains-network/DiamondABI.json";` Speaks for: diamond.
+`import DiamondABI from "./protocols/gains-network/DiamondABI.json";` Speaks for: diamond. The import is the contract's full ABI across every deployment; call it through the `GainsNetwork` namespace to have a function a chain's deployment does not run refused.
 
 - `addOtcCollateralBalance(uint8 _collateralIndex, uint256 _collateralAmount)`
 - `addPriceImpactOpenInterest(address _trader, uint32 _index, uint256 _oiDeltaCollateral, bool _open, bool _isPnlPositive)`
@@ -287,6 +287,53 @@ function main() {
 - `whitelistReferrers(address[] _referrers, address[] _allies)`
 - `withdrawPositivePnl(uint32 _index, uint120 _amountCollateral)`
 - `withinMaxBorrowingGroupOi(uint8 _collateralIndex, uint16 _pairIndex, bool _long, uint256 _positionSizeCollateral) view returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AlreadyActive` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AlreadyBeingMarketClosed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AlreadyExists` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BlockOrder` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowingWrongExponent` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowingZeroGroup` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralNotActive` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DepthBandsAboveMax` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DoesntExist` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InitError` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAddresses` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidCollateralIndex` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDecreasePositionSizeInput` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidFacetCutAction` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidShareSum` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NewPositionSizeSmaller` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NoPendingRewards` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NoSl` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotAllowed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotYourOrder` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Overflow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Paused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PendingTrigger` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PointsOverflow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PriceImpactTooHigh` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PriceZero` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StakingCooldownActive` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WaitTimeout` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongAccess` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongDepthBandsOrder` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongFromBlock` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongIndex` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongLength` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongOrder` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongSl` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongTp` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongWindowsCount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongWindowsDuration` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event CouldNotCloseTrade` taking `(address,uint16,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event OnePercentDepthUpdated` taking `(uint256,uint128,uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ParamUpdateRequested` taking `(uint8,uint16,uint8,uint224)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UpdatedOpenFeeP` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

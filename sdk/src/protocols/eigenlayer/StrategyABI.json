@@ -518,27 +518,7 @@
       "inputs": []
     },
     {
-      "name": "InputAddressZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidNewPausedStatus",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaxPerDepositExceedsMax",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NewSharesZero",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyPauser",
       "type": "error",
       "inputs": []
     },
@@ -548,22 +528,7 @@
       "inputs": []
     },
     {
-      "name": "OnlyUnderlyingToken",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OnlyUnpauser",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "TotalSharesExceedsMax",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WithdrawalAmountExceedsTotalDeposits",
       "type": "error",
       "inputs": []
     }

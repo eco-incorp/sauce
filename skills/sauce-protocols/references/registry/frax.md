@@ -33,7 +33,7 @@ function main() {
 
 ### `FraxERC20ABI`
 
-`import FraxERC20ABI from "./protocols/frax/FraxERC20ABI.json";` Speaks for: frax.
+`import FraxERC20ABI from "./protocols/frax/FraxERC20ABI.json";` Speaks for: frax. The import is the contract's full ABI across every deployment; call it through the `Frax` namespace to have a function a chain's deployment does not run refused.
 
 - `addPool(address pool_address)`
 - `allowance(address owner, address spender) view returns (uint256)`
@@ -103,3 +103,7 @@ function main() {
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address sender, address recipient, uint256 amount) returns (bool)`
 - `weth_address() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

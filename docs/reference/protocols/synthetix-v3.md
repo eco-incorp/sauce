@@ -55,7 +55,7 @@ function main() {
 
 ### `CoreProxyABI`
 
-`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy.
+`import CoreProxyABI from "./protocols/synthetix-v3/CoreProxyABI.json";` Speaks for: coreProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `acceptPoolOwnership(uint128 poolId)`
@@ -197,9 +197,51 @@ function main() {
 - `withdrawMarketCollateral(uint128 marketId, address collateralType, uint256 tokenAmount)`
 - `withdrawMarketUsd(uint128 marketId, address target, uint256 amount) returns (uint256 feeAmount)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AccountActivityTimeoutPending` taking `(uint128,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AccountNotFound` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CannotScaleEmptyMapping` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralDepositDisabled` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CollateralNotFound` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DeprecatedDeposit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IncorrectMarketInterface` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IneligibleForLiquidation` taking `(uint256,int256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAccountCollateral` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAllowance` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAvailableCollateral` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientCcipFee` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientDelegation` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientMarketCollateralDepositable` taking `(uint128,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAccountId` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidParameter` taking `(string,string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPermission` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MarketNotFound` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MinDelegationTimeoutPending` taking `(uint128,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchAssociatedSystemKind` taking `(bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAssociatedSystem` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotAContract` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotCcipRouter` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotEnoughLiquidity` taking `(uint128,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotFundedByPool` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyAccountTokenProxy` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowInt128ToUint128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowInt256ToUint256` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint128ToInt128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint256ToInt256` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint256ToUint128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint64ToInt64` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PermissionDenied` taking `(uint128,bytes32,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PermissionNotGranted` taking `(uint128,bytes32,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolAlreadyExists` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolCollateralLimitExceeded` taking `(uint128,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PrecisionLost` taking `(uint256,uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UpgradeSimulationFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `PerpsMarketProxyABI`
 
-`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy.
+`import PerpsMarketProxyABI from "./protocols/synthetix-v3/PerpsMarketProxyABI.json";` Speaks for: perpsMarketProxy. The import is the contract's full ABI across every deployment; call it through the `SynthetixV3` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptOwnership()`
 - `addSettlementStrategy(uint128 marketId, (uint8 strategyType, uint256 settlementDelay, uint256 settlementWindowDuration, address priceVerificationContract, bytes32 feedId, uint256 settlementReward, bool disabled, uint256 commitmentPriceDelay) strategy) returns (uint256 strategyId)`
@@ -318,6 +360,42 @@ function main() {
 - `updateReferrerShare(address referrer, uint256 shareRatioD18)`
 - `upgradeTo(address newImplementation)`
 - `utilizationRate() view returns (uint256 rate, uint256 delegatedCollateral, uint256 lockedCredit)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AccountLiquidatable` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error AccountNotFound` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientCollateral` taking `(uint128,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAccountId` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAmountDelta` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDistributor` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidDistributorContract` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidFeeCollectorInterface` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidId` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidInterestRateParameters` taking `(uint128,uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMarket` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidParameter` taking `(string,string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidPermission` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidSettlementWindowDuration` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxCollateralExceeded` taking `(uint128,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxOpenInterestReached` taking `(uint128,uint256,int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MaxUSDOpenInterestReached` taking `(uint128,uint256,int256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchAssociatedSystemKind` taking `(bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAssociatedSystem` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NonexistentDebt` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotEligibleForLiquidation` taking `(uint128)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OnlyAccountTokenProxy` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowInt128ToUint128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowInt256ToUint256` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint128ToInt128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint256ToInt256` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error OverflowUint256ToUint128` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PendingOrderExists` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PermissionDenied` taking `(uint128,bytes32,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PermissionNotGranted` taking `(uint128,bytes32,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PerpsMarketAlreadyInitialized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SettlementStrategyNotFound` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SettlementWindowExpired` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

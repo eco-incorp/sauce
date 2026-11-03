@@ -53,7 +53,7 @@ function main() {
 
 ### `ThrusterV3SwapRouterABI`
 
-`import ThrusterV3SwapRouterABI from "./protocols/thruster/ThrusterV3SwapRouterABI.json";` Speaks for: v3SwapRouter.
+`import ThrusterV3SwapRouterABI from "./protocols/thruster/ThrusterV3SwapRouterABI.json";` Speaks for: v3SwapRouter. The import is the contract's full ABI across every deployment; call it through the `Thruster` namespace to have a function a chain's deployment does not run refused.
 
 - `BLAST() view returns (address)`
 - `claimGas(address _recipient, uint256 _minClaimRateBips) returns (uint256 amount)`

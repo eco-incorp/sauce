@@ -33,7 +33,7 @@ function main() {
 
 ### `DepositContractABI`
 
-`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract.
+`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract. The import is the contract's full ABI across every deployment; call it through the `Aevo` namespace to have a function a chain's deployment does not run refused.
 
 - `bridgeERC20(address _localToken, address _remoteToken, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
 - `bridgeERC20To(address _localToken, address _remoteToken, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
@@ -61,3 +61,10 @@ function main() {
 - `superchainConfig() view returns (address)`
 - `systemConfig() view returns (address)`
 - `version() view returns (string)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ProxyAdminOwnedBase_NotProxyAdmin` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ProxyAdminOwnedBase_NotProxyAdminOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ProxyAdminOwnedBase_NotSharedProxyAdminOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReinitializableBase_ZeroInitVersion` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

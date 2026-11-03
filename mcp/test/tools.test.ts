@@ -198,19 +198,31 @@ describe("sauce_globals", () => {
     assert.equal((one.protocol as { namespace: string }).namespace, "UniswapV3");
   });
 
-  it("lists every namespace's contracts without their methods, which `protocol` gives", async () => {
+  it("lists every namespace's contracts and every interface without their methods, which `protocol` gives", async () => {
     type Namespace = { namespace: string; contracts: Array<Record<string, unknown>> };
     const all = ok(await mcp.call("sauce_globals", { chain: "base", protocols: true })) as {
       protocols: Namespace[];
+      interfaces: Array<Record<string, unknown>>;
     };
     const contracts = all.protocols.flatMap((each) => each.contracts);
     assert.ok(contracts.length > 10);
     assert.ok(contracts.every((contract) => !("methods" in contract)));
     assert.ok(contracts.every((contract) => typeof contract.address === "string"));
+    assert.ok(all.interfaces.length > 0);
+    assert.ok(all.interfaces.every((bound) => !("methods" in bound)));
+    assert.ok(all.interfaces.some((bound) => bound.namespace === "Erc4626"));
     const one = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "UniswapV3" })) as {
       protocol: Namespace;
     };
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
+    const bound = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "Erc4626" })) as {
+      interfaces: Array<{ namespace: string; methods: Array<{ name: string }> }>;
+    };
+    assert.deepEqual(
+      bound.interfaces.map((each) => each.namespace),
+      ["Erc4626"],
+    );
+    assert.ok(bound.interfaces[0]!.methods.some((method) => method.name === "totalAssets"));
   });
 
   it("counts tokenized stocks out of the default, and says how to list and find them", async () => {

@@ -103,6 +103,17 @@ export const RamsesRouterABI = [
     outputs: [],
   },
   {
+    name: "initialize",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "_logic", type: "address" },
+      { name: "admin_", type: "address" },
+      { name: "_data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "isPair",
     type: "function",
     stateMutability: "view",

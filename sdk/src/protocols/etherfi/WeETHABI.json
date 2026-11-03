@@ -676,22 +676,6 @@
       ]
     },
     {
-      "name": "AdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "previousAdmin",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "newAdmin",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "Approval",
       "type": "event",
       "inputs": [
@@ -709,17 +693,6 @@
           "name": "value",
           "type": "uint256",
           "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "BeaconUpgraded",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "beacon",
-          "type": "address",
-          "indexed": true
         }
       ]
     },
@@ -914,11 +887,6 @@
       "inputs": []
     },
     {
-      "name": "InsufficientBalance",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidInput",
       "type": "error",
       "inputs": []
@@ -939,11 +907,6 @@
       "inputs": []
     },
     {
-      "name": "Reentrancy",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WeETHUnderbacked",
       "type": "error",
       "inputs": [
@@ -956,11 +919,6 @@
           "type": "uint256"
         }
       ]
-    },
-    {
-      "name": "ZeroAddress",
-      "type": "error",
-      "inputs": []
     },
     {
       "name": "ZeroAmount",

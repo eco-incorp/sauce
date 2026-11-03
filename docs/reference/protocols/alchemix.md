@@ -57,7 +57,7 @@ function main() {
 
 ### `AlchemistABI`
 
-`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH.
+`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH. The import is the contract's full ABI across every deployment; call it through the `Alchemix` namespace to have a function a chain's deployment does not run refused.
 
 - `acceptAdmin()`
 - `accounts(address owner) view returns (int256 debt, address[] depositedTokens)`
@@ -138,6 +138,47 @@ function main() {
 - `withdrawFrom(address owner, address yieldToken, uint256 shares, address recipient) returns (uint256)`
 - `withdrawUnderlying(address yieldToken, uint256 shares, address recipient, uint256 minimumAmountOut) returns (uint256)`
 - `withdrawUnderlyingFrom(address owner, address yieldToken, uint256 shares, address recipient, uint256 minimumAmountOut) returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ExpectedValueExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IllegalArgument` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LiquidationLimitExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LossExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MintingLimitExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MulticallFailed` taking `(bytes,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RepayLimitExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SlippageExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenDisabled` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Undercollateralized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AddUnderlyingToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AddYieldToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ApproveMint` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ApproveWithdraw` taking `(address,address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Burn` taking `(address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event CreditUnlockRateUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Deposit` taking `(address,address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Donate` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Harvest` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event KeeperSet` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Liquidate` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiquidationLimitUpdated` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MaximumExpectedValueUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MaximumLossUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Mint` taking `(address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ProtocolFeeReceiverUpdated` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Repay` taking `(address,address,uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RepayLimitUpdated` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SentinelSet` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Snap` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SweepRewardTokens` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SweepTokens` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TokenAdapterUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UnderlyingTokenEnabled` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Withdraw` taking `(address,address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event YieldTokenEnabled` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

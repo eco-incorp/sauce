@@ -73,7 +73,7 @@ functions, and its writes are SafeERC20.
 
 ### `PancakeSwapV3FactoryABI`
 
-`import PancakeSwapV3FactoryABI from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";` Speaks for: factory.
+`import PancakeSwapV3FactoryABI from "./protocols/pancakeswap-v3/PancakeSwapV3FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `PancakeswapV3` namespace to have a function a chain's deployment does not run refused.
 
 - `collectProtocol(address pool, address recipient, uint128 amount0Requested, uint128 amount1Requested) returns (uint128 amount0, uint128 amount1)`
 - `createPool(address tokenA, address tokenB, uint24 fee) returns (address pool)`
@@ -93,7 +93,7 @@ functions, and its writes are SafeERC20.
 
 ### `PancakeSwapV3NFPMABI`
 
-`import PancakeSwapV3NFPMABI from "./protocols/pancakeswap-v3/PancakeSwapV3NFPMABI.json";` Speaks for: nonfungiblePositionManager.
+`import PancakeSwapV3NFPMABI from "./protocols/pancakeswap-v3/PancakeSwapV3NFPMABI.json";` Speaks for: nonfungiblePositionManager. The import is the contract's full ABI across every deployment; call it through the `PancakeswapV3` namespace to have a function a chain's deployment does not run refused.
 
 - `approve(address to, uint256 tokenId)`
 - `balanceOf(address owner) view returns (uint256)`
@@ -170,7 +170,7 @@ functions, and its writes are SafeERC20.
 
 ### `PancakeSwapV3SmartRouterABI`
 
-`import PancakeSwapV3SmartRouterABI from "./protocols/pancakeswap-v3/PancakeSwapV3SmartRouterABI.json";` Speaks for: smartRouter.
+`import PancakeSwapV3SmartRouterABI from "./protocols/pancakeswap-v3/PancakeSwapV3SmartRouterABI.json";` Speaks for: smartRouter. The import is the contract's full ABI across every deployment; call it through the `PancakeswapV3` namespace to have a function a chain's deployment does not run refused.
 
 - `approveMax(address token) payable`
 - `approveMaxMinusOne(address token) payable`

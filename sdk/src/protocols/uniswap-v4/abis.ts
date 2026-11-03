@@ -566,7 +566,6 @@ export const UniswapV4UniversalRouterABI = [
   { name: "ContractLocked", type: "error", inputs: [] },
   { name: "DeltaNotNegative", type: "error", inputs: [{ name: "currency", type: "address" }] },
   { name: "DeltaNotPositive", type: "error", inputs: [{ name: "currency", type: "address" }] },
-  { name: "ETHNotAccepted", type: "error", inputs: [] },
   {
     name: "ExecutionFailed",
     type: "error",
@@ -577,7 +576,6 @@ export const UniswapV4UniversalRouterABI = [
   },
   { name: "FromAddressIsNotOwner", type: "error", inputs: [] },
   { name: "InputLengthMismatch", type: "error", inputs: [] },
-  { name: "InsufficientBalance", type: "error", inputs: [] },
   { name: "InsufficientETH", type: "error", inputs: [] },
   { name: "InsufficientToken", type: "error", inputs: [] },
   { name: "InvalidAction", type: "error", inputs: [{ name: "action", type: "bytes4" }] },
@@ -1113,7 +1111,6 @@ export const UniswapV4PositionManagerABI = [
   },
   { name: "NoCodeSubscriber", type: "error", inputs: [] },
   { name: "NonceAlreadyUsed", type: "error", inputs: [] },
-  { name: "NoSelfPermit", type: "error", inputs: [] },
   { name: "NotApproved", type: "error", inputs: [{ name: "caller", type: "address" }] },
   { name: "NotPoolManager", type: "error", inputs: [] },
   { name: "NotSubscribed", type: "error", inputs: [] },
@@ -1277,5 +1274,4 @@ export const UniswapV4StateViewABI = [
     inputs: [],
     outputs: [{ name: "", type: "address" }],
   },
-  { name: "NotPoolManager", type: "error", inputs: [] },
 ] as const;

@@ -93,9 +93,19 @@ functions, and its writes are SafeERC20.
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error BelowMinimumK` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error DepositsNotEqual` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FactoryAlreadySet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientLiquidityMinted` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTo` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `VelodromePoolFactoryABI`
 
-`import VelodromePoolFactoryABI from "./protocols/velodrome/VelodromePoolFactoryABI.json";` Speaks for: poolFactory.
+`import VelodromePoolFactoryABI from "./protocols/velodrome/VelodromePoolFactoryABI.json";` Speaks for: poolFactory. The import is the contract's full ABI across every deployment; call it through the `Velodrome` namespace to have a function a chain's deployment does not run refused.
 
 - `allPools(uint256) view returns (address)`
 - `allPoolsLength() view returns (uint256)`
@@ -130,11 +140,14 @@ functions, and its writes are SafeERC20.
 Left out of this ABI, though its deployments declare them:
 
 - `createPool` taking `(address,address,uint24)`: an overload of createPool(address,address,bool), which takes as many arguments: a call picks its overload by argument count.
+- `error InvalidPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSinkConverter` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolAlreadyExists` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `getPool` taking `(address,address,uint24)`: an overload of getPool(address,address,bool), which takes as many arguments: a call picks its overload by argument count.
 
 ### `VelodromeRouterABI`
 
-`import VelodromeRouterABI from "./protocols/velodrome/VelodromeRouterABI.json";` Speaks for: routerV2.
+`import VelodromeRouterABI from "./protocols/velodrome/VelodromeRouterABI.json";` Speaks for: routerV2. The import is the contract's full ABI across every deployment; call it through the `Velodrome` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, bool stable, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`
@@ -167,3 +180,18 @@ Left out of this ABI, though its deployments declare them:
 - `weth() view returns (address)`
 - `zapIn(address tokenIn, uint256 amountInA, uint256 amountInB, (address tokenA, address tokenB, bool stable, address factory, uint256 amountOutMinA, uint256 amountOutMinB, uint256 amountAMin, uint256 amountBMin) zapInPool, (address from, address to, bool stable, address factory)[] routesA, (address from, address to, bool stable, address factory)[] routesB, address to, bool stake) payable returns (uint256 liquidity)`
 - `zapOut(address tokenOut, uint256 liquidity, (address tokenA, address tokenB, bool stable, address factory, uint256 amountOutMinA, uint256 amountOutMinB, uint256 amountAMin, uint256 amountBMin) zapOutPool, (address from, address to, bool stable, address factory)[] routesA, (address from, address to, bool stable, address factory)[] routesB)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error Expired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAmountA` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAmountADesired` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAmountAOptimal` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientAmountB` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAmountInForETHDeposit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidRouteA` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidRouteB` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolDoesNotExist` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolFactoryDoesNotExist` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SameAddresses` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

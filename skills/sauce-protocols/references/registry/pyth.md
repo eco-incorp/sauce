@@ -33,7 +33,7 @@ function main() {
 
 ### `PythOracleABI`
 
-`import PythOracleABI from "./protocols/pyth/PythOracleABI.json";` Speaks for: oracle.
+`import PythOracleABI from "./protocols/pyth/PythOracleABI.json";` Speaks for: oracle. The import is the contract's full ABI across every deployment; call it through the `Pyth` namespace to have a function a chain's deployment does not run refused.
 
 - `chainId() view returns (uint16)`
 - `executeGovernanceInstruction(bytes encodedVM)`
@@ -88,4 +88,15 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error InsufficientFee` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTwapUpdateData` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTwapUpdateDataSet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidUpdateData` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidWormholeAddressToSet` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NoFreshUpdate` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PriceFeedNotFound` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StalePrice` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TwapPriceFeedUpdate` taking `(bytes32,uint64,uint64,int64,uint64,uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `getUpdateFee` taking `(uint256)`: an overload of getUpdateFee(bytes[]), which takes as many arguments: a call picks its overload by argument count.

@@ -34,7 +34,7 @@ function main() {
 
 ### `ETHxABI`
 
-`import ETHxABI from "./protocols/stader/ETHxABI.json";` Speaks for: ETHx.
+`import ETHxABI from "./protocols/stader/ETHxABI.json";` Speaks for: ETHx. The import is the contract's full ABI across every deployment; call it through the `Stader` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -65,9 +65,13 @@ function main() {
 - `unpause()`
 - `updateStaderConfig(address _staderConfig)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `StakePoolManagerABI`
 
-`import StakePoolManagerABI from "./protocols/stader/StakePoolManagerABI.json";` Speaks for: stakePoolManager.
+`import StakePoolManagerABI from "./protocols/stader/StakePoolManagerABI.json";` Speaks for: stakePoolManager. The import is the contract's full ABI across every deployment; call it through the `Stader` namespace to have a function a chain's deployment does not run refused.
 
 - `convertToAssets(uint256 _shares) view returns (uint256)`
 - `convertToShares(uint256 _assets) view returns (uint256)`
@@ -103,3 +107,12 @@ function main() {
 - `updateExcessETHDepositCoolDown(uint256 _excessETHDepositCoolDown)`
 - `updateStaderConfig(address _staderConfig)`
 - `validatorBatchDeposit(uint8 _poolId)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CooldownNotComplete` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolIdDoesNotExit` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TransferFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedOperationInSafeMode` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

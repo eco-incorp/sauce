@@ -73,6 +73,8 @@ const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
 /** What each export's deployments declare that its ABI leaves out, and why
  *  (`scripts/gen-registry-abis.mjs`). */
 const OMITTED = join(SDK, "test", "fixtures", "registry-abi", "omitted.json");
+/** What each captured contract dispatches, selector by selector (`scripts/capture-registry-abi.mjs`). */
+const EVIDENCE = join(SDK, "test", "fixtures", "registry-abi", "evidence.json");
 /** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
 const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
 
@@ -309,7 +311,31 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  const omitted = JSON.parse(readFileSync(OMITTED, "utf8")).exports;
+  const omittedFile = JSON.parse(readFileSync(OMITTED, "utf8"));
+  const omitted = omittedFile.exports;
+  // An interface binds to whatever address a program gives it, so the contracts it reaches can
+  // differ. Read from the captured instances of each interface export: one whose instances do not
+  // all dispatch the same of the functions it lists is flagged. Only the listed functions count:
+  // the evidence records every function any instance declares, and a `standard` or `common`
+  // interface lists only those every instance runs.
+  const listedSelectors = new Map(
+    sdk.contracts
+      .listInterfaces()
+      .map((d) => [`${d.protocol}|${d.abiExport}`, d.methods.map((m) => m.selector.toLowerCase())]),
+  );
+  const dispatched = new Map(); // `${slug}|${export}` -> per instance, the listed selectors it runs
+  for (const instance of JSON.parse(readFileSync(EVIDENCE, "utf8")).instances) {
+    const key = `${instance.protocol}|${instance.abi}`;
+    const listed = listedSelectors.get(key);
+    if (listed === undefined) continue;
+    const run = listed.filter((selector) => (instance.selectors[selector] ?? null) !== null);
+    dispatched.set(key, [...(dispatched.get(key) ?? []), new Set(run)]);
+  }
+  const instancesDiffer = (slug, name) => {
+    const sets = dispatched.get(`${slug}|${name}`) ?? [];
+
+    return sets.some((set) => set.size !== sets[0].size || [...set].some((s) => !sets[0].has(s)));
+  };
   // Per role deployment, the functions of its ABI it does not run as declared: withheld on its
   // chain, so a program compiled for that chain cannot call them (`contracts.generated.ts`).
   const withheld = new Map();
@@ -412,6 +438,14 @@ export async function skillsReferences(api, documented) {
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
         omitted: omitted[`${info.slug}.${e.name}`] ?? [],
+        // Deployments whose verified ABI is carried, in part, from an earlier capture.
+        partial: (omittedFile.partial?.[`${info.slug}.${e.name}`] ?? []).flatMap((c) => {
+          const [chainId, address] = c.deployment.split(":");
+          const chain = byId.get(Number(chainId));
+          return chain === undefined ? [] : [{ chain: chain.slug, address, date: c.date }];
+        }),
+        // An interface export whose captured instances dispatch different functions.
+        instancesDiffer: instancesDiffer(info.slug, e.name),
         functions: e.functions.map((f) => ({
           text: functionText(f),
           returned: returnedNote(sdk, info.slug, e.name, f),
@@ -1738,10 +1772,24 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         (e.served
           ? `\`import ${e.name} from "./protocols/${p.slug}/${e.name}.json";\``
           : "Not served for import: a program calls it by selector.") +
-          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : ""),
+          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : "") +
+          // An import is the raw ABI, unfiltered per chain: only a namespace name is withheld.
+          (e.served && e.roles.length
+            ? " The import is the contract's full ABI across every deployment" +
+              (p.namespace
+                ? `; call it through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused.`
+                : ".")
+            : ""),
         "",
         ...e.functions.map((f) => `- \`${f.text}\`${f.returned}`),
         "",
+        // An interface reaches whatever contract a program binds it to, and they differ.
+        ...(e.instancesDiffer
+          ? [
+              "Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.",
+              "",
+            ]
+          : []),
         // Where a deployment of a role this ABI speaks for lacks some of its functions.
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
@@ -1762,6 +1810,12 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
               "",
             ]
           : []),
+        // A deployment whose verified ABI no source could give, kept from an earlier capture that
+        // took only what the registry declared then: this ABI may lack what it runs.
+        ...e.partial.flatMap((c) => [
+          `On ${chainsBySlug.get(c.chain).name}, no source could give the verified ABI of ${addressCode(chainsBySlug.get(c.chain).kind, c.address)} when the registry was checked, so what it declares is kept from a check of ${c.date} that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.`,
+          "",
+        ]),
       );
     }
   }

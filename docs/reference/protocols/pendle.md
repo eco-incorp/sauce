@@ -133,6 +133,7 @@ functions, and its writes are SafeERC20.
 Left out of this ABI, though its deployments declare them:
 
 - `DOMAIN_SEPARATOR` taking `()`: not every deployment dispatches it.
+- `error MarketScalarRootBelowZero` taking `(int256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `error MarketZeroNetLPFee` taking `()`: not every deployment declares it.
 - `event RedeemRewards` taking `(address,uint256[])`: not every deployment declares it.
 - `getNonOverrideLnFeeRateRoot` taking `()`: not every deployment dispatches it.
@@ -145,7 +146,7 @@ Left out of this ABI, though its deployments declare them:
 
 ### `PendleRouterABI`
 
-`import PendleRouterABI from "./protocols/pendle/PendleRouterABI.json";` Speaks for: router.
+`import PendleRouterABI from "./protocols/pendle/PendleRouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `Pendle` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidityDualSyAndPt(address receiver, address market, uint256 netSyDesired, uint256 netPtDesired, uint256 minLpOut) returns (uint256 netLpOut, uint256 netSyUsed, uint256 netPtUsed)`
 - `addLiquidityDualTokenAndPt(address receiver, address market, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, uint256 netPtDesired, uint256 minLpOut) payable returns (uint256 netLpOut, uint256 netPtUsed, uint256 netSyInterm)`
@@ -204,6 +205,10 @@ Left out of this ABI, though its deployments declare them:
 - `swapTokenToTokenViaSy(address receiver, address SY, (address tokenIn, uint256 netTokenIn, address tokenMintSy, address pendleSwap, (uint8 swapType, address extRouter, bytes extCalldata, bool needScale) swapData) input, address tokenRedeemSy, uint256 minTokenOut) payable returns (uint256 netTokenOut, uint256 netSyInterm)`
 - `transferOwnership(address newOwner, bool direct, bool renounce)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event SelectorToFacetSet` taking `(bytes4,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `PendleSYABI`
 
 `import PendleSYABI from "./protocols/pendle/PendleSYABI.json";`
@@ -249,7 +254,8 @@ Left out of this ABI, though its deployments declare them:
 - `adapter` taking `()`: not every deployment dispatches it.
 - `asset` taking `()`: not every deployment dispatches it.
 - `eip712Domain` taking `()`: not every deployment dispatches it.
-- `event EIP712DomainChanged` taking `()`: not every deployment declares it.
+- `event ClaimRewards` taking `(address,address[],uint256[])`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `event SetAdapter` taking `(address)`: not every deployment declares it.
 - `initialize` taking `(string,string,address)`: not every deployment dispatches it.
 - `setAdapter` taking `(address)`: not every deployment dispatches it.

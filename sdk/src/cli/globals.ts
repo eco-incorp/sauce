@@ -145,6 +145,25 @@ function namespaceLines(ns: SourceNamespace, methods: boolean): string[] {
   ];
 }
 
+/**
+ * A namespace as `--json` lists it: each contract's name, address and the rest, and its `methods`
+ * only when it is the namespace `--protocol` named, as the text lists them. Every namespace's
+ * methods together are most of a megabyte, so they come with `--protocol`, for one.
+ */
+function namespaceJson(ns: SourceNamespace, named: SourceNamespace | undefined): object {
+  if (ns === named) return ns;
+
+  return { ...ns, contracts: ns.contracts.map(({ methods: _methods, ...contract }) => contract) };
+}
+
+/** An interface as `--json` lists it: without its `methods` unless `--protocol` named it. */
+function interfaceJson(one: SourceInterface, named: readonly SourceInterface[]): object {
+  if (named.includes(one)) return one;
+  const { methods: _methods, ...rest } = one;
+
+  return rest;
+}
+
 /** The SVM chains of Solana's test clusters, to which another SVM chain's tokens point a program
  *  for one of them: their symbols are that cluster's mints. */
 const TEST_CLUSTERS = CANONICAL_CHAINS.filter((one) => {
@@ -314,11 +333,14 @@ export function globalsCommand(input: GlobalsInput): CommandOutput {
       chain,
       ...(one === undefined ? {} : { protocol: one }),
       ...(showTokens ? { tokens: listed.map(tokenJson) } : {}),
-      // The interfaces asked for: every one beside the namespaces, or --protocol's own.
+      // The namespaces and interfaces asked for: every one beside the namespaces, or --protocol's own.
+      // Methods come with --protocol, for the namespace it names, as in the text.
       ...(showProtocols
         ? {
-            protocols: globals.protocols,
-            interfaces: globals.interfaces,
+            protocols: globals.protocols.map((ns) => namespaceJson(ns, one)),
+            interfaces: globals.interfaces.map((bound) =>
+              interfaceJson(bound, named?.interfaces ?? []),
+            ),
             ...(svm ? { venues: globals.venues } : {}),
           }
         : named !== undefined && named.interfaces.length > 0

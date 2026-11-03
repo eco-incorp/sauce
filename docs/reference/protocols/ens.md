@@ -52,7 +52,7 @@ function main() {
 
 ### `BaseRegistrarABI`
 
-`import BaseRegistrarABI from "./protocols/ens/BaseRegistrarABI.json";` Speaks for: baseRegistrar.
+`import BaseRegistrarABI from "./protocols/ens/BaseRegistrarABI.json";` Speaks for: baseRegistrar. The import is the contract's full ABI across every deployment; call it through the `Ens` namespace to have a function a chain's deployment does not run refused.
 
 - `addController(address controller)`
 - `approve(address to, uint256 tokenId)`
@@ -84,10 +84,11 @@ function main() {
 Left out of this ABI, though its deployments declare them:
 
 - `available` taking `(uint256)`: its name is an accessor's own property.
+- `event NameMigrated` taking `(uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `ENSRegistryABI`
 
-`import ENSRegistryABI from "./protocols/ens/ENSRegistryABI.json";` Speaks for: registry.
+`import ENSRegistryABI from "./protocols/ens/ENSRegistryABI.json";` Speaks for: registry. The import is the contract's full ABI across every deployment; call it through the `Ens` namespace to have a function a chain's deployment does not run refused.
 
 - `isApprovedForAll(address owner, address operator) view returns (bool)`
 - `old() view returns (address)`

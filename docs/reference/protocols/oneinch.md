@@ -89,7 +89,7 @@ function main() {
 
 ### `AggregationRouterV6ABI`
 
-`import AggregationRouterV6ABI from "./protocols/oneinch/AggregationRouterV6ABI.json";` Speaks for: aggregationRouterV6.
+`import AggregationRouterV6ABI from "./protocols/oneinch/AggregationRouterV6ABI.json";` Speaks for: aggregationRouterV6. The import is the contract's full ABI across every deployment; call it through the `Oneinch` namespace to have a function a chain's deployment does not run refused.
 
 - `advanceEpoch(uint96 series, uint256 amount)`
 - `and(uint256 offsets, bytes data) view returns (bool)`
@@ -141,6 +141,14 @@ function main() {
 - `unoswapTo2(uint256 to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2) returns (uint256 returnAmount)`
 - `unoswapTo3(uint256 to, uint256 token, uint256 amount, uint256 minReturn, uint256 dex, uint256 dex2, uint256 dex3) returns (uint256 returnAmount)`
 - `unpause()`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error MakingAmountTooLow` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReturnAmountIsNotEnough` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error StringTooLong` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event EIP712DomainChanged` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

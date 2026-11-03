@@ -35,7 +35,7 @@ function main() {
 
 ### `CErc20ABI`
 
-`import CErc20ABI from "./protocols/compound-v2/CErc20ABI.json";` Speaks for: cUSDC.
+`import CErc20ABI from "./protocols/compound-v2/CErc20ABI.json";` Speaks for: cUSDC. The import is the contract's full ABI across every deployment; call it through the `CompoundV2` namespace to have a function a chain's deployment does not run refused.
 
 - `_acceptAdmin() returns (uint256)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
@@ -86,7 +86,7 @@ function main() {
 
 ### `ComptrollerABI`
 
-`import ComptrollerABI from "./protocols/compound-v2/ComptrollerABI.json";` Speaks for: comptroller.
+`import ComptrollerABI from "./protocols/compound-v2/ComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `CompoundV2` namespace to have a function a chain's deployment does not run refused.
 
 - `_become(address unitroller)`
 - `_borrowGuardianPaused() view returns (bool)`

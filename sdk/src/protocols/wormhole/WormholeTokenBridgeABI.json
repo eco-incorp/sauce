@@ -987,22 +987,6 @@
       ]
     },
     {
-      "name": "AdminChanged",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "previousAdmin",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "newAdmin",
-          "type": "address",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "BeaconUpgraded",
       "type": "event",
       "inputs": [

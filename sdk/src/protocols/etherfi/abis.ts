@@ -523,19 +523,6 @@ export const LiquidityPoolABI = [
     outputs: [{ name: "", type: "address" }],
   },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
-  },
-  {
     name: "Deposit",
     type: "event",
     inputs: [
@@ -641,7 +628,6 @@ export const LiquidityPoolABI = [
   { name: "EETHRateDeflation", type: "error", inputs: [] },
   { name: "IncorrectCaller", type: "error", inputs: [] },
   { name: "InsufficientLiquidity", type: "error", inputs: [] },
-  { name: "InvalidAmount", type: "error", inputs: [] },
   { name: "InvalidPauseUntilDuration", type: "error", inputs: [] },
   { name: "InvalidShareAmount", type: "error", inputs: [] },
   { name: "InvalidValidatorSize", type: "error", inputs: [] },
@@ -651,7 +637,6 @@ export const LiquidityPoolABI = [
   { name: "NotRegistered", type: "error", inputs: [] },
   { name: "PauserCooldownStillActive", type: "error", inputs: [] },
   { name: "RebaseExceedsPositiveCap", type: "error", inputs: [] },
-  { name: "Reentrancy", type: "error", inputs: [] },
   { name: "SendFail", type: "error", inputs: [] },
 ] as const;
 
@@ -996,14 +981,6 @@ export const WeETHABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
     name: "Approval",
     type: "event",
     inputs: [
@@ -1011,11 +988,6 @@ export const WeETHABI = [
       { name: "spender", type: "address", indexed: true },
       { name: "value", type: "uint256", indexed: false },
     ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
   },
   {
     name: "ERC20Recovered",
@@ -1090,12 +1062,10 @@ export const WeETHABI = [
     inputs: [{ name: "pausedUntil", type: "uint256" }],
   },
   { name: "EthTransferFailed", type: "error", inputs: [] },
-  { name: "InsufficientBalance", type: "error", inputs: [] },
   { name: "InvalidInput", type: "error", inputs: [] },
   { name: "InvalidPauseUntilDuration", type: "error", inputs: [] },
   { name: "NotPaused", type: "error", inputs: [] },
   { name: "PauserCooldownStillActive", type: "error", inputs: [] },
-  { name: "Reentrancy", type: "error", inputs: [] },
   {
     name: "WeETHUnderbacked",
     type: "error",
@@ -1104,7 +1074,6 @@ export const WeETHABI = [
       { name: "proxyShares", type: "uint256" },
     ],
   },
-  { name: "ZeroAddress", type: "error", inputs: [] },
   { name: "ZeroAmount", type: "error", inputs: [] },
 ] as const;
 
@@ -1451,14 +1420,6 @@ export const EETHABI = [
     outputs: [],
   },
   {
-    name: "AdminChanged",
-    type: "event",
-    inputs: [
-      { name: "previousAdmin", type: "address", indexed: false },
-      { name: "newAdmin", type: "address", indexed: false },
-    ],
-  },
-  {
     name: "Approval",
     type: "event",
     inputs: [
@@ -1466,11 +1427,6 @@ export const EETHABI = [
       { name: "spender", type: "address", indexed: true },
       { name: "value", type: "uint256", indexed: false },
     ],
-  },
-  {
-    name: "BeaconUpgraded",
-    type: "event",
-    inputs: [{ name: "beacon", type: "address", indexed: true }],
   },
   {
     name: "ERC20Recovered",
@@ -1558,13 +1514,11 @@ export const EETHABI = [
   { name: "EthTransferFailed", type: "error", inputs: [] },
   { name: "ExpiredDeadline", type: "error", inputs: [] },
   { name: "IncorrectCaller", type: "error", inputs: [] },
-  { name: "InsufficientBalance", type: "error", inputs: [] },
   { name: "InvalidInput", type: "error", inputs: [] },
   { name: "InvalidPauseUntilDuration", type: "error", inputs: [] },
   { name: "InvalidSignature", type: "error", inputs: [] },
   { name: "NotPaused", type: "error", inputs: [] },
   { name: "PauserCooldownStillActive", type: "error", inputs: [] },
-  { name: "Reentrancy", type: "error", inputs: [] },
   { name: "TransferAmountExceedsAllowance", type: "error", inputs: [] },
   { name: "TransferAmountExceedsBalance", type: "error", inputs: [] },
 ] as const;

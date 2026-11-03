@@ -1389,27 +1389,7 @@
       ]
     },
     {
-      "name": "ActivelyDelegated",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "CallerCannotUndelegate",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "CurrentlyPaused",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "FullySlashed",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InputAddressZero",
       "type": "error",
       "inputs": []
     },
@@ -1424,11 +1404,6 @@
       "inputs": []
     },
     {
-      "name": "InvalidDepositScalingFactor",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidNewPausedStatus",
       "type": "error",
       "inputs": []
@@ -1439,17 +1414,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidShortString",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidSignature",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidSnapshotOrdering",
       "type": "error",
       "inputs": []
     },
@@ -1464,21 +1429,6 @@
       "inputs": []
     },
     {
-      "name": "OnlyEigenPodManager",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyPauser",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "OnlyStrategyManagerOrEigenPodManager",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "OnlyUnpauser",
       "type": "error",
       "inputs": []
@@ -1489,42 +1439,12 @@
       "inputs": []
     },
     {
-      "name": "OperatorsCannotUndelegate",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SaltSpent",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "SignatureExpired",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "StringTooLong",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "str",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "WithdrawalDelayNotElapsed",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WithdrawalNotQueued",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WithdrawerNotCaller",
       "type": "error",
       "inputs": []
     }

@@ -51,7 +51,7 @@ functions, and its writes are SafeERC20.
 
 ### `SushiSwapV2FactoryABI`
 
-`import SushiSwapV2FactoryABI from "./protocols/sushiswap-v2/SushiSwapV2FactoryABI.json";` Speaks for: factory.
+`import SushiSwapV2FactoryABI from "./protocols/sushiswap-v2/SushiSwapV2FactoryABI.json";` Speaks for: factory. The import is the contract's full ABI across every deployment; call it through the `SushiswapV2` namespace to have a function a chain's deployment does not run refused.
 
 - `allPairs(uint256) view returns (address)`
 - `allPairsLength() view returns (uint256)`
@@ -99,7 +99,7 @@ functions, and its writes are SafeERC20.
 
 ### `SushiSwapV2RouterABI`
 
-`import SushiSwapV2RouterABI from "./protocols/sushiswap-v2/SushiSwapV2RouterABI.json";` Speaks for: router.
+`import SushiSwapV2RouterABI from "./protocols/sushiswap-v2/SushiSwapV2RouterABI.json";` Speaks for: router. The import is the contract's full ABI across every deployment; call it through the `SushiswapV2` namespace to have a function a chain's deployment does not run refused.
 
 - `addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)`
 - `addLiquidityETH(address token, uint256 amountTokenDesired, uint256 amountTokenMin, uint256 amountETHMin, address to, uint256 deadline) payable returns (uint256 amountToken, uint256 amountETH, uint256 liquidity)`

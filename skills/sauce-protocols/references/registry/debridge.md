@@ -48,7 +48,7 @@ function main() {
 
 ### `DlnDestinationABI`
 
-`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination.
+`import DlnDestinationABI from "./protocols/debridge/DlnDestinationABI.json";` Speaks for: dlnDestination. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`
@@ -92,9 +92,23 @@ function main() {
 - `unpause()`
 - `version() pure returns (string)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AdminBadRole` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error CallProxyBadRole` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NativeSenderBadRole` taking `(bytes,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSupportedDstChain` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnexpectedBatchSize` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnknownEngine` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ZeroAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
+On Base, no source could give the verified ABI of `0xe7351fd770a37282b91d153ee690b63579d6dd7f` when the registry was checked, so what it declares is kept from a check of 2026-10-27 that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.
+
 ### `DlnSourceABI`
 
-`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource.
+`import DlnSourceABI from "./protocols/debridge/DlnSourceABI.json";` Speaks for: dlnSource. The import is the contract's full ABI across every deployment; call it through the `Debridge` namespace to have a function a chain's deployment does not run refused.
 
 - `BPS_DENOMINATOR() view returns (uint256)`
 - `chainEngines(uint256) view returns (uint8)`
@@ -146,3 +160,13 @@ function main() {
 - `version() pure returns (string)`
 - `withdrawCollectedFees(address[] _tokens)`
 - `withdrawUnclaimedAffiliateFees(address[] _tokens, address _beneficiary)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error AdminBadRole` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IntentManagerBadRole` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MismatchedOrderId` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnknownEngine` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error WrongChain` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

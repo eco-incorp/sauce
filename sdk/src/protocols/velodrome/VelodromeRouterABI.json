@@ -1328,36 +1328,6 @@
       "inputs": []
     },
     {
-      "name": "Expired",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientAmount",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientAmountA",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientAmountADesired",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientAmountAOptimal",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InsufficientAmountB",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InsufficientAmountBDesired",
       "type": "error",
       "inputs": []
@@ -1373,22 +1343,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidAmountInForETHDeposit",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidPath",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidRouteA",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "InvalidRouteB",
       "type": "error",
       "inputs": []
     },
@@ -1399,21 +1354,6 @@
     },
     {
       "name": "OnlyWETH",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PoolDoesNotExist",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "PoolFactoryDoesNotExist",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "SameAddresses",
       "type": "error",
       "inputs": []
     },

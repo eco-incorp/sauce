@@ -34,7 +34,7 @@ function main() {
 
 ### `VBNBABI`
 
-`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB.
+`import VBNBABI from "./protocols/venus/VBNBABI.json";` Speaks for: vBNB. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
 
 - `_acceptAdmin() returns (uint256)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
@@ -81,6 +81,10 @@ function main() {
 - `totalSupply() view returns (uint256)`
 - `transfer(address dst, uint256 amount) returns (bool)`
 - `transferFrom(address src, address dst, uint256 amount) returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event ReservesAdded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `VTokenABI`
 
@@ -161,9 +165,16 @@ function main() {
 - `transferOutUnderlyingFlashLoan(address to, uint256 amount)`
 - `underlying() view returns (address)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `error AccrueInterestFailed` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error FlashLoanFeeTooHigh` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Mint` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Redeem` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `VenusComptrollerABI`
 
-`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller.
+`import VenusComptrollerABI from "./protocols/venus/VenusComptrollerABI.json";` Speaks for: comptroller. The import is the contract's full ABI across every deployment; call it through the `Venus` namespace to have a function a chain's deployment does not run refused.
 
 - `_become(address unitroller)`
 - `_grantXVS(address recipient, uint256 amount)`
@@ -321,4 +332,16 @@ function main() {
 
 Left out of this ABI, though its deployments declare them:
 
+- `error AlreadyInSelectedPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ArrayLengthMismatch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error BorrowNotAllowedInPool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyPoolLabel` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ExecuteFlashLoanFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAmount` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOperationForCorePool` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidWeightingStrategy` taking `(uint8)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MarketConfigNotFound` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MarketNotListed` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolDoesNotExist` taking `(uint96)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PoolMarketNotFound` taking `(uint96,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `MAX_FLASHLOAN_ASSETS` taking `()`: no captured deployment dispatches it.

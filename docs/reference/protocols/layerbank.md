@@ -106,7 +106,7 @@ functions, and its writes are SafeERC20.
 
 ### `LayerBankCoreABI`
 
-`import LayerBankCoreABI from "./protocols/layerbank/LayerBankCoreABI.json";` Speaks for: core.
+`import LayerBankCoreABI from "./protocols/layerbank/LayerBankCoreABI.json";` Speaks for: core. The import is the contract's full ABI across every deployment; call it through the `Layerbank` namespace to have a function a chain's deployment does not run refused.
 
 - `accountLiquidityOf(address account) view returns (uint256 collateralInUSD, uint256 supplyInUSD, uint256 borrowInUSD)`
 - `allMarkets() view returns (address[])`
@@ -161,6 +161,10 @@ functions, and its writes are SafeERC20.
 - `unpause()`
 - `usersOfMarket(address, address) view returns (bool)`
 - `validator() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event FlashLoan` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

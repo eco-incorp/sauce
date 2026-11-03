@@ -35,7 +35,7 @@ function main() {
 
 ### `LidoABI`
 
-`import LidoABI from "./protocols/lido/LidoABI.json";` Speaks for: stETH.
+`import LidoABI from "./protocols/lido/LidoABI.json";` Speaks for: stETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address _owner, address _spender) view returns (uint256)`
 - `allowRecoverability(address token) view returns (bool)`
@@ -124,9 +124,14 @@ function main() {
 - `transferToVault(address)`
 - `withdrawDepositableEther(uint256 _amount, uint256 _seedDepositsCount)`
 
+Left out of this ABI, though its deployments declare them:
+
+- `event RecoverToVault` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ScriptResult` taking `(address,bytes,bytes,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+
 ### `WstETHABI`
 
-`import WstETHABI from "./protocols/lido/WstETHABI.json";` Speaks for: wstETH.
+`import WstETHABI from "./protocols/lido/WstETHABI.json";` Speaks for: wstETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -152,7 +157,7 @@ function main() {
 
 ### `WstETHBridgedABI`
 
-`import WstETHBridgedABI from "./protocols/lido/WstETHBridgedABI.json";` Speaks for: wstETH.
+`import WstETHBridgedABI from "./protocols/lido/WstETHBridgedABI.json";` Speaks for: wstETH. The import is the contract's full ABI across every deployment; call it through the `Lido` namespace to have a function a chain's deployment does not run refused.
 
 - `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
@@ -169,3 +174,7 @@ function main() {
 - `totalSupply() view returns (uint256)`
 - `transfer(address to, uint256 amount) returns (bool)`
 - `transferFrom(address from, address to, uint256 amount) returns (bool)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ErrorNotEnoughBalance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

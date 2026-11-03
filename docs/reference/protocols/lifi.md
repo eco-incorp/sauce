@@ -59,7 +59,7 @@ function main() {
 
 ### `LiFiDiamondABI`
 
-`import LiFiDiamondABI from "./protocols/lifi/LiFiDiamondABI.json";` Speaks for: lifiDiamond.
+`import LiFiDiamondABI from "./protocols/lifi/LiFiDiamondABI.json";` Speaks for: lifiDiamond. The import is the contract's full ABI across every deployment; call it through the `Lifi` namespace to have a function a chain's deployment does not run refused.
 
 - `ACROSS_CHAIN_ID_SOLANA() view returns (uint256)`
 - `addDex(address _dex)`
@@ -284,6 +284,11 @@ Not on Avalanche C-Chain's lifiDiamond (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4
 
 Left out of this ABI, though its deployments declare them:
 
+- `error SymbolDoesNotExist` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedChain` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiFiSwappedGeneric` taking `(bytes32,string,string,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiFiTransferCompleted` taking `(bytes32,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiFiTransferRecovered` taking `(bytes32,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 - `initAllBridge` taking `((uint256,uint256)[])`: no captured deployment dispatches it.
 - `initCelerCircleBridge` taking `()`: no captured deployment dispatches it.
 - `initFrax` taking `((uint256,uint32)[])`: no captured deployment dispatches it.

@@ -53,7 +53,7 @@ function main() {
 
 ### `PolygonRootChainManagerABI`
 
-`import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";` Speaks for: rootChainManager.
+`import PolygonRootChainManagerABI from "./protocols/polygon-bridge/PolygonRootChainManagerABI.json";` Speaks for: rootChainManager. The import is the contract's full ABI across every deployment; call it through the `PolygonBridge` namespace to have a function a chain's deployment does not run refused.
 
 - `checkpointManagerAddress() view returns (address)`
 - `childChainManagerAddress() view returns (address)`
@@ -99,6 +99,10 @@ function main() {
 - `typeToPredicate(bytes32) view returns (address)`
 - `updateTokenMigrationStatus(address rootToken, bool isDepositDisable, bool isExitDisabled, uint256 lastExitBlockNumber)`
 - `USDT_ADDRESS() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event RoleAdminChanged` taking `(bytes32,bytes32,bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

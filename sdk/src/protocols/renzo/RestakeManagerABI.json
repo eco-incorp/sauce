@@ -670,68 +670,6 @@
       ]
     },
     {
-      "name": "UserWithdrawCompleted",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "withdrawalRoot",
-          "type": "bytes32",
-          "indexed": false
-        },
-        {
-          "name": "withdrawer",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "token",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "ezETHBurned",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
-      "name": "UserWithdrawStarted",
-      "type": "event",
-      "inputs": [
-        {
-          "name": "withdrawalRoot",
-          "type": "bytes32",
-          "indexed": false
-        },
-        {
-          "name": "withdrawer",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "token",
-          "type": "address",
-          "indexed": false
-        },
-        {
-          "name": "amount",
-          "type": "uint256",
-          "indexed": false
-        },
-        {
-          "name": "ezETHToBurn",
-          "type": "uint256",
-          "indexed": false
-        }
-      ]
-    },
-    {
       "name": "AlreadyAdded",
       "type": "error",
       "inputs": []
@@ -742,36 +680,7 @@
       "inputs": []
     },
     {
-      "name": "InvalidTokenDecimals",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expected",
-          "type": "uint8"
-        },
-        {
-          "name": "actual",
-          "type": "uint8"
-        }
-      ]
-    },
-    {
-      "name": "InvalidTVL",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "InvalidZeroInput",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MaxTokenTVLReached",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotDepositQueue",
       "type": "error",
       "inputs": []
     },

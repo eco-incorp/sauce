@@ -1339,11 +1339,6 @@
       ]
     },
     {
-      "name": "EIP712DomainChanged",
-      "type": "event",
-      "inputs": []
-    },
-    {
       "name": "FeeRecipientChanged",
       "type": "event",
       "inputs": [
@@ -1634,16 +1629,6 @@
       ]
     },
     {
-      "name": "AccountDenylisted",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "AddressEmptyCode",
       "type": "error",
       "inputs": [
@@ -1652,39 +1637,6 @@
           "type": "address"
         }
       ]
-    },
-    {
-      "name": "BatchIdUsed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "batchId",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "BurnFeeTooHighAtIndex",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "maxFee",
-          "type": "uint256"
-        },
-        {
-          "name": "actualFee",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "CannotDelegateToSelf",
-      "type": "error",
-      "inputs": []
     },
     {
       "name": "ContractSignerNeverAllowlisted",
@@ -1697,22 +1649,7 @@
       ]
     },
     {
-      "name": "CursorOutOfBounds",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "DeltaMustBeNonZero",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "depositor",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "DepositorIsBlacklisted",
       "type": "error",
       "inputs": [
         {
@@ -1738,16 +1675,6 @@
         {
           "name": "length",
           "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "ECDSAInvalidSignatureS",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "s",
-          "type": "bytes32"
         }
       ]
     },
@@ -1785,34 +1712,6 @@
       "name": "InputArrayLengthMismatch",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "IntentExpiredAtIndex",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "maxBlockHeight",
-          "type": "uint256"
-        },
-        {
-          "name": "currentBlock",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "IntentValueMustBePositiveAtIndex",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        }
-      ]
     },
     {
       "name": "InvalidAddress",
@@ -1853,90 +1752,12 @@
       ]
     },
     {
-      "name": "InvalidIntentSourceSignerAtIndex",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "intentSigner",
-          "type": "address"
-        },
-        {
-          "name": "actualSigner",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "InvalidSignature",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "InvalidTransferPayloadMagic",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualMagic",
-          "type": "bytes4"
-        }
-      ]
-    },
-    {
-      "name": "InvalidTransferSpecMagic",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualMagic",
-          "type": "bytes4"
-        }
-      ]
-    },
-    {
-      "name": "InvalidTransferSpecVersion",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "actualVersion",
-          "type": "uint32"
-        }
-      ]
-    },
-    {
-      "name": "MismatchedBurn",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MustHaveAtLeastOneBurnIntent",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MustHaveAtLeastOneDelta",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "MustNetToZero",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "totalDelta",
-          "type": "int256"
-        }
-      ]
-    },
-    {
       "name": "NoRelevantBurnIntents",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "NotAllSameToken",
       "type": "error",
       "inputs": []
     },
@@ -1946,24 +1767,9 @@
       "inputs": []
     },
     {
-      "name": "NotInitializing",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "NoWithdrawingBalance",
       "type": "error",
       "inputs": []
-    },
-    {
-      "name": "OwnableInvalidOwner",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "owner",
-          "type": "address"
-        }
-      ]
     },
     {
       "name": "OwnableUnauthorizedAccount",
@@ -1991,98 +1797,6 @@
       ]
     },
     {
-      "name": "TransferPayloadDataTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadOverallLengthMismatch",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedTotalLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualTotalLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetElementHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "actualSetLength",
-          "type": "uint256"
-        },
-        {
-          "name": "requiredOffset",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetElementTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "index",
-          "type": "uint32"
-        },
-        {
-          "name": "actualSetLength",
-          "type": "uint256"
-        },
-        {
-          "name": "requiredOffset",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
       "name": "TransferPayloadSetInvalidElementMagic",
       "type": "error",
       "inputs": [
@@ -2093,58 +1807,6 @@
         {
           "name": "actualMagic",
           "type": "bytes4"
-        }
-      ]
-    },
-    {
-      "name": "TransferPayloadSetOverallLengthMismatch",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedTotalLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualTotalLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferSpecHashUsed",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "transferSpecHash",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "TransferSpecHeaderTooShort",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedMinimumLength",
-          "type": "uint256"
-        },
-        {
-          "name": "actualLength",
-          "type": "uint256"
-        }
-      ]
-    },
-    {
-      "name": "TransferSpecInvalidHookData",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "expectedHookDataLength",
-          "type": "uint256"
-        },
-        {
-          "name": "transferSpecLength",
-          "type": "uint256"
         }
       ]
     },
@@ -2163,51 +1825,11 @@
       ]
     },
     {
-      "name": "UnauthorizedContractSignerAllowlister",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "UnauthorizedContractSignerDisallowlister",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "UnauthorizedDenylister",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "addr",
-          "type": "address"
-        }
-      ]
-    },
-    {
       "name": "UnauthorizedPauser",
       "type": "error",
       "inputs": [
         {
           "name": "caller",
-          "type": "address"
-        }
-      ]
-    },
-    {
-      "name": "UnsupportedToken",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "token",
           "type": "address"
         }
       ]
@@ -2227,42 +1849,12 @@
       ]
     },
     {
-      "name": "UUPSUnauthorizedCallContext",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "UUPSUnsupportedProxiableUUID",
-      "type": "error",
-      "inputs": [
-        {
-          "name": "slot",
-          "type": "bytes32"
-        }
-      ]
-    },
-    {
-      "name": "WithdrawalNotYetAvailable",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WithdrawalValueExceedsAvailableBalance",
       "type": "error",
       "inputs": []
     },
     {
-      "name": "WithdrawalValueMustBePositive",
-      "type": "error",
-      "inputs": []
-    },
-    {
       "name": "WrongDomain",
-      "type": "error",
-      "inputs": []
-    },
-    {
-      "name": "WrongGatewayContract",
       "type": "error",
       "inputs": []
     },

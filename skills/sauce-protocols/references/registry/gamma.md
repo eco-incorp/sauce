@@ -86,14 +86,16 @@ function main() {
 
 ### `UniProxyABI`
 
-`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy.
+`import UniProxyABI from "./protocols/gamma/UniProxyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
 
 - `deposit(uint256 deposit0, uint256 deposit1, address to, address pos, uint256[4] minIn) returns (uint256 shares)`
 - `getDepositAmount(address pos, address token, uint256 _deposit) view returns (uint256 amountStart, uint256 amountEnd)`
 
+On Polygon, no source could give the verified ABI of `0xa42d55074869491d60ac05490376b74cf19b00e6` when the registry was checked, so what it declares is kept from a check of 2026-10-27 that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.
+
 ### `UniProxyLegacyABI`
 
-`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy.
+`import UniProxyLegacyABI from "./protocols/gamma/UniProxyLegacyABI.json";` Speaks for: uniProxy. The import is the contract's full ABI across every deployment; call it through the `Gamma` namespace to have a function a chain's deployment does not run refused.
 
 - `addPosition(address pos, uint8 version)`
 - `appendList(address pos, address[] listed)`
@@ -121,3 +123,7 @@ function main() {
 - `transferOwnership(address newOwner)`
 - `twapCheck() view returns (bool)`
 - `twapInterval() view returns (uint32)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event CustomDeposit` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
