@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07 (those upgraded since, again on 2026-10-27; Denali after its upgrade at slot 454,575,418): the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07 (those upgraded since, again on 2026-10-27; Denali after its upgrade at slot 454,575,418; GoonfiV2 on 2026-11-02, after its upgrade at slot 464,460,283): the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
   "programs": [
     {
       "name": "raydium-cp-swap",
@@ -246,7 +246,8 @@
       "name": "goonfi-v2",
       "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
       "file": "goonfi-v2.so.gz",
-      "sha256": "cd78ffe66f2ca9068ef03ab7c57e61f5bc693824430a2ca897c2da2661288850"
+      "sha256": "f36f2ead0152f1029e5fedbb3f5076336828e7bb2c455aea1a3c62bd3b2f199a",
+      "redeploySlot": 464460283
     },
     {
       "name": "raydium-launchlab",
