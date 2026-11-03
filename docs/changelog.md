@@ -114,8 +114,8 @@ nothing moves.
 - **Added** (EVM): **every protocol namespace carries its contract's full verified ABI.** A registry
   ABI was the few functions a program was expected to call; it is now every function the contract's
   deployments declare in their verified source and dispatch, and every event and error their code
-  carries: 9,307 functions over 240 contracts and interfaces, from 744 over 232, with 2,338 events
-  (from 2) and 1,540 errors (from 11). A program calls a recorded contract's other functions by name,
+  carries: 9,307 functions over 240 contracts and interfaces, from 744 over 232, with 2,359 events
+  (from 2) and 1,573 errors (from 11). A program calls a recorded contract's other functions by name,
   its own reads and admin functions included (`AaveV3.Pool.getReserveAToken(USDC)`,
   `BalancerV2.Vault.queryBatchSwap(…)`, `MorphoBlue.Morpho.idToMarketParams(id)`), with no ABI
   file of its own. Only what the SDK cannot expose is left out, such as the second of two overloads

@@ -688,11 +688,13 @@ generation time).
 
 `test/registry-abi.test.ts` checks each function, event and custom error of each export against the
 evidence: some deployment must dispatch each function's selector (after resolving EIP-1167 clones,
-EIP-1967/beacon/legacy proxy slots, `implementation()` getters, `delegates`, and diamond or selector
-routers), and where a verified ABI exists, its outputs, mutability and struct field names must
-match; a role's deployment that does not match must withhold it, or carry its verified declaration
-under `shapes` where it dispatches the selector and declares the signature otherwise, and one that
-does match must do neither; an
+EIP-1967/beacon/legacy proxy slots, `implementation()` getters — asked of proxy-shaped code, and of
+larger code that DELEGATECALLs and dispatches one, a delegator forwarding each function by name such
+as Moonwell's and Benqi's markets, which stays a layer of its own rather than a wrapper —
+`delegates`, and diamond or selector routers), and where a verified ABI exists, its outputs,
+mutability and struct field names must match; a role's deployment that does not match must
+withhold it, or carry its verified declaration under `shapes` where it dispatches the selector and
+declares the signature otherwise, and one that does match must do neither; an
 interface instance that declares it otherwise needs an `exempt`. An event or error ships only where
 some deployment's code carries it (a PUSH32 before its LOG, an anonymous event's LOG of as many
 topics as it indexes, a constant before its REVERT), `unverified` or not: the generator leaves the
@@ -705,9 +707,10 @@ in the export or in `omitted.json`: nothing is trimmed silently. `targets.json` 
 hand-written half (its `note` defines every key): which deployments evidence which export (`roles`
 from `addresses.ts`, narrowed by `chains` where one role's deployments run different releases, or
 representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
-about), `unresolved` (a router inventory's facet no deployment reaches, and why), `delegates` (a
-getter naming the contract a fallback delegates to: Comet's
-`extensionDelegate()`), `overloads`, `default` (the contract `<Protocol>.<method>(…)` calls where a
+about), `unresolved` (a router inventory's facet no deployment reaches, and why), `delegates`
+(getters naming the contracts it delegates to, each captured as a layer: Comet's fallback's
+`extensionDelegate()`, Euler EVault's `MODULE_TOKEN()` and its seven other modules), `overloads`,
+`default` (the contract `<Protocol>.<method>(…)` calls where a
 protocol has several singletons: Aave V3's Pool), `standard` (an interface whose instances are
 examples of an ERC or a protocol's interface — ERC-20, ERC-4626, ERC-3156's lender, Morpho Blue's
 IOracle: its ABI is its pinned reference interface alone, each function where every instance

@@ -847,13 +847,18 @@ async function captureInstance(job, target, seeds, seedMarks) {
   try {
     layers = await resolveLayers(chainId, address);
     // A contract whose fallback delegates what it does not dispatch to a contract a getter names
-    // (Comet's `extensionDelegate()`): that contract's code runs as this one's, so it is a layer.
+    // (Comet's `extensionDelegate()`), or that delegates its functions to modules getters name
+    // (Euler's EVault, `MODULE_TOKEN()` and the rest): that contract's code runs as this one's, so
+    // it is a layer. Each is resolved as its own proxy chain, whose depth alone the guard bounds.
     if (layers[0].kind !== "empty") {
       for (const getter of target.delegates ?? []) {
         const word = await call(chainId, result.address, toFunctionSelector(getter));
         const delegate = typeof word === "string" ? wordToAddress(word.slice(0, 66)) : null;
         if (!isAddress(delegate) || !(await hasCode(chainId, delegate))) continue;
-        const inner = await resolveLayers(chainId, delegate, new Set(layers.map((l) => l.address)));
+        if (layers.some((l) => l.address === delegate)) continue;
+        const inner = (await resolveLayers(chainId, delegate)).filter(
+          (l) => !layers.some((known) => known.address === l.address),
+        );
         if (inner.length > 0) inner[0].kind = getter;
         layers.push(...inner);
       }
