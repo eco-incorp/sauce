@@ -155,6 +155,7 @@ import {
 } from "./terminal.js";
 import { updateCheckOff, updateNotice, type UpdateCheck } from "./update-check.js";
 import { updateCommand, type Updater } from "./update.js";
+import { whereCommand } from "./where.js";
 import {
   AGENTS,
   describeStatus,
@@ -1711,6 +1712,58 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       );
 
       return undefined;
+    },
+  },
+  where: {
+    usage: "sauce where <file | -> [--chains <slug,…>] [--supported] [--json]",
+    summary: "Compile a program for every chain and list the ones it compiles on",
+    flags: {
+      chains: {
+        type: "string",
+        value: "<slug,…>",
+        help: "Only these chains, comma-separated (default: every chain Sauce knows)",
+      },
+      supported: { type: "boolean", help: "Only the chains transactions are built and sent on" },
+      "source-dir": PROGRAM["source-dir"]!,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Compiles the file once for each chain, the same compile `sauce compile` runs, and lists",
+      "the chains it compiles on with the program's size, then the ones it does not with the",
+      "first reason: most often a token or protocol that chain has no name for. It reads no",
+      "chain and needs no key, so it answers whether a program written for Base also runs on",
+      "Ethereum or Solana before a cook is built anywhere.",
+      "",
+      "Examples:",
+      "  sauce where pay.sauce.ts",
+      "  sauce where swap.sauce.ts --supported",
+      "  sauce where pay.sauce.ts --chains base,ethereum,solana --json",
+    ].join("\n"),
+    run: (args, io) => {
+      const { file, text, stdin } = programText(io, fileOperand(args));
+      const list = stringFlag(args, "chains");
+      const sourceDir = stringFlag(args, "source-dir");
+      const chains =
+        list === undefined
+          ? undefined
+          : list
+              .split(",")
+              .map((each) => each.trim())
+              .filter((each) => each !== "")
+              .map((each) => parseChain(each, "--chains"));
+
+      return whereCommand(
+        {
+          file,
+          text,
+          ...(stdin ? { stdin } : {}),
+          ...(sourceDir === undefined ? {} : { sourceDir }),
+          ...(chains === undefined ? {} : { chains }),
+          supported: args.values.supported === true,
+        },
+        io,
+      );
     },
   },
   actions: {
