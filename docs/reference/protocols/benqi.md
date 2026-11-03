@@ -133,7 +133,9 @@ Left out of this ABI, though its deployments declare them:
 
 - `_acceptAdmin() returns (uint256)`
 - `_addReserves(uint256 addAmount) returns (uint256)`
+- `_becomeImplementation(bytes data)`
 - `_reduceReserves(uint256 reduceAmount) returns (uint256)`
+- `_resignImplementation()`
 - `_setComptroller(address newComptroller) returns (uint256)`
 - `_setImplementation(address implementation_, bool allowResign, bytes becomeImplementationData)`
 - `_setInterestRateModel(address newInterestRateModel) returns (uint256)`
@@ -161,6 +163,8 @@ Left out of this ABI, though its deployments declare them:
 - `getAccountSnapshot(address account) view returns (uint256, uint256, uint256, uint256)`
 - `getCash() view returns (uint256)`
 - `implementation() view returns (address)`
+- `initialize(address comptroller_, address interestRateModel_, uint256 initialExchangeRateMantissa_, string name_, string symbol_, uint8 decimals_)`
+- `initialize(address underlying_, address comptroller_, address interestRateModel_, uint256 initialExchangeRateMantissa_, string name_, string symbol_, uint8 decimals_)`
 - `interestRateModel() view returns (address)`
 - `isQiToken() view returns (bool)`
 - `liquidateBorrow(address borrower, uint256 repayAmount, address qiTokenCollateral) returns (uint256)`
@@ -184,26 +188,6 @@ Left out of this ABI, though its deployments declare them:
 - `transfer(address dst, uint256 amount) returns (bool)`
 - `transferFrom(address src, address dst, uint256 amount) returns (bool)`
 - `underlying() view returns (address)`
-
-Left out of this ABI, though its deployments declare them:
-
-- `event AccrueInterest` taking `(uint256,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Approval` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Borrow` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Failure` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event LiquidateBorrow` taking `(address,address,uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Mint` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewAdmin` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewComptroller` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewMarketInterestRateModel` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewPendingAdmin` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewProtocolSeizeShare` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewReserveFactor` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Redeem` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event RepayBorrow` taking `(address,address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event ReservesAdded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event ReservesReduced` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Transfer` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

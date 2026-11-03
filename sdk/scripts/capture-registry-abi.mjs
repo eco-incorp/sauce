@@ -12,13 +12,16 @@
 // For every contract instance in `test/fixtures/registry-abi/targets.json` it records:
 //   - which selectors the deployed code dispatches, after resolving proxies (EIP-1167 clones,
 //     EIP-1967 implementation and beacon slots, the legacy zeppelinos, EIP-1822 and Synthetix slots,
-//     `implementation()`-style getters) and selector routers (EIP-2535 `facets`/`facetAddress`, 0x's
+//     `implementation()`-style getters, asked of proxy-shaped code and of a larger delegator whose
+//     own code dispatches one) and selector routers (EIP-2535 `facets`/`facetAddress`, 0x's
 //     `getFunctionImplementation`, Paraswap's `getImplementation`, Pendle's `selectorToFacet`,
 //     Fluid's `getSigsImplementation`);
 //   - its FULL verified ABI, from Sourcify, then Blockscout, then a keyless Etherscan-compatible
 //     API: every function, event and custom error of the implementation layer(s) and of every facet
 //     a selector router reaches. Of a proxy layer that delegates to another (a wrapper), only what
-//     the registry already declares by name: a proxy's admin functions are not the contract's.
+//     the registry already declares by name: a proxy's admin functions are not the contract's. A
+//     delegator that forwards each function by name (Compound's CErc20Delegator) declares the
+//     contract's interface itself, and is no wrapper.
 // The candidate selectors are the same for every instance of one ABI export: the union of every
 // instance's verified functions, the registry's own, the target's `probes` (signatures to ask a
 // selector router about when the registry's are wrong), and the functions of the export's reference
@@ -332,7 +335,8 @@ const SLOTS = {
   // keccak256(abi.encode("io.synthetix.core-contracts.Proxy")): Synthetix v3 router proxies.
   synthetix: "0x5a648c35a2f5512218b4683cf10e03f5b7c9dc7346e1bf77d304ae97f60f592b",
 };
-/** Getters that name a proxy's implementation, tried on proxy-shaped code no slot resolved. */
+/** Getters that name a proxy's implementation, tried on proxy-shaped code no slot resolved, and on
+ *  a larger delegator whose own code dispatches one. */
 const IMPL_GETTERS = {
   "implementation()": "0x5c60da1b",
   "comptrollerImplementation()": "0xbb82aa5e",
@@ -398,16 +402,26 @@ async function resolveLayers(chainId, address, seen = new Set()) {
       if (isAddress(impl)) targets.push(["beacon", impl]);
     } else targets.push([kind, target]);
   }
-  if (targets.length === 0 && proxyShaped(chainId, code)) {
+  // A delegator forwards each function to its implementation by name, so it declares the contract's
+  // interface itself, events included: it is a layer, and not a wrapper.
+  let forwards = false;
+  if (targets.length === 0) {
+    const thin = proxyShaped(chainId, code);
+    // Code too large to be shaped like a proxy that still DELEGATECALLs, and dispatches a getter
+    // naming an implementation, is such a delegator (Compound's CErc20Delegator, as Moonwell's and
+    // Benqi's markets are): that getter is asked too.
+    const delegator = !thin && !ERAVM.has(chainId) && opcodes(code).has(0xf4);
     for (const [getter, sel] of Object.entries(IMPL_GETTERS)) {
+      if (!thin && !(delegator && dispatches(code, sel, chainId))) continue;
       const impl = wordToAddress(await call(chainId, address, sel));
       if (isAddress(impl) && impl !== address && (await hasCode(chainId, impl))) {
         targets.push([getter, impl]);
+        forwards = !thin;
         break;
       }
     }
     // Gnosis Safe proxies keep the singleton in slot 0.
-    if (targets.length === 0) {
+    if (targets.length === 0 && thin) {
       const impl = wordToAddress(await getSlot(chainId, address, "0x0"));
       if (isAddress(impl) && (await hasCode(chainId, impl)) && code.includes("a619486e")) {
         targets.push(["slot0", impl]);
@@ -420,7 +434,7 @@ async function resolveLayers(chainId, address, seen = new Set()) {
     layers.push(...inner);
   }
   // A layer that delegated to another is a wrapper: its own functions are its admin's.
-  layers[0].wrapper = layers.length > 1;
+  layers[0].wrapper = layers.length > 1 && !forwards;
   return layers;
 }
 

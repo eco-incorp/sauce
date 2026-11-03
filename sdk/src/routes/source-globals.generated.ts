@@ -1539,7 +1539,9 @@ export interface BenqiComptrollerMethods {
 export interface BenqiQiTokenMethods {
   "_acceptAdmin"(): SauceCall<bigint>;
   "_addReserves"(arg0: (bigint | number)): SauceCall<bigint>;
+  "_becomeImplementation"(arg0: (string | SauceBytes)): SauceCall<void>;
   "_reduceReserves"(arg0: (bigint | number)): SauceCall<bigint>;
+  "_resignImplementation"(): SauceCall<void>;
   "_setComptroller"(arg0: (bigint | number)): SauceCall<bigint>;
   "_setImplementation"(arg0: (bigint | number), arg1: boolean, arg2: (string | SauceBytes)): SauceCall<void>;
   "_setInterestRateModel"(arg0: (bigint | number)): SauceCall<bigint>;
@@ -1567,6 +1569,8 @@ export interface BenqiQiTokenMethods {
   "getAccountSnapshot"(arg0: (bigint | number)): SauceCall<[bigint, bigint, bigint, bigint]>;
   "getCash"(): SauceCall<bigint>;
   "implementation"(): SauceCall<bigint>;
+  "initialize"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (string | SauceBytes), arg4: (string | SauceBytes), arg5: (bigint | number)): SauceCall<void>;
+  "initialize"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (string | SauceBytes), arg6: (bigint | number)): SauceCall<void>;
   "interestRateModel"(): SauceCall<bigint>;
   "isQiToken"(): SauceCall<boolean>;
   "liquidateBorrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;

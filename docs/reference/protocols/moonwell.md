@@ -102,25 +102,6 @@ function main() {
 - `transferFrom(address src, address dst, uint256 amount) returns (bool)`
 - `underlying() view returns (address)`
 
-Left out of this ABI, though its deployments declare them:
-
-- `event AccrueInterest` taking `(uint256,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Approval` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Borrow` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event LiquidateBorrow` taking `(address,address,uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Mint` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewAdmin` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewComptroller` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewMarketInterestRateModel` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewPendingAdmin` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewProtocolSeizeShare` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event NewReserveFactor` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Redeem` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event RepayBorrow` taking `(address,address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event ReservesAdded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event ReservesReduced` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-- `event Transfer` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
-
 ### `MoonwellComptrollerABI`
 
 `import MoonwellComptrollerABI from "./protocols/moonwell/MoonwellComptrollerABI.json";` Speaks for: comptroller. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Moonwell` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.

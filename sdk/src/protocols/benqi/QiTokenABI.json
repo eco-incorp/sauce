@@ -30,6 +30,18 @@
       ]
     },
     {
+      "name": "_becomeImplementation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "_reduceReserves",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -45,6 +57,13 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "_resignImplementation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
     },
     {
       "name": "_setComptroller",
@@ -474,6 +493,74 @@
       ]
     },
     {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "comptroller_",
+          "type": "address"
+        },
+        {
+          "name": "interestRateModel_",
+          "type": "address"
+        },
+        {
+          "name": "initialExchangeRateMantissa_",
+          "type": "uint256"
+        },
+        {
+          "name": "name_",
+          "type": "string"
+        },
+        {
+          "name": "symbol_",
+          "type": "string"
+        },
+        {
+          "name": "decimals_",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "underlying_",
+          "type": "address"
+        },
+        {
+          "name": "comptroller_",
+          "type": "address"
+        },
+        {
+          "name": "interestRateModel_",
+          "type": "address"
+        },
+        {
+          "name": "initialExchangeRateMantissa_",
+          "type": "uint256"
+        },
+        {
+          "name": "name_",
+          "type": "string"
+        },
+        {
+          "name": "symbol_",
+          "type": "string"
+        },
+        {
+          "name": "decimals_",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "interestRateModel",
       "type": "function",
       "stateMutability": "view",
@@ -827,6 +914,184 @@
       ]
     },
     {
+      "name": "AccrueInterest",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "cashPrior",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "interestAccumulated",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "borrowIndex",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBorrows",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Borrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "accountBorrows",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBorrows",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Failure",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "error",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "info",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "detail",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LiquidateBorrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "liquidator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "qiTokenCollateral",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Mint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "minter",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "mintAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "mintTokens",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAdmin",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newAdmin",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewComptroller",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldComptroller",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newComptroller",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
       "name": "NewImplementation",
       "type": "event",
       "inputs": [
@@ -838,6 +1103,185 @@
         {
           "name": "newImplementation",
           "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewMarketInterestRateModel",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldInterestRateModel",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newInterestRateModel",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPendingAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPendingAdmin",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPendingAdmin",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewProtocolSeizeShare",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldProtocolSeizeShareMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newProtocolSeizeShareMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewReserveFactor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldReserveFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newReserveFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Redeem",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "redeemer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "redeemAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RepayBorrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "payer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "accountBorrows",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalBorrows",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReservesAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "benefactor",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "addAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newTotalReserves",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReservesReduced",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "admin",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "reduceAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newTotalReserves",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
           "indexed": false
         }
       ]
