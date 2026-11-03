@@ -43,6 +43,12 @@ that chain when the program compiles, naming the chains that do run it. The regi
 them, per deployment ("not on this deployment" in its Deployments table, and "Not on" under each
 ABI).
 
+Only a namespace name is held to the chain's deployment. An ABI import is the contract's full ABI
+across every deployment, the same on every chain: like an `IERC20` import, it is the raw ABI, an
+escape hatch that refuses no function. A call through it to a function the contract does not run
+compiles, does not run the function, and need not revert. Its line in the registry file says so.
+Call a recorded contract through its namespace to have that call refused.
+
 ## Choosing
 
 | Question                     | Answer                                                                                                   |
