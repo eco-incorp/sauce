@@ -68,7 +68,7 @@ export const UnitFlowV3FactoryABI = [
   },
 ] as const;
 
-// UnitFlowV3Router — Uniswap V3 SwapRouter shape (params carry a deadline). Fragments from its verified source (Sourcify, Arc 0x6fD8351b…f410).
+// UnitFlowV3Router — Uniswap V3 SwapRouter shape (params carry a deadline). From its verified source (Sourcify, Arc 0x6fD8351b…f410).
 export const UnitFlowV3RouterABI = [
   {
     name: "exactInput",
@@ -297,7 +297,7 @@ export const UnitFlowV3RouterABI = [
   },
 ] as const;
 
-// Quoter — fragment from its verified source (Sourcify, Arc 0x5AF6E89F…0E34).
+// Quoter — from its verified source (Sourcify, Arc 0x5AF6E89F…0E34).
 export const UnitFlowV3QuoterABI = [
   {
     name: "factory",
@@ -374,8 +374,7 @@ export const UnitFlowV3QuoterABI = [
 
 // UnitFlowV3Pool — a Uniswap V3 pool fork; fragments from its source (UnitFlow-Finance/
 // UnitFlowV3-contract, IUnitFlowV3PoolState.sol and IUnitFlowV3PoolImmutables.sol). The Arc pools
-// have no verified source. Its `swap` calls back for the input, which a program cannot answer, so it
-// is not declared.
+// have no verified source. Its `swap` calls back for the input, which a program cannot answer.
 export const UnitFlowV3PoolABI = [
   {
     name: "burn",

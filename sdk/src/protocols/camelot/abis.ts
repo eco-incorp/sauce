@@ -696,11 +696,11 @@ export const CamelotV2FactoryABI = [
   },
 ] as const;
 
-// CamelotPair: the reads a program makes on a pair it looked up through V2Factory, and `swap`, called
-// directly once the input is transferred to the pair. Unlike a UniswapV2Pair, `getReserves` returns
-// each token's fee (in thousandths of a percent) in place of a timestamp, a pair may be a stable
-// (`stableSwap`) curve, and `getAmountOut` prices a trade by either. Pass empty `data`. From the
-// verified CamelotPair source; the referrer `swap` overload is left out.
+// CamelotPair: a pair a program looks up through V2Factory. Its `swap` is called directly once the
+// input is transferred to the pair. Unlike a UniswapV2Pair, `getReserves` returns each token's fee
+// (in thousandths of a percent) in place of a timestamp, a pair may be a stable (`stableSwap`)
+// curve, and `getAmountOut` prices a trade by either. Pass empty `data`. From the verified
+// CamelotPair source.
 export const CamelotV2PairABI = [
   {
     name: "allowance",
@@ -1279,10 +1279,10 @@ export const CamelotV3FactoryABI = [
   },
 ] as const;
 
-// Camelot V3's pool, an AlgebraPool: the reads a program makes on a pool it looked up through
-// V3Factory. `globalState` is Algebra's slot0, with a fee per direction: `feeZto` selling token0,
-// `feeOtz` selling token1, in hundredths of a basis point. Its `swap` calls back for the input,
-// which a program cannot answer, so it is not declared. From the verified AlgebraPool source.
+// Camelot V3's pool, an AlgebraPool: a pool a program looks up through V3Factory. `globalState` is
+// Algebra's slot0, with a fee per direction: `feeZto` selling token0, `feeOtz` selling token1, in
+// hundredths of a basis point. Its `swap` calls back for the input, which a program cannot answer:
+// a program swaps through `@sauce/router`. From the verified AlgebraPool source.
 export const CamelotV3PoolABI = [
   {
     name: "activeIncentive",

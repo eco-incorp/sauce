@@ -1223,8 +1223,8 @@ export const LBFactoryABI = [
   },
 ] as const;
 
-// LBPair — the reads a program makes on a pair it looked up through LBFactory, and `swap`, called
-// directly once the input is transferred to the pair: `swapForY` sells X for Y. `getSwapOut` quotes
+// LBPair — a pair a program looks up through LBFactory. Its `swap` is called directly once the
+// input is transferred to the pair: `swapForY` sells X for Y. `getSwapOut` quotes
 // a sale: a nonzero `amountInLeft` is more than the pair's liquidity can fill, and a `swap` of it
 // reverts. `swap` returns both amounts in one word, X in the low 128 bits and Y in the high 128;
 // `getPriceFromId` is a bin's price of X in Y, 128.128 fixed point. From the verified LBPair source

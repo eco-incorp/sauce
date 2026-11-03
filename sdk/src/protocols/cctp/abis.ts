@@ -1,7 +1,7 @@
 // Circle CCTP v2 — TokenMessengerV2. The burn side of Cross-Chain Transfer Protocol: `depositForBurn`
-// burns USDC on the source chain and instructs Circle to mint it on the destination domain. This is
-// the minimal surface a Sauce route needs to drive a CCTP transfer; the receive/mint side
-// (MessageTransmitterV2.receiveMessage / gatewayMint) is attestation-driven and off-chain.
+// burns USDC on the source chain and instructs Circle to mint it on the destination domain. The
+// receive/mint side (MessageTransmitterV2.receiveMessage / gatewayMint) is attestation-driven and
+// off-chain; the `handleReceive*` functions here are the MessageTransmitter's alone to call.
 export const TokenMessengerABI = [
   {
     name: "acceptOwnership",

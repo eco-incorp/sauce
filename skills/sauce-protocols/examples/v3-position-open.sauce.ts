@@ -4,9 +4,9 @@
 // pool's tokens, fee and tick spacing are read from the pool. The position manager takes the two
 // tokens in the pool's price ratio, so one amount is used in full and the other in part: what it
 // does not take stays in the Pot, and the allowances are withdrawn. The NFT stays in the Pot;
-// v3-position-manage.sauce.ts takes fees and liquidity out and hands it over. A position's own
-// reads come from UniswapV3Positions.json beside this file. Returns the position, the liquidity
-// added and what it took of the pool's token0 and token1 (token0 is the lower address).
+// v3-position-manage.sauce.ts takes fees and liquidity out and hands it over. Returns the
+// position, the liquidity added and what it took of the pool's token0 and token1 (token0 is the
+// lower address).
 //
 //   sauce run v3-position-open.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <tokenId> <pool> <amount0> <amount1> <min0> <min1>
@@ -26,7 +26,6 @@
 //
 //   sauce run v3-position-open.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 0 <pool> 1000000000000000000000 1000000000 900000000000000000000 900000000
-import UniswapV3Positions from "./UniswapV3Positions.json";
 
 function main(
   tokenId: Uint256,
@@ -71,9 +70,9 @@ function main(
     spent0 = minted.amount0;
     spent1 = minted.amount1;
   } else {
-    require(UniswapV3Positions.at(manager).ownerOf(tokenId) ==
-      pot, "the position is not the Pot's");
-    const position = UniswapV3Positions.at(manager).positions(tokenId);
+    const owner: Address = manager.ownerOf(tokenId);
+    require(owner == pot, "the position is not the Pot's");
+    const position = manager.positions(tokenId);
     require(position.token0 == token0 &&
       position.token1 == token1 &&
       position.fee == fee, "the position is on another pool");

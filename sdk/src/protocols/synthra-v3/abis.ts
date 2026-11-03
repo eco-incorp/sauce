@@ -1003,9 +1003,9 @@ export const SynthraV3NonfungiblePositionManagerABI = [
   },
 ] as const;
 
-// Synthra V3's pool. A Uniswap V3 fork: its pool reads are UniswapV3Pool's (the Arc bytecode
+// Synthra V3's pool. A Uniswap V3 fork: its pool functions are UniswapV3Pool's (the Arc bytecode
 // dispatches every selector here). Its `swap` calls back `synthraV3SwapCallback` for the input,
-// which a program cannot answer, so it is not declared.
+// which a program cannot answer.
 export const SynthraV3PoolABI = [
   {
     name: "burn",

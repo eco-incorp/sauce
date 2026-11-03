@@ -206,8 +206,9 @@ there.
 Call a contract by name, in this order of preference:
 
 1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
-   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, at the chain's address. Which
-   namespaces, members and aliases exist is `sauce-globals`'s.
+   `AaveV3.Pool.supply(...)`, typed by the contract's whole verified ABI, at the chain's address.
+   Which namespaces, members and aliases exist is `sauce-globals`'s; a function the chain's own
+   deployment does not run is refused for that chain, naming the chains that run it.
    - **A contract a call returns**: where the registry records which contract an address a
      function returns is (a factory's pool, a pool's tokens, a vault's asset; the function's line
      in its `sauce-protocols` registry file says so), call that contract's methods on the result,
@@ -224,12 +225,13 @@ Call a contract by name, in this order of preference:
    in `sauce-protocols` gives the line, such as
    `import VaultABI from "./protocols/erc4626/VaultABI.json"`, then
    `VaultABI.at(vault).convertToAssets(shares)`.
-3. **The program's own ABI**, for a contract no registry knows or a function its registry ABI does
-   not declare: a JSON ABI file beside the program, holding only the functions the program calls,
-   with the deployed contract's types from its verified source, imported by relative path as its
-   default export: `import IOracle from "./IOracle.json"`, then `IOracle.at(pool).observe(...)`. The
-   `sauce` command reads it from beside the file; through the MCP server, pass it in `modules`
-   (`{ "IOracle.json": "<its JSON>" }`).
+3. **The program's own ABI**, for a contract no registry records, such as an NFT collection: a
+   JSON ABI file beside the program, holding only the functions the program calls, with the
+   deployed contract's types from its verified source or the interface it implements, imported by
+   relative path as its default export: `import IERC721 from "./IERC721.json"`, then
+   `IERC721.at(nft).ownerOf(tokenId)`. The `sauce` command reads it from beside the file; through
+   the MCP server, pass it in `modules` (`{ "IERC721.json": "<its JSON>" }`). A contract the
+   registry records needs none: its namespace already carries every function its deployment runs.
 
 Never call through `evm.static` or `evm.call` with a hex selector where one of these exists: the
 typed call encodes arguments and names outputs. Select the field you need for clarity, but any read
@@ -477,9 +479,10 @@ add. For any message not here, search [references/builtins.md](references/builti
 ## Files
 
 - [examples/twap.sauce.ts](examples/twap.sauce.ts) finds a pool through `UniswapV3.Factory` and
-  reads its price history through its own ABI beside it,
-  [examples/IOracle.json](examples/IOracle.json), which declares the one function the registry's
-  pool ABI lacks, `observe`.
+  reads its price history through `UniswapV3.Pool`'s `observe`.
+- [examples/nft-handover.sauce.ts](examples/nft-handover.sauce.ts) hands over an NFT the Pot holds,
+  calling the collection, which no registry records, through its own ABI beside it,
+  [examples/IERC721.json](examples/IERC721.json).
 - [examples/saucescript.mts](examples/saucescript.mts) compiles a guarded program, asserts each
   rejection above, and pins what compiling for a chain adds.
 - [references/builtins.md](references/builtins.md) and

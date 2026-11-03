@@ -426,9 +426,9 @@ export const SushiSwapV2FactoryABI = [
   },
 ] as const;
 
-// SushiSwap V2's pair, a UniswapV2Pair: the reads a program makes on a pair it looked up through the
-// factory, and `swap`, called directly once the input is transferred to the pair (0.3% fee). Pass
-// empty `data`: any other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source.
+// SushiSwap V2's pair, a UniswapV2Pair: a pair a program looks up through the factory. Its `swap` is
+// called directly once the input is transferred to the pair (0.3% fee). Pass empty `data`: any
+// other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source.
 export const SushiSwapV2PairABI = [
   {
     name: "allowance",

@@ -1330,9 +1330,10 @@ export const UniswapV3SwapRouter02ABI = [
   },
 ] as const;
 
-// UniswapV3Pool — the reads a program makes on a pool it looked up through the factory: its price
-// and tick, its in-range liquidity, its fee and tick spacing, and its tokens. From the verified
-// UniswapV3Pool source; every pool the factory creates runs the same code.
+// UniswapV3Pool — a pool a program looks up through the factory: its price and tick, its in-range
+// liquidity, its fee and tick spacing, and its tokens. Its `swap` calls back for the input, which a
+// program cannot answer: a program swaps through `@sauce/router`. From the verified UniswapV3Pool
+// source; every pool the factory creates runs the same code.
 export const UniswapV3PoolABI = [
   {
     name: "burn",

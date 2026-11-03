@@ -4,9 +4,7 @@
 // exactly `amount` of the Pot's PT or YT and takes at least `minOut` of `token`. The market names its
 // own SY, PT and YT (readTokens), so the program takes only the market. The Router is approved for
 // exactly `amount` and must take all of it, and what `recipient` received is measured as a balance
-// change. The market's reads and the Router's sells are not in the registry's Pendle ABI:
-// PendleMarket.json and PendleRouterTrades.json beside this file declare them. Returns what the Pot
-// spent and what the recipient received.
+// change. Returns what the Pot spent and what the recipient received.
 //
 //   sauce run pendle-trade.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <market> <token> <useYt> <sell> <amount> <minOut> <recipient>
@@ -28,8 +26,6 @@
 //   sauce run pendle-trade.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args <market> 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0 false false \
 //     1000000000000000000 1000000000000000000 <recipient>
-import PendleMarket from "./PendleMarket.json";
-import PendleRouterTrades from "./PendleRouterTrades.json";
 
 // One limit-order fill, as the Router's LimitOrderData lists them. This program fills none.
 interface Order {
@@ -61,7 +57,7 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ): { spent: Uint256; received: Uint256 } {
-  const [, pt, yt] = PendleMarket.at(market).readTokens();
+  const [, pt, yt] = Pendle.Market(market).readTokens();
   let traded = pt;
   if (useYt) traded = yt;
   let tokenIn = token;
@@ -96,21 +92,9 @@ function main(
       swapData: noSwap,
     };
     if (useYt) {
-      PendleRouterTrades.at(Pendle.Router).swapExactYtForToken(
-        recipient,
-        market,
-        amount,
-        output,
-        noLimitOrders,
-      );
+      Pendle.Router.swapExactYtForToken(recipient, market, amount, output, noLimitOrders);
     } else {
-      PendleRouterTrades.at(Pendle.Router).swapExactPtForToken(
-        recipient,
-        market,
-        amount,
-        output,
-        noLimitOrders,
-      );
+      Pendle.Router.swapExactPtForToken(recipient, market, amount, output, noLimitOrders);
     }
   } else {
     const input = {

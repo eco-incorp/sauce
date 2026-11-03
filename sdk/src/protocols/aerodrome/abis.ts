@@ -797,8 +797,8 @@ export const AerodromePoolFactoryABI = [
   { name: "ZeroFee", type: "error", inputs: [] },
 ] as const;
 
-// Pool — the reads a program makes on a pool it looked up through PoolFactory, and `swap`, called
-// directly once the input is transferred to the pool. `getAmountOut` prices a trade net of the
+// Pool — a pool a program looks up through PoolFactory. Its `swap` is called directly once the
+// input is transferred to the pool. `getAmountOut` prices a trade net of the
 // pool's fee on either curve (`stable`: x³y + y³x, otherwise xy); `getReserves`' third value is a
 // timestamp. Pass empty `data`: any other calls `hook` back on `to`. From the verified Pool source,
 // of which every pool is an EIP-1167 clone.

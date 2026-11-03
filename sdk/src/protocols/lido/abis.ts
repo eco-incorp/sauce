@@ -1092,7 +1092,7 @@ export const WstETHABI = [
 /**
  * Lido's bridged wstETH on an L2 (Arbitrum's `ERC20Bridged`): an ERC-20 the L2 bridge mints and
  * burns. It has none of `WstETHABI`'s wrapping or stETH-rate functions; `bridgeMint`/`bridgeBurn`
- * are the bridge's alone and are left out.
+ * are the bridge's alone to call.
  */
 export const WstETHBridgedABI = [
   {

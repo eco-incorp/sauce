@@ -1193,10 +1193,9 @@ export const PancakeSwapV3NFPMABI = [
   },
 ] as const;
 
-// PancakeV3Pool — the reads a program makes on a pool it looked up through the factory, as on
-// UniswapV3.Pool except that `slot0`'s `feeProtocol` is a uint32. Its `swap` calls back for the
-// input, which a program cannot answer, so it is not declared. From the verified PancakeV3Pool
-// source.
+// PancakeV3Pool — a pool a program looks up through the factory, as UniswapV3.Pool except that
+// `slot0`'s `feeProtocol` is a uint32. Its `swap` calls back for the input, which a program cannot
+// answer: a program swaps through `@sauce/router`. From the verified PancakeV3Pool source.
 export const PancakeSwapV3PoolABI = [
   {
     name: "burn",

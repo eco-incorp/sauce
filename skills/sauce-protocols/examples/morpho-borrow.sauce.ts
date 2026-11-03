@@ -4,9 +4,7 @@
 // up as Morpho rounds a debt), the most it may owe at the market's liquidation LTV, priced by the
 // market's own oracle, and its health factor: that most over the debt, 1e18 being 1. Below 1 the
 // position can be liquidated. The market's tokens, oracle, interest rate model and LLTV are read
-// from Morpho by `id`. Morpho's reads, which the registry's Morpho ABI does not declare, and the
-// oracle's price are in MorphoMarket.json beside this file, as Morpho Blue's IMorpho and IOracle
-// interfaces declare them.
+// from Morpho by `id`.
 //
 //   sauce run morpho-borrow.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <id> <collateral> <amount> <to>
@@ -24,7 +22,6 @@
 //   sauce run morpho-borrow.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 0x94b823e6bd8ea533b4e33fbc307faea0b307301bc48763acc4d4aa4def7636cd \
 //     1000000000000000000 1000000000 <to>
-import MorphoMarket from "./MorphoMarket.json";
 
 const WAD = 1000000000000000000;
 const ORACLE_PRICE_SCALE = 10 ** 36;
@@ -38,8 +35,7 @@ function main(
   amount: Uint256,
   to: Address,
 ): { collateral: Uint256; borrowed: Uint256; maxBorrow: Uint256; healthFactor: Uint256 } {
-  const morpho = MorphoMarket.at(MorphoBlue.Morpho);
-  const params = morpho.idToMarketParams(id);
+  const params = MorphoBlue.Morpho.idToMarketParams(id);
   require(params.loanToken != 0, "no Morpho Blue market has that id");
   const market = {
     loanToken: params.loanToken,
@@ -57,12 +53,12 @@ function main(
   MorphoBlue.Morpho.borrow(market, amount, 0, pot, to);
 
   // 2. The position as Morpho holds it, and its health as Morpho judges it.
-  const position = morpho.position(id, pot);
-  const totals = morpho.market(id);
+  const position = MorphoBlue.Morpho.position(id, pot);
+  const totals = MorphoBlue.Morpho.market(id);
   const shares = totals.totalBorrowShares + VIRTUAL_SHARES;
   const borrowed =
     (position.borrowShares * (totals.totalBorrowAssets + VIRTUAL_ASSETS) + shares - 1) / shares;
-  const price = MorphoMarket.at(market.oracle).price();
+  const price = MorphoBlue.Oracle(market.oracle).price();
   const maxBorrow = Math.mulDiv(
     Math.mulDiv(position.collateral, price, ORACLE_PRICE_SCALE),
     market.lltv,

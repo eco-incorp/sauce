@@ -412,11 +412,11 @@ export const UniswapV2FactoryABI = [
   },
 ] as const;
 
-// UniswapV2Pair — the reads a program makes on a pair it looked up through the factory (its reserves
-// and tokens), and `swap`, which a program calls directly: transfer the input to the pair first, then
-// `swap` the output out, which the pair checks against its constant product net of the 0.3% fee. Pass
-// empty `data`: any other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source;
-// every pair the factory creates runs the same code.
+// UniswapV2Pair — a pair a program looks up through the factory. Its `swap` is called directly:
+// transfer the input to the pair first, then `swap` the output out, which the pair checks against
+// its constant product net of the 0.3% fee. Pass empty `data`: any other calls `uniswapV2Call` back
+// on `to`. From the verified UniswapV2Pair source; every pair the factory creates runs the same
+// code.
 export const UniswapV2PairABI = [
   {
     name: "allowance",

@@ -1,4 +1,4 @@
-// CLFactory — fragments from its verified source (Sourcify, Arc 0xb89Df768…1d03, contracts/core/CLFactory.sol).
+// CLFactory — from its verified source (Sourcify, Arc 0xb89Df768…1d03, contracts/core/CLFactory.sol).
 export const SlipstreamCLFactoryABI = [
   {
     name: "allPools",
@@ -489,9 +489,9 @@ export const SlipstreamCLFactoryABI = [
   { name: "VoterSet", type: "event", inputs: [{ name: "voter", type: "address", indexed: true }] },
 ] as const;
 
-// CLPool — the reads a program makes on a pool it looked up through a CLFactory, from the verified
-// CLPool source. Its `slot0` has no `feeProtocol`, unlike Uniswap V3's, and its `fee` is set per
-// pool and can change, so a program reads it rather than assume the tick spacing's default.
+// CLPool — a pool a program looks up through a CLFactory, from the verified CLPool source. Its
+// `slot0` has no `feeProtocol`, unlike Uniswap V3's, and its `fee` is set per pool and can change,
+// so a program reads it rather than assume the tick spacing's default.
 export const AerodromeSlipstreamPoolABI = [
   {
     name: "burn",
@@ -1018,7 +1018,7 @@ export const AerodromeSlipstreamPoolABI = [
   },
 ] as const;
 
-// NonfungiblePositionManager — fragments from its verified source (Sourcify, Arc 0xc84bB45D…f473).
+// NonfungiblePositionManager — from its verified source (Sourcify, Arc 0xc84bB45D…f473).
 export const SlipstreamPositionManagerABI = [
   {
     name: "approve",
@@ -1549,7 +1549,7 @@ export const SlipstreamPositionManagerABI = [
   },
 ] as const;
 
-// Metarouter — Aero's command-encoded router. Fragment from its verified source (Sourcify, Arc 0x7275FA44…c886, V3/src/metarouter/Metarouter.sol).
+// Metarouter — Aero's command-encoded router. From its verified source (Sourcify, Arc 0x7275FA44…c886, V3/src/metarouter/Metarouter.sol).
 export const AeroMetarouterABI = [
   {
     name: "EMISSION_TOKEN",

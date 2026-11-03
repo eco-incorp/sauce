@@ -1,5 +1,5 @@
 // LayerBank routes every user action through Core, naming the market (lToken); the lToken's own
-// supply/borrow/redeem functions are Core-only. The lToken ABI here is its read surface.
+// supply/borrow/redeem functions are Core-only, so a program calls Core and reads the lToken.
 export const LTokenABI = [
   {
     name: "_totalBorrow",

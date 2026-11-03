@@ -402,7 +402,7 @@ export function register(anvil: () => Anvil): void {
         const owing = await comet<bigint>("borrowBalanceOf", [env.pot]);
         assert.ok(owing > LOAN, `a month's interest accrued: ${owing}`);
         const before = [owing, potUsdc, await allowance(env, USDC, env.pot, COMET), toWeth];
-        await refuse("compound-repay", [REWARDS, String(LOAN), to], /the debt is above maxRepay/);
+        await refuse("compound-repay", [String(LOAN), to], /the debt is above maxRepay/);
         assert.deepEqual(
           [
             await comet<bigint>("borrowBalanceOf", [env.pot]),
@@ -413,7 +413,7 @@ export function register(anvil: () => Anvil): void {
           before,
         );
         assert.equal(await comet<bigint>("collateralBalanceOf", [env.pot, WETH]), ONE_WETH);
-        const closed = await cook("compound-repay", [REWARDS, String(LOAN + 50n * USDC_UNIT), to]);
+        const closed = await cook("compound-repay", [String(LOAN + 50n * USDC_UNIT), to]);
         const paid = potUsdc - (await balanceOf(env, USDC, env.pot));
         assert.ok(paid > LOAN, `the interest was repaid too, not only ${paid}`);
         ranAsRehearsed(closed.repaid, paid, "the USDC repaid");

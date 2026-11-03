@@ -1,4 +1,4 @@
-// Spoke — the user-facing Aave V4 market. Fragments from the verified SpokeInstance (Ethereum 0x7a603b73…7450).
+// Spoke — the user-facing Aave V4 market. From the verified SpokeInstance (Ethereum 0x7a603b73…7450).
 export const AaveV4SpokeABI = [
   {
     name: "addDynamicReserveConfig",
@@ -1029,7 +1029,7 @@ export const AaveV4SpokeABI = [
   { name: "Unauthorized", type: "error", inputs: [] },
 ] as const;
 
-// Hub — the shared Aave V4 liquidity hub Spokes draw from. Fragments from the verified HubInstance (Ethereum 0xfe89fd96…f704).
+// Hub — the shared Aave V4 liquidity hub Spokes draw from. From the verified HubInstance (Ethereum 0xfe89fd96…f704).
 export const AaveV4HubABI = [
   {
     name: "add",

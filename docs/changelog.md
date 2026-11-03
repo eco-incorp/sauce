@@ -54,28 +54,29 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -94,6 +95,54 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK Unreleased
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 1.0.0:
+nothing moves.
+
+### The registry
+
+- **Added** (EVM): **every protocol namespace carries its contract's full verified ABI.** A registry
+  ABI was the few functions a program was expected to call; it is now every function, event and
+  error the contract's deployments declare in their verified source and dispatch: 9,129 functions
+  over 240 contracts and interfaces, from 744 over 232, with 2,504 events (from 2) and 2,380 errors
+  (from 11). A program calls a recorded contract's other functions by name, its own reads and
+  admin functions included (`AaveV3.Pool.getReserveAToken(USDC)`,
+  `BalancerV2.Vault.queryBatchSwap(…)`, `MorphoBlue.Morpho.idToMarketParams(id)`), with no ABI
+  file of its own. A function is left out only where it cannot be bound unambiguously, such as the
+  second of two overloads that take the same number of arguments.
+- **Added** (EVM): **new contracts.** `AaveV3.PoolAddressesProvider`, an address only before, has
+  its ABI; `AaveV3.Oracle` is new, and so are the `AaveV3.AToken` and `AaveV3.VariableDebtToken`
+  interfaces, `CompoundV3.CometRewards`, the `MorphoBlue.Oracle` interface and the `Pendle.Market`
+  and `Pendle.SY` interfaces. A program calls their methods on what a function returns:
+  `AaveV3.PoolAddressesProvider.getPriceOracle().getAssetPrice(USDC)`, or
+  `AaveV3.Pool.getReserveVariableDebtToken(USDC)` held in a `const` and its `approveDelegation`
+  called.
+- **Now refused** (EVM): **a function the chain's own deployment does not run.** Deployments of one
+  contract can run different releases, and the registry records which functions each one's code
+  dispatches. A call to one the chain's deployment does not run is refused when the program
+  compiles, naming the chains that run it, where it used to compile. Calls that compiled before
+  and are refused now: `Cbeth.CbETH.exchangeRate` and `mint` on Base,
+  `Lifi.LiFiDiamond.startBridgeTokensViaAcrossV4` on Gnosis, Fantom and Avalanche, and
+  `Paraswap.AugustusV5.simpleSwap` on Base. The message: "`Cbeth.CbETH.exchangeRate(…)`:
+  `exchangeRate` is in cbeth.CbETH's ABI, but its deployment on base does not run it (as
+  declared); it is on: ethereum." Each protocol's reference page lists what each deployment does
+  not run.
+- **Changed**: a method a contract does not have is refused with a shorter list. A contract with
+  more than six methods is listed by its count and the five names nearest the one written:
+  "`getPol` is not in uniswap-v3.Factory's vendored ABI (7 known methods; nearest: getPool,
+  createPool, owner, setOwner, parameters). Did you mean `getPool`?". One with six or fewer still
+  lists every method ("known methods: price").
+
+### The agent skills and the manual
+
+- **Changed**: the examples call every contract the registry records through its namespace. The
+  ABI files beside the Aave V3, Compound III, Morpho Blue, Pendle, Uniswap V3 position, Balancer
+  V2 batch swap and TWAP examples are gone; each program makes the same calls.
+  `compound-repay.sauce.ts` no longer takes the CometRewards address as its first argument: it
+  calls `CompoundV3.CometRewards`. `sauce-script`'s example of a program's own ABI is
+  `nft-handover.sauce.ts`, for an ERC-721 collection, which no registry records.
 
 ## SDK 1.0.0 — 2026-10-27
 

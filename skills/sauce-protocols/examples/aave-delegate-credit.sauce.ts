@@ -3,11 +3,9 @@
 // borrowing power on USDC's variable-debt token. The borrower then borrows with the Pot as
 // `onBehalfOf`, from their own wallet or Pot: `AaveV3.Pool.borrow(USDC, amount, 2, 0, <pot>)`. The
 // USDC goes to the borrower and the debt to the Pot, which carries it and its liquidation risk until
-// aave-repay-delegated.sauce.ts repays it. The reserve's token lookups and the debt token's
-// delegation calls, which the registry's Aave V3 ABI does not declare, are in AaveV3Delegation.json
-// beside this file, as Aave V3's Pool and VariableDebtToken interfaces declare them. Returns the
-// debt token, the borrower's allowance as the debt token records it, and the Pot's WETH collateral
-// on Aave, its aWETH, in wei.
+// aave-repay-delegated.sauce.ts repays it. The debt token is the one the Pool names for USDC, and
+// the delegation is called on it. Returns the debt token, the borrower's allowance as the debt
+// token records it, and the Pot's WETH collateral on Aave, its aWETH, in wei.
 //
 //   sauce run aave-delegate-credit.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <borrower> <collateral> <credit>
@@ -22,7 +20,6 @@
 //
 //   sauce run aave-delegate-credit.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args <borrower> 10000000000000000000 1000000000
-import AaveV3Delegation from "./AaveV3Delegation.json";
 
 function main(
   borrower: Address,
@@ -39,12 +36,12 @@ function main(
   }
 
   // 2. The credit: the borrower may open USDC variable-rate debt in the Pot's name, up to `credit`.
-  const debtToken = AaveV3Delegation.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
-  AaveV3Delegation.at(debtToken).approveDelegation(borrower, credit);
-  const allowance = AaveV3Delegation.at(debtToken).borrowAllowance(pot, borrower);
+  const debtToken = AaveV3.Pool.getReserveVariableDebtToken(USDC);
+  debtToken.approveDelegation(borrower, credit);
+  const allowance = debtToken.borrowAllowance(pot, borrower);
   require(allowance == credit, "the delegation was not recorded");
 
   // 3. The Pot's collateral on Aave: its aWETH, which grows with interest.
-  const aToken = AaveV3Delegation.at(AaveV3.Pool).getReserveAToken(WETH);
+  const aToken = AaveV3.Pool.getReserveAToken(WETH);
   return { debtToken, allowance, collateral: Token(aToken).balanceOf(pot) };
 }

@@ -1,6 +1,6 @@
 // The LI.FI Diamond routes each bridge through its own facet entry point
-// (`startBridgeTokensVia<Bridge>`); there is no generic `startBridgeTokensViaBridge`. This declares
-// the Across V4 facet's, plus the calldata-verification facet's `extractBridgeData`.
+// (`startBridgeTokensVia<Bridge>`); there is no generic `startBridgeTokensViaBridge`. Every
+// facet's functions are here, the calldata-verification facet's `extractBridgeData` among them.
 export const LiFiDiamondABI = [
   {
     name: "ACROSS_CHAIN_ID_SOLANA",

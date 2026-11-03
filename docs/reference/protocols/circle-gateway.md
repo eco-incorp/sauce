@@ -37,8 +37,8 @@ function main(amount: Uint256, depositor: Address): Uint256 {
 - **Whose balance it credits.** `depositFor(token, depositor, value)` credits `depositor`.
   `deposit(token, value)` credits the caller, which in a Sauce program is the Pot: the Gateway
   balance is then the Pot's, not the user's. A balance credited to the Pot can be spent only by a
-  burn intent signed by a delegate the Pot adds for itself with the GatewayWallet's `addDelegate`,
-  which the registry's ABI does not declare. To let the user spend it through Gateway from their
+  burn intent signed by a delegate the Pot adds for itself with
+  `CircleGateway.GatewayWallet.addDelegate`. To let the user spend it through Gateway from their
   wallet, deposit for their address.
 - **Approve exactly the amount** for `CircleGateway.GatewayWallet` first, and deposit exactly what
   the Pot means to: a given `amount`, or the USDC a swap just delivered measured as a delta. On Arc

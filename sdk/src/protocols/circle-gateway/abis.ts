@@ -1,4 +1,4 @@
-// GatewayWallet — fragments from the verified GatewayWallet implementation (Ethereum 0xf7a6d9d7…e798).
+// GatewayWallet — from the verified GatewayWallet implementation (Ethereum 0xf7a6d9d7…e798).
 export const GatewayWalletABI = [
   {
     name: "acceptOwnership",
@@ -1020,7 +1020,7 @@ export const GatewayWalletABI = [
   { name: "ZeroAddressDisallowlister", type: "error", inputs: [] },
 ] as const;
 
-// GatewayMinter — fragments from the verified GatewayMinter implementation (Ethereum 0xc2ff6806…51b1).
+// GatewayMinter — from the verified GatewayMinter implementation (Ethereum 0xc2ff6806…51b1).
 export const GatewayMinterABI = [
   {
     name: "acceptOwnership",

@@ -660,9 +660,9 @@ export const QuickSwapV2FactoryABI = [
   },
 ] as const;
 
-// QuickSwap V2's pair, a UniswapV2Pair: the reads a program makes on a pair it looked up through
-// V2Factory, and `swap`, called directly once the input is transferred to the pair (0.3% fee). Pass
-// empty `data`: any other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source.
+// QuickSwap V2's pair, a UniswapV2Pair: a pair a program looks up through V2Factory. Its `swap` is
+// called directly once the input is transferred to the pair (0.3% fee). Pass empty `data`: any
+// other calls `uniswapV2Call` back on `to`. From the verified UniswapV2Pair source.
 export const QuickSwapV2PairABI = [
   {
     name: "getReserves",
@@ -846,10 +846,10 @@ export const QuickSwapV3FactoryABI = [
   },
 ] as const;
 
-// QuickSwap V3's pool, an AlgebraPool (Algebra V1): the reads a program makes on a pool it looked up
-// through V3Factory. `globalState` is Algebra's slot0: the sqrt price (Q64.96), the tick and the
-// current dynamic fee, in hundredths of a basis point. Its `swap` calls back for the input, which a
-// program cannot answer, so it is not declared. From the verified AlgebraPool source.
+// QuickSwap V3's pool, an AlgebraPool (Algebra V1): a pool a program looks up through V3Factory.
+// `globalState` is Algebra's slot0: the sqrt price (Q64.96), the tick and the current dynamic fee,
+// in hundredths of a basis point. Its `swap` calls back for the input, which a program cannot
+// answer: a program swaps through `@sauce/router`. From the verified AlgebraPool source.
 export const QuickSwapV3PoolABI = [
   {
     name: "activeIncentive",
