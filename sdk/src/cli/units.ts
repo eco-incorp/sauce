@@ -77,7 +77,9 @@ function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimal
 
 export function unitsCommand(input: UnitsInput): CommandOutput {
   const token = tokenOf(input);
-  const amount = input.amount.replaceAll("_", "").replaceAll(",", "");
+  // Validated as written, with --fund's grammar: a separator is refused, not stripped, so a
+  // decimal comma (1,5) never reads as 15.
+  const { amount } = input;
   let baseUnits: bigint;
   if (input.base) {
     if (!/^\d+$/.test(amount)) {
@@ -85,7 +87,7 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
     }
     baseUnits = BigInt(amount);
   } else {
-    if (!/^\d+(\.\d+)?$|^\.\d+$/.test(amount)) {
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
       throw new UsageError(`${input.amount} is not an amount: write it like 1.5 or 1000`);
     }
     const fraction = amount.split(".")[1] ?? "";

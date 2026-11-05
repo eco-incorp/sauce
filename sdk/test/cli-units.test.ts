@@ -65,6 +65,19 @@ describe("sauce units", () => {
     ).toThrow(/USDC on base has 6/);
   });
 
+  it("refuses a malformed amount rather than reading it as another number", () => {
+    for (const amount of ["1,5", "1,,5", "1.2,3", "1_000", "-1", "1e6", ".5", "1.", ""]) {
+      expect(() => unitsCommand({ chain: base, amount, token: "USDC", base: false })).toThrow(
+        /is not an amount/,
+      );
+    }
+    for (const amount of ["1,500,000", "1_500_000", "-1", "1e6"]) {
+      expect(() => unitsCommand({ chain: base, amount, token: "USDC", base: true })).toThrow(
+        /is not a whole number/,
+      );
+    }
+  });
+
   it("refuses a symbol that matches two tokens in different cases, unless the case is exact", () => {
     const tokens: SourceToken[] = [
       { symbol: "uSDC", address: "0x0000000000000000000000000000000000000001", decimals: 6 },
