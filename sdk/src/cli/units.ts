@@ -1,24 +1,24 @@
 /**
  * `sauce units`: an amount of a token in whole tokens and in its smallest unit, the one a program's
- * `main` takes. `1.5 USDC` is `1500000` on Base; `--base 1500000 USDC` reads it back. The token is
- * named the way a program names it, a symbol `sauce globals` lists for the chain, or by address,
- * with its decimals given by `--decimals`.
+ * `main` takes. `1.5 USDC` is `1500000` on Base; `1500000n USDC` reads it back, base units written
+ * as `--fund` writes them. The token is named the way a program names it, a symbol
+ * `sauce globals` lists for the chain, or by address, with its decimals given by `--decimals`.
  */
 import { formatUnits, parseUnits } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
+import { wordsOf } from "../evm/effects.js";
 import { sourceGlobals, type SourceToken } from "../routes/source-globals.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
+import { tokenAmount } from "./funding.js";
 
 export interface UnitsInput {
   readonly chain: CanonicalChain;
-  /** The amount as written: whole tokens (`1.5`), or with `base` the smallest unit (`1500000`). */
+  /** The amount as written: whole tokens (`1.5`), or the smallest unit ending in n (`1500000n`). */
   readonly amount: string;
   /** A symbol the chain knows (`USDC`, any case), or a token's address with `decimals`. */
   readonly token: string;
-  /** The amount is already in the smallest unit; print it in whole tokens. */
-  readonly base: boolean;
   /** The token's decimals, for a token the chain has no symbol for. */
   readonly decimals?: number;
 }
@@ -79,32 +79,41 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
   const token = tokenOf(input);
   // Validated as written, with --fund's grammar: a separator is refused, not stripped, so a
   // decimal comma (1,5) never reads as 15.
-  const { amount } = input;
+  const amount = tokenAmount(input.amount);
+  if (amount === undefined) {
+    throw new UsageError(
+      `${input.amount} is not an amount: whole tokens (1.5, 1000) or base units ending in n ` +
+        "(1500000n)",
+    );
+  }
   let baseUnits: bigint;
-  if (input.base) {
-    if (!/^\d+$/.test(amount)) {
-      throw new UsageError(`--base: ${input.amount} is not a whole number of the smallest unit`);
-    }
-    baseUnits = BigInt(amount);
+  let note: string | undefined;
+  if ("base" in amount) {
+    baseUnits = amount.base;
   } else {
-    if (!/^\d+(\.\d+)?$/.test(amount)) {
-      throw new UsageError(`${input.amount} is not an amount: write it like 1.5 or 1000`);
-    }
-    const fraction = amount.split(".")[1] ?? "";
+    const { units } = amount;
+    const fraction = units.split(".")[1] ?? "";
     if (fraction.length > token.decimals) {
       throw new UsageError(
-        `${input.amount} ${token.symbol} has ${fraction.length} decimal places; ` +
+        `${units} ${token.symbol} has ${fraction.length} decimal places; ` +
           `${token.symbol} has ${token.decimals}, so it cannot be written exactly`,
       );
     }
-    baseUnits = parseUnits(amount, token.decimals);
+    baseUnits = parseUnits(units, token.decimals);
+    // The note --fund gives: a bare integer at or above 10^decimals reads like base units
+    // (1500000 USDC is 1.5 million USDC), the mistake this command is most often run to catch.
+    if (fraction === "" && token.decimals > 0 && BigInt(units) >= 10n ** BigInt(token.decimals)) {
+      note =
+        `${units} ${token.symbol}: that is ${wordsOf(units)} ${token.symbol}; for base units ` +
+        `write ${units}n`;
+    }
   }
   const whole = formatUnits(baseUnits, token.decimals);
   const text = [
     `${whole} ${token.symbol} = ${baseUnits} in its smallest unit (${token.decimals} decimals, ` +
       `${input.chain.slug})`,
     "",
-    input.base ? `Whole tokens: ${whole}` : `For --args: ${baseUnits}`,
+    "base" in amount ? `Whole tokens: ${whole}` : `For --args: ${baseUnits}`,
   ];
 
   return {
@@ -116,6 +125,8 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
       decimals: token.decimals,
       amount: whole,
       baseUnits: baseUnits.toString(),
+      ...(note === undefined ? {} : { note }),
     },
+    ...(note === undefined ? {} : { notes: [note] }),
   };
 }

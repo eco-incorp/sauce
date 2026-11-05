@@ -1092,11 +1092,10 @@ Examples:
 ```text
 Turn an amount in whole tokens into the smallest unit main takes, or back.
 
-Usage: sauce units --chain <slug|id> <amount> <token> [--base] [--decimals <n>] [--json]
+Usage: sauce units --chain <slug|id> <amount> <token> [--decimals <n>] [--json]
 
 Options:
       --chain <slug|id>  The chain whose token it is
-      --base             The amount is in the smallest unit: print it in whole tokens
       --decimals <n>     The token's decimals, for a token the chain has no symbol for
       --json             Print one JSON object instead
   -h, --help             Show this help
@@ -1106,11 +1105,13 @@ A program's amounts are integers in the token's smallest unit: USDC has 6 decima
 1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile
 resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An
 amount with more decimal places than the token has is refused, never rounded. A token
-the chain has no symbol for is named by its address, with --decimals.
+the chain has no symbol for is named by its address, with --decimals. Base units end in
+n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,
+and a note on stderr says so.
 
 Examples:
   sauce units --chain base 1.5 USDC
-  sauce units --chain base --base 1500000 USDC
+  sauce units --chain base 1500000n USDC
   sauce units --chain solana 0.25 WSOL --json
   sauce units --chain base 2 0x… --decimals 18
 ```
