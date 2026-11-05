@@ -1194,7 +1194,8 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `actions`, `simulate`, `run`, `wallet <verb>`, `tx`, `pot`, `globals`,
+executable. Its import-free launcher refuses Node <24 before loading `start.ts`, which wires the
+process into `run.ts`. Commands: `compile`, `actions`, `simulate`, `run`, `wallet <verb>`, `tx`, `pot`, `globals`,
 `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`)
 Solana. `run.ts` dispatches `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export)
 and `pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
@@ -1346,7 +1347,8 @@ second front end applies the same rules: `run.ts` reads flags into it, and the M
 tool arguments into it.
 
 **`sauce mcp`** is the MCP server (`mcp/`, built to `mcp/dist`). It is a CLI command, not a bin
-of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
+of its own, so `npx --engine-strict -y @eco-incorp/sauce@latest mcp` self-hosts it on Node >=24.
+The explicit tag prevents npm from choosing an older, engine-compatible package. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
 MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);

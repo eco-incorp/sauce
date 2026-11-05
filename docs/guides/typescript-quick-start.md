@@ -23,7 +23,7 @@ mkdir sauce-app
 cd sauce-app
 npm init -y
 npm pkg set type=module
-npm install @eco-incorp/sauce viem
+npm install --engine-strict @eco-incorp/sauce@latest viem
 ```
 
 The package is the compiler, every chain's names and the builders. viem is the library its

@@ -96,8 +96,8 @@ section in order. Each item is a check you can do with the `sauce` command; the
 ## Pin the versions
 
 - **Pin the package exactly.** `sauce init` writes an exact version; in another project use
-  `npm i -D -E @eco-incorp/sauce`, and run `npx sauce`, so every machine and CI job runs the same
-  command and compiler.
+  `npm install --engine-strict -D -E @eco-incorp/sauce@latest` with Node.js 24 or newer, and run
+  `npx sauce`, so every machine and CI job runs the same command and compiler.
 - **Keep the skills in step.** If agents write your programs, run `sauce skills status` in CI: it
   exits 1 while the skills are outdated.
 - **Upgrade on purpose.** Read the [changelog](../changelog.md) before moving to a new version, then

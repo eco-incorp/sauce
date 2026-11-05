@@ -13,8 +13,10 @@ from TypeScript before ([Compile from TypeScript](compiling.md)).
 
 ## Install
 
+With Node.js 24 or newer, install the library locally in your project:
+
 ```sh
-npm install @eco-incorp/sauce @solana/kit
+npm install --engine-strict @eco-incorp/sauce@latest @solana/kit
 ```
 
 `@solana/kit` is Solana's TypeScript library: the examples here take its `Address`, its RPC client

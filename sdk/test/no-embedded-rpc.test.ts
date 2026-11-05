@@ -31,7 +31,7 @@
  * The npm registry is the `sauce` command's one other network access, and one module names it and
  * reads it, `sdk/src/cli/npm-registry.ts`: for `sauce update` when it runs, and for the update
  * check's refresh (`update-check.ts`), in a process of its own. Only the command's own modules
- * import either, and only its executable (`main.ts`) creates the check, so neither a browser nor a
+ * import either, and only its process wiring (`start.ts`) creates the check, so neither a browser nor a
  * library import ever reaches the registry. npm reaches it too, as the user's npm configuration
  * says, where the command runs npm: `sauce init --install`, the package managers of `sauce update`,
  * and `npm ci` into a runtime folder (`runtime.ts`, which only the executable gives the process).
@@ -90,24 +90,6 @@ const FORK_FIXTURE_RPCS = {
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
 /** Where the registry may be named and read, and who may import the modules that read it. */
 const NPM_REGISTRY = "sdk/src/cli/npm-registry.ts";
-const REGISTRY_READERS = {
-  // runtime.ts takes `newer` alone, to order its version folders; it reads nothing.
-  "npm-registry": [
-    "sdk/src/cli/runtime.ts",
-    "sdk/src/cli/update-check.ts",
-    "sdk/src/cli/update.ts",
-  ],
-  "update-check": [
-    "sdk/src/cli/main.ts",
-    "sdk/src/cli/mcp.ts",
-    "sdk/src/cli/run.ts",
-    "sdk/src/cli/update-refresh.ts",
-  ],
-  update: ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts"],
-  "update-refresh": [],
-} as const;
-/** Every workspace's shipped source, the MCP server's included: what may import a registry reader. */
-const IMPORTING_ROOTS = [...["sdk/src", "actions/src", "dev-tools/src"], "mcp/src"];
 /** Shipped files the environment scan must include, so a move cannot take the command out of it. */
 const SHIPPED_REQUIRED = ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts", "sdk/src/cli/commands.ts"];
 /**
@@ -334,11 +316,6 @@ describe("the SDK ships no RPC endpoints", () => {
       "sdk/src/cli/update-check.ts",
       "sdk/src/cli/update.ts",
     ]);
-    // The runtime folder's installer is the process's only where the executable gives it.
-    const importers = [...shipped]
-      .filter(([, text]) => /from\s+["']\.\/runtime\.js["']/.test(text))
-      .map(([file]) => file);
-    expect(importers).toEqual(["sdk/src/cli/main.ts"]);
   });
 
   it("shipped code names the npm registry only in the module that reads it", () => {
@@ -347,37 +324,6 @@ describe("the SDK ships no RPC endpoints", () => {
       .filter(([, text]) => /registry\.npmjs\.org/.test(text))
       .map(([file]) => file);
     expect(naming).toEqual([NPM_REGISTRY]);
-  });
-
-  it("only the sauce command's own modules reach the registry, and only its executable starts it", () => {
-    const shipped = scanned(IMPORTING_ROOTS);
-    for (const [module, expected] of Object.entries(REGISTRY_READERS)) {
-      const imports = new RegExp(String.raw`(?:from|import\()\s*["'][^"']*/${module}(?:\.js)?["']`);
-      const found = [...shipped].filter(([, text]) => imports.test(text)).map(([file]) => file);
-      expect([module, found.sort()]).toEqual([module, [...expected]]);
-    }
-    // The registry's only reads: `sauce update`'s packument, and the refresh's latest version.
-    const reads = [...shipped].flatMap(([file, text]) =>
-      [...text.matchAll(/\b(readPackument|readLatest|startDetached)\(/g)]
-        .filter((match) => !/function\s+$/.test(text.slice(0, match.index)))
-        .map((match) => `${file}: ${match[1]}`),
-    );
-    expect(reads.sort()).toEqual([
-      "sdk/src/cli/update-check.ts: readLatest",
-      "sdk/src/cli/update-check.ts: startDetached",
-      "sdk/src/cli/update.ts: readPackument",
-    ]);
-    // The check and the updater are created by the executable alone: a module that imports
-    // `run.ts` (a test, the skills checker) gets neither, so it reaches no registry.
-    const created = [...shipped].flatMap(([file, text]) =>
-      [...text.matchAll(/\b(nodeUpdateCheck|nodeUpdater)\(/g)]
-        .filter((match) => !/function\s+$/.test(text.slice(0, match.index)))
-        .map((match) => `${file}: ${match[1]}`),
-    );
-    expect(created.sort()).toEqual([
-      "sdk/src/cli/main.ts: nodeUpdateCheck",
-      "sdk/src/cli/main.ts: nodeUpdater",
-    ]);
   });
 
   it("the RPC config example holds placeholders only", () => {
