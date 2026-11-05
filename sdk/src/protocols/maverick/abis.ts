@@ -420,16 +420,6 @@ export const MaverickV2FactoryABI = [
     inputs: [{ name: "pool", type: "address" }],
     outputs: [{ name: "", type: "bool" }],
   },
-  {
-    name: "lookup",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "startIndex", type: "uint256" },
-      { name: "endIndex", type: "uint256" },
-    ],
-    outputs: [{ name: "pools", type: "address[]" }],
-  },
   // Paged: pools [startIndex, endIndex) for the pair. There is no two-argument overload.
   {
     name: "lookup",
@@ -438,6 +428,16 @@ export const MaverickV2FactoryABI = [
     inputs: [
       { name: "tokenA", type: "address" },
       { name: "tokenB", type: "address" },
+      { name: "startIndex", type: "uint256" },
+      { name: "endIndex", type: "uint256" },
+    ],
+    outputs: [{ name: "pools", type: "address[]" }],
+  },
+  {
+    name: "lookup",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
       { name: "startIndex", type: "uint256" },
       { name: "endIndex", type: "uint256" },
     ],

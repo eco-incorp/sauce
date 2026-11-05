@@ -186,6 +186,18 @@ export const Permit2ABI = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "token", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
       {
         name: "transferDetails",
         type: "tuple[]",
@@ -196,18 +208,6 @@ export const Permit2ABI = [
           { name: "token", type: "address" },
         ],
       },
-    ],
-    outputs: [],
-  },
-  {
-    name: "transferFrom",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint160" },
-      { name: "token", type: "address" },
     ],
     outputs: [],
   },

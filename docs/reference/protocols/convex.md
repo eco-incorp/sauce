@@ -69,8 +69,8 @@ functions, and its writes are SafeERC20.
 - `earned(address account) view returns (uint256)`
 - `extraRewards(uint256) view returns (address)`
 - `extraRewardsLength() view returns (uint256)`
-- `getReward() returns (bool)`
 - `getReward(address _account, bool _claimExtras) returns (bool)`
+- `getReward() returns (bool)`
 - `historicalRewards() view returns (uint256)`
 - `lastTimeRewardApplicable() view returns (uint256)`
 - `lastUpdateTime() view returns (uint256)`

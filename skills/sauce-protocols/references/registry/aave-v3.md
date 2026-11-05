@@ -146,8 +146,8 @@ Left out of this ABI, though its deployments declare them:
 
 - `ADDRESSES_PROVIDER() view returns (address)`
 - `approvePositionManager(address positionManager, bool approve)`
-- `borrow(bytes32 args)`
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
+- `borrow(bytes32 args)`
 - `configureEModeCategory(uint8 id, (uint16 ltv, uint16 liquidationThreshold, uint16 liquidationBonus, bool isolated, string label) category)`
 - `configureEModeCategoryBorrowableBitmap(uint8 id, uint128 borrowableBitmap)`
 - `configureEModeCategoryCollateralBitmap(uint8 id, uint128 collateralBitmap)`
@@ -192,15 +192,15 @@ Left out of this ABI, though its deployments declare them:
 - `initialize(address _logic, bytes _data) payable`
 - `initReserve(address asset, address aTokenAddress, address variableDebtAddress)`
 - `isApprovedPositionManager(address user, address positionManager) view returns (bool)`
-- `liquidationCall(bytes32 args1, bytes32 args2)`
 - `liquidationCall(address collateralAsset, address debtAsset, address user, uint256 debtToCover, bool receiveAToken)`
+- `liquidationCall(bytes32 args1, bytes32 args2)`
 - `MAX_NUMBER_RESERVES() view returns (uint16)`
 - `mintToTreasury(address[] assets)`
 - `multicall(bytes[] data) returns (bytes[] results)`
 - `POOL_REVISION() view returns (uint256)`
 - `renouncePositionManagerRole(address user)`
-- `repay(bytes32 args) returns (uint256)`
 - `repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) returns (uint256)`
+- `repay(bytes32 args) returns (uint256)`
 - `repayWithATokens(bytes32 args) returns (uint256)`
 - `repayWithATokens(address asset, uint256 amount, uint256 interestRateMode) returns (uint256)`
 - `repayWithPermit(bytes32 args, bytes32 r, bytes32 s) returns (uint256)`
@@ -215,16 +215,16 @@ Left out of this ABI, though its deployments declare them:
 - `setUserUseReserveAsCollateral(bytes32 args)`
 - `setUserUseReserveAsCollateral(address asset, bool useAsCollateral)`
 - `setUserUseReserveAsCollateralOnBehalfOf(address asset, bool useAsCollateral, address onBehalfOf)`
-- `supply(bytes32 args)`
 - `supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`
+- `supply(bytes32 args)`
 - `supplyWithPermit(bytes32 args, bytes32 r, bytes32 s)`
 - `supplyWithPermit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode, uint256 deadline, uint8 permitV, bytes32 permitR, bytes32 permitS)`
 - `syncIndexesState(address asset)`
 - `syncRatesState(address asset)`
 - `UMBRELLA() view returns (bytes32)`
 - `updateFlashloanPremium(uint128 flashLoanPremium)`
-- `withdraw(bytes32 args) returns (uint256)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
+- `withdraw(bytes32 args) returns (uint256)`
 
 Not on Ethereum's pool (`0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`), whose code does not dispatch them or does not declare them as listed here: `borrow`, `dropReserve`, `liquidationCall`, `repay`, `repayWithATokens`, `repayWithPermit`, `resetIsolationModeTotalDebt`, `setUserUseReserveAsCollateral`, `supply`, `supplyWithPermit`, `withdraw`. Do not call them there: a program compiled for Ethereum is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.
 

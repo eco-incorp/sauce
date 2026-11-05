@@ -524,17 +524,17 @@ export const BaseRewardPoolABI = [
     name: "getReward",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [],
+    inputs: [
+      { name: "_account", type: "address" },
+      { name: "_claimExtras", type: "bool" },
+    ],
     outputs: [{ name: "", type: "bool" }],
   },
   {
     name: "getReward",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [
-      { name: "_account", type: "address" },
-      { name: "_claimExtras", type: "bool" },
-    ],
+    inputs: [],
     outputs: [{ name: "", type: "bool" }],
   },
   {

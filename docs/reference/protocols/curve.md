@@ -92,14 +92,14 @@ function main() {
 
 `import CurveRouterNGABI from "./protocols/curve/CurveRouterNGABI.json";` Speaks for: routerNG. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Curve` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy) payable returns (uint256)`
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _expected, address[5] _pools) payable returns (uint256)`
 - `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy, address[5] _pools, address _receiver) payable returns (uint256)`
+- `exchange(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, uint256 _min_dy) payable returns (uint256)`
 - `get_dx(address[11] _route, uint256[5][5] _swap_params, uint256 _out_amount, address[5] _pools) view returns (uint256)`
 - `get_dx(address[11] _route, uint256[5][5] _swap_params, uint256 _out_amount, address[5] _pools, address[5] _base_pools) view returns (uint256)`
 - `get_dx(address[11] _route, uint256[5][5] _swap_params, uint256 _out_amount, address[5] _pools, address[5] _base_pools, address[5] _base_tokens) view returns (uint256)`
-- `get_dy(address[11] _route, uint256[5][5] _swap_params, uint256 _amount) view returns (uint256)`
 - `get_dy(address[11] _route, uint256[5][5] _swap_params, uint256 _amount, address[5] _pools) view returns (uint256)`
+- `get_dy(address[11] _route, uint256[5][5] _swap_params, uint256 _amount) view returns (uint256)`
 - `version() view returns (string)`
 
 ### `CurveStableSwapABI`

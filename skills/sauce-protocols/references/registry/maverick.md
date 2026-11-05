@@ -54,8 +54,8 @@ functions, and its writes are SafeERC20.
 - `createPermissioned(uint64 feeAIn, uint64 feeBIn, uint16 tickSpacing, uint32 lookback, address tokenA, address tokenB, int32 activeTick, uint8 kinds, address accessor, bool permissionedLiquidity, bool permissionedSwap) returns (address pool)`
 - `deployParameters() view returns (uint64 feeAIn, uint64 feeBIn, uint32 lookback, int32 activeTick, uint64 tokenAScale, uint64 tokenBScale, address tokenA, address tokenB, uint16 tickSpacing, uint8 options, address accessor)`
 - `isFactoryPool(address pool) view returns (bool)`
-- `lookup(uint256 startIndex, uint256 endIndex) view returns (address[] pools)`
 - `lookup(address tokenA, address tokenB, uint256 startIndex, uint256 endIndex) view returns (address[] pools)`
+- `lookup(uint256 startIndex, uint256 endIndex) view returns (address[] pools)`
 - `lookup(uint256 feeAIn, uint256 feeBIn, uint256 tickSpacing, uint256 lookback, address tokenA, address tokenB, uint8 kinds) view returns (address)`
 - `lookupPermissioned(uint256 startIndex, uint256 endIndex) view returns (address[] pools)`
 - `lookupPermissioned(address _tokenA, address _tokenB, address accessor, uint256 startIndex, uint256 endIndex) view returns (address[] pools)`

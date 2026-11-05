@@ -168,8 +168,8 @@ export interface AaveV2LendingPoolMethods {
 export interface AaveV3PoolMethods {
   "ADDRESSES_PROVIDER"(): SauceCall<bigint>;
   "approvePositionManager"(arg0: (bigint | number), arg1: boolean): SauceCall<void>;
-  "borrow"(arg0: (bigint | number)): SauceCall<void>;
   "borrow"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): SauceCall<void>;
+  "borrow"(arg0: (bigint | number)): SauceCall<void>;
   "configureEModeCategory"(arg0: (bigint | number), arg1: { "ltv": (bigint | number); "liquidationThreshold": (bigint | number); "liquidationBonus": (bigint | number); "isolated": boolean; "label": (string | SauceBytes) }): SauceCall<void>;
   "configureEModeCategoryBorrowableBitmap"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
   "configureEModeCategoryCollateralBitmap"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
@@ -214,15 +214,15 @@ export interface AaveV3PoolMethods {
   "initialize"(arg0: (bigint | number), arg1: (string | SauceBytes)): SauceCall<void>;
   "initReserve"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<void>;
   "isApprovedPositionManager"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<boolean>;
-  "liquidationCall"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
   "liquidationCall"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: boolean): SauceCall<void>;
+  "liquidationCall"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<void>;
   "MAX_NUMBER_RESERVES"(): SauceCall<bigint>;
   "mintToTreasury"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<void>;
   "multicall"(arg0: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<SauceArray<SauceBytes>>;
   "POOL_REVISION"(): SauceCall<bigint>;
   "renouncePositionManagerRole"(arg0: (bigint | number)): SauceCall<void>;
-  "repay"(arg0: (bigint | number)): SauceCall<bigint>;
   "repay"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<bigint>;
+  "repay"(arg0: (bigint | number)): SauceCall<bigint>;
   "repayWithATokens"(arg0: (bigint | number)): SauceCall<bigint>;
   "repayWithATokens"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
   "repayWithPermit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
@@ -237,16 +237,16 @@ export interface AaveV3PoolMethods {
   "setUserUseReserveAsCollateral"(arg0: (bigint | number)): SauceCall<void>;
   "setUserUseReserveAsCollateral"(arg0: (bigint | number), arg1: boolean): SauceCall<void>;
   "setUserUseReserveAsCollateralOnBehalfOf"(arg0: (bigint | number), arg1: boolean, arg2: (bigint | number)): SauceCall<void>;
-  "supply"(arg0: (bigint | number)): SauceCall<void>;
   "supply"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
+  "supply"(arg0: (bigint | number)): SauceCall<void>;
   "supplyWithPermit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<void>;
   "supplyWithPermit"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number), arg7: (bigint | number)): SauceCall<void>;
   "syncIndexesState"(arg0: (bigint | number)): SauceCall<void>;
   "syncRatesState"(arg0: (bigint | number)): SauceCall<void>;
   "UMBRELLA"(): SauceCall<bigint>;
   "updateFlashloanPremium"(arg0: (bigint | number)): SauceCall<void>;
-  "withdraw"(arg0: (bigint | number)): SauceCall<bigint>;
   "withdraw"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number)): SauceCall<bigint>;
+  "withdraw"(arg0: (bigint | number)): SauceCall<bigint>;
   "configureEModeCategory(uint8,(uint16,uint16,uint16,string))"(arg0: (bigint | number), arg1: { "ltv": (bigint | number); "liquidationThreshold": (bigint | number); "liquidationBonus": (bigint | number); "label": (string | SauceBytes) }): SauceCall<void>;
 }
 
@@ -2436,8 +2436,8 @@ export interface ConvexBaseRewardPoolMethods {
   "earned"(arg0: (bigint | number)): SauceCall<bigint>;
   "extraRewards"(arg0: (bigint | number)): SauceCall<bigint>;
   "extraRewardsLength"(): SauceCall<bigint>;
-  "getReward"(): SauceCall<boolean>;
   "getReward"(arg0: (bigint | number), arg1: boolean): SauceCall<boolean>;
+  "getReward"(): SauceCall<boolean>;
   "historicalRewards"(): SauceCall<bigint>;
   "lastTimeRewardApplicable"(): SauceCall<bigint>;
   "lastUpdateTime"(): SauceCall<bigint>;
@@ -2583,14 +2583,14 @@ export interface CurveAddressProviderMethods {
 }
 
 export interface CurveRouterNGMethods {
-  "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<bigint>;
   "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<bigint>;
   "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg5: (bigint | number)): SauceCall<bigint>;
+  "exchange"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<bigint>;
   "get_dx"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<bigint>;
   "get_dx"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<bigint>;
   "get_dx"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg4: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg5: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<bigint>;
-  "get_dy"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number)): SauceCall<bigint>;
   "get_dy"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number), arg3: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>)): SauceCall<bigint>;
+  "get_dy"(arg0: (readonly ((bigint | number))[] | SauceArray<(bigint | number)>), arg1: (readonly ((readonly ((bigint | number))[] | SauceArray<(bigint | number)>))[] | SauceArray<(readonly ((bigint | number))[] | SauceArray<(bigint | number)>)>), arg2: (bigint | number)): SauceCall<bigint>;
   "version"(): SauceCall<SauceBytes>;
 }
 
@@ -5646,8 +5646,8 @@ export interface MaverickV2FactoryMethods {
   "createPermissioned"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: Int256, arg7: (bigint | number), arg8: (bigint | number), arg9: boolean, arg10: boolean): SauceCall<bigint>;
   "deployParameters"(): SauceCall<[bigint, bigint, bigint, Int256, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & { "feeAIn": bigint; "feeBIn": bigint; "lookback": bigint; "activeTick": Int256; "tokenAScale": bigint; "tokenBScale": bigint; "tokenA": bigint; "tokenB": bigint; "tickSpacing": bigint; "options": bigint; "accessor": bigint }>;
   "isFactoryPool"(arg0: (bigint | number)): SauceCall<boolean>;
-  "lookup"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<SauceArray<bigint>>;
   "lookup"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<SauceArray<bigint>>;
+  "lookup"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<SauceArray<bigint>>;
   "lookup"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number), arg5: (bigint | number), arg6: (bigint | number)): SauceCall<bigint>;
   "lookupPermissioned"(arg0: (bigint | number), arg1: (bigint | number)): SauceCall<SauceArray<bigint>>;
   "lookupPermissioned"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number), arg4: (bigint | number)): SauceCall<SauceArray<bigint>>;
@@ -6562,8 +6562,8 @@ export interface Permit2Permit2Methods {
   "permit"(arg0: (bigint | number), arg1: { "details": { "token": (bigint | number); "amount": (bigint | number); "expiration": (bigint | number); "nonce": (bigint | number) }; "spender": (bigint | number); "sigDeadline": (bigint | number) }, arg2: (string | SauceBytes)): SauceCall<void>;
   "permitTransferFrom"(arg0: { "permitted": { "token": (bigint | number); "amount": (bigint | number) }; "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: { "to": (bigint | number); "requestedAmount": (bigint | number) }, arg2: (bigint | number), arg3: (string | SauceBytes)): SauceCall<void>;
   "permitWitnessTransferFrom"(arg0: { "permitted": { "token": (bigint | number); "amount": (bigint | number) }; "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: { "to": (bigint | number); "requestedAmount": (bigint | number) }, arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (string | SauceBytes)): SauceCall<void>;
-  "transferFrom"(arg0: (readonly ({ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) }>)): SauceCall<void>;
   "transferFrom"(arg0: (bigint | number), arg1: (bigint | number), arg2: (bigint | number), arg3: (bigint | number)): SauceCall<void>;
+  "transferFrom"(arg0: (readonly ({ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) })[] | SauceArray<{ "from": (bigint | number); "to": (bigint | number); "amount": (bigint | number); "token": (bigint | number) }>)): SauceCall<void>;
   "permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"(arg0: (bigint | number), arg1: { "details": (readonly ({ "token": (bigint | number); "amount": (bigint | number); "expiration": (bigint | number); "nonce": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number); "expiration": (bigint | number); "nonce": (bigint | number) }>); "spender": (bigint | number); "sigDeadline": (bigint | number) }, arg2: (string | SauceBytes)): SauceCall<void>;
   "permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"(arg0: { "permitted": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: (readonly ({ "to": (bigint | number); "requestedAmount": (bigint | number) })[] | SauceArray<{ "to": (bigint | number); "requestedAmount": (bigint | number) }>), arg2: (bigint | number), arg3: (string | SauceBytes)): SauceCall<void>;
   "permitWitnessTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes32,string,bytes)"(arg0: { "permitted": (readonly ({ "token": (bigint | number); "amount": (bigint | number) })[] | SauceArray<{ "token": (bigint | number); "amount": (bigint | number) }>); "nonce": (bigint | number); "deadline": (bigint | number) }, arg1: (readonly ({ "to": (bigint | number); "requestedAmount": (bigint | number) })[] | SauceArray<{ "to": (bigint | number); "requestedAmount": (bigint | number) }>), arg2: (bigint | number), arg3: (bigint | number), arg4: (string | SauceBytes), arg5: (string | SauceBytes)): SauceCall<void>;
@@ -9180,8 +9180,8 @@ export interface UniswapV4PositionManagerMethods {
 }
 
 export interface UniswapV4UniversalRouterMethods {
-  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<void>;
   "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>), arg2: (bigint | number)): SauceCall<void>;
+  "execute"(arg0: (string | SauceBytes), arg1: (readonly ((string | SauceBytes))[] | SauceArray<(string | SauceBytes)>)): SauceCall<void>;
   "msgSender"(): SauceCall<bigint>;
   "poolManager"(): SauceCall<bigint>;
   "uniswapV3SwapCallback"(arg0: Int256, arg1: Int256, arg2: (string | SauceBytes)): SauceCall<void>;

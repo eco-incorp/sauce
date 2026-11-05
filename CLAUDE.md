@@ -650,8 +650,14 @@ writes each export and its `<X>ABI.json` twin from `test/fixtures/registry-abi/e
 (`--check` exits 1 when stale; `registry-abi.test.ts` runs it): what `abis.ts` already declares is
 kept as written, comments included (each comment inside an entry is hoisted above it), so a program
 that compiles keeps compiling, and the evidence's other functions, events and errors are added,
-sorted by name and argument count. A function no deployment dispatches is not added. What cannot be
-exposed is left out and listed, with why, in the generated `test/fixtures/registry-abi/omitted.json`,
+sorted by name and argument count — but for a name's overloads the registry declared before it took
+full ABIs, which come first in their order then (`test/fixtures/registry-abi/baseline-order.json`,
+main's twins at 92af3e34, written once): a lookup by name with no argument count (`methodOf`,
+`selectorOf`, `abi.find` by name) takes a name's first overload, so `selectorOf(router, "execute")`
+stays `0x3593564c` beside the added `execute(bytes,bytes[])`; `registry-default-overload.test.ts`
+holds every export, twin, descriptor and chain view to it. A function no deployment dispatches is
+not added. What cannot be exposed is left out and listed, with why, in the generated
+`test/fixtures/registry-abi/omitted.json`,
 which the registry's generated documents render: a second overload of one name and argument count
 (a call picks its overload by argument count; the registry's is kept, else the one `overloads`
 names, else the most dispatched), overloads mixing reads and writes, a name the SDK reads as its own

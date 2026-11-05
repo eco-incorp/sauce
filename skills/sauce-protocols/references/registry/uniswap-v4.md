@@ -195,8 +195,8 @@ Left out of this ABI, though its deployments declare them:
 
 `import UniswapV4UniversalRouterABI from "./protocols/uniswap-v4/UniswapV4UniversalRouterABI.json";` Speaks for: universalRouter. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `UniswapV4` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `execute(bytes commands, bytes[] inputs) payable`
 - `execute(bytes commands, bytes[] inputs, uint256 deadline) payable`
+- `execute(bytes commands, bytes[] inputs) payable`
 - `msgSender() view returns (address)`
 - `poolManager() view returns (address)`
 - `uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes data)`

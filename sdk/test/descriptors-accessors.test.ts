@@ -59,7 +59,7 @@ describe("descriptors accessors: the motivating path", () => {
       }),
     );
     expect(() => invoke(router, "execute", "0x00")).toThrow(
-      "uniswap-v4.UniversalRouter.execute takes 2 or 3 arguments, got 1",
+      "uniswap-v4.UniversalRouter.execute takes 3 or 2 arguments, got 1",
     );
   });
 
@@ -68,7 +68,7 @@ describe("descriptors accessors: the motivating path", () => {
     expect(methodOf(router, "execute", 2)?.selector).toBe("0x24856bc3");
     expect(methodOf(router, "execute", 3)?.selector).toBe("0x3593564c");
     expect(methodOf(router, "execute", 1)).toBeUndefined();
-    expect(selectorOf(router, "execute")).toBe("0x24856bc3");
+    expect(selectorOf(router, "execute")).toBe("0x3593564c");
   });
 
   it("`on(...)` (the import-based front door) is equivalent to chainContracts(...)", () => {

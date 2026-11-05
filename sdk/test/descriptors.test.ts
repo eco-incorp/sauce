@@ -28,14 +28,14 @@ describe("descriptors: golden selectors", () => {
     expect(selectorOf(d, "transfer")).toBe("0xa9059cbb");
   });
 
-  it("correct: aave-v3.Pool.supply (the four-argument overload; L2 pools also run supply(bytes32))", () => {
+  it("correct: aave-v3.Pool.supply", () => {
     const d = getDescriptor("aave-v3", "Pool")!;
-    expect(selectorOf(d, "supply", 4)).toBe("0x617ba037");
+    expect(selectorOf(d, "supply")).toBe("0x617ba037");
   });
 
-  it("correct: uniswap-v4.UniversalRouter.execute (with its deadline)", () => {
+  it("correct: uniswap-v4.UniversalRouter.execute", () => {
     const d = getDescriptor("uniswap-v4", "UniversalRouter")!;
-    expect(selectorOf(d, "execute", 3)).toBe("0x3593564c");
+    expect(selectorOf(d, "execute")).toBe("0x3593564c");
   });
 
   it("correct: uniswap-v3.Factory.getPool (uint24 fee, the deployed selector)", () => {

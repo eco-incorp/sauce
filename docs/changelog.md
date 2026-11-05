@@ -120,7 +120,10 @@ nothing moves.
   `BalancerV2.Vault.queryBatchSwap(…)`, `MorphoBlue.Morpho.idToMarketParams(id)`), with no ABI
   file of its own. Only what the SDK cannot expose is left out, such as the second of two overloads
   that take the same number of arguments or a name the SDK reads as its own; each protocol's
-  reference page lists what its ABIs leave out.
+  reference page lists what its ABIs leave out. A name that gained overloads keeps the ones it had
+  first, so a lookup without an argument count is unchanged: `selectorOf(router, "execute")` is
+  still `0x3593564c` beside the new `execute(bytes,bytes[])`, and `AaveV3.Pool`'s `supply` still the
+  four-argument one beside the L2 `supply(bytes32)`.
 - **Added** (EVM): **new contracts.** `AaveV3.PoolAddressesProvider`, an address only before, has
   its ABI; `AaveV3.Oracle` is new, and so are the `AaveV3.AToken` and `AaveV3.VariableDebtToken`
   interfaces, `CompoundV3.CometRewards`, the `MorphoBlue.Oracle` interface and the `Pendle.Market`

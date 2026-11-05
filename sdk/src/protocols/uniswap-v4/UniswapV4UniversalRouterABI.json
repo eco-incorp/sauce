@@ -12,6 +12,10 @@
         {
           "name": "inputs",
           "type": "bytes[]"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
         }
       ],
       "outputs": []
@@ -28,10 +32,6 @@
         {
           "name": "inputs",
           "type": "bytes[]"
-        },
-        {
-          "name": "deadline",
-          "type": "uint256"
         }
       ],
       "outputs": []

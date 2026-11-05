@@ -34,18 +34,6 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "args",
-          "type": "bytes32"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "borrow",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
           "name": "asset",
           "type": "address"
         },
@@ -64,6 +52,18 @@
         {
           "name": "onBehalfOf",
           "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "borrow",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "args",
+          "type": "bytes32"
         }
       ],
       "outputs": []
@@ -978,22 +978,6 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "args1",
-          "type": "bytes32"
-        },
-        {
-          "name": "args2",
-          "type": "bytes32"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "liquidationCall",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
           "name": "collateralAsset",
           "type": "address"
         },
@@ -1012,6 +996,22 @@
         {
           "name": "receiveAToken",
           "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "liquidationCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "args1",
+          "type": "bytes32"
+        },
+        {
+          "name": "args2",
+          "type": "bytes32"
         }
       ],
       "outputs": []
@@ -1087,8 +1087,20 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "args",
-          "type": "bytes32"
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "interestRateMode",
+          "type": "uint256"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
         }
       ],
       "outputs": [
@@ -1104,20 +1116,8 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "asset",
-          "type": "address"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "interestRateMode",
-          "type": "uint256"
-        },
-        {
-          "name": "onBehalfOf",
-          "type": "address"
+          "name": "args",
+          "type": "bytes32"
         }
       ],
       "outputs": [
@@ -1403,18 +1403,6 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "args",
-          "type": "bytes32"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "supply",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
           "name": "asset",
           "type": "address"
         },
@@ -1429,6 +1417,18 @@
         {
           "name": "referralCode",
           "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "supply",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "args",
+          "type": "bytes32"
         }
       ],
       "outputs": []
@@ -1547,8 +1547,16 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "args",
-          "type": "bytes32"
+          "name": "asset",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
         }
       ],
       "outputs": [
@@ -1564,16 +1572,8 @@
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "asset",
-          "type": "address"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "to",
-          "type": "address"
+          "name": "args",
+          "type": "bytes32"
         }
       ],
       "outputs": [

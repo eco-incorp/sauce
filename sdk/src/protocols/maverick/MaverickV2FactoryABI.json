@@ -340,6 +340,14 @@
       "stateMutability": "view",
       "inputs": [
         {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
           "name": "startIndex",
           "type": "uint256"
         },
@@ -360,14 +368,6 @@
       "type": "function",
       "stateMutability": "view",
       "inputs": [
-        {
-          "name": "tokenA",
-          "type": "address"
-        },
-        {
-          "name": "tokenB",
-          "type": "address"
-        },
         {
           "name": "startIndex",
           "type": "uint256"

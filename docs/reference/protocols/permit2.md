@@ -108,8 +108,8 @@ function main() {
 - `permit(address owner, ((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permitSingle, bytes signature)`
 - `permitTransferFrom(((address token, uint256 amount) permitted, uint256 nonce, uint256 deadline) permit, (address to, uint256 requestedAmount) transferDetails, address owner, bytes signature)`
 - `permitWitnessTransferFrom(((address token, uint256 amount) permitted, uint256 nonce, uint256 deadline) permit, (address to, uint256 requestedAmount) transferDetails, address owner, bytes32 witness, string witnessTypeString, bytes signature)`
-- `transferFrom((address from, address to, uint160 amount, address token)[] transferDetails)`
 - `transferFrom(address from, address to, uint160 amount, address token)`
+- `transferFrom((address from, address to, uint160 amount, address token)[] transferDetails)`
 
 Left out of this ABI by name, and called by their signature through the namespace:
 

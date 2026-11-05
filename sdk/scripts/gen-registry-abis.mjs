@@ -77,6 +77,8 @@ const { CANONICAL_CHAINS } = load("src/chains/canonical.ts");
 const { listProtocols } = load("src/protocols/index.ts");
 const targets = JSON.parse(readFileSync(join(FIXTURES, "targets.json"), "utf8")).protocols;
 const evidence = JSON.parse(readFileSync(join(FIXTURES, "evidence.json"), "utf8"));
+/** `<slug>.<Export>` -> the functions it declared before the registry took full ABIs, in order. */
+const BASELINE = JSON.parse(readFileSync(join(FIXTURES, "baseline-order.json"), "utf8")).exports;
 const reference = readReference();
 const evmChainIds = new Set(CANONICAL_CHAINS.filter((c) => c.kind === "evm").map((c) => c.id));
 
@@ -489,8 +491,23 @@ function fullAbi(slug, exportName, today, target, contracts) {
     }
   }
 
+  // A name's overloads the registry declared before it took full ABIs come first, in their order
+  // then (`baseline-order.json`), ahead of any it added: a lookup of the name with no argument
+  // count (`methodOf`, `selectorOf`) finds the overload it found then.
+  const baseline = BASELINE[`${slug}.${exportName}`] ?? [];
+  const before = new Map(baseline.map((sig, at) => [sig, at]));
+  for (const sig of baseline) {
+    if (!functions.some((f) => signature(f) === sig)) {
+      fail(
+        `${slug}.${exportName}: ${sig}, which it declared before, is no longer among its functions`,
+      );
+    }
+  }
+  const rankOf = (item) =>
+    item.type === "function" ? (before.get(signature(item)) ?? Infinity) : Infinity;
   const byOrder = (a, b) =>
     a.name.localeCompare(b.name) ||
+    rankOf(a) - rankOf(b) ||
     (a.inputs?.length ?? 0) - (b.inputs?.length ?? 0) ||
     signature(a).localeCompare(signature(b));
   const items = [
