@@ -1,6 +1,244 @@
 {
   "abi": [
     {
+      "name": "allowance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "balance",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "clear",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "currency",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "collectProtocolFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "currency",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountCollected",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "donate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        },
+        {
+          "name": "hookData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "delta",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "extsload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "extsload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "startSlot",
+          "type": "bytes32"
+        },
+        {
+          "name": "nSlots",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]"
+        }
+      ]
+    },
+    {
+      "name": "exttload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "initialize",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -44,65 +282,45 @@
       ]
     },
     {
-      "name": "swap",
+      "name": "isOperator",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
       "inputs": [
         {
-          "name": "key",
-          "type": "tuple",
-          "components": [
-            {
-              "name": "currency0",
-              "type": "address"
-            },
-            {
-              "name": "currency1",
-              "type": "address"
-            },
-            {
-              "name": "fee",
-              "type": "uint24"
-            },
-            {
-              "name": "tickSpacing",
-              "type": "int24"
-            },
-            {
-              "name": "hooks",
-              "type": "address"
-            }
-          ]
+          "name": "owner",
+          "type": "address"
         },
         {
-          "name": "params",
-          "type": "tuple",
-          "components": [
-            {
-              "name": "zeroForOne",
-              "type": "bool"
-            },
-            {
-              "name": "amountSpecified",
-              "type": "int256"
-            },
-            {
-              "name": "sqrtPriceLimitX96",
-              "type": "uint160"
-            }
-          ]
-        },
-        {
-          "name": "hookData",
-          "type": "bytes"
+          "name": "operator",
+          "type": "address"
         }
       ],
       "outputs": [
         {
-          "name": "delta",
-          "type": "int256"
+          "name": "isOperator",
+          "type": "bool"
         }
       ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
     },
     {
       "name": "modifyLiquidity",
@@ -174,42 +392,750 @@
       ]
     },
     {
-      "name": "extsload",
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeController",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeesAccrued",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "slot",
-          "type": "bytes32"
+          "name": "currency",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setOperator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
         }
       ],
       "outputs": [
         {
           "name": "",
-          "type": "bytes32"
+          "type": "bool"
         }
       ]
     },
     {
-      "name": "extsload",
+      "name": "setProtocolFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "name": "newProtocolFee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setProtocolFeeController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "controller",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "settle",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "settleFor",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "supportsInterface",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "startSlot",
-          "type": "bytes32"
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address"
+            }
+          ]
         },
         {
-          "name": "nSlots",
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "zeroForOne",
+              "type": "bool"
+            },
+            {
+              "name": "amountSpecified",
+              "type": "int256"
+            },
+            {
+              "name": "sqrtPriceLimitX96",
+              "type": "uint160"
+            }
+          ]
+        },
+        {
+          "name": "hookData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "delta",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "sync",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "currency",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "take",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "currency",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
           "type": "uint256"
         }
       ],
       "outputs": [
         {
           "name": "",
-          "type": "bytes32[]"
+          "type": "bool"
         }
       ]
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unlock",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "updateDynamicLPFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "currency0",
+              "type": "address"
+            },
+            {
+              "name": "currency1",
+              "type": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24"
+            },
+            {
+              "name": "hooks",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "name": "newDynamicLPFee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "id",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Donate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialize",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "currency0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "currency1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "indexed": false
+        },
+        {
+          "name": "hooks",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160",
+          "indexed": false
+        },
+        {
+          "name": "tick",
+          "type": "int24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ModifyLiquidity",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tickLower",
+          "type": "int24",
+          "indexed": false
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24",
+          "indexed": false
+        },
+        {
+          "name": "liquidityDelta",
+          "type": "int256",
+          "indexed": false
+        },
+        {
+          "name": "salt",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OperatorSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProtocolFeeControllerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "protocolFeeController",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProtocolFeeUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "protocolFee",
+          "type": "uint24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Swap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "int128",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "int128",
+          "indexed": false
+        },
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160",
+          "indexed": false
+        },
+        {
+          "name": "liquidity",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "tick",
+          "type": "int24",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "id",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AlreadyUnlocked",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CurrenciesOutOfOrderOrEqual",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currency0",
+          "type": "address"
+        },
+        {
+          "name": "currency1",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CurrencyNotSettled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DelegateCallNotAllowed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCaller",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ManagerLocked",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MustClearExactPositiveDelta",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NonzeroNativeValue",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PoolNotInitialized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ProtocolFeeCurrencySynced",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ProtocolFeeTooLarge",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "SwapAmountCannotBeZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TickSpacingTooLarge",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        }
+      ]
+    },
+    {
+      "name": "TickSpacingTooSmall",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        }
+      ]
+    },
+    {
+      "name": "UnauthorizedDynamicLPFeeUpdate",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

@@ -63,7 +63,6 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
-import { toFunctionSelector } from "viem";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
@@ -71,8 +70,10 @@ export const SKILLS_DIR = join(SDK, "..", "skills");
 /** The manual's generated reference. */
 export const DOCS_REFERENCE_DIR = join(SDK, "..", "docs", "reference");
 const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
-/** What each deployment's code dispatches, captured from the chain: a selector the evidence records
- *  as `null` is one the deployed code does not dispatch, so a call to it reverts there. */
+/** What each export's deployments declare that its ABI leaves out, and why
+ *  (`scripts/gen-registry-abis.mjs`). */
+const OMITTED = join(SDK, "test", "fixtures", "registry-abi", "omitted.json");
+/** What each captured contract dispatches, selector by selector (`scripts/capture-registry-abi.mjs`). */
 const EVIDENCE = join(SDK, "test", "fixtures", "registry-abi", "evidence.json");
 /** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
 const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
@@ -310,13 +311,59 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  // Per deployment and ABI export, the selectors its code dispatches (and `null` for those it lacks).
-  const dispatched = new Map(
-    JSON.parse(readFileSync(EVIDENCE, "utf8")).instances.map((i) => [
-      `${i.protocol}|${i.abi}|${i.chainId}|${i.address.toLowerCase()}`,
-      i.selectors ?? {},
-    ]),
+  const omittedFile = JSON.parse(readFileSync(OMITTED, "utf8"));
+  const omitted = omittedFile.exports;
+  // An interface binds to whatever address a program gives it, so the contracts it reaches can
+  // differ. Read from the captured instances of each interface export: one whose instances do not
+  // all dispatch the same of the functions it lists is flagged. Only the listed functions count:
+  // the evidence records every function any instance declares, and a `standard` or `common`
+  // interface lists only those every instance runs.
+  const listedSelectors = new Map(
+    sdk.contracts
+      .listInterfaces()
+      .map((d) => [`${d.protocol}|${d.abiExport}`, d.methods.map((m) => m.selector.toLowerCase())]),
   );
+  const dispatched = new Map(); // `${slug}|${export}` -> per instance, the listed selectors it runs
+  for (const instance of JSON.parse(readFileSync(EVIDENCE, "utf8")).instances) {
+    const key = `${instance.protocol}|${instance.abi}`;
+    const listed = listedSelectors.get(key);
+    if (listed === undefined) continue;
+    const run = listed.filter((selector) => (instance.selectors[selector] ?? null) !== null);
+    dispatched.set(key, [...(dispatched.get(key) ?? []), new Set(run)]);
+  }
+  const instancesDiffer = (slug, name) => {
+    const sets = dispatched.get(`${slug}|${name}`) ?? [];
+
+    return sets.some((set) => set.size !== sets[0].size || [...set].some((s) => !sets[0].has(s)));
+  };
+  // Per role deployment, the functions of its ABI it does not run as declared: withheld on its
+  // chain, so a program compiled for that chain cannot call them; and those it declares otherwise,
+  // which a program compiled for that chain calls as it declares them (`contracts.generated.ts`).
+  const withheld = new Map();
+  const shapes = new Map();
+  // The functions a contract's ABI leaves out for their name or arity alone, which a program calls
+  // by their signature (`ContractLink.bySignature`): the contracts of each export that carry them,
+  // and per role deployment those its chain does not run as declared.
+  const bySignatureLinks = new Map();
+  const bySignatureAbsent = new Map();
+  for (const link of sdk.contracts.CONTRACT_LINKS) {
+    for (const [chainId, signatures] of Object.entries(link.withheld ?? {})) {
+      withheld.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, signatures);
+    }
+    for (const [chainId, functions] of Object.entries(link.shapes ?? {})) {
+      shapes.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, functions);
+    }
+    for (const [chainId, signatures] of Object.entries(link.bySignatureWithheld ?? {})) {
+      bySignatureAbsent.set(
+        `${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`,
+        signatures,
+      );
+    }
+    if ((link.bySignature ?? []).length > 0) {
+      const key = `${link.protocol}|${link.abiExport}`;
+      bySignatureLinks.set(key, [...(bySignatureLinks.get(key) ?? []), link]);
+    }
+  }
   const globals = globalsIndex(sdk, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
@@ -367,22 +414,32 @@ export async function skillsReferences(api, documented) {
         if (typeof address !== "string") continue;
         const named = contracts.find((c) => c.address.toLowerCase() === address.toLowerCase());
         const abi = exportFor(role, deployment.chainId);
-        // The ABI's functions this deployment's code does not dispatch: a bridged token without the
-        // L1 token's functions, say. The page says so beside the deployment.
-        const selectors = dispatched.get(
-          `${info.slug}|${abi}|${deployment.chainId}|${address.toLowerCase()}`,
-        );
+        // The ABI's functions this deployment does not run as declared: a bridged token without
+        // the L1 token's functions, an older release. The page says so beside the deployment.
         const absent =
-          abi === undefined || selectors === undefined
+          abi === undefined
             ? []
             : [
                 ...new Set(
-                  exports
-                    .find((e) => e.name === abi)
-                    .functions.filter((f) => selectors[toFunctionSelector(f)] === null)
-                    .map((f) => f.name),
+                  (withheld.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map(
+                    (signature) => signature.slice(0, signature.indexOf("(")),
+                  ),
                 ),
               ];
+        // The ABI's functions this deployment declares otherwise: an older release returning
+        // fewer fields. The page gives its declaration beside the deployment.
+        const declared =
+          abi === undefined
+            ? []
+            : (shapes.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map((f) => ({
+                name: f.name,
+                text: functionText(f),
+              }));
+        // The ABI's functions called by signature that this deployment does not run as declared.
+        const bySignatureWithheld =
+          abi === undefined
+            ? []
+            : (bySignatureAbsent.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []);
         deployed.push({
           chain: chain.slug,
           role,
@@ -390,6 +447,8 @@ export async function skillsReferences(api, documented) {
           namespace: named === undefined ? undefined : `${namespace.name}.${named.name}`,
           abi,
           absent,
+          declared,
+          bySignatureWithheld,
         });
       }
     }
@@ -414,6 +473,44 @@ export async function skillsReferences(api, documented) {
         name: e.name,
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
+        // What the deployments declare that this ABI leaves out, and why: the functions left out
+        // for their name or arity alone (they carry their ABI item) are called by signature.
+        omitted: (omitted[`${info.slug}.${e.name}`] ?? []).filter((o) => o.function === undefined),
+        bySignature: (omitted[`${info.slug}.${e.name}`] ?? [])
+          .filter((o) => o.function !== undefined)
+          .map((o) => {
+            const carrying = (bySignatureLinks.get(`${info.slug}|${e.name}`) ?? []).filter((l) =>
+              l.bySignature.some(
+                (f) => `${f.name}(${(f.inputs ?? []).map(canonicalOf).join(",")})` === o.signature,
+              ),
+            );
+            if (carrying.length === 0 || namespace === undefined) {
+              throw new Error(
+                `${info.slug}.${e.name}: ${o.signature} is called by signature, but no contract of a namespace carries it`,
+              );
+            }
+
+            return {
+              signature: o.signature,
+              text: functionText(o.function),
+              reason: o.reason,
+              // How a program calls it on each contract of the export: a singleton by its
+              // namespace member, an interface bound to the address it is given.
+              spellings: carrying.map((l) =>
+                l.kind === "interface"
+                  ? `${namespace.name}.${l.contract}(<address>)["${o.signature}"](…)`
+                  : `${namespace.name}.${l.contract}["${o.signature}"](…)`,
+              ),
+            };
+          }),
+        // Deployments whose verified ABI is carried, in part, from an earlier capture.
+        partial: (omittedFile.partial?.[`${info.slug}.${e.name}`] ?? []).flatMap((c) => {
+          const [chainId, address] = c.deployment.split(":");
+          const chain = byId.get(Number(chainId));
+          return chain === undefined ? [] : [{ chain: chain.slug, address, date: c.date }];
+        }),
+        // An interface export whose captured instances dispatch different functions.
+        instancesDiffer: instancesDiffer(info.slug, e.name),
         functions: e.functions.map((f) => ({
           text: functionText(f),
           returned: returnedNote(sdk, info.slug, e.name, f),
@@ -868,7 +965,10 @@ const spelling = (d) =>
     : d.abi !== undefined
       ? `${code(`${d.abi}.at(${d.address})`)}`
       : "no registry ABI") +
-  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "");
+  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "") +
+  (d.declared?.length
+    ? `; declared otherwise by this deployment: ${d.declared.map((f) => code(f.name)).join(", ")}`
+    : "");
 
 function renderGlobals(data) {
   const { globals } = data;
@@ -1740,17 +1840,100 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         (e.served
           ? `\`import ${e.name} from "./protocols/${p.slug}/${e.name}.json";\``
           : "Not served for import: a program calls it by selector.") +
-          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : ""),
+          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : "") +
+          // An import is the registry's ABI, the same on every chain: only a namespace name is
+          // held to the chain's deployment.
+          (e.served && e.roles.length
+            ? " The import is the registry's ABI for this contract, the functions listed here" +
+              (e.omitted.length || e.bySignature.length
+                ? " and none of those left out below"
+                : "") +
+              ": the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment" +
+              (p.namespace
+                ? `. Call the contract through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.`
+                : ".")
+            : ""),
         "",
         ...e.functions.map((f) => `- \`${f.text}\`${f.returned}`),
         "",
+        // An interface reaches whatever contract a program binds it to, and they differ.
+        ...(e.instancesDiffer
+          ? [
+              "Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.",
+              "",
+            ]
+          : []),
         // Where a deployment of a role this ABI speaks for lacks some of its functions.
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
           .flatMap((d) => [
-            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. Do not call them there: the call does not run the function, and whether it reverts is up to that code.`,
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them or does not declare them as listed here: ${d.absent.map(code).join(", ")}. Do not call them there: a program compiled for ${chainsBySlug.get(d.chain).name} is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.`,
             "",
           ]),
+        // Where a deployment of a role this ABI speaks for declares some of its functions otherwise.
+        ...p.deployed
+          .filter((d) => d.abi === e.name && d.declared.length)
+          .flatMap((d) => {
+            const chain = chainsBySlug.get(d.chain).name;
+            return [
+              `Declared otherwise by ${chain}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), and called as it declares them by a program compiled for ${chain}${p.namespace ? ` through the \`${p.namespace.name}\` namespace` : ""}:`,
+              "",
+              ...d.declared.map((f) => `- \`${f.text}\``),
+              "",
+              (e.served
+                ? `The import above declares them as listed for this ABI, which that deployment does not run as declared${p.namespace ? `: on ${chain}, call them through the namespace` : ""}.`
+                : `That deployment does not run them as listed for this ABI.`) +
+                (site === DOCS_SITE
+                  ? ` The TypeScript SDK's types declare them as listed for this ABI too, while a call made on ${chain} through its accessor decodes the deployment's declaration, so a result field the two do not share is absent at run time.`
+                  : ""),
+              "",
+            ];
+          }),
+        // What a program calls by signature: the functions this ABI leaves out for their name or
+        // arity alone, and the deployments that do not run each.
+        ...(e.bySignature.length
+          ? [
+              "Left out of this ABI by name, and called by their signature through the namespace:",
+              "",
+              ...e.bySignature.map((o) => {
+                const absent = p.deployed.filter(
+                  (d) => d.abi === e.name && d.bySignatureWithheld.includes(o.signature),
+                );
+                const where = absent.map(
+                  (d) =>
+                    `${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)})`,
+                );
+                const chains = [...new Set(absent.map((d) => chainsBySlug.get(d.chain).name))];
+
+                return (
+                  `- ${o.spellings.map(code).join(", ")}: \`${o.text}\`; ${o.reason}.` +
+                  (absent.length
+                    ? ` Not run by ${where.join(", ")}: a program compiled for ${chains.join(", ")} is refused it.`
+                    : "")
+                );
+              }),
+              "",
+            ]
+          : []),
+        // What the deployments declare that this ABI leaves out, and why.
+        ...(e.omitted.length
+          ? [
+              "Left out of this ABI, though its deployments declare them:",
+              "",
+              // The name apart from its parameter types: a name the SDK reserves is not a call.
+              ...e.omitted.map((o) => {
+                const at = o.signature.indexOf("(");
+                return `- \`${o.signature.slice(0, at)}\` taking \`${o.signature.slice(at)}\`: ${o.reason}.`;
+              }),
+              "",
+            ]
+          : []),
+        // A deployment whose verified ABI no source could give, kept from an earlier capture that
+        // took only what the registry declared then: this ABI may lack what it runs.
+        ...e.partial.flatMap((c) => [
+          `On ${chainsBySlug.get(c.chain).name}, no source could give the verified ABI of ${addressCode(chainsBySlug.get(c.chain).kind, c.address)} when the registry was checked, so what it declares is kept from a check of ${c.date} that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.`,
+          "",
+        ]),
       );
     }
   }

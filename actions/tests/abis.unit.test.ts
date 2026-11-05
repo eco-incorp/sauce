@@ -14,7 +14,6 @@ import {
 } from "../src/abis.js";
 import { CHAIN_KEY_SET, NAMESPACE_KEYS } from "../../sdk/dist/routes/accessor-index.js";
 import { BalancerV2VaultABI } from "../../sdk/dist/protocols/balancer-v2/index.js";
-import { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
 import { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
 
 describe("action ABI bindings", () => {
@@ -78,18 +77,21 @@ describe("action ABI bindings", () => {
         }
       }
     }
-    assert.equal(fromSdk, 25, "a registry-sourced method was added or dropped — update this count");
+    assert.equal(fromSdk, 27, "a registry-sourced method was added or dropped — update this count");
   });
 
   it("the methods the registry declares with their deployed types come from it, selector unchanged", () => {
     // Each was a local fragment while the registry spelled it differently or lacked it — the
     // six-argument RouterNG overload missing, Stargate's `to` a `uint256`, Permit2's expiration a
-    // `uint64`. The selectors are the deployed ones, dispatched in `sdk/test/fixtures/registry-abi`.
+    // `uint64`, DODO's V1 entry point outside the trimmed proxy ABI. The selectors are the deployed
+    // ones, dispatched in `sdk/test/fixtures/registry-abi`.
     const fromRegistry: [BindingName, string, string, string, string][] = [
       ["ICurveRouterNG", "exchange", "curve", "CurveRouterNGABI", "0xc872a3c5"],
       ["IBalancerV2Vault", "batchSwap", "balancer-v2", "BalancerV2VaultABI", "0x945bcec9"],
       ["IStargatePool", "send", "stargate", "StargatePoolABI", "0xc7c7f5b3"],
       ["IPermit2", "approve", "permit2", "Permit2ABI", "0x87517c45"],
+      ["IDodoProxy", "dodoSwapV1", "dodo", "DODOV2ProxyABI", "0x0dd4ebd9"],
+      ["IStargatePool", "quoteSend", "stargate", "StargatePoolABI", "0x3b6f743b"],
     ];
     for (const [binding, method, protocol, abiExport, selector] of fromRegistry) {
       const bound = bindingMethods(binding)[method]!;
@@ -129,23 +131,6 @@ describe("action ABI bindings", () => {
       );
       assert.deepEqual(bound.fn.outputs, [], `${binding}.${method} decodes nothing`);
       assert.equal(bound.fn.stateMutability, declared.stateMutability, `${binding}.${method}`);
-    }
-  });
-
-  it("a fragment is local only while the registry ABI for its contract lacks the function", () => {
-    // When one of these starts passing the check, the registry gained the function: bind it there.
-    const registryAbiFor: [BindingName, string, readonly unknown[]][] = [
-      ["IDodoProxy", "dodoSwapV1", DODOV2ProxyABI],
-      ["IStargatePool", "quoteSend", StargatePoolABI],
-    ];
-    for (const [binding, method, abi] of registryAbiFor) {
-      const bound = bindingMethods(binding)[method]!;
-      assert.equal(bound.source.kind, "local", `${binding}.${method}`);
-      const signature = canonicalSignature(bound.fn);
-      const declared = (abi as AbiFunction[]).filter(
-        (item) => item.type === "function" && canonicalSignature(item) === signature,
-      );
-      assert.deepEqual(declared, [], `the registry now declares ${signature}`);
     }
   });
 

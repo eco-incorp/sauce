@@ -1,6 +1,59 @@
 {
   "abi": [
     {
+      "name": "defaultHook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "defaultIsm",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "delivered",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_id",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "deployedBlock",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "dispatch",
       "type": "function",
       "stateMutability": "payable",
@@ -22,6 +75,190 @@
         {
           "name": "",
           "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "dispatch",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "hookMetadata",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "dispatch",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "hook",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        },
+        {
+          "name": "_defaultIsm",
+          "type": "address"
+        },
+        {
+          "name": "_defaultHook",
+          "type": "address"
+        },
+        {
+          "name": "_requiredHook",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "latestDispatchedId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "localDomain",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "nonce",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "process",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "_message",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "processedAt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_id",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint48"
+        }
+      ]
+    },
+    {
+      "name": "processor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_id",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
         }
       ]
     },
@@ -51,35 +288,289 @@
       ]
     },
     {
-      "name": "process",
-      "type": "function",
-      "stateMutability": "payable",
-      "inputs": [
-        {
-          "name": "_metadata",
-          "type": "bytes"
-        },
-        {
-          "name": "_message",
-          "type": "bytes"
-        }
-      ],
-      "outputs": []
-    },
-    {
-      "name": "delivered",
+      "name": "quoteDispatch",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "_id",
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
           "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "defaultHookMetadata",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "quoteDispatch",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "destinationDomain",
+          "type": "uint32"
+        },
+        {
+          "name": "recipientAddress",
+          "type": "bytes32"
+        },
+        {
+          "name": "messageBody",
+          "type": "bytes"
+        },
+        {
+          "name": "metadata",
+          "type": "bytes"
+        },
+        {
+          "name": "hook",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "fee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "recipientIsm",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_recipient",
+          "type": "address"
         }
       ],
       "outputs": [
         {
           "name": "",
-          "type": "bool"
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "requiredHook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setDefaultHook",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_hook",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultIsm",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_module",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setRequiredHook",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_hook",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "VERSION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "DefaultHookSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "hook",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DefaultIsmSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "module",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Dispatch",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destination",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "message",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DispatchId",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "messageId",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Process",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "origin",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProcessId",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "messageId",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RequiredHookSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "hook",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

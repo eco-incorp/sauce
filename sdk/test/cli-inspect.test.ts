@@ -202,11 +202,37 @@ describe("sauce globals", () => {
     );
     expect(Object.keys(one)).toEqual(["chain", "protocol"]);
     expect((one.protocol as { namespace: string }).namespace).toBe("UniswapV4");
+    // Methods with --protocol, for the namespace it names, as the text lists them.
+    const named = one.protocol as { contracts: Array<{ methods?: unknown[] }> };
+    expect(named.contracts.some((contract) => (contract.methods ?? []).length > 0)).toBe(true);
     const full = json(await sauce("globals", "--chain", "base", "--json"));
     expect((full.defines as Record<string, unknown>).chainId).toBe("8453");
     expect((full.defines as Record<string, unknown>).USDC).toBe(
       "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     );
+    // Everything else lists each contract and interface without its methods.
+    const contracts = (
+      full.protocols as Array<{ contracts: Array<Record<string, unknown>> }>
+    ).flatMap((ns) => ns.contracts);
+    expect(contracts.length).toBeGreaterThan(10);
+    expect(contracts.filter((contract) => "methods" in contract)).toEqual([]);
+    expect(contracts.every((contract) => typeof contract.address === "string")).toBe(true);
+    const interfaces = full.interfaces as Array<Record<string, unknown>>;
+    expect(interfaces.length).toBeGreaterThan(0);
+    expect(interfaces.filter((bound) => "methods" in bound)).toEqual([]);
+    // --protocols with --protocol: the named namespace keeps its methods in the list too.
+    const both = json(
+      await sauce("globals", "--chain", "base", "--protocols", "--protocol", "UniswapV4", "--json"),
+    );
+    const listed = both.protocols as Array<{
+      namespace: string;
+      contracts: Array<Record<string, unknown>>;
+    }>;
+    for (const ns of listed) {
+      expect(ns.contracts.some((contract) => "methods" in contract)).toBe(
+        ns.namespace === "UniswapV4",
+      );
+    }
   });
 
   it("lists Tether's token where it is USDT0 as USDT0, the symbol a program there writes", async () => {
@@ -410,6 +436,8 @@ describe("sauce globals", () => {
     expect(out.interfaces).toEqual([
       expect.objectContaining({ namespace: "Erc4626", name: "Vault", protocol: "erc4626" }),
     ]);
+    const [named] = out.interfaces as Array<{ methods: Array<{ name: string }> }>;
+    expect(named!.methods.map((m) => m.name)).toContain("totalAssets");
     // Every one listed binds and compiles as listed.
     const vault = sourceGlobals("base").interfaces.find((bound) => bound.namespace === "Erc4626")!;
     expect(vault.methods.map((m) => m.name)).toContain("totalAssets");

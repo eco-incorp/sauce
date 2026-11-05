@@ -34,9 +34,37 @@ function main() {
 
 ### `BorrowerOperationsABI`
 
-`import BorrowerOperationsABI from "./protocols/liquity-v1/BorrowerOperationsABI.json";` Speaks for: borrowerOperations.
+`import BorrowerOperationsABI from "./protocols/liquity-v1/BorrowerOperationsABI.json";` Speaks for: borrowerOperations. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `LiquityV1` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `openTrove(uint256 _maxFeePercentage, uint256 _LUSDAmount, address _upperHint, address _lowerHint) payable`
-- `closeTrove()`
+- `_100pct() view returns (uint256)`
+- `activePool() view returns (address)`
+- `addColl(address _upperHint, address _lowerHint) payable`
 - `adjustTrove(uint256 _maxFeePercentage, uint256 _collWithdrawal, uint256 _LUSDChange, bool _isDebtIncrease, address _upperHint, address _lowerHint) payable`
+- `BORROWING_FEE_FLOOR() view returns (uint256)`
+- `CCR() view returns (uint256)`
+- `claimCollateral()`
+- `closeTrove()`
+- `DECIMAL_PRECISION() view returns (uint256)`
+- `defaultPool() view returns (address)`
+- `getCompositeDebt(uint256 _debt) pure returns (uint256)`
+- `getEntireSystemColl() view returns (uint256 entireSystemColl)`
+- `getEntireSystemDebt() view returns (uint256 entireSystemDebt)`
+- `isOwner() view returns (bool)`
+- `lqtyStaking() view returns (address)`
+- `lqtyStakingAddress() view returns (address)`
+- `LUSD_GAS_COMPENSATION() view returns (uint256)`
+- `lusdToken() view returns (address)`
+- `MCR() view returns (uint256)`
+- `MIN_NET_DEBT() view returns (uint256)`
+- `moveETHGainToTrove(address _borrower, address _upperHint, address _lowerHint) payable`
+- `NAME() view returns (string)`
+- `openTrove(uint256 _maxFeePercentage, uint256 _LUSDAmount, address _upperHint, address _lowerHint) payable`
+- `owner() view returns (address)`
+- `PERCENT_DIVISOR() view returns (uint256)`
+- `priceFeed() view returns (address)`
 - `repayLUSD(uint256 _LUSDAmount, address _upperHint, address _lowerHint)`
+- `setAddresses(address _troveManagerAddress, address _activePoolAddress, address _defaultPoolAddress, address _stabilityPoolAddress, address _gasPoolAddress, address _collSurplusPoolAddress, address _priceFeedAddress, address _sortedTrovesAddress, address _lusdTokenAddress, address _lqtyStakingAddress)`
+- `sortedTroves() view returns (address)`
+- `troveManager() view returns (address)`
+- `withdrawColl(uint256 _collWithdrawal, address _upperHint, address _lowerHint)`
+- `withdrawLUSD(uint256 _maxFeePercentage, uint256 _LUSDAmount, address _upperHint, address _lowerHint)`

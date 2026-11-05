@@ -1,12 +1,28 @@
 {
   "abi": [
     {
-      "name": "balanceOf",
+      "name": "addPermanentExemptions",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "accounts",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "allowance",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "account",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
           "type": "address"
         }
       ],
@@ -37,6 +53,686 @@
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "blockUserTransfers",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "accounts",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burnFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "currentPeriodMintedAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "custodyAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "decreaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "subtractedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getCurrentPeriodStartTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNextDailyLimitResetTimestamp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "increaseAllowance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "addedValue",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "admin",
+          "type": "address"
+        },
+        {
+          "name": "lrtConfigAddr",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isPermanentlyExempt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isExempt",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lrtConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "maxMintAmountPerDay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "periodStartTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "recoverFrozenFunds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "reinitialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_periodStartTime",
+          "type": "uint256"
+        },
+        {
+          "name": "_custodyAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "remainingDailyMintLimit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setCustodyAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCustodyAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxMintAmountPerDay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maxMintAmountPerDay",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transfersBlockedUntil",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "blockedUntil",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CustodyAddressUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newCustodyAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FrozenFundsRecovered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MaxMintAmountPerDayUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newMaxMintAmountPerDay",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PeriodStartTimeSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newPeriodStartTime",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PermanentExemptionAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdatedLRTConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "lrtConfig",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UserTransfersBlocked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "until",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddressPermanentlyExempt",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "CallerNotLRTConfigAdmin",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CallerNotLRTConfigAllowedRole",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "CallerNotLRTConfigManager",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CannotPermanentlyExemptBlockedAddress",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "blockedUntil",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "DailyMintLimitExceeded",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currentAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "maxAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "NoActiveTransferBlock",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "PeriodStartTimeShouldBeWithin24Hours",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TransfersBlocked",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "blockedUntil",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ZeroAddressNotAllowed",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

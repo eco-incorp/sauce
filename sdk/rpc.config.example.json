@@ -23,6 +23,9 @@
   "57073": "<your Ink RPC URL>",
   "59144": "<your Linea RPC URL>",
   "81457": "<your Blast RPC URL>",
+  "84532": "<your Ethereum RPC URL>",
   "534352": "<your Scroll RPC URL>",
-  "7777777": "<your Zora RPC URL>"
+  "5042002": "<your Ethereum RPC URL>",
+  "7777777": "<your Zora RPC URL>",
+  "11155111": "<your Ethereum RPC URL>"
 }

@@ -1,4 +1,4 @@
-import type { Address, Hex, Abi, AbiParameter } from "viem";
+import type { Address, Hex, Abi, AbiFunction, AbiParameter } from "viem";
 import type { CanonicalChain, ChainSlug } from "../chains/canonical.js";
 
 /**
@@ -39,7 +39,14 @@ export interface MethodReturn {
 export interface ContractCoverage {
   /** Always "sdk-registry" in v1 — the SDK's own vendored data, never an external ABI source. */
   readonly abiSource: "sdk-registry";
-  /** Every vendored ABI is a curated subset; never "full" in v1. */
+  /**
+   * "partial": the registry ABI is its deployments' full verified ABI less what cannot be exposed
+   * (each export's omissions, with why, are `test/fixtures/registry-abi/omitted.json`); a `standard`
+   * or `common` interface is only what every instance runs; and a chain's `descriptorOn` view also
+   * drops what that chain's deployment does not run (`withheldOn`) and carries what it declares
+   * otherwise as it declares it (`shapesOn`). No shipped record says which exports omit nothing, so
+   * none is claimed "full".
+   */
   readonly completeness: "partial" | "unknown";
   /** "widened" means the selectors computed here will NOT match the deployed contract's real selectors. */
   readonly typeFidelity: "exact" | "widened";
@@ -68,6 +75,31 @@ export interface ContractDescriptor {
   /** Derived via the canonical chain registry, id-ascending. */
   readonly chains: readonly ChainSlug[];
   readonly coverage: ContractCoverage;
+  /** The protocol's default contract, which `<Protocol>.<method>(…)` calls, where the registry
+   *  marks one among several singletons (`ContractLink.default`). */
+  readonly isDefault?: true;
+  /**
+   * Per chain id, the canonical signatures of `abi`'s functions the chain's deployment does not run
+   * as declared (see `ContractLink.withheld`); `{}` when every deployment runs all of it. `abi`
+   * and `methods` are the union over the deployments: `descriptorOn(descriptor, chainId)` is the
+   * chain's own.
+   */
+  readonly withheldOn: Readonly<Record<number, readonly string[]>>;
+  /**
+   * Per chain id, the functions of `abi` the chain's deployment declares otherwise, as it declares
+   * them (see `ContractLink.shapes`); `{}` when none does. `descriptorOn(descriptor, chainId)`
+   * carries each in place of `abi`'s.
+   */
+  readonly shapesOn: Readonly<Record<number, readonly AbiFunction[]>>;
+  /**
+   * The contract's functions its ABI leaves out for their name or arity alone, which a program
+   * calls by full signature only (see `ContractLink.bySignature`); `[]` for most. A chain's
+   * `descriptorOn` view leaves out those its deployment does not run (`bySignatureWithheldOn`).
+   */
+  readonly bySignature: readonly AbiFunction[];
+  /** Per chain id, the signatures of `bySignature` the chain's deployment does not run as declared
+   *  (see `ContractLink.bySignatureWithheld`); `{}` when every deployment runs them all. */
+  readonly bySignatureWithheldOn: Readonly<Record<number, readonly string[]>>;
 }
 
 export interface ResolvedContract {

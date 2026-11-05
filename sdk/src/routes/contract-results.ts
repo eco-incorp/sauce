@@ -36,12 +36,14 @@
  * call that "does not name a function".
  */
 import type { CanonicalChain } from "../chains/canonical.js";
+import { outputAt } from "../descriptors/derive.js";
 import { DESCRIPTORS } from "../descriptors/registry.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
+import { bySignatureHint, methodListing } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
 import {
@@ -96,23 +98,6 @@ interface Binding {
   readonly kind: string;
   readonly init: AstNode;
   readonly index?: number;
-}
-
-/** The output parameter `path` leads to: the one output, or a field of the record returned. */
-function outputAt(method: DescriptorMethod, path: readonly string[]) {
-  const { outputs } = method;
-  if (path.length === 0) return outputs.length === 1 ? outputs[0] : undefined;
-  let fields =
-    outputs.length === 1 && outputs[0]!.type === "tuple"
-      ? (outputs[0] as { components?: typeof outputs }).components
-      : outputs;
-  let found: (typeof outputs)[number] | undefined;
-  for (const name of path) {
-    found = fields?.find((field) => field.name === name);
-    if (found === undefined) return undefined;
-    fields = (found as { components?: typeof outputs }).components;
-  }
-  return found;
 }
 
 /** The registry contracts whose ABI has `method`, the way a program calls each at an address. */
@@ -266,8 +251,10 @@ export function rewriteContractResults(
     const fields =
       whole.path.length === 0 && outputs.length > 1
         ? outputs
-        : (outputAt(whole.method, whole.path) as { components?: typeof outputs } | undefined)
-            ?.components;
+        : (
+            outputAt(whole.method.outputs, whole.path) as
+              { components?: typeof outputs } | undefined
+          )?.components;
     const name = fields?.[binding.index]?.name;
     return name ? { ...whole, path: [...whole.path, name] } : undefined;
   }
@@ -320,10 +307,24 @@ export function rewriteContractResults(
     }
     const call = `${spelled(object)}.${method}(...)`;
     if (!contract.methods.some((m) => m.name === method)) {
-      const methods = [...new Set(contract.methods.map((m) => m.name))].join(", ");
+      const methods = methodListing(
+        contract.methods.map((m) => m.name),
+        method,
+        "its methods",
+      );
+      // A function its ABI leaves out by name is called by signature on the contract bound to the
+      // result, as written by hand.
+      const hint = bySignatureHint(
+        contract.kind === "interface"
+          ? `${named(contract)}(${spelled(object)})`
+          : `${named(contract)}.at(${spelled(object)})`,
+        method,
+        contract,
+      );
       fail(
         `'${call}': ${spelled(object)} is ${isToken(contract) ? "a token" : `a ${named(contract)}`}, ` +
-          `whose ABI has no '${method}' (its methods: ${methods})`,
+          `whose ABI has no '${method}' ${methods}` +
+          (hint === "" ? "" : `.${hint}`),
       );
     }
     const write = isToken(contract) && Object.hasOwn(SAFE_WRITES, method);
@@ -356,7 +357,9 @@ export function rewriteContractResults(
     // A contract the program names or binds is the token pass's holder.
     if (reference(object) !== undefined || bound(object) !== undefined) return;
     const output = result(object);
-    if (output === undefined || outputAt(output.method, output.path)?.type !== "address") return;
+    if (output === undefined || outputAt(output.method.outputs, output.path)?.type !== "address") {
+      return;
+    }
     // Over the whole member, as `token-rewrite.ts#balanceSplices` does: a parenthesized receiver's
     // `(` and `)` lie outside `object`, between it and the member's own bounds.
     const span = n.end - n.start;
@@ -393,7 +396,7 @@ export function rewriteContractResults(
       }
       return;
     }
-    if (outputAt(output.method, output.path)?.type !== "address") return;
+    if (outputAt(output.method.outputs, output.path)?.type !== "address") return;
     const spellings = spellingsOf(method, output.owner.protocol);
     fail(
       `'${spelled(object)}.${method}(...)': ${spelled(object)} is an address, and the registry does ` +

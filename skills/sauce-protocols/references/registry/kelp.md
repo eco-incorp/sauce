@@ -34,14 +34,86 @@ function main() {
 
 ### `LRTDepositPoolABI`
 
-`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool.
+`import LRTDepositPoolABI from "./protocols/kelp/LRTDepositPoolABI.json";` Speaks for: lrtDepositPool. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Kelp` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `addNodeDelegatorContractToQueue(address[] nodeDelegatorContracts)`
 - `depositAsset(address asset, uint256 depositAmount, uint256 minRSETHAmountExpected, string referralId)`
+- `depositETH(uint256 minRSETHAmountExpected, string referralId) payable`
+- `getAssetCurrentLimit(address asset) view returns (uint256)`
+- `getAssetDistributionData(address asset) view returns (uint256 assetLyingInDepositPool, uint256 assetLyingInNDCs, uint256 assetStakedInEigenLayer, uint256 assetUnstakingFromEigenLayer, uint256 assetLyingInConverter, uint256 assetLyingUnstakingVault)`
+- `getETHDistributionData() view returns (uint256 ethLyingInDepositPool, uint256 ethLyingInNDCs, uint256 ethStakedInEigenLayer, uint256 ethUnstakingFromEigenLayer, uint256 ethLyingInConverter, uint256 ethLyingInUnstakingVault)`
+- `getNodeDelegatorQueue() view returns (address[])`
 - `getRsETHAmountToMint(address asset, uint256 amount) view returns (uint256 rsethAmountToMint)`
+- `getSwapAssetForETHReturnAmount(address fromAsset, uint256 fromAssetAmount) view returns (uint256 returnAmount)`
+- `getSwapETHToAssetReturnAmount(address toAsset, uint256 ethAmountToSend) view returns (uint256 returnAmount)`
+- `getTotalAssetDeposits(address asset) view returns (uint256 totalAssetDeposit)`
+- `initialize(address lrtConfigAddr)`
+- `isNodeDelegator(address) view returns (uint256)`
+- `lrtConfig() view returns (address)`
+- `maxApproveToLRTConverter(address asset)`
+- `maxNegligibleAmount() view returns (uint256)`
+- `maxNodeDelegatorLimit() view returns (uint256)`
+- `minAmountToDeposit() view returns (uint256)`
+- `nodeDelegatorQueue(uint256) view returns (address)`
+- `pause()`
+- `paused() view returns (bool)`
+- `receiveFromLRTConverter() payable`
+- `receiveFromNodeDelegator() payable`
+- `receiveFromRewardReceiver() payable`
+- `removeManyNodeDelegatorContractsFromQueue(address[] nodeDelegatorContracts)`
+- `removeNodeDelegatorContractFromQueue(address nodeDelegatorAddress)`
+- `revokeApproveToLRTConverter(address asset)`
+- `setMaxNegligibleAmount(uint256 maxNegligibleAmount_)`
+- `setMinAmountToDeposit(uint256 minAmountToDeposit_)`
+- `stakeEthForStETH(address referral, uint256 ethAmount)`
+- `swapAssetForETHWithinDepositPool(address fromAsset, uint256 fromAssetAmount, uint256 minETHAmountExpected)`
+- `swapETHForAssetWithinDepositPool(address toAsset, uint256 minToAssetAmount) payable`
+- `transferAssetToLRTUnstakingVault(address asset, uint256 amount)`
+- `transferAssetToNodeDelegator(uint256 ndcIndex, address asset, uint256 amount)`
+- `transferETHToLRTUnstakingVault(uint256 amount)`
+- `transferETHToNodeDelegator(uint256 ndcIndex, uint256 amount)`
+- `unpause()`
+- `updateMaxNodeDelegatorLimit(uint256 maxNodeDelegatorLimit_)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CallerNotLRTConfigAdmin` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ETHNotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `RsETHABI`
 
-`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH.
+`import RsETHABI from "./protocols/kelp/RsETHABI.json";` Speaks for: rsETH. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Kelp` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `balanceOf(address account) view returns (uint256)`
+- `addPermanentExemptions(address[] accounts)`
+- `allowance(address owner, address spender) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `blockUserTransfers(address[] accounts)`
+- `burnFrom(address account, uint256 amount)`
+- `currentPeriodMintedAmount() view returns (uint256)`
+- `custodyAddress() view returns (address)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `getCurrentPeriodStartTime() view returns (uint256)`
+- `getNextDailyLimitResetTimestamp() view returns (uint256)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `initialize(address admin, address lrtConfigAddr)`
+- `isPermanentlyExempt(address account) view returns (bool isExempt)`
+- `lrtConfig() view returns (address)`
+- `maxMintAmountPerDay() view returns (uint256)`
+- `mint(address to, uint256 amount)`
+- `name() view returns (string)`
+- `pause()`
+- `paused() view returns (bool)`
+- `periodStartTime() view returns (uint256)`
+- `recoverFrozenFunds(address from)`
+- `reinitialize(uint256 _periodStartTime, address _custodyAddress)`
+- `remainingDailyMintLimit() view returns (uint256)`
+- `setCustodyAddress(address newCustodyAddress)`
+- `setMaxMintAmountPerDay(uint256 _maxMintAmountPerDay)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`
+- `transfersBlockedUntil(address account) view returns (uint256 blockedUntil)`
+- `unpause()`

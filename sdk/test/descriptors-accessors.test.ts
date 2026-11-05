@@ -189,9 +189,9 @@ describe("descriptors accessors: interface + address-only kinds", () => {
     expect(call.data.startsWith("0xa9059cbb")).toBe(true);
   });
 
-  it("an address-only descriptor (AaveV3.PoolAddressesProvider) has zero methods but a real address", () => {
+  it("an address-only descriptor (Paraswap.AugustusV6) has zero methods but a real address", () => {
     const base = chainContracts("base");
-    const accessor = base.AaveV3.PoolAddressesProvider;
+    const accessor = base.Paraswap.AugustusV6;
     expect(accessor.methods.length).toBe(0);
     expect(accessor.abi.length).toBe(0);
   });

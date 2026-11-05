@@ -172,7 +172,7 @@ describe("chain accessors: the names resolve through an import, and only through
         Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, "500");
         Base.PancakeswapV3.Factory.getPool(Base.USDC.address, Base.WETH.address, 500).write(client);
         Base.Erc4626.Vault.deposit(1n, Base.USDC.address);
-        Base.AaveV3.PoolAddressesProvider.getPool();
+        Base.Paraswap.AugustusV6.getPool();
       }
     `);
     expect(diagnostics).toHaveLength(4);

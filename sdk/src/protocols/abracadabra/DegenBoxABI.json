@@ -1,6 +1,112 @@
 {
   "abi": [
     {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "batch",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "calls",
+          "type": "bytes[]"
+        },
+        {
+          "name": "revertOnFail",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "successes",
+          "type": "bool[]"
+        },
+        {
+          "name": "results",
+          "type": "bytes[]"
+        }
+      ]
+    },
+    {
+      "name": "batchFlashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "receivers",
+          "type": "address[]"
+        },
+        {
+          "name": "tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "deploy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "masterContract",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "useCreate2",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cloneAddress",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "payable",
@@ -36,6 +142,487 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "DOMAIN_SEPARATOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "flashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "harvest",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "balance",
+          "type": "bool"
+        },
+        {
+          "name": "maxChangeAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "masterContractApproved",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "masterContractOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingStrategy",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "permitToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "registerProtocol",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setMasterContractApproval",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "masterContract",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStrategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "newStrategy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStrategyTargetPercentage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "targetPercentage_",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "strategy",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "strategyData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "strategyStartDate",
+          "type": "uint64"
+        },
+        {
+          "name": "targetPercentage",
+          "type": "uint64"
+        },
+        {
+          "name": "balance",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "toAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "share",
+          "type": "uint256"
+        },
+        {
+          "name": "roundUp",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "toShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "roundUp",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "share",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "elastic",
+          "type": "uint128"
+        },
+        {
+          "name": "base",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "share",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferMultiple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "tos",
+          "type": "address[]"
+        },
+        {
+          "name": "shares",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        },
+        {
+          "name": "direct",
+          "type": "bool"
+        },
+        {
+          "name": "renounce",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "whitelistedMasterContracts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "whitelistMasterContract",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "masterContract",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
     },
     {
       "name": "withdraw",
@@ -75,23 +662,318 @@
       ]
     },
     {
-      "name": "balanceOf",
-      "type": "function",
-      "stateMutability": "view",
+      "name": "LogDeploy",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "masterContract",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "cloneAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogDeposit",
+      "type": "event",
       "inputs": [
         {
           "name": "token",
-          "type": "address"
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "share",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogFlashLoan",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "feeAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogRegisterProtocol",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "protocol",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogSetMasterContractApproval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "masterContract",
+          "type": "address",
+          "indexed": true
         },
         {
           "name": "user",
-          "type": "address"
-        }
-      ],
-      "outputs": [
+          "type": "address",
+          "indexed": true
+        },
         {
-          "name": "",
-          "type": "uint256"
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyDivest",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyInvest",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyLoss",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyProfit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyQueued",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogStrategySet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LogStrategyTargetPercentage",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "targetPercentage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogTransfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "share",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogWhiteListMasterContract",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "masterContract",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LogWithdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "share",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

@@ -1,0 +1,894 @@
+[
+  {
+    "type": "function",
+    "name": "WETH9",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approveMax",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "approveMaxMinusOne",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "approveZeroThenMax",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "approveZeroThenMaxMinusOne",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "callPositionManager",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "checkOracleSlippage",
+    "inputs": [
+      {
+        "name": "path",
+        "type": "bytes"
+      },
+      {
+        "name": "maximumTickDivergence",
+        "type": "uint24"
+      },
+      {
+        "name": "secondsAgo",
+        "type": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "checkOracleSlippage",
+    "inputs": [
+      {
+        "name": "paths",
+        "type": "bytes[]"
+      },
+      {
+        "name": "amounts",
+        "type": "uint128[]"
+      },
+      {
+        "name": "maximumTickDivergence",
+        "type": "uint24"
+      },
+      {
+        "name": "secondsAgo",
+        "type": "uint32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "exactInput",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "path",
+            "type": "bytes"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "amountIn",
+            "type": "uint256"
+          },
+          {
+            "name": "amountOutMinimum",
+            "type": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountOut",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "exactInputSingle",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "tokenIn",
+            "type": "address"
+          },
+          {
+            "name": "tokenOut",
+            "type": "address"
+          },
+          {
+            "name": "fee",
+            "type": "uint24"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "amountIn",
+            "type": "uint256"
+          },
+          {
+            "name": "amountOutMinimum",
+            "type": "uint256"
+          },
+          {
+            "name": "sqrtPriceLimitX96",
+            "type": "uint160"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountOut",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "exactOutput",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "path",
+            "type": "bytes"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "amountOut",
+            "type": "uint256"
+          },
+          {
+            "name": "amountInMaximum",
+            "type": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "exactOutputSingle",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "tokenIn",
+            "type": "address"
+          },
+          {
+            "name": "tokenOut",
+            "type": "address"
+          },
+          {
+            "name": "fee",
+            "type": "uint24"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "name": "amountOut",
+            "type": "uint256"
+          },
+          {
+            "name": "amountInMaximum",
+            "type": "uint256"
+          },
+          {
+            "name": "sqrtPriceLimitX96",
+            "type": "uint160"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "factory",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "factoryV2",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getApprovalType",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "increaseLiquidity",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address"
+          },
+          {
+            "name": "tokenId",
+            "type": "uint256"
+          },
+          {
+            "name": "amount0Min",
+            "type": "uint256"
+          },
+          {
+            "name": "amount1Min",
+            "type": "uint256"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "mint",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "token0",
+            "type": "address"
+          },
+          {
+            "name": "token1",
+            "type": "address"
+          },
+          {
+            "name": "fee",
+            "type": "uint24"
+          },
+          {
+            "name": "tickLower",
+            "type": "int24"
+          },
+          {
+            "name": "tickUpper",
+            "type": "int24"
+          },
+          {
+            "name": "amount0Min",
+            "type": "uint256"
+          },
+          {
+            "name": "amount1Min",
+            "type": "uint256"
+          },
+          {
+            "name": "recipient",
+            "type": "address"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "bytes"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "previousBlockhash",
+        "type": "bytes32"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "results",
+        "type": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "multicall",
+    "inputs": [
+      {
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "name": "data",
+        "type": "bytes[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes[]"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "positionManager",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pull",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "refundETH",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "selfPermit",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "selfPermitAllowed",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256"
+      },
+      {
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "selfPermitAllowedIfNecessary",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256"
+      },
+      {
+        "name": "expiry",
+        "type": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "selfPermitIfNecessary",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapExactTokensForTokens",
+    "inputs": [
+      {
+        "name": "amountIn",
+        "type": "uint256"
+      },
+      {
+        "name": "amountOutMin",
+        "type": "uint256"
+      },
+      {
+        "name": "path",
+        "type": "address[]"
+      },
+      {
+        "name": "to",
+        "type": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountOut",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "swapTokensForExactTokens",
+    "inputs": [
+      {
+        "name": "amountOut",
+        "type": "uint256"
+      },
+      {
+        "name": "amountInMax",
+        "type": "uint256"
+      },
+      {
+        "name": "path",
+        "type": "address[]"
+      },
+      {
+        "name": "to",
+        "type": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountIn",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "sweepToken",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "sweepToken",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "sweepTokenWithFee",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "name": "feeBips",
+        "type": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "sweepTokenWithFee",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "feeBips",
+        "type": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "uniswapV3SwapCallback",
+    "inputs": [
+      {
+        "name": "amount0Delta",
+        "type": "int256"
+      },
+      {
+        "name": "amount1Delta",
+        "type": "int256"
+      },
+      {
+        "name": "_data",
+        "type": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "unwrapWETH9",
+    "inputs": [
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "unwrapWETH9",
+    "inputs": [
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "unwrapWETH9WithFee",
+    "inputs": [
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "name": "feeBips",
+        "type": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "unwrapWETH9WithFee",
+    "inputs": [
+      {
+        "name": "amountMinimum",
+        "type": "uint256"
+      },
+      {
+        "name": "feeBips",
+        "type": "uint256"
+      },
+      {
+        "name": "feeRecipient",
+        "type": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "wrapETH",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  }
+]

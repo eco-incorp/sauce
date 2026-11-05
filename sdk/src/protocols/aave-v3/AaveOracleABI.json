@@ -1,0 +1,158 @@
+{
+  "abi": [
+    {
+      "name": "ADDRESSES_PROVIDER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BASE_CURRENCY",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BASE_CURRENCY_UNIT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsPrices",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "getFallbackOracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSourceOfAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setAssetSources",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "address[]"
+        },
+        {
+          "name": "sources",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFallbackOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fallbackOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "AssetSourceUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "source",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FallbackOracleUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "fallbackOracle",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    }
+  ]
+}

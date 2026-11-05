@@ -68,6 +68,7 @@
     "fetch-contract-code": "node scripts/fetch-contract-code.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
+    "gen-registry-abis": "node scripts/gen-registry-abis.mjs",
     "gen-builtins": "node scripts/gen-builtins.mjs",
     "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
     "gen-skills-references": "node scripts/gen-skills-references.mjs",

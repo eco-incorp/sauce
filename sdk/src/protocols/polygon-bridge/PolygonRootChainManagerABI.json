@@ -1,6 +1,87 @@
 {
   "abi": [
     {
+      "name": "checkpointManagerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "childChainManagerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "childToRootToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "cleanMapToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        },
+        {
+          "name": "childToken",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "DEFAULT_ADMIN_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "DEPOSIT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "depositEtherFor",
       "type": "function",
       "stateMutability": "payable",
@@ -33,6 +114,63 @@
       "outputs": []
     },
     {
+      "name": "ERC712_VERSION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "ETHER_ADDRESS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "executeMetaTransaction",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "userAddress",
+          "type": "address"
+        },
+        {
+          "name": "functionSignature",
+          "type": "bytes"
+        },
+        {
+          "name": "sigR",
+          "type": "bytes32"
+        },
+        {
+          "name": "sigS",
+          "type": "bytes32"
+        },
+        {
+          "name": "sigV",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "exit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -43,6 +181,625 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "getChainId",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getDomainSeperator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getNonce",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nonce",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRoleAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMember",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMemberCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "grantRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "hasRole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initializeEIP712",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "isMigrated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "MAP_TOKEN",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "MAPPER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "mapToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        },
+        {
+          "name": "childToken",
+          "type": "address"
+        },
+        {
+          "name": "tokenType",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "migrateBridgeFunds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "MIGRATION_MANAGER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "migrationStatus",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isDepositDisabled",
+          "type": "bool"
+        },
+        {
+          "name": "isExitDisabled",
+          "type": "bool"
+        },
+        {
+          "name": "lastExitBlockNumber",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "processedExits",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "registerPredicate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenType",
+          "type": "bytes32"
+        },
+        {
+          "name": "predicateAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "remapToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        },
+        {
+          "name": "childToken",
+          "type": "address"
+        },
+        {
+          "name": "tokenType",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "revokeRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "rootToChildToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setCheckpointManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCheckpointManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setChildChainManagerAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newChildChainManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStateSender",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newStateSender",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setupContractId",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "stateSenderAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tokenToType",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "typeToPredicate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "updateTokenMigrationStatus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address"
+        },
+        {
+          "name": "isDepositDisable",
+          "type": "bool"
+        },
+        {
+          "name": "isExitDisabled",
+          "type": "bool"
+        },
+        {
+          "name": "lastExitBlockNumber",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "USDT_ADDRESS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MetaTransactionExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "userAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "relayerAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "functionSignature",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MigrationStatusChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "isDepositDisabled",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "isExitDisabled",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "lastExitBlockNumber",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PredicateRegistered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "tokenType",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "predicateAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenMapped",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "rootToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "childToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tokenType",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
     }
   ]
 }

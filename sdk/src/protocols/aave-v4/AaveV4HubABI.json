@@ -1,12 +1,128 @@
 {
   "abi": [
     {
-      "name": "getAssetId",
+      "name": "add",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "addAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "underlying",
+          "type": "address"
+        },
+        {
+          "name": "decimals",
+          "type": "uint8"
+        },
+        {
+          "name": "feeReceiver",
+          "type": "address"
+        },
+        {
+          "name": "irStrategy",
+          "type": "address"
+        },
+        {
+          "name": "irData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "addSpoke",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "addCap",
+              "type": "uint40"
+            },
+            {
+              "name": "drawCap",
+              "type": "uint40"
+            },
+            {
+              "name": "riskPremiumThreshold",
+              "type": "uint24"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "halted",
+              "type": "bool"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "authority",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "draw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
           "type": "address"
         }
       ],
@@ -18,10 +134,297 @@
       ]
     },
     {
+      "name": "eliminateDeficit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAddedAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAddedShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "liquidity",
+              "type": "uint120"
+            },
+            {
+              "name": "realizedFees",
+              "type": "uint120"
+            },
+            {
+              "name": "decimals",
+              "type": "uint8"
+            },
+            {
+              "name": "addedShares",
+              "type": "uint120"
+            },
+            {
+              "name": "swept",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumOffsetRay",
+              "type": "int200"
+            },
+            {
+              "name": "drawnShares",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumShares",
+              "type": "uint120"
+            },
+            {
+              "name": "liquidityFee",
+              "type": "uint16"
+            },
+            {
+              "name": "drawnIndex",
+              "type": "uint120"
+            },
+            {
+              "name": "drawnRate",
+              "type": "uint96"
+            },
+            {
+              "name": "lastUpdateTimestamp",
+              "type": "uint40"
+            },
+            {
+              "name": "underlying",
+              "type": "address"
+            },
+            {
+              "name": "irStrategy",
+              "type": "address"
+            },
+            {
+              "name": "reinvestmentController",
+              "type": "address"
+            },
+            {
+              "name": "feeReceiver",
+              "type": "address"
+            },
+            {
+              "name": "deficitRay",
+              "type": "uint200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getAssetAccruedFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "feeReceiver",
+              "type": "address"
+            },
+            {
+              "name": "liquidityFee",
+              "type": "uint16"
+            },
+            {
+              "name": "irStrategy",
+              "type": "address"
+            },
+            {
+              "name": "reinvestmentController",
+              "type": "address"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "getAssetCount",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetDeficitRay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetDrawnIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetDrawnRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetDrawnShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "underlying",
+          "type": "address"
+        }
+      ],
       "outputs": [
         {
           "name": "",
@@ -47,6 +450,497 @@
       ]
     },
     {
+      "name": "getAssetOwed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetPremiumData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetPremiumRay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetSwept",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetTotalOwed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAssetUnderlyingAndDecimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "getSpoke",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "drawnShares",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumShares",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumOffsetRay",
+              "type": "int200"
+            },
+            {
+              "name": "addedShares",
+              "type": "uint120"
+            },
+            {
+              "name": "addCap",
+              "type": "uint40"
+            },
+            {
+              "name": "drawCap",
+              "type": "uint40"
+            },
+            {
+              "name": "riskPremiumThreshold",
+              "type": "uint24"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "halted",
+              "type": "bool"
+            },
+            {
+              "name": "deficitRay",
+              "type": "uint200"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getSpokeAddedAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeAddedShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "addCap",
+              "type": "uint40"
+            },
+            {
+              "name": "drawCap",
+              "type": "uint40"
+            },
+            {
+              "name": "riskPremiumThreshold",
+              "type": "uint24"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "halted",
+              "type": "bool"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getSpokeCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeDeficitRay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeDrawnShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeOwed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokePremiumData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokePremiumRay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getSpokeTotalOwed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "HUB_REVISION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "authority",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isConsumingScheduledOp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "isSpokeListed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "isUnderlyingListed",
       "type": "function",
       "stateMutability": "view",
@@ -62,6 +956,1290 @@
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "MAX_ALLOWED_SPOKE_CAP",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "MAX_ALLOWED_UNDERLYING_DECIMALS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "MAX_RISK_PREMIUM_THRESHOLD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "MIN_ALLOWED_UNDERLYING_DECIMALS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "mintFeeShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "payFeeShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "previewAddByAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewAddByShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewDrawByAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewDrawByShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRemoveByAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRemoveByShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRestoreByAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRestoreByShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "reclaim",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "refreshPremium",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "remove",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "reportDeficit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "drawnAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "restore",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "drawnAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setAuthority",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAuthority",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setInterestRateData",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "irData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "sweep",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "shares",
+          "type": "uint256"
+        },
+        {
+          "name": "toSpoke",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateAssetConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "feeReceiver",
+              "type": "address"
+            },
+            {
+              "name": "liquidityFee",
+              "type": "uint16"
+            },
+            {
+              "name": "irStrategy",
+              "type": "address"
+            },
+            {
+              "name": "reinvestmentController",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "name": "irData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateSpokeConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256"
+        },
+        {
+          "name": "spoke",
+          "type": "address"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "addCap",
+              "type": "uint40"
+            },
+            {
+              "name": "drawCap",
+              "type": "uint40"
+            },
+            {
+              "name": "riskPremiumThreshold",
+              "type": "uint24"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "halted",
+              "type": "bool"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "Add",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "underlying",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "decimals",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddSpoke",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AuthorityUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "authority",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Draw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "drawnAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EliminateDeficit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "callerSpoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "coveredSpoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "deficitAmountRay",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MintFeeShares",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "feeReceiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Reclaim",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "reinvestmentController",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RefreshPremium",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Remove",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReportDeficit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "deficitAmountRay",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Restore",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "drawnAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Sweep",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "reinvestmentController",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TransferShares",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "drawnIndex",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "drawnRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "accruedFees",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateAssetConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "feeReceiver",
+              "type": "address"
+            },
+            {
+              "name": "liquidityFee",
+              "type": "uint16"
+            },
+            {
+              "name": "irStrategy",
+              "type": "address"
+            },
+            {
+              "name": "reinvestmentController",
+              "type": "address"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateSpokeConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "spoke",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "addCap",
+              "type": "uint40"
+            },
+            {
+              "name": "drawCap",
+              "type": "uint40"
+            },
+            {
+              "name": "riskPremiumThreshold",
+              "type": "uint24"
+            },
+            {
+              "name": "active",
+              "type": "bool"
+            },
+            {
+              "name": "halted",
+              "type": "bool"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AccessManagedInvalidAuthority",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "authority",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AccessManagedUnauthorized",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AddCapExceeded",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "addCap",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "AssetNotListed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DrawCapExceeded",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "drawCap",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InsufficientLiquidity",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "liquidity",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InsufficientTransferred",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "liquidityNeeded",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAssetDecimals",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInitialization",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInterestRateStrategy",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidLiquidityFee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidPremiumChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidReinvestmentController",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidShares",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotInitializing",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyReinvestmentController",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeCastOverflowedIntDowncast",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "bits",
+          "type": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedIntToUint",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "value",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedUintDowncast",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "bits",
+          "type": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedUintToInt",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SafeERC20FailedOperation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "SpokeAlreadyListed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SpokeHalted",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SpokeNotActive",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SpokeNotListed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SurplusDrawnDeficitReported",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "maxAllowedDeficit",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SurplusDrawnRestored",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "maxAllowedRestore",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SurplusPremiumRayDeficitReported",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "maxAllowedDeficitRay",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SurplusPremiumRayRestored",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "maxAllowedRestoreRay",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UnderlyingAlreadyListed",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

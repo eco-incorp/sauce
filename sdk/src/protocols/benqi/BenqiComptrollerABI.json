@@ -1,6 +1,563 @@
 {
   "abi": [
     {
+      "name": "_become",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "unitroller",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_borrowGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_grantQi",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_mintGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_setBorrowCapGuardian",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newBorrowCapGuardian",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setBorrowPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_setCloseFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCloseFactorMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setCollateralFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "newCollateralFactorMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setLiquidationIncentive",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newLiquidationIncentiveMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setMarketBorrowCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "newBorrowCaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setMintPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_setPauseGuardian",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPauseGuardian",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setPriceOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setRewardSpeed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rewardType",
+          "type": "uint8"
+        },
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "supplyRewardSpeed",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowRewardSpeed",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setSeizePaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_setTransferPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_supportMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "accountAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "borrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowCapGuardian",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "borrowCaps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "borrowRewardSpeeds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "checkMembership",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "qiToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "claimReward",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rewardType",
+          "type": "uint8"
+        },
+        {
+          "name": "holder",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimReward",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "rewardType",
+          "type": "uint8"
+        },
+        {
+          "name": "holder",
+          "type": "address"
+        },
+        {
+          "name": "qiTokens",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimReward",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "rewardType",
+          "type": "uint8"
+        },
+        {
+          "name": "holders",
+          "type": "address[]"
+        },
+        {
+          "name": "qiTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "borrowers",
+          "type": "bool"
+        },
+        {
+          "name": "suppliers",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "closeFactorMantissa",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "comptrollerImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "enterMarkets",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -31,6 +588,1162 @@
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAccountLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAllMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsIn",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getBlockTimestamp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getHypotheticalAccountLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenModify",
+          "type": "address"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "initialIndexConstant",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint224"
+        }
+      ]
+    },
+    {
+      "name": "isComptroller",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "liquidateBorrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidateBorrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "liquidateCalculateSeizeTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "qiTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidationIncentiveMantissa",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "markets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isListed",
+          "type": "bool"
+        },
+        {
+          "name": "collateralFactorMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "isQied",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "maxAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "minter",
+          "type": "address"
+        },
+        {
+          "name": "mintAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "mintVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "minter",
+          "type": "address"
+        },
+        {
+          "name": "actualMintAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "mintTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pauseGuardian",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingComptrollerImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "qiAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "redeemAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "redeemer",
+          "type": "address"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "redeemVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "redeemer",
+          "type": "address"
+        },
+        {
+          "name": "redeemAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "repayBorrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repayBorrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowerIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "rewardAccrued",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rewardAvax",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "rewardBorrowerIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rewardBorrowState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint224"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "rewardQi",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "rewardSupplierIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rewardSupplyState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint224"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "seizeAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "seizeGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "seizeVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "qiTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setQiAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newQiAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "supplyRewardSpeeds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "src",
+          "type": "address"
+        },
+        {
+          "name": "dst",
+          "type": "address"
+        },
+        {
+          "name": "transferTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address"
+        },
+        {
+          "name": "src",
+          "type": "address"
+        },
+        {
+          "name": "dst",
+          "type": "address"
+        },
+        {
+          "name": "transferTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ActionPaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "action",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "pauseState",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ActionPaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "action",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "pauseState",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BorrowRewardSpeedUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "rewardToken",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newBorrowRewardSpeed",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DistributedBorrowerReward",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "tokenType",
+          "type": "uint8",
+          "indexed": true
+        },
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "qiDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "qiBorrowIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DistributedSupplierReward",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "tokenType",
+          "type": "uint8",
+          "indexed": true
+        },
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "qiDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "qiBorrowIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Failure",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "error",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "info",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "detail",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketEntered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketExited",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketListed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewBorrowCap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newBorrowCap",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewBorrowCapGuardian",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldBorrowCapGuardian",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newBorrowCapGuardian",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewCloseFactor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldCloseFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newCloseFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewCollateralFactor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "oldCollateralFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newCollateralFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewLiquidationIncentive",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldLiquidationIncentiveMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newLiquidationIncentiveMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPauseGuardian",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPauseGuardian",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPauseGuardian",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPriceOracle",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPriceOracle",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPriceOracle",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "QiGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SupplyRewardSpeedUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "rewardToken",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "qiToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newSupplyRewardSpeed",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     }

@@ -33,8 +33,26 @@ function main() {
 
 ### `CrvUSDERC20ABI`
 
-`import CrvUSDERC20ABI from "./protocols/crvusd/CrvUSDERC20ABI.json";` Speaks for: crvusd.
+`import CrvUSDERC20ABI from "./protocols/crvusd/CrvUSDERC20ABI.json";` Speaks for: crvusd. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Crvusd` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `balanceOf(address account) view returns (uint256)`
+- `allowance(address arg0, address arg1) view returns (uint256)`
 - `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `burn(uint256 _value) returns (bool)`
+- `burnFrom(address _from, uint256 _value) returns (bool)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address _spender, uint256 _sub_value) returns (bool)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `increaseAllowance(address _spender, uint256 _add_value) returns (bool)`
+- `mint(address _to, uint256 _value) returns (bool)`
+- `minter() view returns (address)`
+- `name() view returns (string)`
+- `nonces(address arg0) view returns (uint256)`
+- `permit(address _owner, address _spender, uint256 _value, uint256 _deadline, uint8 _v, bytes32 _r, bytes32 _s) returns (bool)`
+- `salt() view returns (bytes32)`
+- `set_minter(address _minter)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
 - `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address _from, address _to, uint256 _value) returns (bool)`
+- `version() view returns (string)`

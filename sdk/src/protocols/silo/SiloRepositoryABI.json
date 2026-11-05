@@ -1,6 +1,271 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "addBridgeAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newBridgeAsset",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "assetConfigs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "maxLoanToValue",
+          "type": "uint64"
+        },
+        {
+          "name": "liquidationThreshold",
+          "type": "uint64"
+        },
+        {
+          "name": "interestRateModel",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "bridgePool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "changeManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_manager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "defaultAssetConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "maxLoanToValue",
+          "type": "uint64"
+        },
+        {
+          "name": "liquidationThreshold",
+          "type": "uint64"
+        },
+        {
+          "name": "interestRateModel",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ensureCanCreateSiloFor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_assetIsABridge",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "entryFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "fees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "entryFee",
+          "type": "uint64"
+        },
+        {
+          "name": "protocolShareFee",
+          "type": "uint64"
+        },
+        {
+          "name": "protocolLiquidationFee",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "getBridgeAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getInterestRateModel",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationThreshold",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getMaximumLTV",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getMaxSiloDepositsValue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getNotificationReceiver",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRemovedBridgeAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
       "name": "getSilo",
       "type": "function",
       "stateMutability": "view",
@@ -16,6 +281,1106 @@
           "type": "address"
         }
       ]
+    },
+    {
+      "name": "getVersionForAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "isPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "globalPause",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isSilo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isSiloPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "manager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "maxLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "globalLimit",
+          "type": "bool"
+        },
+        {
+          "name": "defaultMaxLiquidity",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "newSilo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_siloAsset",
+          "type": "address"
+        },
+        {
+          "name": "_siloData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "priceProvidersRepository",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolLiquidationFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "protocolShareFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "registerSiloVersion",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_factory",
+          "type": "address"
+        },
+        {
+          "name": "_isDefault",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeBridgeAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_bridgeAssetToRemove",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removePendingOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "replaceSilo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_siloAsset",
+          "type": "address"
+        },
+        {
+          "name": "_siloVersion",
+          "type": "uint128"
+        },
+        {
+          "name": "_siloData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "router",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setAssetConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_assetConfig",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxLoanToValue",
+              "type": "uint64"
+            },
+            {
+              "name": "liquidationThreshold",
+              "type": "uint64"
+            },
+            {
+              "name": "interestRateModel",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultInterestRateModel",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_defaultInterestRateModel",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultLiquidationThreshold",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_defaultLiquidationThreshold",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultMaximumLTV",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_defaultMaxLTV",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultSiloMaxDepositsLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maxDeposits",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultSiloVersion",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_defaultVersion",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_fees",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "entryFee",
+              "type": "uint64"
+            },
+            {
+              "name": "protocolShareFee",
+              "type": "uint64"
+            },
+            {
+              "name": "protocolLiquidationFee",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setGlobalPause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_globalPause",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLimitedMaxLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_globalLimit",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setNotificationReceiver",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_newNotificationReceiver",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceProvidersRepository",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_repository",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setRouter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_router",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSiloMaxDepositsLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_maxDeposits",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSiloPause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_silo",
+          "type": "address"
+        },
+        {
+          "name": "_asset",
+          "type": "address"
+        },
+        {
+          "name": "_pauseValue",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTokensFactory",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokensFactory",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setVersionForAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_siloAsset",
+          "type": "address"
+        },
+        {
+          "name": "_version",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "siloFactory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "siloRepositoryPing",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "siloReverse",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "siloVersion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "byDefault",
+          "type": "uint128"
+        },
+        {
+          "name": "latest",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "tokensFactory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferPendingOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPendingOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unregisterSiloVersion",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_siloVersion",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "AssetConfigUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "silo",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assetConfig",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "maxLoanToValue",
+              "type": "uint64"
+            },
+            {
+              "name": "liquidationThreshold",
+              "type": "uint64"
+            },
+            {
+              "name": "interestRateModel",
+              "type": "address"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BridgeAssetAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newBridgeAsset",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BridgeAssetRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "bridgeAssetRemoved",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BridgePool",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DefaultSiloMaxDepositsLimitUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newMaxDeposits",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeeUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newEntryFee",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "newProtocolShareFee",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "newProtocolLiquidationFee",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GlobalPause",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "globalPause",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "InterestRateModel",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newModel",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ManagerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "manager",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewDefaultLiquidationThreshold",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "defaultLiquidationThreshold",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewDefaultMaximumLTV",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "defaultMaximumLTV",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewSilo",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "silo",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "siloVersion",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NotificationReceiverUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newIncentiveContract",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipPending",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newPendingOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PriceProvidersRepositoryUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newProvider",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RegisterSiloVersion",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "factory",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "siloLatestVersion",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "siloDefaultVersion",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RouterUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newRouter",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SiloDefaultVersion",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newDefaultVersion",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SiloMaxDepositsLimitsUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "silo",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newMaxDeposits",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SiloPause",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "silo",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "pauseValue",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokensFactoryUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newTokensFactory",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UnregisterSiloVersion",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "factory",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "siloVersion",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VersionForAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "version",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AssetAlreadyAdded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "AssetIsNotABridge",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ConfigDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "GlobalLimitDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "GlobalPauseDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InterestRateModelDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidEntryFee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInterestRateModel",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidNotificationReceiver",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidProtocolLiquidationFee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidProtocolShareFee",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidSiloVersion",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LastBridgeAsset",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LiquidationThresholdDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ManagerIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaximumLTVDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaxLiquidityDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotificationReceiverDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyOwnerOrManager",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PriceProviderRepositoryDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SiloDoesNotExist",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SiloIsZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SiloMaxLiquidityDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SiloPauseDidNotChange",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SiloVersionDoesNotExist",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TokenIsNotAContract",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "VersionForAssetDidNotChange",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

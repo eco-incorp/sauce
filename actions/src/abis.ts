@@ -12,13 +12,18 @@
  * next to it. A swap at one of `@sauce/router`'s venues binds nothing here: it is a call into that
  * library, which carries the pool and Router ABIs it calls.
  *
- * WHY OUTPUTS ARE DROPPED. A binding decodes every output its ABI declares, even one the program
- * never reads, and decoding from empty return data reverts. 3pool-era Curve pools return nothing
- * from `exchange`, so declaring that output would revert a swap that succeeded. The rule here is
- * therefore: declare an output only when an action reads it. Every other method is bound
- * output-free — the call must succeed, and nothing is decoded. ERC-20 `approve`/`transfer` are not
- * bindings at all: tokens such as USDT return nothing from them, and they go through the SDK's own
- * `SafeERC20` lowering, `token/safe` (see `to-sauce.ts#Lowering.erc20Write`).
+ * WHY OUTPUTS ARE DROPPED. A method declares an output only when an action reads it; every other
+ * method is bound output-free, so the call must succeed and nothing is said about what it returns.
+ * The pinned compiler decodes a result only where the program reads it, and then decodes the whole
+ * declared output (the SauceScript reference's "Unread results skip all decoding"): a probe
+ * compiling one unread call with outputs `[]`, `[uint256]` and `[uint256, tuple, bytes]` got the
+ * same 68 bytes each time, and reading the result added the decode. So an unread output costs
+ * nothing either way, and a dropped one keeps a read the lowering does not make from ever
+ * decoding a reply some deployment leaves empty, as 3pool-era Curve pools do from `exchange` (an
+ * older compiler decoded every declared output, and that reverted swaps that succeeded). ERC-20
+ * `approve`/`transfer` are not bindings at all: tokens such as USDT return nothing from them, and
+ * they go through the SDK's own `SafeERC20` lowering, `token/safe` (see
+ * `to-sauce.ts#Lowering.erc20Write`).
  *
  * WHY SOME CALLS ARE STILL RAW. A binding call cannot attach native value, and the compiler has no
  * calldata builtin besides `abi.encode`. So a payable call carrying ETH (`WETH.deposit`, Lido
@@ -38,6 +43,7 @@ import { CrocSwapDexABI, CurveRouterNGABI, ERC20ABI, LidoABI } from "./registry.
 import { LiquidityPoolABI, Permit2ABI, RETHABI, RocketDepositPoolABI } from "./registry.js";
 import { StargatePoolABI, TokenMessengerABI, UniswapV2RouterABI, WstETHABI } from "./registry.js";
 import {
+  DODOV2ProxyABI,
   LBFactoryABI,
   SlipstreamCLFactoryABI,
   UniswapV2FactoryABI,
@@ -191,9 +197,12 @@ const CATALOG = {
     userCmd: sdk("ambient", "CrocSwapDexABI", CrocSwapDexABI, "userCmd(uint16,bytes)", "drop"),
   }),
   IDodoProxy: () => ({
-    dodoSwapV1: local(
-      "function dodoSwapV1(address fromToken, address toToken, uint256 fromTokenAmount, uint256 minReturnAmount, address[] dodoPairs, uint256 directions, bool isIncentive, uint256 deadLine) payable returns (uint256 returnAmount)",
-      "the registry declares only the proxy's V2 entry point",
+    dodoSwapV1: sdk(
+      "dodo",
+      "DODOV2ProxyABI",
+      DODOV2ProxyABI,
+      "dodoSwapV1(address,address,uint256,uint256,address[],uint256,bool,uint256)",
+      "keep",
     ),
   }),
   ICarbonController: () => ({
@@ -269,9 +278,13 @@ const CATALOG = {
     ),
   }),
   IStargatePool: () => ({
-    quoteSend: local(
-      "function quoteSend((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) sendParam, bool payInLzToken) view returns ((uint256 nativeFee, uint256 lzTokenFee) fee)",
-      "the registry's StargatePoolABI declares `send` but not `quoteSend`",
+    // The fee a send needs, which the program reads before it.
+    quoteSend: sdk(
+      "stargate",
+      "StargatePoolABI",
+      StargatePoolABI,
+      "quoteSend((uint32,bytes32,uint256,uint256,bytes,bytes,bytes),bool)",
+      "keep",
     ),
     // The receipts it returns are never read, so they are not decoded.
     send: sdk(

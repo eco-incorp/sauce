@@ -118,7 +118,7 @@ test("unsupported names and ABI argument shapes remain TypeScript errors", () =>
     Uniswap.UniversalRouter.execute("0x", ["0x"], "tomorrow");
     Uniswap.UniversalRouter.at("0x1234");
     AaveV3.Pool.supply(USDC, 1n, 0x1234n, false);
-    AaveV3.PoolAddressesProvider.getPool();
+    Paraswap.AugustusV6.getPool();
     MorphoBlue.Bundler3.at(0x1234n);
     PancakeswapV3.Factory.getPool(USDC, WETH);
     Erc4626.Vault.deposit(1n, 1n);

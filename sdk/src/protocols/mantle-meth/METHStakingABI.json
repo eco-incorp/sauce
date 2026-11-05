@@ -1,31 +1,82 @@
 {
   "abi": [
     {
-      "name": "stake",
+      "name": "allocatedETHForDeposits",
       "type": "function",
-      "stateMutability": "payable",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "allocateETH",
+      "type": "function",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "minMETHAmount",
+          "name": "allocateToUnstakeRequestsManager",
+          "type": "uint256"
+        },
+        {
+          "name": "allocateToDeposits",
+          "type": "uint256"
+        },
+        {
+          "name": "allocateToLiquidityBuffer",
           "type": "uint256"
         }
       ],
       "outputs": []
     },
     {
-      "name": "mETHToETH",
+      "name": "ALLOCATOR_SERVICE_ROLE",
       "type": "function",
       "stateMutability": "view",
-      "inputs": [
-        {
-          "name": "mETHAmount",
-          "type": "uint256"
-        }
-      ],
+      "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "claimUnstakeRequest",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "unstakeRequestID",
           "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "DEFAULT_ADMIN_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "depositContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
         }
       ]
     },
@@ -45,6 +96,1185 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "exchangeAdjustmentRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "getRoleAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMember",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMemberCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "grantRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "hasRole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initializationBlockNumber",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "init",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "admin",
+              "type": "address"
+            },
+            {
+              "name": "manager",
+              "type": "address"
+            },
+            {
+              "name": "allocatorService",
+              "type": "address"
+            },
+            {
+              "name": "initiatorService",
+              "type": "address"
+            },
+            {
+              "name": "returnsAggregator",
+              "type": "address"
+            },
+            {
+              "name": "withdrawalWallet",
+              "type": "address"
+            },
+            {
+              "name": "mETH",
+              "type": "address"
+            },
+            {
+              "name": "depositContract",
+              "type": "address"
+            },
+            {
+              "name": "oracle",
+              "type": "address"
+            },
+            {
+              "name": "pauser",
+              "type": "address"
+            },
+            {
+              "name": "unstakeRequestsManager",
+              "type": "address"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initializeV2",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "lb",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initiateValidatorsWithDeposits",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "validators",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "operatorID",
+              "type": "uint256"
+            },
+            {
+              "name": "depositAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "pubkey",
+              "type": "bytes"
+            },
+            {
+              "name": "withdrawalCredentials",
+              "type": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "depositDataRoot",
+              "type": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "expectedDepositRoot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "INITIATOR_SERVICE_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "isStakingAllowlist",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "liquidityBuffer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "maximumDepositAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maximumMETHSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "mETHToETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "mETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimumDepositAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimumStakeBound",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimumUnstakeBound",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "numInitiatedValidators",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pauser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "receiveFromUnstakeRequestsManager",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "receiveReturns",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "receiveReturnsFromLiquidityBuffer",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "reclaimAllocatedETHSurplus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "renounceRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "returnsAggregator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "revokeRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setExchangeAdjustmentRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "exchangeAdjustmentRate_",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaximumDepositAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "maximumDepositAmount_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaximumMETHSupply",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "maximumMETHSupply_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimumDepositAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "minimumDepositAmount_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimumStakeBound",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "minimumStakeBound_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimumUnstakeBound",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "minimumUnstakeBound_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStakingAllowlist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "isStakingAllowlist_",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setWithdrawalWallet",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "withdrawalWallet_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "stake",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "minMETHAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "STAKING_ALLOWLIST_MANAGER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "STAKING_ALLOWLIST_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "STAKING_MANAGER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "supportsInterface",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "TOP_UP_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "topUp",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "totalControlled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "totalDepositedInValidators",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unallocatedETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unstakeRequest",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "methAmount",
+          "type": "uint128"
+        },
+        {
+          "name": "minETHAmount",
+          "type": "uint128"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unstakeRequestInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "unstakeRequestID",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unstakeRequestsManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "unstakeRequestWithPermit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "methAmount",
+          "type": "uint128"
+        },
+        {
+          "name": "minETHAmount",
+          "type": "uint128"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "usedValidators",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pubkey",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "exists",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "withdrawalWallet",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "AllocatedETHToDeposits",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AllocatedETHToLiquidityBuffer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AllocatedETHToUnstakeRequestsManager",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ProtocolConfigChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "setterSelector",
+          "type": "bytes4",
+          "indexed": true
+        },
+        {
+          "name": "setterSignature",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "value",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReturnsReceived",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReturnsReceivedFromLiquidityBuffer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RoleAdminChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "previousAdminRole",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "newAdminRole",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Staked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "staker",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ethAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "mETHAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UnstakeRequestClaimed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "staker",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UnstakeRequested",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "staker",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ethAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "mETHLocked",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ValidatorInitiated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "operatorID",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "pubkey",
+          "type": "bytes",
+          "indexed": false
+        },
+        {
+          "name": "amountDeposited",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DoesNotReceiveETH",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidConfiguration",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidDepositRoot",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "InvalidWithdrawalCredentialsNotETH1",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes12"
+        }
+      ]
+    },
+    {
+      "name": "InvalidWithdrawalCredentialsWrongAddress",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "InvalidWithdrawalCredentialsWrongLength",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MaximumMETHSupplyExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MaximumValidatorDepositExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MinimumStakeBoundNotSatisfied",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MinimumUnstakeBoundNotSatisfied",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MinimumValidatorDepositNotSatisfied",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughDepositETH",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughUnallocatedETH",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotLiquidityBuffer",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotReturnsAggregator",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotUnstakeRequestsManager",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Paused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PreviouslyUsedValidator",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "StakeBelowMinimumMETHAmount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "methAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedMinimum",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UnstakeBelowMinimumETHAmount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "ethAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedMinimum",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ZeroAddress",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

@@ -1,6 +1,155 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "activeMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        },
+        {
+          "name": "pageSize",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "activeMarketsPerUser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        },
+        {
+          "name": "pageSize",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "addressManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "addToWhitelist",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_whitelistAddress",
+          "type": "address"
+        },
+        {
+          "name": "_flag",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "assetToChainlinkId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "assetToPythId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "bonusPerCollateral",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "canResolveMarket",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "createNewMarket",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -66,6 +215,1264 @@
           "type": "address"
         }
       ]
+    },
+    {
+      "name": "currentRiskPerAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "currentRiskPerAssetAndDirection",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getLengths",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256[5]"
+        }
+      ]
+    },
+    {
+      "name": "getParams",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "supportedAsset",
+              "type": "bool"
+            },
+            {
+              "name": "safeBoxImpact",
+              "type": "uint256"
+            },
+            {
+              "name": "maximumPriceDelay",
+              "type": "uint64"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        },
+        {
+          "name": "_sUSD",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initNonReentrant",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "lastPauseTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lpFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lpFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "marketHasCreatedAtAttribute",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "marketHasFeeAttribute",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "maturedMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        },
+        {
+          "name": "pageSize",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "maturedMarketsPerUser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "index",
+          "type": "uint256"
+        },
+        {
+          "name": "pageSize",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "maxBuyinAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maximalTimeToMaturity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maximumPriceDelay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "maximumPriceDelayForResolving",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "maxRiskPerAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxRiskPerAssetAndDirection",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        },
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxSkewImpact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minBuyinAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimalTimeToMaturity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "multicollateralEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "nominatedOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "nominateNewOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "offrampHelper",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "resolveMarketWithPrice",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_market",
+          "type": "address"
+        },
+        {
+          "name": "_finalPrice",
+          "type": "int64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "safeBoxImpact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setAMMAddresses",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_mastercopy",
+          "type": "address"
+        },
+        {
+          "name": "_speedMarketsAMMUtils",
+          "type": "address"
+        },
+        {
+          "name": "_addressManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setAssetToPriceOracleID",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "pythId",
+          "type": "bytes32"
+        },
+        {
+          "name": "chainlinkId",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLimitParams",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minBuyinAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxBuyinAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_minimalTimeToMaturity",
+          "type": "uint256"
+        },
+        {
+          "name": "_maximalTimeToMaturity",
+          "type": "uint256"
+        },
+        {
+          "name": "_maximumPriceDelay",
+          "type": "uint64"
+        },
+        {
+          "name": "_maximumPriceDelayForResolving",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLPFeeParams",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_timeThresholds",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_lpFees",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_lpFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxRisks",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "_maxRiskPerAsset",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxRiskPerAssetAndDirection",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMultiCollateralOnOffRampEnabled",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_enabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_paused",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSafeBoxAndMaxSkewImpact",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_safeBoxImpact",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxSkewImpact",
+          "type": "uint256"
+        },
+        {
+          "name": "_skewSlippage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSupportedAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "_supported",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSupportedNativeCollateralAndBonus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateral",
+          "type": "address"
+        },
+        {
+          "name": "_supported",
+          "type": "bool"
+        },
+        {
+          "name": "_bonus",
+          "type": "uint256"
+        },
+        {
+          "name": "_collateralKey",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSusdAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_sUSD",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "skewSlippage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "speedMarketMastercopy",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "speedMarketsAMMUtils",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "supportedAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "supportedNativeCollateral",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "sUSD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "timeThresholdsForFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_collateral",
+          "type": "address"
+        },
+        {
+          "name": "_destination",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnershipAtInit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "proxyAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "whitelistedAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "AddedIntoWhitelist",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_whitelistAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_flag",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AMMAddressesChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_mastercopy",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_speedMarketsAMMUtils",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_addressManager",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AmountTransfered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_collateral",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_destination",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollateralBonusSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "collateral",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "bonus",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LimitParamsChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_minBuyinAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maxBuyinAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_minimalTimeToMaturity",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maximalTimeToMaturity",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maximumPriceDelay",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maximumPriceDelayForResolving",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_market",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_user",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_strikeTime",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_strikePrice",
+          "type": "int64",
+          "indexed": false
+        },
+        {
+          "name": "_direction",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "_buyinAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketCreatedWithFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_market",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_user",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_strikeTime",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_strikePrice",
+          "type": "int64",
+          "indexed": false
+        },
+        {
+          "name": "_direction",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "_buyinAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_safeBoxImpact",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_lpFee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketResolved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_market",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "_result",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "_userIsWinner",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MultiCollateralOnOffRampEnabled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_enabled",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerNominated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauseChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "isPaused",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReferrerPaid",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "refferer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "trader",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "volume",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SafeBoxAndMaxSkewImpactChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_safeBoxImpact",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maxSkewImpact",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_skewSlippage",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetAssetToPriceOracleID",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "pythId",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "chainlinkId",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetLPFeeParams",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_timeThresholds",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "_lpFees",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "_lpFee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetMaxRisks",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_maxRiskPerAsset",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_maxRiskPerAssetAndDirection",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetSupportedAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_supported",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SusdAddressChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_sUSD",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AssetNotSupported",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CanOnlyBeCalledFromResolverOrOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidBuyinAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidWhitelistAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "RiskPerDirectionExceeded",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

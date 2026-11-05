@@ -1,6 +1,95 @@
 {
   "abi": [
     {
+      "name": "baseFeeConfiguration",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "alpha1",
+          "type": "uint16"
+        },
+        {
+          "name": "alpha2",
+          "type": "uint16"
+        },
+        {
+          "name": "beta1",
+          "type": "uint32"
+        },
+        {
+          "name": "beta2",
+          "type": "uint32"
+        },
+        {
+          "name": "gamma1",
+          "type": "uint16"
+        },
+        {
+          "name": "gamma2",
+          "type": "uint16"
+        },
+        {
+          "name": "volumeBeta",
+          "type": "uint32"
+        },
+        {
+          "name": "volumeGamma",
+          "type": "uint16"
+        },
+        {
+          "name": "baseFee",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "farmingAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "poolByPair",
       "type": "function",
       "stateMutability": "view",
@@ -18,6 +107,215 @@
         {
           "name": "pool",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolDeployer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setBaseFeeConfiguration",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "alpha1",
+          "type": "uint16"
+        },
+        {
+          "name": "alpha2",
+          "type": "uint16"
+        },
+        {
+          "name": "beta1",
+          "type": "uint32"
+        },
+        {
+          "name": "beta2",
+          "type": "uint32"
+        },
+        {
+          "name": "gamma1",
+          "type": "uint16"
+        },
+        {
+          "name": "gamma2",
+          "type": "uint16"
+        },
+        {
+          "name": "volumeBeta",
+          "type": "uint32"
+        },
+        {
+          "name": "volumeGamma",
+          "type": "uint16"
+        },
+        {
+          "name": "baseFee",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFarmingAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_farmingAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setVaultAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "vaultAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "FarmingAddress",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newFarmingAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FeeConfiguration",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "alpha1",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "alpha2",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "beta1",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "beta2",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "gamma1",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "gamma2",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "volumeBeta",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "volumeGamma",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "baseFee",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Owner",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Pool",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VaultAddress",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newVaultAddress",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

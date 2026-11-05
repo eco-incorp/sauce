@@ -198,19 +198,31 @@ describe("sauce_globals", () => {
     assert.equal((one.protocol as { namespace: string }).namespace, "UniswapV3");
   });
 
-  it("lists every namespace's contracts without their methods, which `protocol` gives", async () => {
+  it("lists every namespace's contracts and every interface without their methods, which `protocol` gives", async () => {
     type Namespace = { namespace: string; contracts: Array<Record<string, unknown>> };
     const all = ok(await mcp.call("sauce_globals", { chain: "base", protocols: true })) as {
       protocols: Namespace[];
+      interfaces: Array<Record<string, unknown>>;
     };
     const contracts = all.protocols.flatMap((each) => each.contracts);
     assert.ok(contracts.length > 10);
     assert.ok(contracts.every((contract) => !("methods" in contract)));
     assert.ok(contracts.every((contract) => typeof contract.address === "string"));
+    assert.ok(all.interfaces.length > 0);
+    assert.ok(all.interfaces.every((bound) => !("methods" in bound)));
+    assert.ok(all.interfaces.some((bound) => bound.namespace === "Erc4626"));
     const one = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "UniswapV3" })) as {
       protocol: Namespace;
     };
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
+    const bound = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "Erc4626" })) as {
+      interfaces: Array<{ namespace: string; methods: Array<{ name: string }> }>;
+    };
+    assert.deepEqual(
+      bound.interfaces.map((each) => each.namespace),
+      ["Erc4626"],
+    );
+    assert.ok(bound.interfaces[0]!.methods.some((method) => method.name === "totalAssets"));
   });
 
   it("counts tokenized stocks out of the default, and says how to list and find them", async () => {
@@ -592,23 +604,23 @@ describe("sauce_pools", () => {
 
 describe("sauce_compile", () => {
   it("compiles a program with its own ABI beside it, given in modules", async () => {
-    // The sauce-script skill's example: the factory and the pool namespaces, `observe` through
-    // the program's own ./IOracle.json.
+    // The sauce-script skill's example: an ERC-721 collection, which no registry records, through
+    // the program's own ./IERC721.json.
     const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
-    const source = readFileSync(new URL("twap.sauce.ts", examples), "utf8");
-    const abi = readFileSync(new URL("IOracle.json", examples), "utf8");
+    const source = readFileSync(new URL("nft-handover.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IERC721.json", examples), "utf8");
     const out = ok(
-      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IOracle.json": abi } }),
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IERC721.json": abi } }),
     );
     assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
     assert.deepEqual(
       (out.entryParams as Array<{ name: string }>).map((param) => param.name),
-      ["tokenA", "tokenB", "fee", "window"],
+      ["nft", "tokenId", "to"],
     );
     // Without the module, the import has nothing to resolve to.
     assert.match(
       failed(await mcp.call("sauce_compile", { source, chain: "base" })),
-      /IOracle\.json/,
+      /IERC721\.json/,
     );
   });
 

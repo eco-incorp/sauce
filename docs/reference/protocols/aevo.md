@@ -29,7 +29,7 @@ Options and perpetuals exchange built on a custom OP Stack rollup. Off-chain ord
 - Withdrawals processed by the rollup bridge (takes ~7 days for L2 to L1)
 - Approve ERC-20 tokens to depositContract before calling depositERC20
 - The deposit contract is Aevo's OP Stack `L1StandardBridge`, so these are the standard bridge entry points.
-- `depositERC20` and `depositETH` are for an externally owned account only: called from a contract, a Pot included, they revert with "StandardBridge: function can only be called from an EOA", so a Sauce program cannot deposit with `depositERC20`. The bridge's `depositERC20To(l1Token, l2Token, to, amount, minGasLimit, extraData)` takes a contract caller; the registry's ABI for Aevo does not declare it, so a program binds an ABI of its own for it
+- `depositERC20` and `depositETH` are for an externally owned account only: called from a contract, a Pot included, they revert with "StandardBridge: function can only be called from an EOA", so a Sauce program cannot deposit with `depositERC20`. The bridge's `depositERC20To(l1Token, l2Token, to, amount, minGasLimit, extraData)` takes a contract caller: a program calls `Aevo.DepositContract.depositERC20To(...)`
 
 ## Its names in a program
 
@@ -52,10 +52,41 @@ function main() {
 
 ### `DepositContractABI`
 
-`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract.
+`import DepositContractABI from "./protocols/aevo/DepositContractABI.json";` Speaks for: depositContract. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Aevo` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `bridgeERC20(address _localToken, address _remoteToken, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
+- `bridgeERC20To(address _localToken, address _remoteToken, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
+- `bridgeETH(uint32 _minGasLimit, bytes _extraData) payable`
+- `bridgeETHTo(address _to, uint32 _minGasLimit, bytes _extraData) payable`
 - `depositERC20(address l1Token, address l2Token, uint256 amount, uint32 minGasLimit, bytes extraData)`
+- `depositERC20To(address _l1Token, address _l2Token, address _to, uint256 _amount, uint32 _minGasLimit, bytes _extraData)`
 - `depositETH(uint32 minGasLimit, bytes extraData) payable`
+- `depositETHTo(address _to, uint32 _minGasLimit, bytes _extraData) payable`
+- `deposits(address, address) view returns (uint256)`
+- `finalizeBridgeERC20(address _localToken, address _remoteToken, address _from, address _to, uint256 _amount, bytes _extraData)`
+- `finalizeBridgeETH(address _from, address _to, uint256 _amount, bytes _extraData) payable`
+- `finalizeERC20Withdrawal(address _l1Token, address _l2Token, address _from, address _to, uint256 _amount, bytes _extraData)`
+- `finalizeETHWithdrawal(address _from, address _to, uint256 _amount, bytes _extraData) payable`
+- `initialize(address _messenger, address _systemConfig)`
+- `initVersion() view returns (uint8)`
+- `l2TokenBridge() view returns (address)`
+- `messenger() view returns (address)`
+- `MESSENGER() view returns (address)`
+- `OTHER_BRIDGE() view returns (address)`
+- `otherBridge() view returns (address)`
+- `paused() view returns (bool)`
+- `proxyAdmin() view returns (address)`
+- `proxyAdminOwner() view returns (address)`
+- `superchainConfig() view returns (address)`
+- `systemConfig() view returns (address)`
+- `version() view returns (string)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ProxyAdminOwnedBase_NotProxyAdmin` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ProxyAdminOwnedBase_NotProxyAdminOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ProxyAdminOwnedBase_NotSharedProxyAdminOwner` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error ReinitializableBase_ZeroInitVersion` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

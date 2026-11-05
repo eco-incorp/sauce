@@ -57,10 +57,10 @@ describe("source globals match the Sauce contract model", () => {
         // @ts-expect-error ERC-20 balance owners are Sauce scalars too.
         USDC.balanceOf("0x1111111111111111111111111111111111111111");
         // An address-only contract is its address: no ABI, so no methods.
-        const provider: bigint = AaveV3.PoolAddressesProvider;
+        const provider: bigint = Paraswap.AugustusV6;
         const bundler: bigint = MorphoBlue.Bundler3;
         // @ts-expect-error An address-only contract has no methods to call.
-        AaveV3.PoolAddressesProvider.getPool();
+        Paraswap.AugustusV6.getPool();
         // An interface has no address of its own: it is called at one the program supplies.
         const shares: bigint = Erc4626.Vault.at(1n).deposit(1n, 1n);
         // @ts-expect-error An unbound interface is not an address.

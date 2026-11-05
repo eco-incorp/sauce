@@ -1,6 +1,96 @@
 {
   "abi": [
     {
+      "name": "allPairs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allPairsLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "createPair",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pair",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_ownerFeeShare",
+          "type": "uint256"
+        },
+        {
+          "name": "_feeTo",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feePercentOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeTo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "getPair",
       "type": "function",
       "stateMutability": "view",
@@ -18,6 +108,286 @@
         {
           "name": "pair",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "OWNER_FEE_SHARE_MAX",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ownerFeeShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "REFERER_FEE_SHARE_MAX",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "referrersFeeShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setFeePercentOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feePercentOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeTo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeTo",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwnerFeeShare",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwnerFeeShare",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setReferrerFeeShare",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "referrer",
+          "type": "address"
+        },
+        {
+          "name": "referrerFeeShare",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSetStableOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_setStableOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStableOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "FeePercentOwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FeeToTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevFeeTo",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeTo",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnerFeeShareUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevOwnerFeeShare",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ownerFeeShare",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PairCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "pair",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "length",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReferrerFeeShareUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "referrer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "prevReferrerFeeShare",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "referrerFeeShare",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetStableOwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

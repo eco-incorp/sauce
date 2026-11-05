@@ -1,10 +1,8 @@
 // Closes the Pot's position in a Morpho Blue market: repays all of its debt by its borrow shares,
 // so no dust of debt is left behind, from the Pot's loan token, and withdraws all of its collateral
 // to `to`. Interest is accrued first, so the debt repaid is the debt now; the loan token is approved
-// for exactly that. Refuses a debt above `maxRepay`. Morpho's reads, which the registry's Morpho ABI
-// does not declare, are in MorphoMarket.json beside this file, as Morpho Blue's IMorpho interface
-// declares them. Returns the loan token repaid, the shares that repaid, and the collateral
-// withdrawn.
+// for exactly that. Refuses a debt above `maxRepay`. Returns the loan token repaid, the shares that
+// repaid, and the collateral withdrawn.
 //
 //   sauce run morpho-repay.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <id> <maxRepay> <to>
@@ -18,7 +16,6 @@
 //
 //   sauce run morpho-repay.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 0x94b823e6bd8ea533b4e33fbc307faea0b307301bc48763acc4d4aa4def7636cd 1010000000 <to>
-import MorphoMarket from "./MorphoMarket.json";
 
 // Morpho's virtual shares and assets, which it adds to a market's totals in every conversion.
 const VIRTUAL_SHARES = 1000000;
@@ -29,8 +26,7 @@ function main(
   maxRepay: Uint256,
   to: Address,
 ): { repaid: Uint256; sharesRepaid: Uint256; withdrawn: Uint256 } {
-  const morpho = MorphoMarket.at(MorphoBlue.Morpho);
-  const params = morpho.idToMarketParams(id);
+  const params = MorphoBlue.Morpho.idToMarketParams(id);
   require(params.loanToken != 0, "no Morpho Blue market has that id");
   const market = {
     loanToken: params.loanToken,
@@ -42,12 +38,12 @@ function main(
 
   // 1. The debt now: interest accrued, then the Pot's shares in the loan token, rounded up as
   //    Morpho rounds what a repayment of shares costs.
-  morpho.accrueInterest(market);
-  const position = morpho.position(id, pot);
+  MorphoBlue.Morpho.accrueInterest(market);
+  const position = MorphoBlue.Morpho.position(id, pot);
   let repaid = 0;
   let sharesRepaid = 0;
   if (position.borrowShares > 0) {
-    const totals = morpho.market(id);
+    const totals = MorphoBlue.Morpho.market(id);
     const shares = totals.totalBorrowShares + VIRTUAL_SHARES;
     const owed =
       (position.borrowShares * (totals.totalBorrowAssets + VIRTUAL_ASSETS) + shares - 1) / shares;
