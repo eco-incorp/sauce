@@ -36,6 +36,13 @@
 // newest blocks of the first deployment that emitted one, which the test decodes with the
 // registry's own declaration.
 //
+// A read that fails is never recorded as an answer. A null carrier means the code was read and
+// does not carry it, and the generator leaves out what no deployment carries, so every read of code
+// (a layer, a facet, a linked library) throws when it cannot be answered, and the run stops before
+// it writes the fixture (`lib/registry-capture.mjs`). A call a contract reverts is its answer; a
+// node that fails one is not. A deployment whose layers could not be resolved is recorded with
+// `error`, which both generators refuse.
+//
 // RPC endpoints come only from the file `--rpc-config` names: a JSON object mapping each chain id to
 // its URL, or to a list of URLs a failed request moves along (`{ "<chainId>": "<url>" }`,
 // `{ "<chainId>": ["<url>", "<url>"] }`). There is no default and no public fallback, and nothing is
@@ -48,6 +55,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { decodeAbiParameters, keccak256, toEventSelector, toFunctionSelector } from "viem";
+import {
+  ERAVM,
+  ZERO,
+  embeddedAddresses,
+  facetCodes,
+  isAddress,
+  isRevert,
+  linkedLibraries,
+  readCode,
+} from "./lib/registry-capture.mjs";
 
 const USAGE =
   "usage: node scripts/capture-registry-abi.mjs --recapture --rpc-config <path> " +
@@ -153,9 +170,6 @@ const ETHERSCAN_COMPATIBLE = {
   324: ["zksync-explorer", "https://block-explorer-api.mainnet.zksync.io/api"],
 };
 
-/** zkSync Era runs EraVM bytecode: no PUSH4 dispatcher to parse, so selectors are found by scan. */
-const ERAVM = new Set([324]);
-
 /** The URL attempt `attempt` of a request to `chainId` goes to: the config's list, in turn. */
 function rpcUrl(chainId, attempt) {
   const urls = RPC_URLS.get(chainId);
@@ -206,16 +220,6 @@ async function rpc(chainId, method, params) {
   }
 }
 
-/**
- * Whether a JSON-RPC error is the call's own revert, as nodes report one (code 3, or -32000/-32015
- * with an execution message), rather than a node refusing or failing the request.
- */
-function isRevert(error) {
-  const message = String(error?.message ?? "").toLowerCase();
-  if (error?.code === 3) return true;
-  return /revert|execution|invalid opcode|out of gas|stack underflow|bad instruction/.test(message);
-}
-
 /** Minimum spacing between requests to one host, so a free API's rate limit is not tripped. */
 const SPACING_MS = {
   "sourcify.dev": 350,
@@ -233,7 +237,8 @@ async function throttle(host) {
 /**
  * JSON body, `null` for "not here" (404 / not verified). Throws when the API could not answer: a
  * rate limit or a server error after retries, and at once a refusal (401/403: a key wall or a
- * challenge page, which no retry passes), so a refused lookup is never recorded as "unverified".
+ * challenge page, which no retry passes, and any other status but 404), so a refused lookup is
+ * never recorded as "unverified".
  */
 async function getJson(url) {
   const host = new URL(url).host;
@@ -249,8 +254,7 @@ async function getJson(url) {
       await sleep(2000 * 2 ** attempt);
       continue;
     }
-    if (res.status === 401 || res.status === 403) throw new Error(`${host}: HTTP ${res.status}`);
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`${host}: HTTP ${res.status}`);
     return await res.json();
   }
 }
@@ -326,7 +330,6 @@ const getSlot = (chainId, address, slot) =>
 const call = (chainId, to, data) =>
   memo(`call:${chainId}:${to}:${data}`, () => rpc(chainId, "eth_call", [{ to, data }, "latest"]));
 
-const ZERO = "0x0000000000000000000000000000000000000000";
 const SLOTS = {
   eip1967: "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
   eip1967Beacon: "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50",
@@ -370,7 +373,6 @@ function decodeAddressArray(data) {
 
 const wordToAddress = (word) =>
   word && word.length === 66 && /^0x0{24}/.test(word) ? `0x${word.slice(-40)}`.toLowerCase() : null;
-const isAddress = (a) => a !== null && a !== ZERO && /^0x[0-9a-f]{40}$/.test(a);
 
 /** Small code that DELEGATECALLs: a proxy, whatever its storage layout. */
 function proxyShaped(chainId, code) {
@@ -383,10 +385,14 @@ async function hasCode(chainId, address) {
   return Boolean(code && code !== "0x");
 }
 
-/** The proxy layers under `address`, outermost first. */
+/** The proxy layers under `address`, outermost first. A chain of proxies deeper than any captured
+ *  one is refused rather than cut short: a layer left out is code whose events nothing reads. */
 async function resolveLayers(chainId, address, seen = new Set()) {
   address = address.toLowerCase();
-  if (seen.has(address) || seen.size > 6) return [];
+  if (seen.has(address)) return [];
+  if (seen.size > 6) {
+    throw new Error(`${address}: more than 7 proxy layers under ${[...seen][0]} — read them`);
+  }
   seen.add(address);
   const code = await getCode(chainId, address);
   if (!code || code === "0x") return [{ address, kind: "empty" }];
@@ -450,56 +456,6 @@ async function routerLookups(chainId, address) {
     if (typeof probe !== "string" || probe.length < 66) continue;
     if (wordToAddress(probe.slice(0, 66)) !== ZERO) continue;
     found.push([lookup, lsel]);
-  }
-  return found;
-}
-
-/**
- * The addresses a thin proxy hard-codes: PUSH20 constants, and PUSH32 words holding an address (how
- * Solidity inlines an `immutable address`).
- */
-function embeddedAddresses(code) {
-  const hex = code.slice(2);
-  const out = new Set();
-  for (let i = 0; i < hex.length; i += 2) {
-    const op = parseInt(hex.slice(i, i + 2), 16);
-    let imm = null;
-    if (op === 0x73) imm = `0x${hex.slice(i + 2, i + 42)}`;
-    if (op === 0x7f && /^0{24}/.test(hex.slice(i + 2, i + 26)))
-      imm = `0x${hex.slice(i + 26, i + 66)}`;
-    if (imm !== null) {
-      imm = imm.toLowerCase();
-      if (isAddress(imm) && !/^0x0{8}/.test(imm) && !/^0xf{8}/.test(imm)) out.add(imm);
-    }
-    if (op >= 0x60 && op <= 0x7f) i += 2 * (op - 0x5f);
-  }
-  return [...out];
-}
-
-/**
- * The Solidity libraries `codes` link, by address: each embedded address whose code is a deployed
- * library's, which opens with the call guard solc writes into every library (PUSH20 its own
- * address, ADDRESS, EQ). A library runs in its caller's context through DELEGATECALL, so what it
- * emits or reverts with is its caller's (Aave's Pool emits `Supply` from SupplyLogic). A library
- * links others in turn. None on EraVM, whose code is not EVM bytecode.
- */
-async function linkedLibraries(chainId, codes) {
-  const found = new Map();
-  if (ERAVM.has(chainId)) return found;
-  const tried = new Set();
-  for (let frontier = codes.filter(Boolean); frontier.length > 0;) {
-    const next = [];
-    for (const code of frontier) {
-      for (const address of embeddedAddresses(code)) {
-        if (tried.has(address)) continue;
-        tried.add(address);
-        const library = await getCode(chainId, address).catch(() => null);
-        if (!library?.toLowerCase().startsWith(`0x73${address.slice(2)}3014`)) continue;
-        found.set(address, library);
-        next.push(library);
-      }
-    }
-    frontier = next;
   }
   return found;
 }
@@ -759,12 +715,15 @@ function noteVerifiedCode(chainId, address, codeHash) {
  * The verified ABI of the same runtime code elsewhere, for an address no source could answer for:
  * another captured layer with its code hash, or the same address on another configured chain. It
  * is taken only where the two codes are equal byte for byte (`sameCodeAs`), so it is that code's
- * own ABI; null when none is.
+ * own ABI. `{ twin: null, failures }` when none is, with each lookup that could not be answered:
+ * the instance records them with its own (`abiErrors`), so an outage is never an "unverified".
  */
 function sameCodeAbi(chainId, address) {
   return memo(`same:${chainId}:${address}`, async () => {
-    const code = await getCode(chainId, address).catch(() => null);
-    if (!code || code === "0x") return null;
+    // A layer's own code, read already to resolve it: one that cannot be read now fails the run.
+    const code = await readCode(getCode, chainId, address, "a layer");
+    const failures = [];
+    if (code === "0x") return { twin: null, failures };
     const full = keccak256(code);
     const candidates = [
       ...(VERIFIED_CODE.get(full.slice(0, 18)) ?? []),
@@ -774,12 +733,16 @@ function sameCodeAbi(chainId, address) {
     for (const [c, a] of candidates) {
       if (tried.has(`${c}:${a}`)) continue;
       tried.add(`${c}:${a}`);
-      const other = await getCode(c, a).catch(() => null);
-      if (!other || keccak256(other) !== full) continue;
-      const v = await verifiedAbi(c, a).catch(() => null);
-      if (v) return { ...v, sameCodeAs: `${c}:${a}` };
+      try {
+        const other = await getCode(c, a);
+        if (!other || keccak256(other) !== full) continue;
+        const v = await verifiedAbi(c, a);
+        if (v) return { twin: { ...v, sameCodeAs: `${c}:${a}` }, failures };
+      } catch (err) {
+        failures.push(`same code at ${c}:${a}: ${err.message}`);
+      }
     }
-    return null;
+    return { twin: null, failures };
   });
 }
 
@@ -792,9 +755,9 @@ async function lookupAbi(chainId, address, result) {
   try {
     return await verifiedAbi(chainId, address);
   } catch (err) {
-    const twin = await sameCodeAbi(chainId, address);
+    const { twin, failures } = await sameCodeAbi(chainId, address);
     if (twin !== null) return twin;
-    (result.abiErrors ??= []).push(`${address}: ${err.message}`);
+    (result.abiErrors ??= []).push([`${address}: ${err.message}`, ...failures].join("; "));
     return null;
   }
 }
@@ -1056,14 +1019,16 @@ async function captureInstance(job, target, seeds, seedMarks) {
   // that runs carries each (a layer, a facet a router named, or a library either links), or null.
   // An anonymous event is found by the shape of the LOG that emits it (`emitsAnonymous`), having no
   // topic0 to find.
-  const facetCode = {};
-  for (const facet of [...new Set([...facets, ...Object.values(routed).map((r) => r.facet)])]) {
-    facetCode[facet] = await getCode(chainId, facet).catch(() => null);
-  }
-  const libraries = await linkedLibraries(chainId, [
-    ...layers.map((l) => l.code),
-    ...Object.values(facetCode),
-  ]);
+  const facetCode = await facetCodes(
+    chainId,
+    [...new Set([...facets, ...Object.values(routed).map((r) => r.facet)])],
+    getCode,
+  );
+  const libraries = await linkedLibraries(
+    chainId,
+    [...layers.map((l) => l.code), ...Object.values(facetCode)],
+    getCode,
+  );
   const locate = (kind, mark) => {
     const topics = kind === "event" ? ANONYMOUS.get(mark) : undefined;
     const carries =
@@ -1105,7 +1070,10 @@ async function captureInstance(job, target, seeds, seedMarks) {
   return result;
 }
 
-/** One JSON-RPC request with no retry on an error the node answers: a too-wide range is an answer. */
+/**
+ * One JSON-RPC request with no retry on an error the node answers: a too-wide range is an answer.
+ * A request no endpoint answered is not one, and fails the run.
+ */
 async function rpcAnswer(chainId, method, params) {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -1118,7 +1086,9 @@ async function rpcAnswer(chainId, method, params) {
       const body = await res.json();
       return body.error ? { error: body.error } : { result: body.result };
     } catch (err) {
-      if (attempt >= 2) return { error: { message: err.message } };
+      if (attempt >= 2) {
+        throw new Error(`chain ${chainId} ${method} failed: ${err.message}`, { cause: err });
+      }
       await sleep(1000 * 2 ** attempt);
     }
   }
@@ -1127,11 +1097,16 @@ async function rpcAnswer(chainId, method, params) {
 /**
  * The newest log `address` emitted under `topic0`, or null when none turns up within the search: a
  * window walked back from the head, narrowed when the node refuses its width and widened while it
- * comes back empty. A proxy emits under its own address, so `address` is the instance's.
+ * comes back empty. A proxy emits under its own address, so `address` is the instance's. A head the
+ * node will not give is no search at all, and fails the run.
  */
 async function newestLog(chainId, address, topic0) {
   const head = await rpcAnswer(chainId, "eth_blockNumber", []);
-  if (head.error) return null;
+  if (head.error) {
+    throw new Error(
+      `chain ${chainId} eth_blockNumber: ${JSON.stringify(head.error).slice(0, 200)}`,
+    );
+  }
   let to = parseInt(head.result, 16);
   let span = 50_000;
   for (let requests = 0; requests < 16 && to > 0; requests++) {

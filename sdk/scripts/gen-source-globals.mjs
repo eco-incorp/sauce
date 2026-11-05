@@ -41,6 +41,7 @@ import ts from "typescript";
 import { toFunctionSelector } from "viem";
 
 import { createTsLoader } from "./lib/load-ts.mjs";
+import { readableRows } from "./lib/registry-capture.mjs";
 import {
   ACCESSOR_PROPERTIES,
   abiName,
@@ -141,8 +142,12 @@ const signatureOf = (f) => `${f.name}(${f.inputs.map(canonicalType).join(",")})`
 const evidence = JSON.parse(
   readFileSync(resolve(sdk, "test/fixtures/registry-abi/evidence.json"), "utf8"),
 );
+// A deployment whose capture recorded an error was not read: each export's rows are taken only
+// when every one was (`readableRows`), so no function is withheld for a read that failed.
 const rowOf = new Map(
-  evidence.instances.map((r) => [`${r.protocol}|${r.abi}|${r.chainId}|${r.address}`, r]),
+  [...new Set(evidence.instances.map((r) => `${r.protocol}|${r.abi}`))]
+    .flatMap((key) => readableRows(evidence.instances, ...key.split("|")))
+    .map((r) => [`${r.protocol}|${r.abi}|${r.chainId}|${r.address}`, r]),
 );
 const fieldNames = (params) =>
   params
@@ -171,7 +176,7 @@ const abiParam = (p) => ({
  * as an ABI item; else `false`.
  */
 function runs(row, fn) {
-  if (row === undefined || row.error !== undefined) return false;
+  if (row === undefined) return false;
   const sig = signatureOf(fn);
   const where = row.selectors?.[toFunctionSelector(sig)];
   if (where === undefined || where === null) return false;

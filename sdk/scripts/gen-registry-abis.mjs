@@ -42,6 +42,7 @@ import ts from "typescript";
 import { toEventSelector, toFunctionSelector } from "viem";
 
 import { createTsLoader } from "./lib/load-ts.mjs";
+import { readableRows } from "./lib/registry-capture.mjs";
 import {
   ACCESSOR_PROPERTIES,
   defaultContract,
@@ -184,9 +185,14 @@ function fullAbi(slug, exportName, today, target, contracts) {
   const standard = target.standard !== undefined;
   const common = target.common !== undefined;
   if (standard && common) fail(`${slug}.${exportName}: \`standard\` and \`common\` both`);
-  const rows = evidence.instances.filter(
-    (r) => r.protocol === slug && r.abi === exportName && r.error === undefined,
-  );
+  // A deployment whose capture recorded an error was not read: what it carries is unknown, so the
+  // export is refused rather than built from the rest, which would leave out what only it carries.
+  let rows;
+  try {
+    rows = readableRows(evidence.instances, slug, exportName);
+  } catch (err) {
+    fail(err.message);
+  }
   if (rows.length === 0) fail(`${slug}.${exportName}: no captured deployment — recapture ${slug}`);
   const verifiedOf = (row) => (row.verified ?? []).map((id) => evidence.fragments[id]);
   const ref = reference.get(`${slug}.${exportName}`) ?? [];

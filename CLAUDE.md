@@ -790,9 +790,16 @@ Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the comm
 `sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The script
 reads nothing from the environment and has no public fallback: before its first request it fails,
 listing each chain id the selected deployments need that the file does not give. Verified ABIs come
-from Sourcify, Blockscout and keyless Etherscan-compatible APIs. An explorer that refuses (HTTP
-401/403: Base, Arbitrum and Polygon Blockscout sit behind a challenge page) is recorded as
-`abiErrors`, never as "unverified". Such a layer first takes the verified ABI of the same runtime
+from Sourcify, Blockscout and keyless Etherscan-compatible APIs. An explorer that refuses (any
+status but 404, as HTTP 401/403: Base, Arbitrum and Polygon Blockscout sit behind a challenge page)
+is recorded as `abiErrors`, never as "unverified". A READ THAT FAILS IS NEVER AN ANSWER: a null
+carrier means code was read and does not carry the event or error, and `gen-registry-abis.mjs` leaves
+out what no deployment carries, so every code read (layers, facets, linked libraries:
+`scripts/lib/registry-capture.mjs`) throws when it cannot be answered and the run stops before it
+writes; a node that aborts a call is no revert; a proxy chain deeper than the guard is refused, not
+cut short; and a deployment whose layers could not be resolved is recorded with `error`, which both
+generators refuse (`readableRows`). `registry-capture-failclosed.test.ts` drives those reads with a
+reader that fails. A layer an explorer refused first takes the verified ABI of the same runtime
 code elsewhere (another captured layer, or the address on another configured chain), byte-equal by
 keccak and recorded as `sameCodeAs`; else a deployment whose layers and code are unchanged keeps the
 fragments the previous capture verified from that source, the source marked
