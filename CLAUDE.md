@@ -1956,7 +1956,10 @@ skip the publish, and tag that commit, which the tarball does not contain.
 **Recovery when `publish` succeeded and `release` failed: use "Re-run failed jobs" on that same run,
 never a new dispatch** (a new one is refused). It keeps the run's commit, number and notes, so the tag
 lands on the commit that was published; re-running the tag step after it succeeded changes nothing,
-and it refuses to touch a tag that sits on another commit. If the run can no longer be re-run, an admin
+and it refuses to touch a tag that sits on another commit. `publish` itself never skips a version that
+is already on npm, on any attempt: it cannot show whose it is, and a re-run number says nothing about
+which run published it. If that step failed after npm accepted the tarball, compare the registry's
+tarball with this commit's `pnpm pack`, then tag by hand. If the run can no longer be re-run, an admin
 tags the commit the run built (shown on its page) `vX.Y.Z` and creates the release by hand; the next
 dispatch then continues from that tag.
 

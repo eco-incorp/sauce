@@ -87,6 +87,11 @@ describe("baselineTag", () => {
   });
   it("ignores prereleases and tags of another shape", () => {
     assert.equal(baselineTag(["v1.0.0", "v2.0.0-rc.1", "compiler-v9.0.0", "1.5.0", ""]), "v1.0.0");
+    // A hand-pushed `v1.01.0` is not a release tag, and must not become the baseline.
+    assert.equal(
+      baselineTag(["v1.0.0", "v1.01.0", "v01.5.0", "v99999999999999999999.0.0"]),
+      "v1.0.0",
+    );
     assert.equal(baselineTag(["v2.0.0-rc.1"]), undefined);
   });
 });
@@ -283,6 +288,8 @@ describe("against npm", () => {
     // A prerelease above the baseline is not a stable release, so it is not "published ahead".
     const rc = ["1.0.0", "1.1.0-rc.1"];
     assert.equal(nextRelease({ cwd: r.cwd, published: rc }).version, "1.0.1");
+    // Nor is a malformed version on npm's list one.
+    assert.equal(nextRelease({ cwd: r.cwd, published: ["1.0.0", "1.01.5"] }).version, "1.0.1");
   });
 
   // The recovery hazard: run A publishes 1.0.1 from commit A and its release job fails, so no tag.
@@ -369,8 +376,12 @@ describe("a manual version", () => {
 
   it("must be X.Y.Z and above the newest release", () => {
     const r = revertedMajor();
-    for (const bad of ["1.0.0", "0.99.19", "v1.1.0", "1.1", "1.1.0-rc.1"]) {
-      assert.throws(() => nextRelease({ cwd: r.cwd, releaseAs: bad }), /--release-as/, bad);
+    // Leading zeros and unsafe integers: `npm version 1.01.0` stamps 1.1.0 while the tag would keep
+    // the zero, and the next plan would then refuse a tag npm does not have, for good.
+    const bad = ["1.0.0", "0.99.19", "v1.1.0", "1.1", "1.1.0-rc.1", "1.01.0", "01.1.0", "1.1.00"];
+    bad.push("99999999999999999999.0.0", "1.1.0 ", "");
+    for (const value of bad.filter(Boolean)) {
+      assert.throws(() => nextRelease({ cwd: r.cwd, releaseAs: value }), /--release-as/, value);
     }
   });
 

@@ -43,8 +43,14 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
-const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+// Semver's own grammar: no leading zeros (`1.01.0` is not a version, and `npm version` would
+// silently turn it into 1.1.0 while the tag kept the zero), and every part a safe integer.
+const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const isVersion = (value) =>
+  typeof value === "string" &&
+  VERSION.test(value) &&
+  value.split(".").every((part) => Number.isSafeInteger(Number(part)));
+const isTag = (value) => typeof value === "string" && value[0] === "v" && isVersion(value.slice(1));
 // conventional-changelog-conventionalcommits' header pattern, with the type required.
 const HEADER = /^(\w+)(?:\((.*)\))?(!)?: (.*)$/;
 // Matched the way conventional-commits-parser matches it: a leading `*` bullet (GitHub's squash
@@ -87,18 +93,16 @@ export function bump(version, level) {
 
 /** The highest stable `vX.Y.Z` among `tags`, compared as numbers, or undefined. */
 export function baselineTag(tags) {
-  return tags
-    .filter((tag) => TAG.test(tag))
-    .sort((a, b) => {
-      const [x, y] = [a, b].map((tag) => TAG.exec(tag).slice(1).map(Number));
-      return y[0] - x[0] || y[1] - x[1] || y[2] - x[2];
-    })[0];
+  return tags.filter(isTag).sort((a, b) => {
+    const [x, y] = [a, b].map((tag) => tag.slice(1).split(".").map(Number));
+    return y[0] - x[0] || y[1] - x[1] || y[2] - x[2];
+  })[0];
 }
 
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 const compare = (a, b) => {
-  const [x, y] = [a, b].map((version) => VERSION.exec(version).slice(1).map(Number));
+  const [x, y] = [a, b].map((version) => version.split(".").map(Number));
   return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
 };
 
@@ -113,7 +117,7 @@ const compare = (a, b) => {
  *    package, so nothing could tell the two apart afterwards: this refuses instead.
  */
 export function checkPublished({ baseline, published }) {
-  const stable = [published].flat().filter((version) => VERSION.test(version));
+  const stable = [published].flat().filter(isVersion);
   if (!stable.includes(baseline)) {
     throw new Error(
       `v${baseline} is tagged but ${baseline} is not on npm: a tag alone is not a release, so nothing is planned from it`,
@@ -129,7 +133,7 @@ export function checkPublished({ baseline, published }) {
 
 /** A manual version must be a plain X.Y.Z above the baseline (which is npm's newest, once checked). */
 function checkReleaseAs({ releaseAs, baseline }) {
-  if (!VERSION.test(releaseAs)) throw new Error(`--release-as ${releaseAs} is not X.Y.Z`);
+  if (!isVersion(releaseAs)) throw new Error(`--release-as ${releaseAs} is not a plain X.Y.Z`);
   if (compare(releaseAs, baseline) <= 0) {
     throw new Error(`--release-as ${releaseAs} is not above the newest release, v${baseline}`);
   }

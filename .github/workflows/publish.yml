@@ -19,16 +19,17 @@ name: Publish
 # there. A tag npm lacks (pushed by hand) or a version npm has that no tag names (published, then
 # the tag step failed) STOPS the plan. This is what ties a version to its commit, since npm records
 # no `gitHead` for this package: a fresh dispatch after a failed `release` job would otherwise
-# compute the same version from a newer commit, skip the publish, and tag that commit.
+# compute the same version from a newer commit and tag that commit, whatever its publish step did.
 #
 # After the plan: Checks and Lint gate the commit, `publish` builds and publishes to npm, and
 # `release` tags `vX.Y.Z` and creates the GitHub release, in that order.
 #
 # RECOVERY. If `publish` succeeded and `release` failed, use "Re-run failed jobs" on THAT run: it
 # keeps the commit, the number and the notes, so the tag lands on the commit that was published.
-# Do not dispatch again; the plan refuses. If that run can no longer be re-run, an admin tags the
-# commit it built (shown on the run) as `vX.Y.Z` and creates the release by hand; the next
-# dispatch then continues from that tag.
+# Do not dispatch again; the plan refuses. `publish` never skips a version already on npm: if it
+# failed after npm took the tarball, compare that tarball with this commit's `pnpm pack` and tag by
+# hand. If the run can no longer be re-run, an admin tags the commit it built (shown on the run) as
+# `vX.Y.Z` and creates the release by hand; the next dispatch then continues from that tag.
 #
 # Publishes to PUBLIC npmjs.com ONLY (auth: NPM_TOKEN).
 #
@@ -248,29 +249,25 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      # The plan REFUSES a version that npm already has, so by the time this runs the version is not
-      # on npm, and publishing it is what ties it to $GITHUB_SHA. It can exist here only if something
-      # published it since the plan, or an earlier attempt of THIS run did. "Re-run failed jobs"
-      # keeps the run's commit, so that earlier attempt's tarball is this commit's and the publish
-      # is skipped; on the first attempt nothing in this run published it, so its source cannot be
-      # proven and this refuses. npm records no `gitHead` for this package, so existence is all
-      # there is to ask, which is why the tie to the commit is made here and in the plan.
+      # The plan REFUSES a version that npm already has, so when this runs the version is not on
+      # npm, and publishing it is what ties it to $GITHUB_SHA. If it exists NOW, on any attempt, it
+      # cannot be shown to come from this commit: another run, an old workflow file or a hand publish
+      # put it there, and a re-run number says nothing about which. So this refuses and never skips.
+      # The documented recovery does not need a skip: when `publish` succeeded and `release` failed,
+      # "Re-run failed jobs" re-runs `release` only. If this step itself failed after npm accepted the
+      # tarball, someone compares the registry's tarball with this commit's `pnpm pack` and tags by
+      # hand. npm records no `gitHead` for this package, so there is nothing to compare automatically.
       - name: Publish to npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ needs.plan.outputs.version }}
-          ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
           if npm view "@eco-incorp/sauce@$VERSION" version >/dev/null 2>&1; then
-            if [ "$ATTEMPT" = "1" ]; then
-              echo "::error::@eco-incorp/sauce@$VERSION appeared on npmjs.com after the plan, and nothing in this run published it: its source cannot be shown to be $GITHUB_SHA. Refusing."
-              exit 1
-            fi
-            echo "@eco-incorp/sauce@$VERSION was published by an earlier attempt of this run, from $GITHUB_SHA: skipping the publish."
-          else
-            pnpm publish --access public --no-git-checks
+            echo "::error::@eco-incorp/sauce@$VERSION is already on npmjs.com, and nothing shows it was built from $GITHUB_SHA. Refusing to publish or tag."
+            exit 1
           fi
+          pnpm publish --access public --no-git-checks
 
   # Tag and GitHub release, AFTER the publish and in their own job so the one with `contents:
   # write` never holds NPM_TOKEN, and the one with NPM_TOKEN cannot write to the repository. The
@@ -297,6 +294,8 @@ jobs:
       - name: Create the tag and GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # There is no checkout in this job, so `gh release` has no git remote to resolve.
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
@@ -316,9 +315,13 @@ jobs:
             echo "::error::$tag already exists at $at, but this run published $GITHUB_SHA. Refusing to reuse or move it."
             exit 1
           fi
-          if gh release view "$tag" >/dev/null 2>&1; then
+          # Only "not found" means create; any other failure is surfaced, not read as absence.
+          if out=$(gh release view "$tag" 2>&1); then
             echo "$tag is already released at $GITHUB_SHA: nothing to do."
-          else
+          elif grep -qi "release not found" <<<"$out"; then
             gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" \
               --notes-file release-notes/notes.md --latest
+          else
+            echo "::error::could not tell whether $tag is released: $out"
+            exit 1
           fi
