@@ -12,6 +12,16 @@ version is out. It needs the command installed ([Install](cli.md#install)). The
 what the compiler and engine releases it shipped changed. Read the entries from your version up to
 the one you move to first.
 
+Use Node.js 24 or newer for installation and the CLI (`node --version` checks it). If Node is older,
+upgrade it first, then reinstall the global command:
+
+```sh
+npm install --global --engine-strict @eco-incorp/sauce@latest
+```
+
+Keep both flags: `@latest` avoids npm selecting an obsolete compatible release, which may provide
+`sauce-dev-tools` instead of `sauce`; `--engine-strict` refuses unsupported runtimes.
+
 ## Check which version you run
 
 ```sh
@@ -69,12 +79,13 @@ version installs its own.
 
 ## Update a project's pinned copy
 
-A project made with `sauce init`, or one that ran `npm i -D -E @eco-incorp/sauce`, pins the package
-to one exact version, so every machine and CI job runs the same command and compiler. Update it
-like any other dependency, with the command `sauce update` prints there, for example:
+A project made with `sauce init`, or one that ran
+`npm install --engine-strict -D -E @eco-incorp/sauce@latest`, pins the package to one exact version,
+so every machine and CI job runs the same command and compiler. Update it like any other dependency,
+with the command `sauce update` prints there, for example:
 
 ```sh
-npm install -D -E @eco-incorp/sauce@<version>
+npm install --engine-strict -D -E @eco-incorp/sauce@<version>
 ```
 
 Then update the skills (next section), and simulate your programs again on the new version before
@@ -106,9 +117,9 @@ removed, except the newest of them. A newer version's folder is never touched.
 ## Update the MCP server
 
 A project's MCP entry pins one version of the package. After an upgrade, rewrite it with
-`npx -y @eco-incorp/sauce@latest mcp setup --force`, then restart the server from your agent (in
-most agents, restart the session). The server tells the agent when a newer release is out
-([A newer version](mcp.md#a-newer-version)).
+`npx --engine-strict -y @eco-incorp/sauce@latest mcp setup --force`, then restart the server from
+your agent (in most agents, restart the session). The server tells the agent when a newer release
+is out ([A newer version](mcp.md#a-newer-version)).
 
 ## Know how the compiler and the engine pair
 

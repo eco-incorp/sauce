@@ -565,6 +565,27 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
+  assert.match(sauce("--help"), /Usage:/, "the installed sauce command shows help");
+  for (const version of ["22.20.0", "23.11.0"]) {
+    const refused = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(version)} });
+         await import(${JSON.stringify(pathToFileURL(join(installedRoot, installedManifest.bin.sauce)).href)});`,
+        "--",
+        "--version",
+      ],
+      { cwd: work, encoding: "utf8", env: smokeEnv },
+    );
+    assert.equal(refused.status, 1, `the installed command refuses Node ${version}`);
+    assert.equal(refused.stdout, "");
+    assert.match(refused.stderr, /Node\.js 24/);
+    assert.ok(refused.stderr.includes(version));
+    assert.ok(refused.stderr.includes("@eco-incorp/sauce@latest"));
+  }
+  console.log("Clean package install: supported help/version and unsupported Node refusal pass");
   // The update check, from the install: a fresh cache in a home of its own naming a newer version
   // is noticed on stderr, after stdout's own output, and starts no refresh (the cache is a minute
   // old), so nothing reads the registry. The refresh's script ships beside the bin.
