@@ -9,8 +9,13 @@
 //   fix, perf, revert                            -> patch
 //   a `!` before the colon, or a `BREAKING CHANGE:` footer, on a commit of ANY type -> major
 //   everything else (docs, chore, ci, test, refactor, style, build)                  -> no release
-// v12 caps breaking changes at a minor during its private beta. The SDK is public and past 1.0, so
-// there is no cap here: a breaking change is a major.
+// "Breaking" here is the SDK's own: a change SDK USERS would notice (a SauceScript program that
+// stops compiling or runs differently, a removed or renamed export, command, flag or MCP tool). An
+// engine, compiler or Kitchen major that the SDK absorbs, with no change for its users, is NOT one:
+// it is a `feat` or `fix` here. A commit text cannot tell the two apart, so a computed major is
+// REFUSED unless the caller passes `--allow-major`, which is a person saying users will notice.
+// (v12 caps majors at a minor during its private beta; this is the public SDK's equivalent: a major
+// is a decision, never a side effect of a footer.)
 //
 // BASELINE. The highest `vX.Y.Z` tag by semver, found by tag name and NOT by reachability from the
 // branch. semantic-release only looks at tags in the branch's history, and `v1.0.0` is not: it was
@@ -26,7 +31,8 @@
 // the plan is also held to npm: the baseline tag must be published and be the newest stable version
 // there, or nothing is planned. See `checkPublished`. A local run without it skips the check.
 //
-// OVERRIDE. `--release-as X.Y.Z` replaces the computed number, never the decision to release: a
+// OVERRIDE. `--release-as X.Y.Z` replaces the computed number, never the decision to release (and
+// a major, computed or given, needs `--allow-major` all the same): a
 // merged commit message cannot be edited, so a breaking footer that was undone in the same PR, or a
 // revert of a `feat!`, would otherwise force a major onto npm for good.
 //
@@ -141,6 +147,7 @@ export function nextRelease({
   repository,
   published,
   releaseAs,
+  allowMajor = false,
 } = {}) {
   const tag = baselineTag(git(cwd, "tag", "--list", "v*").split("\n"));
   if (!tag) throw new Error("no vX.Y.Z tag to release from: refusing to guess a first version");
@@ -167,6 +174,14 @@ export function nextRelease({
   const computed = bump(current, level);
   if (releaseAs) checkReleaseAs({ releaseAs, baseline: current });
   const version = releaseAs ?? computed;
+  if (!allowMajor && Number(version.split(".")[0]) > Number(current.split(".")[0])) {
+    const why = commits
+      .filter((c) => c.breaking)
+      .map((c) => `  ${c.sha.slice(0, 7)} ${c.type ?? ""}: ${c.subject}`);
+    throw new Error(
+      `${version} is a major bump and this is the SDK's own version: a major is only for a change SDK users would notice (SauceScript, exports, the CLI, MCP tools), never for an engine or compiler major the SDK absorbs. Commits marked breaking:\n${why.join("\n") || "  (none: --release-as asked for it)"}\nIf users WOULD notice, run again with allow_major. If not, the marker is wrong: publish a minor or patch with release_as, and reword the commits.`,
+    );
+  }
   return {
     released: true,
     current,
@@ -221,6 +236,7 @@ function main(argv) {
     published:
       publishedPath === undefined ? undefined : JSON.parse(readFileSync(publishedPath, "utf8")),
     releaseAs: option(argv, "--release-as"),
+    allowMajor: argv.includes("--allow-major"),
   });
   const { notes: releaseNotes, ...summary } = result;
   if (notesPath && releaseNotes) writeFileSync(notesPath, releaseNotes);

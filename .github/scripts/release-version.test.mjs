@@ -127,7 +127,7 @@ describe("nextRelease", () => {
       r.tag("v1.4.2");
       r.commit("feat: small");
       r.commit(message);
-      assert.equal(nextRelease({ cwd: r.cwd }).version, "2.0.0", message);
+      assert.equal(nextRelease({ cwd: r.cwd, allowMajor: true }).version, "2.0.0", message);
     }
   });
 
@@ -203,7 +203,11 @@ describe("nextRelease", () => {
     r.commit("fix(cli): repair it");
     r.commit("feat(sdk): add it");
     r.commit("refactor(sdk)!: move it\n\nBREAKING CHANGE: import from the new path");
-    const { notes, version } = nextRelease({ cwd: r.cwd, repository: "eco-incorp/sauce" });
+    const { notes, version } = nextRelease({
+      cwd: r.cwd,
+      repository: "eco-incorp/sauce",
+      allowMajor: true,
+    });
     assert.equal(version, "2.0.0");
     const lines = notes.split("\n");
     assert.equal(lines[0], "### ⚠ BREAKING CHANGES");
@@ -347,7 +351,7 @@ describe("a manual version", () => {
 
   it("replaces the number a revert of a breaking change would still force", () => {
     const r = revertedMajor();
-    assert.equal(nextRelease({ cwd: r.cwd }).version, "2.0.0");
+    assert.equal(nextRelease({ cwd: r.cwd, allowMajor: true }).version, "2.0.0");
     const release = nextRelease({ cwd: r.cwd, releaseAs: "1.1.0", repository: "eco-incorp/sauce" });
     assert.equal(release.version, "1.1.0");
     assert.equal(release.tag, "v1.1.0");
@@ -357,7 +361,10 @@ describe("a manual version", () => {
 
   it("is not reported as an override when it equals the computed number", () => {
     const r = revertedMajor();
-    assert.equal(nextRelease({ cwd: r.cwd, releaseAs: "2.0.0" }).computedVersion, undefined);
+    assert.equal(
+      nextRelease({ cwd: r.cwd, releaseAs: "2.0.0", allowMajor: true }).computedVersion,
+      undefined,
+    );
   });
 
   it("must be X.Y.Z and above the newest release", () => {
@@ -414,5 +421,79 @@ describe("the command line against npm", () => {
     const forced = JSON.parse(run(r.cwd, "--published", file, "--release-as", "1.5.0").stdout);
     assert.equal(forced.version, "1.5.0");
     assert.equal(forced.computedVersion, "1.1.0");
+  });
+});
+
+// A major is the SDK's own: only for what SDK users would notice. An engine or compiler major that
+// the SDK absorbs is written as a feat or fix, and nothing in a commit text can prove which it was,
+// so a computed major is refused unless a person says users will notice.
+describe("a major version", () => {
+  function sdk(...messages) {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.4.2");
+    for (const message of messages) r.commit(message);
+    return r;
+  }
+  const absorbed = "feat(compiler)!: adopt compiler 3.0.0, whose engines dropped an opcode";
+
+  it("is refused by default, naming the commits that asked for it", () => {
+    const r = sdk("fix: a", absorbed);
+    assert.throws(
+      () => nextRelease({ cwd: r.cwd }),
+      /2\.0\.0 is a major bump.*SDK users would notice.*adopt compiler 3\.0\.0.*allow_major.*release_as/s,
+    );
+  });
+
+  it("is refused for a footer too, and for any commit type", () => {
+    for (const message of ["refactor: a\n\nBREAKING CHANGE: engines moved", "chore!: a"]) {
+      assert.throws(() => nextRelease({ cwd: sdk(message).cwd }), /is a major bump/, message);
+    }
+  });
+
+  it("is allowed when a person confirms users will notice", () => {
+    const release = nextRelease({ cwd: sdk(absorbed).cwd, allowMajor: true });
+    assert.equal(release.version, "2.0.0");
+  });
+
+  it("an absorbed change worded as feat or fix is a minor or a patch", () => {
+    assert.equal(
+      nextRelease({ cwd: sdk("feat(compiler): adopt compiler 3.0.0").cwd }).version,
+      "1.5.0",
+    );
+    assert.equal(
+      nextRelease({ cwd: sdk("fix(deps): pin the engine release").cwd }).version,
+      "1.4.3",
+    );
+  });
+
+  it("a minor or patch needs no confirmation, whatever is marked breaking beneath it", () => {
+    const r = sdk(absorbed);
+    // The recovery for a wrongly marked commit: publish the number it should have been.
+    assert.equal(nextRelease({ cwd: r.cwd, releaseAs: "1.5.0" }).version, "1.5.0");
+  });
+
+  it("a manual major needs the same confirmation", () => {
+    const r = sdk("feat: a");
+    assert.throws(() => nextRelease({ cwd: r.cwd, releaseAs: "2.0.0" }), /is a major bump/);
+    assert.equal(
+      nextRelease({ cwd: r.cwd, releaseAs: "2.0.0", allowMajor: true }).version,
+      "2.0.0",
+    );
+  });
+
+  it("the command line refuses without --allow-major and plans with it", () => {
+    const r = sdk(absorbed);
+    const script = fileURLToPath(new URL("./release-version.mjs", import.meta.url));
+    const run = (...args) =>
+      spawnSync(process.execPath, [script, ...args], {
+        cwd: r.cwd,
+        encoding: "utf8",
+        env: { ...process.env, GITHUB_OUTPUT: "", GITHUB_STEP_SUMMARY: "" },
+      });
+    const refused = run();
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /is a major bump/);
+    assert.equal(JSON.parse(run("--allow-major").stdout).version, "2.0.0");
   });
 });

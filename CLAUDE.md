@@ -6,6 +6,12 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+**The SDK's major version is only for changes SDK users would notice.** An engine, compiler or Kitchen
+major that the SDK absorbs with no change to SauceScript or to the exports, commands and tools users call
+is a `feat` or a `fix` here, never `!` or a `BREAKING CHANGE:` footer. The commit message sets the
+release version, and the release pipeline refuses a major unless a person confirms it. Read
+[What a major means](#what-a-major-means) before writing a commit or a PR title.
+
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
 **Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
 a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
@@ -1896,7 +1902,8 @@ workflow on `main`; its `plan` job reads the Conventional Commit history since t
 tag and computes the next version with `.github/scripts/release-version.mjs` — `feat` is a minor,
 `fix`, `perf` and `revert` a patch, a `!` header or a `BREAKING CHANGE:` footer a **major** (any type),
 and `docs`, `chore`, `ci`, `test`, `refactor`, `style` and `build` release nothing. These are
-eco-incorp/v12's rules without its private-beta cap on majors, which the public SDK does not have.
+eco-incorp/v12's rules, except that a major is the SDK's own and the pipeline refuses one unless
+`allow_major` is ticked (see [What a major means](#what-a-major-means)).
 Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary (a dry
 run has its own concurrency group, so it never waits behind or cancels a real release).
 `node .github/scripts/release-version.mjs` computes the same number locally, **after
@@ -1910,6 +1917,35 @@ request, so nothing is pushed to `main`). The baseline is found by tag name, not
 `v1.0.0` was cut from a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub
 Packages was dropped deliberately — `publish.yml:33` records why. Only the root version is published;
 workspace packages stay `private`.
+
+### What a major means
+
+**The SDK's major version is the SDK's own, and moves only for a change SDK users would notice.** A
+user notices a SauceScript program that stops compiling or behaves differently, a removed or renamed
+export, subpath, `sauce` command or flag, or MCP tool, a chain the CLI stops accepting, or a Pot, Kitchen
+or address they already use that stops working. A component's own major is not that. The engines, the
+compiler and the Kitchens version independently and release majors of their own (an engine that drops an
+opcode, a compiler that changes its JavaScript API); when the SDK absorbs it, with no change to SauceScript
+or to anything above, the SDK moves by a minor or a patch, and the pin bump in `releases.json` is a `feat`
+or a `fix`. The changelog's `### Compiler and engines` entry records what the component release changed.
+
+Write the commit to match, because the pipeline reads it:
+
+- Put `!` after the type, or a `BREAKING CHANGE:` footer, on a commit **only** if SDK users would notice.
+  Never for "the engine or compiler had a breaking change". Say that in the body in plain words, without
+  starting a line with `BREAKING CHANGE`.
+- A squash merge carries every commit's message, so one intermediate commit with the footer marks the
+  whole PR. Check the commits before merging, not only the title (`validate` checks only the title).
+- The marker works on a commit of any type (`refactor!`, `chore!`, `docs!`), and a `revert:` of a marked
+  commit does not undo it.
+- When unsure whether users would notice, ask the reviewer; do not mark it. A wrong major cannot be
+  taken back (npm never reissues a version), while a missed one is fixed with `allow_major` on the next
+  release.
+
+The pipeline refuses to plan a major (computed from the commits, or given as `release_as`) unless the
+dispatch ticks `allow_major`. That is a person saying users will notice. Refusal lists the commits that
+asked for it. If the marker was wrong, publish the number it should have been with `release_as`, and
+reword future commits.
 
 **The plan is held to npm.** The baseline tag must be a version npm has, and the newest stable one.
 A tag npm lacks (pushed by hand) or a version npm has that no tag names stops the plan with an error.

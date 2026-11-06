@@ -7,7 +7,9 @@ name: Publish
 # THE VERSION IS COMPUTED, NOT TYPED. Dispatch this workflow on `main`: `plan` reads the
 # Conventional Commit history since the newest `vX.Y.Z` tag and derives the next version, and
 # `.github/scripts/release-version.mjs` states the rules (feat -> minor, fix/perf/revert -> patch,
-# `!` or a BREAKING CHANGE footer -> major, anything else releases nothing). Tick `dry_run` to stop
+# `!` or a BREAKING CHANGE footer -> major, anything else releases nothing). A MAJOR is the SDK's
+# own and is refused unless `allow_major` is ticked: only for a change SDK users would notice, never
+# for an engine or compiler major that the SDK absorbs (see CLAUDE.md, "What a major means"). Tick `dry_run` to stop
 # after the plan: the number and the release notes are in the run summary, and nothing is built,
 # published or tagged. `release_as` replaces the number only, for a history that misstates it.
 # There is no tag-push trigger. After `git fetch --tags`, running the script locally gives the same
@@ -50,6 +52,10 @@ on:
     inputs:
       dry_run:
         description: "Compute the next version and its release notes, then STOP. Nothing is built, published or tagged."
+        type: boolean
+        default: false
+      allow_major:
+        description: "Tick ONLY if SDK users will notice the change (SauceScript, exports, the CLI, MCP tools). A computed or given major is refused without it. An engine or compiler major the SDK absorbs is not one."
         type: boolean
         default: false
       release_as:
@@ -109,9 +115,11 @@ jobs:
         id: plan
         env:
           RELEASE_AS: ${{ inputs.release_as }}
+          ALLOW_MAJOR: ${{ inputs.allow_major }}
         run: |
-          node .github/scripts/release-version.mjs --published "$RUNNER_TEMP/published.json" \
-            --release-as "$RELEASE_AS" --notes "$RUNNER_TEMP/notes.md"
+          args=(--published "$RUNNER_TEMP/published.json" --release-as "$RELEASE_AS" --notes "$RUNNER_TEMP/notes.md")
+          if [ "$ALLOW_MAJOR" = "true" ]; then args+=(--allow-major); fi
+          node .github/scripts/release-version.mjs "${args[@]}"
 
       - name: Keep the notes for the release job
         if: steps.plan.outputs.released == 'true'
