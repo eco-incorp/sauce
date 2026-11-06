@@ -29,6 +29,13 @@ label and still disagree, so match versions, never labels. From 0.99.7 the SDK k
 table, one row per compiler version, and refuses to build a cook for an engine that a row pairs with
 a different compiler.
 
+A major version of one of those packages is not a major version of the SDK. The SDK's own major
+version changes only when something you would notice breaks: a SauceScript program that no longer
+compiles or behaves differently, a removed or renamed export, command, flag or MCP tool, or a chain
+the command stops accepting. An engine or compiler major that the SDK absorbs, with none of that, comes
+in an SDK minor or patch, and the entry's `### Compiler and engines` section says what the component
+release changed.
+
 SDK 0.99.0 and 0.99.1 named the compiler by range, `^2.2.0` and `^2.2.1`, so an install got the
 newest 2.x compiler on npm that day: 2.2.1 from 2026-09-17, 2.3.0 from 2026-09-23, 2.4.0 from
 2026-09-30 and 2.5.0 from 2026-10-06. Such an install compiles the language of that compiler, not

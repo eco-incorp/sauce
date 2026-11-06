@@ -4,9 +4,32 @@ name: Publish
 # one root package.json with subpath exports, the agent skills, and the `sauce`
 # bin.
 #
-# Trigger:
-#   git tag v1.2.3 && git push origin v1.2.3
-#   — or manual workflow_dispatch with `version` input.
+# THE VERSION IS COMPUTED, NOT TYPED. Dispatch this workflow on `main`: `plan` reads the
+# Conventional Commit history since the newest `vX.Y.Z` tag and derives the next version, and
+# `.github/scripts/release-version.mjs` states the rules (feat -> minor, fix/perf/revert -> patch,
+# `!` or a BREAKING CHANGE footer -> major, anything else releases nothing). A MAJOR is the SDK's
+# own and is refused unless `allow_major` is ticked: only for a change SDK users would notice, never
+# for an engine or compiler major that the SDK absorbs (see CLAUDE.md, "What a major means"). Tick `dry_run` to stop
+# after the plan: the number and the release notes are in the run summary, and nothing is built,
+# published or tagged. `release_as` replaces the number only, for a history that misstates it.
+# There is no tag-push trigger. After `git fetch --tags`, running the script locally gives the same
+# number (without the npm check): `v1.0.0` is on no branch, so a plain fetch never receives it.
+#
+# The plan is held to npm: the baseline tag must be published and be the newest stable version
+# there. A tag npm lacks (pushed by hand) or a version npm has that no tag names (published, then
+# the tag step failed) STOPS the plan. This is what ties a version to its commit, since npm records
+# no `gitHead` for this package: a fresh dispatch after a failed `release` job would otherwise
+# compute the same version from a newer commit and tag that commit, whatever its publish step did.
+#
+# After the plan: Checks and Lint gate the commit, `publish` builds and publishes to npm, and
+# `release` tags `vX.Y.Z` and creates the GitHub release, in that order.
+#
+# RECOVERY. If `publish` succeeded and `release` failed, use "Re-run failed jobs" on THAT run: it
+# keeps the commit, the number and the notes, so the tag lands on the commit that was published.
+# Do not dispatch again; the plan refuses. `publish` never skips a version already on npm: if it
+# failed after npm took the tarball, compare that tarball with this commit's `pnpm pack` and tag by
+# hand. If the run can no longer be re-run, an admin tags the commit it built (shown on the run) as
+# `vX.Y.Z` and creates the release by hand; the next dispatch then continues from that tag.
 #
 # Publishes to PUBLIC npmjs.com ONLY (auth: NPM_TOKEN).
 #
@@ -28,35 +51,110 @@ name: Publish
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Version to publish (without leading "v")
+      dry_run:
+        description: "Compute the next version and its release notes, then STOP. Nothing is built, published or tagged."
+        type: boolean
+        default: false
+      allow_major:
+        description: "Tick ONLY if SDK users will notice the change (SauceScript, exports, the CLI, MCP tools). A computed or given major is refused without it. An engine or compiler major the SDK absorbs is not one."
+        type: boolean
+        default: false
+      release_as:
+        description: "Optional X.Y.Z to publish instead of the computed version, for a number the history misstates (a revert of a breaking change still counts as breaking). Must be above the newest release; it never forces a release no commit drives."
         type: string
-        required: true
-  push:
-    tags:
-      - "v*"
+        default: ""
+
+# One release at a time, and a run in progress is never cancelled: a publish cannot be taken back.
+# A dry run writes nothing, so it takes a group of its own: in the shared one it would wait behind a
+# release, and cancel a real run already pending there (a group holds one pending run).
+concurrency:
+  group: ${{ inputs.dry_run && format('publish-dry-run-{0}', github.run_id) || 'publish' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  # THE GATE. A tag push matches neither ci.yml's nor lint.yml's `branches` filter, so a tag used to
-  # publish whatever compiled with no test, lint or typecheck run against the tagged commit — and
-  # `npm version` takes the version from the tag, so there was not even a version-bump PR to gate on.
-  #
-  # These call the same workflows CI runs rather than repeating their steps here. Both also trigger
-  # directly on `v*` now, so the tagged commit is checked even if this job is later restructured;
-  # that means one duplicate run per release, which is the cheaper half of the trade.
+  # No secrets and no write access: it only reads history and the public registry, and reports.
+  # A real release from any ref but `main` is refused here. That is a convenience, NOT an access
+  # control: a dispatch (or a tag push) runs the publish.yml of the ref it names, and every
+  # pre-merge commit still carries the old one, with no such check, and NPM_TOKEN is an
+  # organisation secret no environment scopes to a ref. See "Hardening" in CLAUDE.md.
+  plan:
+    name: Plan the release
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.plan.outputs.released }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Refuse a release from any branch but main
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$DRY_RUN" != "true" ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::a release is cut from main, not $REF. Dispatch on main, or tick dry_run."
+            exit 1
+          fi
+
+      # Full history and every tag: the baseline is the newest vX.Y.Z tag and the commits after it.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # What npm has, read without a token (the package is public). The plan is held to it: the
+      # baseline tag must be published and be the newest stable version there. A failed read stops
+      # the run: `set -e` is on, and an empty answer is refused by the script as well.
+      - name: Read the versions npm has
+        run: npm view @eco-incorp/sauce versions --json > "$RUNNER_TEMP/published.json"
+
+      - name: Compute the next version from the commit history
+        id: plan
+        env:
+          RELEASE_AS: ${{ inputs.release_as }}
+          ALLOW_MAJOR: ${{ inputs.allow_major }}
+        run: |
+          args=(--published "$RUNNER_TEMP/published.json" --release-as "$RELEASE_AS" --notes "$RUNNER_TEMP/notes.md")
+          if [ "$ALLOW_MAJOR" = "true" ]; then args+=(--allow-major); fi
+          node .github/scripts/release-version.mjs "${args[@]}"
+
+      - name: Keep the notes for the release job
+        if: steps.plan.outputs.released == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/notes.md
+          if-no-files-found: error
+
+  # THE GATE. A dispatch matches neither ci.yml's nor lint.yml's `push`/`pull_request` filters, so
+  # without these the release would publish whatever compiled with no test, lint or typecheck run
+  # against the commit. They call the same workflows CI runs rather than repeating their steps.
+  # Skipped on a dry run, and when no commit drives a release.
   checks:
     name: Checks
+    needs: plan
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
 
   lint:
     name: Lint
+    needs: plan
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
+    permissions:
+      contents: read
     uses: ./.github/workflows/lint.yml
-    secrets: inherit
 
   publish:
     name: Publish @eco-incorp/sauce
-    needs: [checks, lint]
+    needs: [plan, checks, lint]
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -83,10 +181,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      # BEFORE the build, so a token that cannot publish fails in seconds rather than after the
-      # gate and the build — with the tag already pushed, which is the worst version of this. Note
-      # what it does NOT prove: the FIRST publish of a name cannot be authorised in advance, so for
-      # `@eco-incorp/sauce`'s first release this only shows the token is valid and scoped somewhere.
+      # BEFORE the build, so a token that cannot publish fails in seconds rather than after the gate
+      # and the build. Note what it does NOT prove: the FIRST publish of a name cannot be authorised
+      # in advance, so for `@eco-incorp/sauce`'s first release this only shows the token is valid
+      # and scoped somewhere.
       - name: Verify the npm token
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -145,27 +243,85 @@ jobs:
           test -s mcp/dist/entry.js || { echo "::error::missing mcp/dist/entry.js — sauce mcp would not run"; exit 1; }
           echo "verified: 8 engine artifacts + deployed addresses + 3 SVM binaries + both settle templates + the ./compiler entry point + the bin and the MCP server"
 
-      - name: Resolve version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if [ -z "$VERSION" ]; then
-            echo "Could not resolve version"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version $VERSION"
-
+      # The version is the plan job's: computed from the commit history, or the manual `release_as`.
       - name: Set root package version
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
+      # The plan REFUSES a version that npm already has, so when this runs the version is not on
+      # npm, and publishing it is what ties it to $GITHUB_SHA. If it exists NOW, on any attempt, it
+      # cannot be shown to come from this commit: another run, an old workflow file or a hand publish
+      # put it there, and a re-run number says nothing about which. So this refuses and never skips.
+      # The documented recovery does not need a skip: when `publish` succeeded and `release` failed,
+      # "Re-run failed jobs" re-runs `release` only. If this step itself failed after npm accepted the
+      # tarball, someone compares the registry's tarball with this commit's `pnpm pack` and tags by
+      # hand. npm records no `gitHead` for this package, so there is nothing to compare automatically.
       - name: Publish to npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --access public --no-git-checks
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "@eco-incorp/sauce@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::@eco-incorp/sauce@$VERSION is already on npmjs.com, and nothing shows it was built from $GITHUB_SHA. Refusing to publish or tag."
+            exit 1
+          fi
+          pnpm publish --access public --no-git-checks
+
+  # Tag and GitHub release, AFTER the publish and in their own job so the one with `contents:
+  # write` never holds NPM_TOKEN, and the one with NPM_TOKEN cannot write to the repository. The
+  # tag is created by `gh release create` on the commit the run built, so no branch is pushed to,
+  # which the default-branch ruleset (pull request required) would refuse.
+  #
+  # Nothing is recomputed here. The number and the notes are the plan's, from this run: once the tag
+  # exists the baseline has moved and a recompute would find nothing to release, so a re-run after a
+  # `gh release create` that succeeded but reported an error would fail on a finished release. The
+  # tag is checked instead: absent, it is created at $GITHUB_SHA; already at $GITHUB_SHA, there is
+  # nothing to do; anywhere else, this run refuses and moves nothing.
+  release:
+    name: Tag and release
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes
+
+      - name: Create the tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # There is no checkout in this job, so `gh release` has no git remote to resolve.
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          # Where the tag points, if it exists: its commit, with an annotated tag peeled.
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag" \
+            --jq "map(select(.ref == \"refs/tags/$tag\"))[0].object | select(. != null) | \"\(.type) \(.sha)\"")
+          at=""
+          if [ -n "$ref" ]; then
+            read -r type sha <<<"$ref"
+            if [ "$type" = "tag" ]; then
+              sha=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq .object.sha)
+            fi
+            at="$sha"
+          fi
+          if [ -n "$at" ] && [ "$at" != "$GITHUB_SHA" ]; then
+            echo "::error::$tag already exists at $at, but this run published $GITHUB_SHA. Refusing to reuse or move it."
+            exit 1
+          fi
+          # Only "not found" means create; any other failure is surfaced, not read as absence.
+          if out=$(gh release view "$tag" 2>&1); then
+            echo "$tag is already released at $GITHUB_SHA: nothing to do."
+          elif grep -qi "release not found" <<<"$out"; then
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" \
+              --notes-file release-notes/notes.md --latest
+          else
+            echo "::error::could not tell whether $tag is released: $out"
+            exit 1
+          fi
