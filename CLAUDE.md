@@ -81,7 +81,7 @@ install into or load from a folder, or one above it up to `~/.sauce` (symlinks r
 another user owns or anyone else can write, and a version folder that is not 0700, because the
 process may hold a wallet password. The packages then load from the
 folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
-Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
+Only `start.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
 test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
 repository the workspaces' own copies are the pins, so nothing installs. `sauce runtime
 [status|install]` reports and installs; `sauce mcp setup` installs up front; and `sauce update` has

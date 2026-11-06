@@ -345,6 +345,16 @@ describe("the package's dependencies", () => {
     ).toBe(true);
   });
 
+  it("the sauce command loads no runtime package until a command needs it", () => {
+    const { packages } = graph(["sdk/src/cli/start.ts"], false);
+    expect(packages.size).toBeGreaterThan(0);
+    for (const name of [...RUNTIME, "typescript", "dotenv"]) {
+      expect([name, packages.get(name)]).toEqual([name, undefined]);
+    }
+    expect([...graph(["sdk/src/cli/main.ts"], false).files]).toEqual(["sdk/src/cli/main.ts"]);
+    expect(graph(["sdk/src/cli/main.ts"], true).files.has("sdk/src/cli/start.ts")).toBe(true);
+  });
+
   it("nothing shipped imports TypeScript or dotenv", () => {
     const modules = shippedModules();
     expect(modules).toContain("sdk/src/cli/run.ts");

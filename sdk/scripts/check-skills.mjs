@@ -70,6 +70,7 @@
 //      ```sauce fence with `define=`;
 //  15. no skill file but `sauce-chains/references/deployments.json` names a Sauce release address,
 //      runners and comments included: the release is the same on every chain, written once.
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -740,6 +741,22 @@ const INSTALL_SKILL = "sauce-cli";
 const BARE_NPX = /\bnpx sauce\b/;
 const GLOBAL_INSTALL = /\bnpm install --global --engine-strict @eco-incorp\/sauce@latest\b/;
 const ANYWHERE_NPX = /\bnpx --engine-strict -y @eco-incorp\/sauce@latest\b/;
+function unsafeNpx(text) {
+  return [
+    ...text.matchAll(
+      /\bnpx\s+(?:(?:--engine-strict|-y|--yes)\s+)*@eco-incorp\/sauce(?:@[\w.-]+)?/g,
+    ),
+  ].some((match) => !/\s--engine-strict\s/.test(match[0]) || !match[0].endsWith("@latest"));
+}
+for (const [command, unsafe] of [
+  ["npx -y @eco-incorp/sauce --help", true],
+  ["npx -y @eco-incorp/sauce@latest --help", true],
+  ["npx --engine-strict -y @eco-incorp/sauce --help", true],
+  ["npx --engine-strict -y @eco-incorp/sauce@latest --help", false],
+  ["sauce --help", false],
+]) {
+  assert.equal(unsafeNpx(command), unsafe, command);
+}
 /** `file`'s prose paragraphs, outside fenced blocks and headings: first and last line, and the
  *  text joined into one line. */
 function proseParagraphs(file) {
@@ -774,6 +791,11 @@ for (const skill of skills) {
     read(file)
       .split("\n")
       .forEach((line, i) => {
+        if (unsafeNpx(line))
+          fail(
+            `${rel(file)}:${i + 1}`,
+            "use `npx --engine-strict -y @eco-incorp/sauce@latest` to prevent obsolete package selection",
+          );
         if (BARE_NPX.test(line) && !explained.some((p) => p.start <= i && i <= p.end))
           fail(
             `${rel(file)}:${i + 1}`,
