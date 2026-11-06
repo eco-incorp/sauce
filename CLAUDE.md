@@ -1915,8 +1915,8 @@ fetches the SVM engine binaries, and the single `@eco-incorp/sauce` goes to **pu
 GitHub release, from the plan's own number and notes (the default-branch ruleset requires a pull
 request, so nothing is pushed to `main`). The baseline is found by tag name, not by reachability:
 `v1.0.0` was cut from a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub
-Packages was dropped deliberately — `publish.yml:33` records why. Only the root version is published;
-workspace packages stay `private`.
+Packages was dropped deliberately — the header of `publish.yml` records why. Only the root version is
+published; workspace packages stay `private`.
 
 ### What a major means
 
@@ -1939,8 +1939,8 @@ Write the commit to match, because the pipeline reads it:
 - The marker works on a commit of any type (`refactor!`, `chore!`, `docs!`), and a `revert:` of a marked
   commit does not undo it.
 - When unsure whether users would notice, ask the reviewer; do not mark it. A wrong major cannot be
-  taken back (npm never reissues a version), while a missed one is fixed with `allow_major` on the next
-  release.
+  taken back (npm never reissues a version), while a missed one is fixed on the next release with
+  `release_as` set to the major and `allow_major` ticked (`allow_major` alone only permits a major).
 
 The pipeline refuses to plan a major (computed from the commits, or given as `release_as`) unless the
 dispatch ticks `allow_major`. That is a person saying users will notice. Refusal lists the commits that
@@ -1972,11 +1972,14 @@ supported: a real run is refused on any ref but `main`.
 **Hardening this repository does not have, and the workflow cannot provide.** The "refuse any ref but
 `main`" check lives in the file it guards, so it is a convenience, not an access control: a dispatch
 or a tag push runs the `publish.yml` of the ref it names, every commit from before this change still
-carries the old one (a `v*` tag trigger, no check), and `NPM_TOKEN` is an organisation secret granted
-to the repository, with no environment scoping it to a ref. What closes that is repository
-administration: an environment (`npm`) whose deployment branches are `main` only, holding the token
-instead of the organisation, referenced by `environment:` on the `publish` job and on `deprecate.yml`;
-and a tag ruleset that lets only GitHub Actions create `refs/tags/v*`. Neither is set today.
+carries the old one (a `v*` tag-push trigger and a dispatch with a typed `version`, neither checked),
+and `NPM_TOKEN` is an organisation secret granted to the repository, with no environment scoping it
+to a ref. What closes that is repository administration: an environment (`npm`) whose deployment
+branches are `main` only, holding the token instead of the organisation, referenced by `environment:`
+on the `publish` job and on `deprecate.yml`; and a tag ruleset on `refs/tags/v*`. A ruleset can stop a
+tag moving or being deleted. Whether it can also reserve creation for this workflow depends on its
+bypass list, because the release job creates the tag with `GITHUB_TOKEN`: check that before relying on
+it. Neither is set today.
 
 `docs/changelog.md` is not written by the pipeline and the ruleset needs a pull request for it: dispatch
 with `dry_run` for the number, land the `docs(changelog)` entry (it drives no release), then release.

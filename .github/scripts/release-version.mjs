@@ -178,7 +178,8 @@ export function nextRelease({
   const computed = bump(current, level);
   if (releaseAs) checkReleaseAs({ releaseAs, baseline: current });
   const version = releaseAs ?? computed;
-  if (!allowMajor && Number(version.split(".")[0]) > Number(current.split(".")[0])) {
+  const major = Number(version.split(".")[0]) > Number(current.split(".")[0]);
+  if (!allowMajor && major) {
     const why = commits
       .filter((c) => c.breaking)
       .map((c) => `  ${c.sha.slice(0, 7)} ${c.type ?? ""}: ${c.subject}`);
@@ -192,18 +193,20 @@ export function nextRelease({
     version,
     ...(version !== computed && { computedVersion: computed }),
     tag: `v${version}`,
-    level,
+    // The bump actually released, which `release_as` may change.
+    level: major ? "major" : version.split(".")[1] === current.split(".")[1] ? "patch" : "minor",
     previousTag: tag,
     commits,
-    notes: notes({ commits, version, previousTag: tag, repository }),
+    notes: notes({ commits, version, previousTag: tag, repository, major }),
   };
 }
 
 const line = (c, text) => `* ${c.scope ? `**${c.scope}:** ` : ""}${text} (${c.sha.slice(0, 7)})`;
 
-function notes({ commits, version, previousTag, repository }) {
+// `major`: a release_as below a major means the markers were wrong, so nothing is announced as breaking.
+function notes({ commits, version, previousTag, repository, major }) {
   const out = [];
-  const breaking = commits.filter((c) => c.breaking);
+  const breaking = major ? commits.filter((c) => c.breaking) : [];
   if (breaking.length) {
     out.push("### ⚠ BREAKING CHANGES", "");
     for (const c of breaking) out.push(line(c, c.breakingNote ?? c.subject));

@@ -364,6 +364,10 @@ describe("a manual version", () => {
     assert.equal(release.tag, "v1.1.0");
     assert.equal(release.computedVersion, "2.0.0");
     assert.ok(release.notes.endsWith("compare/v1.0.0...v1.1.0\n"));
+    // A minor announces nothing as breaking: the marker was wrong, that is why release_as was used.
+    assert.ok(!release.notes.includes("BREAKING"));
+    assert.equal(release.level, "minor");
+    assert.match(nextRelease({ cwd: r.cwd, allowMajor: true }).notes, /BREAKING CHANGES/);
   });
 
   it("is not reported as an override when it equals the computed number", () => {
