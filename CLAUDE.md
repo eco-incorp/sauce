@@ -1891,11 +1891,26 @@ No chain deployment is implied by these release addresses.
 
 ## Publishing
 
-Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin v1.2.3` (or manual
-`workflow_dispatch`). Builds all areas, fetches the SVM engine binaries, stamps the **root**
-`package.json` version, and publishes the single `@eco-incorp/sauce` to **public npmjs.com only**
-(`NPM_TOKEN`). GitHub Packages was dropped deliberately — `publish.yml:12` records why. Only the root
-version is published; workspace packages stay `private`.
+Commit-driven (`.github/workflows/publish.yml`): nobody types a version or pushes a tag. Dispatch the
+workflow on `main`; its `plan` job reads the Conventional Commit history since the newest `vX.Y.Z`
+tag and computes the next version with `.github/scripts/release-version.mjs` — `feat` is a minor,
+`fix`, `perf` and `revert` a patch, a `!` header or a `BREAKING CHANGE:` footer a **major** (any type),
+and `docs`, `chore`, `ci`, `test`, `refactor`, `style` and `build` release nothing. These are
+eco-incorp/v12's rules without its private-beta cap on majors, which the public SDK does not have.
+Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary;
+`node .github/scripts/release-version.mjs` gives the same answer locally, and `--notes <file>` writes the notes.
+A real run is refused on any ref but `main`. Then Checks and Lint gate the commit, the build stamps
+the **root** `package.json` version and fetches the SVM engine binaries, and the single
+`@eco-incorp/sauce` goes to **public npmjs.com only** (`NPM_TOKEN`). Only after that does a separate
+`contents: write` job create the `vX.Y.Z` tag and the GitHub release (the default-branch ruleset
+requires a pull request, so nothing is pushed to `main`), which makes a run that failed between the two
+safe to dispatch again. The baseline is found by tag name, not by reachability: `v1.0.0` was cut from
+a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub Packages was dropped
+deliberately — `publish.yml:21` records why. Only the root version is published; workspace packages
+stay `private`.
+
+`docs/changelog.md` is not written by the pipeline and the ruleset needs a pull request for it: dispatch
+with `dry_run` for the number, land the `docs(changelog)` entry (it drives no release), then release.
 
 The package ships `docs/**/*.md` and `docs/examples/*.ts`. README and scaffold links are **relative
 paths**, so one spelling renders in the repository, on the npm page and inside the published

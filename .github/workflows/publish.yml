@@ -4,9 +4,17 @@ name: Publish
 # one root package.json with subpath exports, the agent skills, and the `sauce`
 # bin.
 #
-# Trigger:
-#   git tag v1.2.3 && git push origin v1.2.3
-#   — or manual workflow_dispatch with `version` input.
+# THE VERSION IS COMPUTED, NOT TYPED. Dispatch this workflow on `main`: `plan` reads the
+# Conventional Commit history since the newest `vX.Y.Z` tag and derives the next version, and
+# `.github/scripts/release-version.mjs` states the rules (feat -> minor, fix/perf/revert -> patch,
+# `!` or a BREAKING CHANGE footer -> major, anything else releases nothing). Tick `dry_run` to stop
+# after the plan: the number and the release notes are in the run summary, and nothing is built,
+# published or tagged. There is no tag-push trigger and no `version` input any more. Running the
+# script locally gives the same answer.
+#
+# After the plan: Checks and Lint gate the commit, `publish` builds and publishes to npm, and
+# `release` tags `vX.Y.Z` and creates the GitHub release, in that order. Publishing is idempotent,
+# so a run that failed after the publish and before the tag can simply be dispatched again.
 #
 # Publishes to PUBLIC npmjs.com ONLY (auth: NPM_TOKEN).
 #
@@ -28,35 +36,80 @@ name: Publish
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Version to publish (without leading "v")
-        type: string
-        required: true
-  push:
-    tags:
-      - "v*"
+      dry_run:
+        description: "Compute the next version and its release notes, then STOP. Nothing is built, published or tagged."
+        type: boolean
+        default: false
+
+# One release at a time, and a run in progress is never cancelled: a publish cannot be taken back.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  # THE GATE. A tag push matches neither ci.yml's nor lint.yml's `branches` filter, so a tag used to
-  # publish whatever compiled with no test, lint or typecheck run against the tagged commit — and
-  # `npm version` takes the version from the tag, so there was not even a version-bump PR to gate on.
-  #
-  # These call the same workflows CI runs rather than repeating their steps here. Both also trigger
-  # directly on `v*` now, so the tagged commit is checked even if this job is later restructured;
-  # that means one duplicate run per release, which is the cheaper half of the trade.
+  # No secrets and no write access: it only reads history and reports. A real release from any ref
+  # but `main` is refused here, before anything else runs, because main is the branch the ruleset
+  # protects: a dispatch on another branch would publish code nobody reviewed.
+  plan:
+    name: Plan the release
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.plan.outputs.released }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Refuse a release from any branch but main
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$DRY_RUN" != "true" ] && [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::a release is cut from main, not $REF. Dispatch on main, or tick dry_run."
+            exit 1
+          fi
+
+      # Full history and every tag: the baseline is the newest vX.Y.Z tag and the commits after it.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Compute the next version from the commit history
+        id: plan
+        run: node .github/scripts/release-version.mjs --notes "$RUNNER_TEMP/notes.md"
+
+  # THE GATE. A dispatch matches neither ci.yml's nor lint.yml's `push`/`pull_request` filters, so
+  # without these the release would publish whatever compiled with no test, lint or typecheck run
+  # against the commit. They call the same workflows CI runs rather than repeating their steps.
+  # Skipped on a dry run, and when no commit drives a release.
   checks:
     name: Checks
+    needs: plan
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
+    permissions:
+      contents: read
+      packages: read
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
   lint:
     name: Lint
+    needs: plan
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
+    permissions:
+      contents: read
     uses: ./.github/workflows/lint.yml
     secrets: inherit
 
   publish:
     name: Publish @eco-incorp/sauce
-    needs: [checks, lint]
+    needs: [plan, checks, lint]
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -145,27 +198,66 @@ jobs:
           test -s mcp/dist/entry.js || { echo "::error::missing mcp/dist/entry.js — sauce mcp would not run"; exit 1; }
           echo "verified: 8 engine artifacts + deployed addresses + 3 SVM binaries + both settle templates + the ./compiler entry point + the bin and the MCP server"
 
-      - name: Resolve version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          if [ -z "$VERSION" ]; then
-            echo "Could not resolve version"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version $VERSION"
-
+      # The version is the plan job's: computed from the commit history, never typed.
       - name: Set root package version
         env:
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.plan.outputs.version }}
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
+      # npm never reissues a version, so a re-run after a publish that succeeded must not fail on
+      # it: the `release` job tags only after this job, and an untagged version recomputes to the
+      # same number, finds it here, skips the publish and goes on to tag.
       - name: Publish to npmjs.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --access public --no-git-checks
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if npm view "@eco-incorp/sauce@$VERSION" version >/dev/null 2>&1; then
+            echo "@eco-incorp/sauce@$VERSION is already on npmjs.com: skipping the publish."
+          else
+            pnpm publish --access public --no-git-checks
+          fi
+
+  # Tag and GitHub release, AFTER the publish and in their own job so the one with `contents:
+  # write` never holds NPM_TOKEN, and the one with NPM_TOKEN cannot write to the repository. The
+  # tag is created by `gh release create` on the commit the run built, so no branch is pushed to,
+  # which the default-branch ruleset (pull request required) would refuse.
+  release:
+    name: Tag and release
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The same commit and tags as the plan, so the same number. Checked rather than assumed: a
+      # tag must never name a version other than the one that was published.
+      - name: Recompute the release and check it is the published one
+        env:
+          PLANNED: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/release-version.mjs --notes "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/release.json"
+          actual=$(node -p "require(process.argv[1]).version" "$RUNNER_TEMP/release.json")
+          [ "$actual" = "$PLANNED" ] || { echo "::error::planned $PLANNED, recomputed ${actual:-none}: refusing to tag"; exit 1; }
+
+      - name: Create the tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION is already released: nothing to do."
+          else
+            gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" --latest
+          fi
