@@ -1897,17 +1897,47 @@ tag and computes the next version with `.github/scripts/release-version.mjs` —
 `fix`, `perf` and `revert` a patch, a `!` header or a `BREAKING CHANGE:` footer a **major** (any type),
 and `docs`, `chore`, `ci`, `test`, `refactor`, `style` and `build` release nothing. These are
 eco-incorp/v12's rules without its private-beta cap on majors, which the public SDK does not have.
-Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary;
-`node .github/scripts/release-version.mjs` gives the same answer locally, and `--notes <file>` writes the notes.
-A real run is refused on any ref but `main`. Then Checks and Lint gate the commit, the build stamps
-the **root** `package.json` version and fetches the SVM engine binaries, and the single
-`@eco-incorp/sauce` goes to **public npmjs.com only** (`NPM_TOKEN`). Only after that does a separate
-`contents: write` job create the `vX.Y.Z` tag and the GitHub release (the default-branch ruleset
-requires a pull request, so nothing is pushed to `main`), which makes a run that failed between the two
-safe to dispatch again. The baseline is found by tag name, not by reachability: `v1.0.0` was cut from
-a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub Packages was dropped
-deliberately — `publish.yml:21` records why. Only the root version is published; workspace packages
-stay `private`.
+Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary (a dry
+run has its own concurrency group, so it never waits behind or cancels a real release).
+`node .github/scripts/release-version.mjs` computes the same number locally, **after
+`git fetch --tags`**: `v1.0.0` is on no branch, so a plain fetch or pull never receives it and a local
+run would count from `v0.99.18`. Locally npm is not consulted (see below); `--notes <file>` writes the
+notes. Then Checks and Lint gate the commit, the build stamps the **root** `package.json` version and
+fetches the SVM engine binaries, and the single `@eco-incorp/sauce` goes to **public npmjs.com only**
+(`NPM_TOKEN`). Only after that does a separate `contents: write` job create the `vX.Y.Z` tag and the
+GitHub release, from the plan's own number and notes (the default-branch ruleset requires a pull
+request, so nothing is pushed to `main`). The baseline is found by tag name, not by reachability:
+`v1.0.0` was cut from a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub
+Packages was dropped deliberately — `publish.yml:33` records why. Only the root version is published;
+workspace packages stay `private`.
+
+**The plan is held to npm.** The baseline tag must be a version npm has, and the newest stable one.
+A tag npm lacks (pushed by hand) or a version npm has that no tag names stops the plan with an error.
+npm records no `gitHead` for this package, so nothing else could tie a version to its commit: without
+this, a dispatch after a failed `release` job would compute the same version from a newer commit,
+skip the publish, and tag that commit, which the tarball does not contain.
+
+**Recovery when `publish` succeeded and `release` failed: use "Re-run failed jobs" on that same run,
+never a new dispatch** (a new one is refused). It keeps the run's commit, number and notes, so the tag
+lands on the commit that was published; re-running the tag step after it succeeded changes nothing,
+and it refuses to touch a tag that sits on another commit. If the run can no longer be re-run, an admin
+tags the commit the run built (shown on its page) `vX.Y.Z` and creates the release by hand; the next
+dispatch then continues from that tag.
+
+**A misstated number.** A merged commit message cannot be edited, and a revert of a `feat!` still
+counts as breaking, so the computed number can be wrong. Dispatch with `release_as` (`X.Y.Z`, above
+the newest release) to publish that number instead; it replaces only the number, never the decision
+to release, and the summary shows both. Releases from a `release/*` maintenance line are not
+supported: a real run is refused on any ref but `main`.
+
+**Hardening this repository does not have, and the workflow cannot provide.** The "refuse any ref but
+`main`" check lives in the file it guards, so it is a convenience, not an access control: a dispatch
+or a tag push runs the `publish.yml` of the ref it names, every commit from before this change still
+carries the old one (a `v*` tag trigger, no check), and `NPM_TOKEN` is an organisation secret granted
+to the repository, with no environment scoping it to a ref. What closes that is repository
+administration: an environment (`npm`) whose deployment branches are `main` only, holding the token
+instead of the organisation, referenced by `environment:` on the `publish` job and on `deprecate.yml`;
+and a tag ruleset that lets only GitHub Actions create `refs/tags/v*`. Neither is set today.
 
 `docs/changelog.md` is not written by the pipeline and the ruleset needs a pull request for it: dispatch
 with `dry_run` for the number, land the `docs(changelog)` entry (it drives no release), then release.

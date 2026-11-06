@@ -2,8 +2,8 @@
 // Each case builds a scratch repository, so the calculation is held to real `git` behaviour: tag
 // ordering, merge-base, merge commits. The expected versions are written out, not derived.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -259,5 +259,160 @@ describe("the command line", () => {
     const link = join(r.cwd, "link.mjs");
     symlinkSync(script, link);
     assert.equal(JSON.parse(run(r.cwd, {}, link)).version, "1.1.0");
+  });
+});
+
+describe("against npm", () => {
+  function released(...extra) {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.0.0");
+    for (const message of extra) r.commit(message);
+    return r;
+  }
+
+  it("plans normally when the baseline is published and the newest there", () => {
+    const r = released("fix: a");
+    assert.equal(nextRelease({ cwd: r.cwd, published: ["0.99.18", "1.0.0"] }).version, "1.0.1");
+    // `npm view <pkg> versions --json` prints a bare string when there is one version.
+    assert.equal(nextRelease({ cwd: r.cwd, published: "1.0.0" }).version, "1.0.1");
+    // A prerelease above the baseline is not a stable release, so it is not "published ahead".
+    const rc = ["1.0.0", "1.1.0-rc.1"];
+    assert.equal(nextRelease({ cwd: r.cwd, published: rc }).version, "1.0.1");
+  });
+
+  // The recovery hazard: run A publishes 1.0.1 from commit A and its release job fails, so no tag.
+  // Main moves on to B. A fresh dispatch plans 1.0.1 AGAIN (the baseline is still v1.0.0), finds it
+  // on npm, skips the publish, and would tag B, which the tarball does not contain.
+  it("publish succeeded, tag failed, main advanced: the redispatch refuses; the original commit is the recovery", () => {
+    const r = released("fix: A");
+    const commitA = r.git("rev-parse", "HEAD");
+    assert.equal(nextRelease({ cwd: r.cwd, published: ["1.0.0"] }).version, "1.0.1");
+
+    r.commit("fix: B");
+    // Without npm the plan is the same number for a different commit: this is the hazard itself.
+    assert.equal(nextRelease({ cwd: r.cwd }).version, "1.0.1");
+    // With npm it is refused, naming the recovery.
+    assert.throws(
+      () => nextRelease({ cwd: r.cwd, published: ["1.0.0", "1.0.1"] }),
+      /npm has 1\.0\.1, newer than the newest tag v1\.0\.0.*never tagged.*Re-run the failed jobs/,
+    );
+
+    // Tagging the commit the tarball was built from makes B a release of its own.
+    r.git("tag", "v1.0.1", commitA);
+    const next = nextRelease({ cwd: r.cwd, published: ["1.0.0", "1.0.1"] });
+    assert.equal(next.version, "1.0.2");
+    assert.deepEqual(
+      next.commits.map((c) => c.subject),
+      ["B"],
+    );
+  });
+
+  it("refuses when npm is ahead even if no commit would release", () => {
+    const r = released("docs: a");
+    assert.throws(() => nextRelease({ cwd: r.cwd, published: ["1.0.0", "1.0.1"] }), /never tagged/);
+  });
+
+  it("refuses a baseline tag npm does not have: a hand-pushed tag is not a release", () => {
+    const r = released("fix: a");
+    r.tag("v1.0.1");
+    r.commit("fix: b");
+    assert.throws(
+      () => nextRelease({ cwd: r.cwd, published: ["1.0.0"] }),
+      /v1\.0\.1 is tagged but 1\.0\.1 is not on npm/,
+    );
+  });
+
+  it("an empty or missing answer from npm is a refusal, not a skipped check", () => {
+    const r = released("fix: a");
+    for (const published of [[], null, "", {}]) {
+      assert.throws(
+        () => nextRelease({ cwd: r.cwd, published }),
+        /is not on npm/,
+        String(published),
+      );
+    }
+  });
+});
+
+describe("a manual version", () => {
+  function revertedMajor() {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.0.0");
+    r.commit("feat(sdk)!: rename it");
+    r.commit("revert: feat(sdk)!: rename it");
+    return r;
+  }
+
+  it("replaces the number a revert of a breaking change would still force", () => {
+    const r = revertedMajor();
+    assert.equal(nextRelease({ cwd: r.cwd }).version, "2.0.0");
+    const release = nextRelease({ cwd: r.cwd, releaseAs: "1.1.0", repository: "eco-incorp/sauce" });
+    assert.equal(release.version, "1.1.0");
+    assert.equal(release.tag, "v1.1.0");
+    assert.equal(release.computedVersion, "2.0.0");
+    assert.ok(release.notes.endsWith("compare/v1.0.0...v1.1.0\n"));
+  });
+
+  it("is not reported as an override when it equals the computed number", () => {
+    const r = revertedMajor();
+    assert.equal(nextRelease({ cwd: r.cwd, releaseAs: "2.0.0" }).computedVersion, undefined);
+  });
+
+  it("must be X.Y.Z and above the newest release", () => {
+    const r = revertedMajor();
+    for (const bad of ["1.0.0", "0.99.19", "v1.1.0", "1.1", "1.1.0-rc.1"]) {
+      assert.throws(() => nextRelease({ cwd: r.cwd, releaseAs: bad }), /--release-as/, bad);
+    }
+  });
+
+  it("never forces a release that no commit drives", () => {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.0.0");
+    r.commit("docs: a");
+    assert.throws(
+      () => nextRelease({ cwd: r.cwd, releaseAs: "1.0.1" }),
+      /no commit since v1\.0\.0/,
+    );
+  });
+});
+
+describe("the command line against npm", () => {
+  const script = fileURLToPath(new URL("./release-version.mjs", import.meta.url));
+  const run = (cwd, ...args) =>
+    spawnSync(process.execPath, [script, ...args], {
+      cwd,
+      encoding: "utf8",
+      env: { ...process.env, GITHUB_OUTPUT: "", GITHUB_STEP_SUMMARY: "" },
+    });
+
+  it("exits non-zero, and says why, when npm is ahead of the tags", () => {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.0.0");
+    r.commit("fix: a");
+    const file = join(r.cwd, ".git", "published.json");
+    writeFileSync(file, JSON.stringify(["1.0.0", "1.0.1"]));
+    const result = run(r.cwd, "--published", file);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /published and never tagged/);
+  });
+
+  it("plans with a published list and a manual version; an empty --release-as is none", () => {
+    const r = repo();
+    r.commit("chore: init");
+    r.tag("v1.0.0");
+    r.commit("feat: a");
+    const file = join(r.cwd, ".git", "published.json");
+    writeFileSync(file, JSON.stringify(["0.99.18", "1.0.0"]));
+    assert.equal(
+      JSON.parse(run(r.cwd, "--published", file, "--release-as", "").stdout).version,
+      "1.1.0",
+    );
+    const forced = JSON.parse(run(r.cwd, "--published", file, "--release-as", "1.5.0").stdout);
+    assert.equal(forced.version, "1.5.0");
+    assert.equal(forced.computedVersion, "1.1.0");
   });
 });
