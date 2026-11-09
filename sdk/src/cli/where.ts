@@ -5,7 +5,7 @@
  * chain has no name for, most often. It reads no chain and needs no key.
  */
 import { canonicalChains, type CanonicalChain } from "../chains/canonical.js";
-import { UsageError } from "./args.js";
+import { parseHeader, parseTarget, UsageError } from "./args.js";
 import {
   compileProgram,
   type CliFiles,
@@ -54,6 +54,11 @@ export function whereCommand(input: WhereInput, files: CliFiles): CommandOutput 
     (chain) => input.supported !== true || chainSupport(chain) === "supported",
   );
   if (chains.length === 0) throw new UsageError("no chain to compile for");
+  // A `// @target` header holds here as it does for `sauce compile`: a chain of the other kind
+  // is refused before it is compiled.
+  const targetRaw = parseHeader(input.text, input.file).target;
+  const target =
+    targetRaw === undefined ? undefined : parseTarget(targetRaw, `${input.file}'s // @target`);
   const attempts: Attempt[] = chains.map((chain) => {
     const program: ProgramInput = {
       file: input.file,
@@ -64,6 +69,13 @@ export function whereCommand(input: WhereInput, files: CliFiles): CommandOutput 
       defines: {},
     };
     const support = chainSupport(chain);
+    if (target !== undefined && target !== chain.kind) {
+      return {
+        chain,
+        support,
+        reason: `the file's \`// @target ${target}\` does not match ${chain.kind.toUpperCase()} chains`,
+      };
+    }
     try {
       return { chain, support, bytes: compileProgram(program, files).bytecode.length };
     } catch (error) {

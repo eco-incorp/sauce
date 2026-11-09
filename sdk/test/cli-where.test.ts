@@ -39,4 +39,23 @@ describe("sauce where", () => {
     };
     expect(supported.chains.every((each) => each.support === "supported")).toBe(true);
   });
+
+  it("refuses the chains a // @target header rules out, as compile does", () => {
+    type Out = { chains: { chain: string; compiles: boolean; reason?: string }[] };
+    const chains = [requireChain("base"), requireChain("solana")];
+    const evm = whereCommand({ file, text: `// @target evm\n${text}`, chains }, files).json as Out;
+    expect(evm.chains[0]).toMatchObject({ chain: "base", compiles: true });
+    expect(evm.chains[1]).toMatchObject({
+      chain: "solana",
+      compiles: false,
+      reason: "the file's `// @target evm` does not match SVM chains",
+    });
+    const svm = whereCommand({ file, text: `// @target svm\n${text}`, chains }, files).json as Out;
+    expect(svm.chains[0]).toMatchObject({
+      chain: "base",
+      compiles: false,
+      reason: "the file's `// @target svm` does not match EVM chains",
+    });
+    expect(svm.chains[1]).toMatchObject({ chain: "solana", compiles: true });
+  });
 });
