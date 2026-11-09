@@ -1,5 +1,20 @@
 export const Permit2ABI = [
   {
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "", type: "address" },
+      { name: "", type: "address" },
+      { name: "", type: "address" },
+    ],
+    outputs: [
+      { name: "amount", type: "uint160" },
+      { name: "expiration", type: "uint48" },
+      { name: "nonce", type: "uint48" },
+    ],
+  },
+  {
     name: "approve",
     type: "function",
     stateMutability: "nonpayable",
@@ -12,20 +27,91 @@ export const Permit2ABI = [
     outputs: [],
   },
   {
-    name: "transferFrom",
+    name: "DOMAIN_SEPARATOR",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "invalidateNonces",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint160" },
       { name: "token", type: "address" },
+      { name: "spender", type: "address" },
+      { name: "newNonce", type: "uint48" },
     ],
     outputs: [],
   },
   {
-    // SignatureTransfer: moves `requestedAmount` of `permitted.token` from `owner` to `to` on a
-    // one-time EIP-712 signature by `owner`, which names the caller (`msg.sender`) as its spender.
+    name: "invalidateUnorderedNonces",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "wordPos", type: "uint256" },
+      { name: "mask", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "lockdown",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "approvals",
+        type: "tuple[]",
+        components: [
+          { name: "token", type: "address" },
+          { name: "spender", type: "address" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  // The unordered nonces SignatureTransfer spends: bit `nonce & 255` of word `nonce >> 8`.
+  {
+    name: "nonceBitmap",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "wordPosition", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "permit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "owner", type: "address" },
+      {
+        name: "permitSingle",
+        type: "tuple",
+        components: [
+          {
+            name: "details",
+            type: "tuple",
+            components: [
+              { name: "token", type: "address" },
+              { name: "amount", type: "uint160" },
+              { name: "expiration", type: "uint48" },
+              { name: "nonce", type: "uint48" },
+            ],
+          },
+          { name: "spender", type: "address" },
+          { name: "sigDeadline", type: "uint256" },
+        ],
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  // SignatureTransfer: moves `requestedAmount` of `permitted.token` from `owner` to `to` on a
+  // one-time EIP-712 signature by `owner`, which names the caller (`msg.sender`) as its spender.
+  {
     name: "permitTransferFrom",
     type: "function",
     stateMutability: "nonpayable",
@@ -60,46 +146,137 @@ export const Permit2ABI = [
     outputs: [],
   },
   {
-    // The unordered nonces SignatureTransfer spends: bit `nonce & 255` of word `nonce >> 8`.
-    name: "nonceBitmap",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "wordPosition", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "lockdown",
+    name: "permitWitnessTransferFrom",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
       {
-        name: "approvals",
+        name: "permit",
+        type: "tuple",
+        components: [
+          {
+            name: "permitted",
+            type: "tuple",
+            components: [
+              { name: "token", type: "address" },
+              { name: "amount", type: "uint256" },
+            ],
+          },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      {
+        name: "transferDetails",
+        type: "tuple",
+        components: [
+          { name: "to", type: "address" },
+          { name: "requestedAmount", type: "uint256" },
+        ],
+      },
+      { name: "owner", type: "address" },
+      { name: "witness", type: "bytes32" },
+      { name: "witnessTypeString", type: "string" },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint160" },
+      { name: "token", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "transferDetails",
         type: "tuple[]",
         components: [
+          { name: "from", type: "address" },
+          { name: "to", type: "address" },
+          { name: "amount", type: "uint160" },
           { name: "token", type: "address" },
-          { name: "spender", type: "address" },
         ],
       },
     ],
     outputs: [],
   },
+  {
+    name: "Approval",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "spender", type: "address", indexed: true },
+      { name: "amount", type: "uint160", indexed: false },
+      { name: "expiration", type: "uint48", indexed: false },
+    ],
+  },
+  {
+    name: "Lockdown",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: false },
+      { name: "spender", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "NonceInvalidation",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "spender", type: "address", indexed: true },
+      { name: "newNonce", type: "uint48", indexed: false },
+      { name: "oldNonce", type: "uint48", indexed: false },
+    ],
+  },
+  {
+    name: "Permit",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "spender", type: "address", indexed: true },
+      { name: "amount", type: "uint160", indexed: false },
+      { name: "expiration", type: "uint48", indexed: false },
+      { name: "nonce", type: "uint48", indexed: false },
+    ],
+  },
+  {
+    name: "UnorderedNonceInvalidation",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "word", type: "uint256", indexed: false },
+      { name: "mask", type: "uint256", indexed: false },
+    ],
+  },
+  { name: "AllowanceExpired", type: "error", inputs: [{ name: "deadline", type: "uint256" }] },
+  { name: "ExcessiveInvalidation", type: "error", inputs: [] },
+  { name: "InsufficientAllowance", type: "error", inputs: [{ name: "amount", type: "uint256" }] },
+  { name: "InvalidAmount", type: "error", inputs: [{ name: "maxAmount", type: "uint256" }] },
+  { name: "InvalidContractSignature", type: "error", inputs: [] },
+  { name: "InvalidNonce", type: "error", inputs: [] },
+  { name: "InvalidSignature", type: "error", inputs: [] },
+  { name: "InvalidSignatureLength", type: "error", inputs: [] },
+  { name: "InvalidSigner", type: "error", inputs: [] },
+  { name: "LengthMismatch", type: "error", inputs: [] },
   // Its custom errors, so a revert inside Permit2 reads as its name rather than as raw data.
   {
     name: "SignatureExpired",
     type: "error",
     inputs: [{ name: "signatureDeadline", type: "uint256" }],
   },
-  { name: "InvalidNonce", type: "error", inputs: [] },
-  { name: "InvalidSignature", type: "error", inputs: [] },
-  { name: "InvalidSignatureLength", type: "error", inputs: [] },
-  { name: "InvalidSigner", type: "error", inputs: [] },
-  { name: "InvalidContractSignature", type: "error", inputs: [] },
-  { name: "InvalidAmount", type: "error", inputs: [{ name: "maxAmount", type: "uint256" }] },
-  { name: "LengthMismatch", type: "error", inputs: [] },
-  { name: "AllowanceExpired", type: "error", inputs: [{ name: "deadline", type: "uint256" }] },
-  { name: "InsufficientAllowance", type: "error", inputs: [{ name: "amount", type: "uint256" }] },
-  { name: "ExcessiveInvalidation", type: "error", inputs: [] },
 ] as const;

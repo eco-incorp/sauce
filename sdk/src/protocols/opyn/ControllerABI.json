@@ -1,6 +1,331 @@
 {
   "abi": [
     {
+      "name": "applyFunding",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "burnPowerPerpAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_powerPerpAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_withdrawAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "wPowerPerpAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burnWPowerPerpAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_wPowerPerpAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_withdrawAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositUniPositionToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_uniTokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "donate",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "ethQuoteCurrencyPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "feeRecipient",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeTier",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "FUNDING_PERIOD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getDenormalizedMark",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_period",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getDenormalizedMarkForFunding",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_period",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getExpectedNormalizationFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_period",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUnscaledIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_period",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "indexForSettlement",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "isShutDown",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isSystemPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isVaultSafe",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastFundingUpdateTimestamp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "lastPauseTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxDebtAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "mintPowerPerpAmount",
       "type": "function",
       "stateMutability": "payable",
@@ -30,7 +355,264 @@
       ]
     },
     {
-      "name": "burnPowerPerpAmount",
+      "name": "mintWPowerPerpAmount",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        },
+        {
+          "name": "_wPowerPerpAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "_uniTokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "normalizationFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "onERC721Received",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "pausesLeft",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "quoteCurrency",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "redeemLong",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_wPerpAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "redeemShort",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "reduceDebt",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "reduceDebtShutdown",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setFeeRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newFeeRate",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeRecipient",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_newFeeRecipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "shortPowerPerp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "shutDown",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "TWAP_PERIOD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "unPauseAnyone",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "unPauseOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "updateOperator",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
@@ -39,32 +621,52 @@
           "type": "uint256"
         },
         {
-          "name": "_powerPerpAmount",
-          "type": "uint256"
-        },
+          "name": "_operator",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "vaults",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
         {
-          "name": "_withdrawAmount",
+          "name": "",
           "type": "uint256"
         }
       ],
       "outputs": [
         {
-          "name": "wPowerPerpAmount",
-          "type": "uint256"
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "name": "NftCollateralId",
+          "type": "uint32"
+        },
+        {
+          "name": "collateralAmount",
+          "type": "uint96"
+        },
+        {
+          "name": "shortAmount",
+          "type": "uint128"
         }
       ]
     },
     {
-      "name": "deposit",
+      "name": "weth",
       "type": "function",
-      "stateMutability": "payable",
-      "inputs": [
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
         {
-          "name": "_vaultId",
-          "type": "uint256"
+          "name": "",
+          "type": "address"
         }
-      ],
-      "outputs": []
+      ]
     },
     {
       "name": "withdraw",
@@ -81,6 +683,421 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "withdrawUniPositionToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_vaultId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "wPowerPerp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "wPowerPerpPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BurnShort",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DepositCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DepositUniPositionToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeeRateUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newFee",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeeRecipientUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeRecipient",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newFeeRecipient",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Liquidate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "liquidator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "debtAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralPaid",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MintShort",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NormalizationFactorUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldNormFactor",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newNormFactor",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "lastModificationTimestamp",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OpenVault",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pausesLeft",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RedeemLong",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "wPowerPerpAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "payoutAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RedeemShort",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vauldId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReduceDebt",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "ethRedeemed",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "wPowerPerpRedeemed",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "wPowerPerpBurned",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "wPowerPerpExcess",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "bounty",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Shutdown",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "indexForSettlement",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UnPaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "unpauser",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateOperator",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawUniPositionToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "vaultId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

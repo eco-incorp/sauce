@@ -32,12 +32,12 @@ function main(contract: Address) {
 
 `import ERC20ABI from "./protocols/erc20/ERC20ABI.json";`
 
-- `transfer(address to, uint256 amount) returns (bool)`
-- `approve(address spender, uint256 amount) returns (bool)`
-- `transferFrom(address from, address to, uint256 amount) returns (bool)`
-- `balanceOf(address account) view returns (uint256)`
 - `allowance(address owner, address spender) view returns (uint256)`
-- `totalSupply() view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `decimals() view returns (uint8)`
 - `name() view returns (string)`
 - `symbol() view returns (string)`
-- `decimals() view returns (uint8)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 amount) returns (bool)`
+- `transferFrom(address from, address to, uint256 amount) returns (bool)`

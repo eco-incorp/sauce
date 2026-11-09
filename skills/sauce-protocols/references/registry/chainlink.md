@@ -36,14 +36,68 @@ function main() {
 
 ### `AggregatorV3ABI`
 
-`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed.
+`import AggregatorV3ABI from "./protocols/chainlink/AggregatorV3ABI.json";` Speaks for: ethUsdFeed. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Chainlink` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `acceptOwnership()`
+- `accessController() view returns (address)`
+- `aggregator() view returns (address)`
+- `confirmAggregator(address _aggregator)`
 - `decimals() view returns (uint8)`
+- `description() view returns (string)`
+- `getAnswer(uint256 _roundId) view returns (int256)`
+- `getRoundData(uint80 _roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `getTimestamp(uint256 _roundId) view returns (uint256)`
+- `latestAnswer() view returns (int256)`
+- `latestRound() view returns (uint256)`
+- `latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `latestTimestamp() view returns (uint256)`
+- `owner() view returns (address)`
+- `phaseAggregators(uint16) view returns (address)`
+- `phaseId() view returns (uint16)`
+- `proposeAggregator(address _aggregator)`
+- `proposedAggregator() view returns (address)`
+- `proposedGetRoundData(uint80 _roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `proposedLatestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `setController(address _accessController)`
+- `transferOwnership(address _to)`
+- `version() view returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event AnswerUpdated` taking `(int256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event NewRound` taking `(uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `FeedRegistryABI`
 
-`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry.
+`import FeedRegistryABI from "./protocols/chainlink/FeedRegistryABI.json";` Speaks for: feedRegistry. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Chainlink` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `latestRoundData(address base, address quote) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `acceptOwnership()`
+- `confirmFeed(address base, address quote, address aggregator)`
+- `decimals(address base, address quote) view returns (uint8)`
+- `description(address base, address quote) view returns (string)`
+- `getAccessController() view returns (address)`
+- `getAnswer(address base, address quote, uint256 roundId) view returns (int256 answer)`
+- `getCurrentPhaseId(address base, address quote) view returns (uint16 currentPhaseId)`
 - `getFeed(address base, address quote) view returns (address aggregator)`
+- `getNextRoundId(address base, address quote, uint80 roundId) view returns (uint80 nextRoundId)`
+- `getPhase(address base, address quote, uint16 phaseId) view returns ((uint16 phaseId, uint80 startingAggregatorRoundId, uint80 endingAggregatorRoundId) phase)`
+- `getPhaseFeed(address base, address quote, uint16 phaseId) view returns (address aggregator)`
+- `getPhaseRange(address base, address quote, uint16 phaseId) view returns (uint80 startingRoundId, uint80 endingRoundId)`
+- `getPreviousRoundId(address base, address quote, uint80 roundId) view returns (uint80 previousRoundId)`
+- `getProposedFeed(address base, address quote) view returns (address proposedAggregator)`
+- `getRoundData(address base, address quote, uint80 _roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `getRoundFeed(address base, address quote, uint80 roundId) view returns (address aggregator)`
+- `getTimestamp(address base, address quote, uint256 roundId) view returns (uint256 timestamp)`
+- `isFeedEnabled(address aggregator) view returns (bool)`
+- `latestAnswer(address base, address quote) view returns (int256 answer)`
+- `latestRound(address base, address quote) view returns (uint256 roundId)`
+- `latestRoundData(address base, address quote) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `latestTimestamp(address base, address quote) view returns (uint256 timestamp)`
+- `owner() view returns (address)`
+- `proposedGetRoundData(address base, address quote, uint80 roundId) view returns (uint80 id, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `proposedLatestRoundData(address base, address quote) view returns (uint80 id, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)`
+- `proposeFeed(address base, address quote, address aggregator)`
+- `setAccessController(address _accessController)`
+- `transferOwnership(address to)`
+- `typeAndVersion() pure returns (string)`
+- `version(address base, address quote) view returns (uint256)`

@@ -59,7 +59,7 @@ describe("descriptors: the epic's motivating path", () => {
     const resolved = describeContract("base", "uniswap-v4", "UniversalRouter");
     expect(resolved).toBeDefined();
     expect(resolved!.address).toBeDefined();
-    expect(resolved!.methods.size).toBe(1);
+    expect(resolved!.methods.size).toBe(7);
     expect(resolved!.methods.get("execute")).toBeDefined();
   });
 });
@@ -160,8 +160,8 @@ describe("descriptors: kind:'interface'", () => {
 });
 
 describe("descriptors: kind:'address-only'", () => {
-  it("aave-v3 PoolAddressesProvider has real addresses, zero abi/methods, and a caveat", () => {
-    const d = getDescriptor("aave-v3", "PoolAddressesProvider")!;
+  it("spark PoolAddressesProvider has real addresses, zero abi/methods, and a caveat", () => {
+    const d = getDescriptor("spark", "PoolAddressesProvider")!;
     expect(d.kind).toBe("address-only");
     expect(d.abi).toEqual([]);
     expect(d.methods).toEqual([]);
@@ -216,10 +216,10 @@ describe("descriptors: registry totals + purity", () => {
     const protocolSlugs = new Set(DESCRIPTORS.map((d) => d.protocol));
     const kinds = (kind: string) => DESCRIPTORS.filter((d) => d.kind === kind).length;
     expect(protocolSlugs).toEqual(new Set(listProtocolSlugs()));
-    expect(DESCRIPTORS.length).toBe(312);
-    expect(kinds("singleton")).toBe(223);
-    expect(kinds("address-only")).toBe(50);
-    expect(kinds("interface")).toBe(39);
+    expect(DESCRIPTORS.length).toBe(319);
+    expect(kinds("singleton")).toBe(226);
+    expect(kinds("address-only")).toBe(49);
+    expect(kinds("interface")).toBe(44);
   });
 
   it("listDescriptors() is stable/reference-equal across calls, and mutating a returned perChainAddress does not corrupt the registry", () => {

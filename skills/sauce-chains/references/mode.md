@@ -49,5 +49,5 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96` | `Across.SpokePool` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96` | `Across.SpokePool`; not on this deployment: `adapterExecuteAcrossV5`, `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `DEPRECATED_zkErc20Bridge`, `executeAcrossV5`, `fxChild`, `gateway`, `initialize`, `L1_USDB`, `l1ChainId`, `L2_ASSET_ROUTER_ADDR`, `L2_BLAST_BRIDGE`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2GatewayRouter`, `l2ScrollMessenger`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `renounceOwnership`, `setFxChild`, `setL2GatewayRouter`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `transferOwnership`, `USDB`, `V5_MAGIC_PREFIX`, `whitelistedTokens`, `whitelistToken`, `wrap`, `YIELD_RECIPIENT`, `zkUSDCBridge` |
 | [Kim](../../sauce-protocols/references/registry/kim.md) | v2Router | `0x5D61c537393cf21893BE619E36fC94cd73C77DD3` | `Kim.V2Router` |

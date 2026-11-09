@@ -4,9 +4,8 @@
 // back before the market expires. Minting spends exactly `amount` of `token` and gives at least
 // `minOut` SY, or at least `minOut` each of PT and YT; redeeming spends exactly `amount` of SY, or
 // `amount` each of PT and YT, and gives at least `minOut` of `token`. The Router is approved for
-// exactly what it takes and must take all of it. The market's reads and these Router functions are
-// not in the registry's Pendle ABI: PendleMarket.json and PendleRouterTrades.json beside this file
-// declare them. Returns what the Pot spent and what the recipient received, as balance changes.
+// exactly what it takes and must take all of it. Returns what the Pot spent and what the recipient
+// received, as balance changes.
 //
 //   sauce run pendle-mint-redeem.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <market> <token> <split> <redeem> <amount> <minOut> <recipient>
@@ -28,8 +27,6 @@
 //   sauce run pendle-mint-redeem.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args <market> 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0 true false \
 //     1000000000000000000 1000000000000000000 <recipient>
-import PendleMarket from "./PendleMarket.json";
-import PendleRouterTrades from "./PendleRouterTrades.json";
 
 function main(
   market: Address,
@@ -40,8 +37,8 @@ function main(
   minOut: Uint256,
   recipient: Address,
 ): { spent: Uint256; received: Uint256 } {
-  const [sy, pt, yt] = PendleMarket.at(market).readTokens();
-  const router = PendleRouterTrades.at(Pendle.Router);
+  const [sy, pt, yt] = Pendle.Market(market).readTokens();
+  const router = Pendle.Router;
   const noSwap = { swapType: 0, extRouter: 0, extCalldata: hex``, needScale: false };
 
   let spent: Uint256 = 0;

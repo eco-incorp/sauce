@@ -1,6 +1,54 @@
 {
   "abi": [
     {
+      "name": "addKappas",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "kappas",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "bridgeVersion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "chainGasAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "DEFAULT_ADMIN_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -65,6 +113,270 @@
       "outputs": []
     },
     {
+      "name": "getFeeBalance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRoleAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMember",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMemberCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "GOVERNANCE_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "grantRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "hasRole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "isLegacySendDisabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "kappaExists",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "kappa",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "fee",
+          "type": "uint256"
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "mintAndSwap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "fee",
+          "type": "uint256"
+        },
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "tokenIndexFrom",
+          "type": "uint8"
+        },
+        {
+          "name": "tokenIndexTo",
+          "type": "uint8"
+        },
+        {
+          "name": "minDy",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "NODEGROUP_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "redeem",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -87,6 +399,771 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "redeemAndRemove",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "swapTokenIndex",
+          "type": "uint8"
+        },
+        {
+          "name": "swapMinAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "swapDeadline",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "redeemAndSwap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "tokenIndexFrom",
+          "type": "uint8"
+        },
+        {
+          "name": "tokenIndexTo",
+          "type": "uint8"
+        },
+        {
+          "name": "minDy",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "redeemV2",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "bytes32"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "revokeRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setChainGasAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLegacySendDisabled",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_isLegacySendDisabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setWethAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_wethAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "startBlockNumber",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "WETH_ADDRESS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "fee",
+          "type": "uint256"
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdrawAndRemove",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "fee",
+          "type": "uint256"
+        },
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "swapTokenIndex",
+          "type": "uint8"
+        },
+        {
+          "name": "swapMinAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "swapDeadline",
+          "type": "uint256"
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdrawChainGas",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "withdrawFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ChainGasWithdrawn",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LegacySendDisabledSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "isDisabled",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RoleGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenDeposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenDepositAndSwap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexFrom",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexTo",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "minDy",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenMint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenMintAndSwap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexFrom",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexTo",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "minDy",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapSuccess",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenRedeem",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenRedeemAndRemove",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapTokenIndex",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "swapMinAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapDeadline",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenRedeemAndSwap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexFrom",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "tokenIndexTo",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "minDy",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "deadline",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenRedeemV2",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TokenWithdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TokenWithdrawAndRemove",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "fee",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapTokenIndex",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "swapMinAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapDeadline",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "swapSuccess",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "kappa",
+          "type": "bytes32",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

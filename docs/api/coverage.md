@@ -47,12 +47,28 @@ lacks is zero, a test of it (`if (UniswapV3.Factory)`) is decided at compile tim
 of it fails to compile, naming the chain and listing the chains that have it; in TypeScript
 `.available` answers, and building a call on an absent contract fails.
 
-Every registry ABI declares its contract's deployed types, so its selectors are the deployed ones,
-and is a subset of the contract's complete API. A `coverage.caveats` entry records a deployment the
-evidence shows differs from its ABI — a bridged token without the L1 token's functions, a function
-whose selector is checked but whose source is not verified. The compile option
-`accessors.allowWidenedSelectors` lets a program use a contract whose ABI's selectors do not match
-its deployment; no shipped descriptor needs it.
+Every registry ABI is its contract's verified ABI as its deployments run it: every function, event
+and error a deployment declares and dispatches, with the deployed types, so its selectors are the
+deployed ones. It leaves out only what the SDK cannot expose by name, such as the second of two
+overloads taking the same number of arguments or a name the SDK reads as its own. A program calls
+those by their canonical signature, its name and parameter types with tuples in parentheses and no
+names or spaces, on the namespace contract: `UniswapV4.PoolManager["extsload(bytes32[])"](slots)`,
+after `.at(address)`, or on an interface bound in the same expression,
+`Beefy.Vault(vault)["available()"]()`. That compiles to the same program as a call by name, and
+each protocol's reference page lists those functions with their spelling. A function one chain's
+deployment does not run is refused for that chain, naming the chains that run it, and one it
+declares otherwise (an older release returning fewer fields) is called there as that deployment
+declares it; each protocol's [reference page](../reference/protocols.md) lists both per deployment.
+That holds for a namespace name only. An explicit twin import is the registry's ABI for the
+contract: the functions its reference page lists, and none of those it lists as left out, with the
+same entries on every chain and nothing withheld or declared otherwise for one chain's deployment.
+The TypeScript accessors' types declare every function as the ABI does, while a call on a chain
+whose deployment declares it otherwise decodes that declaration, so a result field the two do not
+share is absent at run time. A
+`coverage.caveats` entry records a deployment the evidence shows differs from its ABI — a bridged
+token without the L1 token's functions, a function whose selector is checked but whose source is not
+verified. The compile option `accessors.allowWidenedSelectors` lets a program use a contract whose
+ABI's selectors do not match its deployment; no shipped descriptor needs it.
 
 ## Tokens
 

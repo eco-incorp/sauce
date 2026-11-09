@@ -1,7 +1,7 @@
 {
   "abi": [
     {
-      "name": "supply",
+      "name": "addDynamicReserveConfig",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
@@ -10,19 +10,94 @@
           "type": "uint256"
         },
         {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "onBehalfOf",
-          "type": "address"
+          "name": "dynamicConfig",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ]
         }
       ],
       "outputs": [
         {
           "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "addReserve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "hub",
+          "type": "address"
+        },
+        {
+          "name": "assetId",
           "type": "uint256"
         },
+        {
+          "name": "priceSource",
+          "type": "address"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralRisk",
+              "type": "uint24"
+            },
+            {
+              "name": "paused",
+              "type": "bool"
+            },
+            {
+              "name": "frozen",
+              "type": "bool"
+            },
+            {
+              "name": "borrowable",
+              "type": "bool"
+            },
+            {
+              "name": "receiveSharesEnabled",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "dynamicConfig",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
         {
           "name": "",
           "type": "uint256"
@@ -30,31 +105,14 @@
       ]
     },
     {
-      "name": "withdraw",
+      "name": "authority",
       "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
-          "name": "reserveId",
-          "type": "uint256"
-        },
-        {
-          "name": "amount",
-          "type": "uint256"
-        },
-        {
-          "name": "onBehalfOf",
-          "type": "address"
-        }
-      ],
+      "stateMutability": "view",
+      "inputs": [],
       "outputs": [
         {
           "name": "",
-          "type": "uint256"
-        },
-        {
-          "name": "",
-          "type": "uint256"
+          "type": "address"
         }
       ]
     },
@@ -88,21 +146,291 @@
       ]
     },
     {
-      "name": "repay",
+      "name": "DOMAIN_SEPARATOR",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "eip712Domain",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "fields",
+          "type": "bytes1"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "version",
+          "type": "string"
+        },
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "verifyingContract",
+          "type": "address"
+        },
+        {
+          "name": "salt",
+          "type": "bytes32"
+        },
+        {
+          "name": "extensions",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "extSload",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "slot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ret",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "extSloads",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "slots",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32[]"
+        }
+      ]
+    },
+    {
+      "name": "getDynamicReserveConfig",
+      "type": "function",
+      "stateMutability": "view",
       "inputs": [
         {
           "name": "reserveId",
           "type": "uint256"
         },
         {
-          "name": "amount",
+          "name": "dynamicConfigKey",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationBonus",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
           "type": "uint256"
         },
         {
-          "name": "onBehalfOf",
+          "name": "user",
           "type": "address"
+        },
+        {
+          "name": "healthFactor",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "targetHealthFactor",
+              "type": "uint128"
+            },
+            {
+              "name": "healthFactorForMaxBonus",
+              "type": "uint64"
+            },
+            {
+              "name": "liquidationBonusFactor",
+              "type": "uint16"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationLogic",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getReserve",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "underlying",
+              "type": "address"
+            },
+            {
+              "name": "hub",
+              "type": "address"
+            },
+            {
+              "name": "assetId",
+              "type": "uint16"
+            },
+            {
+              "name": "decimals",
+              "type": "uint8"
+            },
+            {
+              "name": "collateralRisk",
+              "type": "uint24"
+            },
+            {
+              "name": "flags",
+              "type": "uint8"
+            },
+            {
+              "name": "dynamicConfigKey",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getReserveConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralRisk",
+              "type": "uint24"
+            },
+            {
+              "name": "paused",
+              "type": "bool"
+            },
+            {
+              "name": "frozen",
+              "type": "bool"
+            },
+            {
+              "name": "borrowable",
+              "type": "bool"
+            },
+            {
+              "name": "receiveSharesEnabled",
+              "type": "bool"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getReserveCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getReserveDebt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
         }
       ],
       "outputs": [
@@ -115,26 +443,6 @@
           "type": "uint256"
         }
       ]
-    },
-    {
-      "name": "setUsingAsCollateral",
-      "type": "function",
-      "stateMutability": "nonpayable",
-      "inputs": [
-        {
-          "name": "reserveId",
-          "type": "uint256"
-        },
-        {
-          "name": "usingAsCollateral",
-          "type": "bool"
-        },
-        {
-          "name": "onBehalfOf",
-          "type": "address"
-        }
-      ],
-      "outputs": []
     },
     {
       "name": "getReserveId",
@@ -158,10 +466,15 @@
       ]
     },
     {
-      "name": "getReserveCount",
+      "name": "getReserveSuppliedAssets",
       "type": "function",
       "stateMutability": "view",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        }
+      ],
       "outputs": [
         {
           "name": "",
@@ -170,7 +483,240 @@
       ]
     },
     {
+      "name": "getReserveSuppliedShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getReserveTotalDebt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUserAccountData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "riskPremium",
+              "type": "uint256"
+            },
+            {
+              "name": "avgCollateralFactor",
+              "type": "uint256"
+            },
+            {
+              "name": "healthFactor",
+              "type": "uint256"
+            },
+            {
+              "name": "totalCollateralValue",
+              "type": "uint256"
+            },
+            {
+              "name": "totalDebtValueRay",
+              "type": "uint256"
+            },
+            {
+              "name": "activeCollateralCount",
+              "type": "uint256"
+            },
+            {
+              "name": "borrowCount",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getUserDebt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUserLastRiskPremium",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUserPosition",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "drawnShares",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumShares",
+              "type": "uint120"
+            },
+            {
+              "name": "premiumOffsetRay",
+              "type": "int200"
+            },
+            {
+              "name": "suppliedShares",
+              "type": "uint120"
+            },
+            {
+              "name": "dynamicConfigKey",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getUserPremiumDebtRay",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUserReserveStatus",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        },
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "getUserSuppliedAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getUserSuppliedShares",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
@@ -210,6 +756,1355 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "authority",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isConsumingScheduledOp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "isPositionManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "positionManager",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isPositionManagerActive",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "positionManager",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "liquidationCall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "collateralReserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "debtReserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "debtToCover",
+          "type": "uint256"
+        },
+        {
+          "name": "receiveShares",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "MAX_USER_RESERVES_LIMIT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "multicall",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes[]"
+        }
+      ]
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "key",
+          "type": "uint192"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ORACLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "permitReserve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "permitV",
+          "type": "uint8"
+        },
+        {
+          "name": "permitR",
+          "type": "bytes32"
+        },
+        {
+          "name": "permitS",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renouncePositionManagerRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "repay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SET_USER_POSITION_MANAGERS_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "setAuthority",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAuthority",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUserPositionManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "positionManager",
+          "type": "address"
+        },
+        {
+          "name": "approve",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUserPositionManagersWithSig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "onBehalfOf",
+              "type": "address"
+            },
+            {
+              "name": "updates",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "positionManager",
+                  "type": "address"
+                },
+                {
+                  "name": "approve",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUsingAsCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "usingAsCollateral",
+          "type": "bool"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "SPOKE_REVISION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "supply",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "updateDynamicReserveConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "dynamicConfigKey",
+          "type": "uint32"
+        },
+        {
+          "name": "dynamicConfig",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateLiquidationConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "targetHealthFactor",
+              "type": "uint128"
+            },
+            {
+              "name": "healthFactorForMaxBonus",
+              "type": "uint64"
+            },
+            {
+              "name": "liquidationBonusFactor",
+              "type": "uint16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updatePositionManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "positionManager",
+          "type": "address"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateReserveConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralRisk",
+              "type": "uint24"
+            },
+            {
+              "name": "paused",
+              "type": "bool"
+            },
+            {
+              "name": "frozen",
+              "type": "bool"
+            },
+            {
+              "name": "borrowable",
+              "type": "bool"
+            },
+            {
+              "name": "receiveSharesEnabled",
+              "type": "bool"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateReservePriceSource",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "priceSource",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateUserDynamicConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateUserRiskPremium",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "useNonce",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "uint192"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "onBehalfOf",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "AddDynamicReserveConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "dynamicConfigKey",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AddReserve",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "assetId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "hub",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AuthorityUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "authority",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Borrow",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "drawnAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LiquidationCall",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "collateralReserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "debtReserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "liquidator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "receiveShares",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "debtAmountRestored",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "drawnSharesLiquidated",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "collateralAmountRemoved",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralSharesLiquidated",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "collateralSharesToLiquidator",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RefreshAllUserDynamicConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RefreshPremiumDebt",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RefreshSingleUserDynamicConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Repay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalAmountRepaid",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReportDeficit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "drawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "premiumDelta",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sharesDelta",
+              "type": "int256"
+            },
+            {
+              "name": "offsetRayDelta",
+              "type": "int256"
+            },
+            {
+              "name": "restoredPremiumRay",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetSpokeImmutables",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oracle",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "maxUserReservesLimit",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetUserPositionManager",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "positionManager",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approve",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetUsingAsCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "usingAsCollateral",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Supply",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "suppliedShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "suppliedAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateDynamicReserveConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "dynamicConfigKey",
+          "type": "uint32",
+          "indexed": true
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralFactor",
+              "type": "uint16"
+            },
+            {
+              "name": "maxLiquidationBonus",
+              "type": "uint32"
+            },
+            {
+              "name": "liquidationFee",
+              "type": "uint16"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateLiquidationConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "targetHealthFactor",
+              "type": "uint128"
+            },
+            {
+              "name": "healthFactorForMaxBonus",
+              "type": "uint64"
+            },
+            {
+              "name": "liquidationBonusFactor",
+              "type": "uint16"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdatePositionManager",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "positionManager",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "active",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateReserveConfig",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "config",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "collateralRisk",
+              "type": "uint24"
+            },
+            {
+              "name": "paused",
+              "type": "bool"
+            },
+            {
+              "name": "frozen",
+              "type": "bool"
+            },
+            {
+              "name": "borrowable",
+              "type": "bool"
+            },
+            {
+              "name": "receiveSharesEnabled",
+              "type": "bool"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateReservePriceSource",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "priceSource",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UpdateUserRiskPremium",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "riskPremium",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Withdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserveId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "withdrawnShares",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "withdrawnAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AssetNotListed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "CannotReceiveShares",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DynamicConfigKeyUninitialized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "HealthFactorBelowThreshold",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "HealthFactorNotBelowThreshold",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAssetDecimals",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCollateralFactorAndMaxLiquidationBonus",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCollateralRisk",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidDebtToCover",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInitialization",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidLiquidationConfig",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidSignature",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MustNotLeaveDust",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReentrancyGuardReentrantCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReserveFrozen",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReserveNotBorrowed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReserveNotEnabledAsCollateral",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReserveNotListed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReserveNotSupplied",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReservePaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeCastOverflowedIntDowncast",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "bits",
+          "type": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedIntToUint",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "value",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedUintDowncast",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "bits",
+          "type": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SafeCastOverflowedUintToInt",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SafeERC20FailedOperation",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "SelfLiquidation",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

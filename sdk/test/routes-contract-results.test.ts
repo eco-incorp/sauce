@@ -226,7 +226,9 @@ describe("what the rewrite refuses", () => {
       refusal(
         `function main(): Uint256 { return UniswapV3.Factory.getPool(WETH, USDC, 500).liquidty(); }`,
       ),
-    ).toContain("is a UniswapV3.Pool, whose ABI has no 'liquidty' (its methods: slot0, liquidity");
+    ).toContain(
+      "is a UniswapV3.Pool, whose ABI has no 'liquidty' (26 known methods; nearest: liquidity, mint, burn, collect, factory)",
+    );
   });
 
   it("a let, which the program may reassign", () => {

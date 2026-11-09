@@ -51,10 +51,30 @@ function main() {
 
 ### `ArbitrumL1GatewayRouterABI`
 
-`import ArbitrumL1GatewayRouterABI from "./protocols/arbitrum-bridge/ArbitrumL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter.
+`import ArbitrumL1GatewayRouterABI from "./protocols/arbitrum-bridge/ArbitrumL1GatewayRouterABI.json";` Speaks for: l1GatewayRouter. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `ArbitrumBridge` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `outboundTransfer(address _token, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) payable returns (bytes)`
+- `calculateL2TokenAddress(address l1ERC20) view returns (address)`
+- `counterpartGateway() view returns (address)`
+- `defaultGateway() view returns (address)`
+- `finalizeInboundTransfer(address, address, address, uint256, bytes) payable`
 - `getGateway(address _token) view returns (address)`
+- `getOutboundCalldata(address _token, address _from, address _to, uint256 _amount, bytes _data) view returns (bytes)`
+- `inbox() view returns (address)`
+- `initialize(address _owner, address _defaultGateway, address, address _counterpartGateway, address _inbox)`
+- `l1TokenToGateway(address) view returns (address)`
+- `outboundTransfer(address _token, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) payable returns (bytes)`
+- `outboundTransferCustomRefund(address _token, address _refundTo, address _to, uint256 _amount, uint256 _maxGas, uint256 _gasPriceBid, bytes _data) payable returns (bytes)`
+- `owner() view returns (address)`
+- `postUpgradeInit()`
+- `router() view returns (address)`
+- `setDefaultGateway(address newL1DefaultGateway, uint256 _maxGas, uint256 _gasPriceBid, uint256 _maxSubmissionCost) payable returns (uint256)`
+- `setGateway(address _gateway, uint256 _maxGas, uint256 _gasPriceBid, uint256 _maxSubmissionCost) payable returns (uint256)`
+- `setGateway(address _gateway, uint256 _maxGas, uint256 _gasPriceBid, uint256 _maxSubmissionCost, address _creditBackAddress) payable returns (uint256)`
+- `setGateways(address[] _token, address[] _gateway, uint256 _maxGas, uint256 _gasPriceBid, uint256 _maxSubmissionCost) payable returns (uint256)`
+- `setOwner(address newOwner)`
+- `supportsInterface(bytes4 interfaceId) view returns (bool)`
+- `updateWhitelistSource(address newSource)`
+- `whitelist() view returns (address)`
 
 ## Next
 

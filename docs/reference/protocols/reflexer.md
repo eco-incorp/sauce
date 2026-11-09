@@ -55,24 +55,69 @@ function main() {
 
 ### `CoinJoinABI`
 
-`import CoinJoinABI from "./protocols/reflexer/CoinJoinABI.json";` Speaks for: coinJoin.
+`import CoinJoinABI from "./protocols/reflexer/CoinJoinABI.json";` Speaks for: coinJoin. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `join(address account, uint256 wad)`
+- `addAuthorization(address account)`
+- `authorizedAccounts(address) view returns (uint256)`
+- `contractEnabled() view returns (uint256)`
+- `decimals() view returns (uint256)`
+- `disableContract()`
 - `exit(address account, uint256 wad)`
+- `join(address account, uint256 wad)`
+- `removeAuthorization(address account)`
+- `safeEngine() view returns (address)`
+- `systemCoin() view returns (address)`
 
 ### `ETHJoinABI`
 
-`import ETHJoinABI from "./protocols/reflexer/ETHJoinABI.json";` Speaks for: ethJoin.
+`import ETHJoinABI from "./protocols/reflexer/ETHJoinABI.json";` Speaks for: ethJoin. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `join(address account, uint256 wad)`
+- `addAuthorization(address account)`
+- `authorizedAccounts(address) view returns (uint256)`
+- `collateral() view returns (address)`
+- `collateralType() view returns (bytes32)`
+- `contractEnabled() view returns (uint256)`
+- `decimals() view returns (uint256)`
+- `disableContract()`
 - `exit(address account, uint256 wad)`
+- `join(address account, uint256 wad)`
+- `removeAuthorization(address account)`
+- `safeEngine() view returns (address)`
 
 ### `SAFEEngineABI`
 
-`import SAFEEngineABI from "./protocols/reflexer/SAFEEngineABI.json";` Speaks for: safeEngine.
+`import SAFEEngineABI from "./protocols/reflexer/SAFEEngineABI.json";` Speaks for: safeEngine. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Reflexer` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `addAuthorization(address account)`
+- `approveSAFEModification(address account)`
+- `authorizedAccounts(address) view returns (uint256)`
+- `canModifySAFE(address safe, address account) view returns (bool)`
+- `coinBalance(address) view returns (uint256)`
+- `collateralTypes(bytes32) view returns (uint256 debtAmount, uint256 accumulatedRate, uint256 safetyPrice, uint256 debtCeiling, uint256 debtFloor, uint256 liquidationPrice)`
+- `confiscateSAFECollateralAndDebt(bytes32 collateralType, address safe, address collateralCounterparty, address debtCounterparty, int256 deltaCollateral, int256 deltaDebt)`
+- `contractEnabled() view returns (uint256)`
+- `createUnbackedDebt(address debtDestination, address coinDestination, uint256 rad)`
+- `debtBalance(address) view returns (uint256)`
+- `denySAFEModification(address account)`
+- `disableContract()`
+- `globalDebt() view returns (uint256)`
+- `globalDebtCeiling() view returns (uint256)`
+- `globalUnbackedDebt() view returns (uint256)`
+- `initializeCollateralType(bytes32 collateralType)`
+- `modifyCollateralBalance(bytes32 collateralType, address account, int256 wad)`
+- `modifyParameters(bytes32 parameter, uint256 data)`
+- `modifyParameters(bytes32 collateralType, bytes32 parameter, uint256 data)`
 - `modifySAFECollateralization(bytes32 collateralType, address safe, address collateralSource, address debtDestination, int256 deltaCollateral, int256 deltaDebt)`
+- `removeAuthorization(address account)`
+- `safeDebtCeiling() view returns (uint256)`
+- `safeRights(address, address) view returns (uint256)`
 - `safes(bytes32 collateralType, address safe) view returns (uint256 lockedCollateral, uint256 generatedDebt)`
+- `settleDebt(uint256 rad)`
+- `tokenCollateral(bytes32, address) view returns (uint256)`
+- `transferCollateral(bytes32 collateralType, address src, address dst, uint256 wad)`
+- `transferInternalCoins(address src, address dst, uint256 rad)`
+- `transferSAFECollateralAndDebt(bytes32 collateralType, address src, address dst, int256 deltaCollateral, int256 deltaDebt)`
+- `updateAccumulatedRate(bytes32 collateralType, address surplusDst, int256 rateMultiplier)`
 
 ## Next
 

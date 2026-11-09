@@ -56,9 +56,38 @@ function main() {
 
 ### `SocketGatewayABI`
 
-`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway.
+`import SocketGatewayABI from "./protocols/socket/SocketGatewayABI.json";` Speaks for: socketGateway. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Socket` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `addController(address controllerAddress) returns (uint32)`
+- `addressAt(uint32 routeId) view returns (address)`
+- `addRoute(address routeAddress) returns (uint32)`
+- `BRIDGE_AFTER_SWAP_SELECTOR() view returns (bytes4)`
+- `CENT_PERCENT() view returns (uint256)`
+- `claimOwner()`
+- `controllerCount() view returns (uint32)`
+- `controllers(uint32) view returns (address)`
+- `disableController(uint32 controllerId)`
+- `disabledRouteAddress() view returns (address)`
+- `disableRoute(uint32 routeId)`
+- `executeController((uint32 controllerId, bytes data) socketControllerRequest) payable returns (bytes)`
+- `executeControllers((uint32 controllerId, bytes data)[] controllerRequests) payable`
 - `executeRoute(uint32 routeId, bytes routeData) payable returns (bytes result)`
+- `executeRoutes(uint32[] routeIds, bytes[] dataItems) payable`
+- `getController(uint32 controllerId) view returns (address)`
+- `getRoute(uint32 routeId) view returns (address)`
+- `nominateOwner(address nominee_)`
+- `nominee() view returns (address)`
+- `owner() view returns (address)`
+- `rescueEther(address userAddress, uint256 amount)`
+- `rescueFunds(address token, address userAddress, uint256 amount)`
+- `routes(uint32) view returns (address)`
+- `routesCount() view returns (uint32)`
+- `setApprovalForRouters(address[] routeAddresses, address[] tokenAddresses, bool isMax)`
+- `swapAndMultiBridge((uint32 swapRouteId, bytes swapImplData, uint32[] bridgeRouteIds, bytes[] bridgeImplDataItems, uint256[] bridgeRatios, bytes[] eventDataItems) swapMultiBridgeRequest) payable`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event OwnershipTransferRequested` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

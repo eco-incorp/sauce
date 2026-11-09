@@ -54,10 +54,10 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Across](../protocols/across.md) | spokePool | `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1` | `Across.SpokePool` |
+| [Across](../protocols/across.md) | spokePool | `0x2D509190Ed0172ba588407D4c2df918F955Cc6E1` | `Across.SpokePool`; not on this deployment: `adapterExecuteAcrossV5`, `DEPRECATED_zkErc20Bridge`, `executeAcrossV5`, `fxChild`, `gateway`, `initialize`, `l1ChainId`, `L2_ASSET_ROUTER_ADDR`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2GatewayRouter`, `l2ScrollMessenger`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `renounceOwnership`, `setFxChild`, `setL2GatewayRouter`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `transferOwnership`, `V5_MAGIC_PREFIX`, `whitelistedTokens`, `whitelistToken`, `wrap`, `zkUSDCBridge` |
 | [Fenix](../protocols/fenix.md) | router | `0xbD571125856975DBfC2E9b6d1DE496D614D7BAEE` | `Fenix.Router` |
 | [Thruster](../protocols/thruster.md) | v3SwapRouter | `0x337827814155ECBf24D20231fCA4444F530C0555` | `Thruster.V3SwapRouter` |
-| [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x5C346464d33F90bABaf70dB6388507CC889C1070` | `UniswapV2.Factory` |
+| [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x5C346464d33F90bABaf70dB6388507CC889C1070` | `UniswapV2.Factory`; not on this deployment: `INIT_CODE_HASH` |
 | [Uniswap V2](../protocols/uniswap-v2.md) | router | `0xBB66Eb1c5e875933D44DAe661dbD80e5D9B03035` | `UniswapV2.Router` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | poolManager | `0x1631559198A9e474033433b2958daBC135ab6446` | `UniswapV4.PoolManager` |
 | [Uniswap V4](../protocols/uniswap-v4.md) | stateView | `0x12a88AE16F46DCe4e8B15368008Ab3380885df30` | `UniswapV4.StateView` |

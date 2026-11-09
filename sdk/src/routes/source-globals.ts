@@ -13,8 +13,9 @@
  *   `pot.owner`, `USDC.accountOf(holder)`, `svm-account-expressions.ts`).
  * - **protocols**: every `<Protocol>[.<Contract>]` reference the protocol-accessor rewrite resolves
  *   on the chain — through `resolveProtocolContract`, the rewrite's own resolver, not a copy of its
- *   rules — with each contract's address and vendored methods. A family alias (`Uniswap` for
- *   `UniswapV4`) lists the contracts it names unambiguously.
+ *   rules — with each contract's address and the methods its deployment there runs (`descriptorOn`:
+ *   none the chain's deployment withholds). A family alias (`Uniswap` for `UniswapV4`) lists the
+ *   contracts it names unambiguously.
  * - **chains**: the chain names a program qualifies an accessor by (`Base.Uniswap.UniversalRouter`).
  * - **defines**: `chainDefines(chain)`, verbatim — the scalars every program on the chain reads.
  * - **modules**: `chainAmbient(chain)`'s modules and the functions each exports for the chain's

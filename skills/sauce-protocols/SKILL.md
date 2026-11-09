@@ -35,6 +35,34 @@ chain has no namespace for it, through the protocol's **ABI import**,
 `./protocols/<slug>/<Export>.json`, bound with `.at(address)` to an address passed as a `main`
 input. Namespace members (deployed contract, address only, interface) are `sauce-globals`'s.
 
+A namespace carries its contract's **full verified ABI**: every function, event and error the
+deployed contract declares and runs, its own reads and admin functions included, so a program
+calls any of them by name and needs no ABI of its own for a recorded contract. Deployments of one
+contract can run different releases: a function a chain's deployment does not run is refused for
+that chain when the program compiles, naming the chains that do run it, and one it declares
+otherwise (an older release returning fewer fields) is called there as that deployment declares
+it. The registry file lists both, per deployment ("not on this deployment" and "declared otherwise
+by this deployment" in its Deployments table, "Not on" and "Declared otherwise by" under each ABI).
+
+Only a namespace name is held to the chain's deployment. An ABI import is the registry's ABI for
+the contract: the functions its registry file lists under that ABI, and none of those it lists as
+left out, with the same entries on every chain and nothing withheld or declared otherwise for one
+chain's deployment. Like an `IERC20` import, it refuses no function it lists: a call through it to
+a function the chain's deployment does not run compiles, does not run the function, and need not
+revert. Its line in the registry file says so. Call a recorded contract through its namespace to
+have that call refused, and a function its deployment declares otherwise called as declared.
+
+A function the namespace leaves out by name (an overload taking as many arguments as the one it
+keeps, or a name the namespace keeps for itself) is called by its **canonical signature**, its name
+and parameter types with tuples in parentheses and no names or spaces:
+`Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](…)`,
+`Base.Permit2.Permit2["…"](…)`, `AaveV3.Pool.at(pool)["…"](…)`, or on an interface
+`Beefy.Vault(vault)["available()"]()`. The registry file lists them under each ABI ("Left out of
+this ABI by name, and called by their signature through the namespace"), each with its spelling
+and the deployments that do not run it: a program compiled for that chain is refused it. Any other
+function may be called the same way, and compiles to the same program as its call by name. The ABI
+import does not carry them; `sauce-script` has a compiled example.
+
 ## Choosing
 
 | Question                     | Answer                                                                                                   |
@@ -133,29 +161,25 @@ has is a flash swap through the Pot's Router (`sauce-swaps`).
   template.
 - [examples/aave-delegate-credit.sauce.ts](examples/aave-delegate-credit.sauce.ts) and
   [examples/aave-repay-delegated.sauce.ts](examples/aave-repay-delegated.sauce.ts) open and close a
-  line of Aave V3 credit the Pot's collateral backs for another borrower, with the delegation calls
-  the registry's ABI lacks in [examples/AaveV3Delegation.json](examples/AaveV3Delegation.json).
+  line of Aave V3 credit the Pot's collateral backs for another borrower, the delegation called on
+  the variable-debt token `AaveV3.Pool.getReserveVariableDebtToken` returns.
 - [examples/compound-borrow.sauce.ts](examples/compound-borrow.sauce.ts) and
   [examples/compound-repay.sauce.ts](examples/compound-repay.sauce.ts) borrow USDC from Compound
   III against WETH, reading the market and what the Pot may borrow, then repay it all and claim the
-  rewards, with the reads the registry's ABI lacks in
-  [examples/CometMarket.json](examples/CometMarket.json).
+  rewards through `CompoundV3.CometRewards`.
 - [examples/morpho-borrow.sauce.ts](examples/morpho-borrow.sauce.ts) and
   [examples/morpho-repay.sauce.ts](examples/morpho-repay.sauce.ts) borrow in a Morpho Blue market
-  by its id, reading the position and its health, then repay it by shares and withdraw, with
-  Morpho's reads in [examples/MorphoMarket.json](examples/MorphoMarket.json).
+  by its id, reading the position and its health through `MorphoBlue.Morpho` and the market's
+  `MorphoBlue.Oracle`, then repay it by shares and withdraw.
 - [examples/pendle-trade.sauce.ts](examples/pendle-trade.sauce.ts) and
   [examples/pendle-mint-redeem.sauce.ts](examples/pendle-mint-redeem.sauce.ts) buy or sell a Pendle
-  market's PT or YT through Pendle's Router, and mint or redeem its SY, or its PT and YT together,
-  reading the market's tokens through [examples/PendleMarket.json](examples/PendleMarket.json),
-  with the Router functions the registry's ABI lacks in
-  [examples/PendleRouterTrades.json](examples/PendleRouterTrades.json).
+  market's PT or YT through `Pendle.Router`, and mint or redeem its SY, or its PT and YT together,
+  reading the market's tokens through `Pendle.Market`.
 - [examples/v3-position-open.sauce.ts](examples/v3-position-open.sauce.ts) and
   [examples/v3-position-manage.sauce.ts](examples/v3-position-manage.sauce.ts) open a full-range
   Uniswap V3 position the Pot owns, or add to one, its range from the pool's tick spacing, then
-  remove a share of its liquidity, collect what it is owed and hand the NFT over, with the position
-  manager's calls the registry's ABI lacks in
-  [examples/UniswapV3Positions.json](examples/UniswapV3Positions.json).
+  remove a share of its liquidity, collect what it is owed and hand the NFT over, all through
+  `UniswapV3.NonfungiblePositionManager`.
 - [examples/gateway-deposit.sauce.ts](examples/gateway-deposit.sauce.ts) deposits the Pot's USDC
   into Circle Gateway for a depositor with `depositFor`, on every chain with Gateway and `USDC`,
   testnets included, and reads the balance back;

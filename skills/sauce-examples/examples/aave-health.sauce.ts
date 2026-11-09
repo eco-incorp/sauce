@@ -1,9 +1,8 @@
 // Guards the Pot's Aave V3 position, to run on a schedule: when its health factor is below
 // `trigger`, repays USDC debt from the Pot's USDC until the health factor is back at `target`, or
 // as near as the Pot's USDC and its USDC debt allow. At or above `trigger` it does nothing. The
-// repayment is priced by Aave's own oracle, read through AaveV3Reads.json beside this file, the
-// reads the registry's Aave V3 ABI does not declare. Returns the health factor before and after,
-// and the USDC repaid.
+// repayment is priced by Aave's own oracle, the one the pool's addresses provider names. Returns
+// the health factor before and after, and the USDC repaid.
 // The position is the Pot's (supplied for the Pot), so the repayment is on the Pot's behalf.
 //
 //   sauce run aave-health.sauce.ts --chain <chain> --keystore <keystore> \
@@ -18,7 +17,6 @@
 //
 //   sauce run aave-health.sauce.ts --chain base --keystore <keystore> \
 //     --args 1300000000000000000 1500000000000000000
-import AaveV3Reads from "./AaveV3Reads.json";
 
 function main(
   trigger: Uint256,
@@ -40,10 +38,10 @@ function main(
   );
   // The Pot's USDC debt, in USDC base units, and its worth at Aave's price for USDC. Debt in other
   // tokens stays; the USDC debt to keep is what is left of debtAtTarget beside it.
-  const debtToken = AaveV3Reads.at(AaveV3.Pool).getReserveVariableDebtToken(USDC);
+  const debtToken = AaveV3.Pool.getReserveVariableDebtToken(USDC);
   const owed = Token(debtToken).balanceOf(pot);
-  const oracle = AaveV3Reads.at(AaveV3.PoolAddressesProvider).getPriceOracle();
-  const usdcPrice = AaveV3Reads.at(oracle).getAssetPrice(USDC); // base currency per USDC
+  const oracle = AaveV3.PoolAddressesProvider.getPriceOracle();
+  const usdcPrice = oracle.getAssetPrice(USDC); // base currency per USDC
   const owedValue = Math.mulDiv(owed, usdcPrice, 1000000);
   const other = account.totalDebtBase > owedValue ? account.totalDebtBase - owedValue : 0;
   const keep = debtAtTarget > other ? Math.mulDiv(debtAtTarget - other, 1000000, usdcPrice) : 0;

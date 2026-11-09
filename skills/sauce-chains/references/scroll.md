@@ -30,10 +30,10 @@ chain does not have it.
 
 ```sauce chain=scroll
 function main() {
-  // `AaveV3.Pool` is Scroll's pool: `0x11fCfe756c05AD438e312a7fd934381537D3cFfe`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Scroll's oracle: `0x04421D8C506E2fA2371a08EfAaBf791F624054F3`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Scroll.AaveV3.Pool == AaveV3.Pool);
+  require(Scroll.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -49,10 +49,13 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x11fCfe756c05AD438e312a7fd934381537D3cFfe` | `AaveV3.Pool` |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96` | `Across.SpokePool` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | oracle | `0x04421D8C506E2fA2371a08EfAaBf791F624054F3` | `AaveV3.Oracle` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x11fCfe756c05AD438e312a7fd934381537D3cFfe` | `AaveV3.Pool`; not on this deployment: `dropReserve`, `resetIsolationModeTotalDebt` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0x69850D0B276776781C063771b161bd8894BCdD04` | `AaveV3.PoolAddressesProvider` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0x3baD7AD0728f9917d1Bf08af5782dCbD516cDd96` | `Across.SpokePool`; not on this deployment: `__OvmSpokePool_init`, `adapterExecuteAcrossV5`, `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `cctpTokenMessenger`, `cctpV2`, `DEPRECATED_zkErc20Bridge`, `executeAcrossV5`, `fxChild`, `gateway`, `initialize`, `L1_USDB`, `l1ChainId`, `l1Gas`, `L2_ASSET_ROUTER_ADDR`, `L2_BLAST_BRIDGE`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2Eth`, `MESSENGER`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `recipientCircleDomainId`, `remoteL1Tokens`, `renounceOwnership`, `setFxChild`, `setL1GasLimit`, `setPolygonTokenBridger`, `setRemoteL1Token`, `setTokenBridge`, `tokenBridges`, `transferOwnership`, `USDB`, `usdcToken`, `V5_MAGIC_PREFIX`, `whitelistedTokens`, `whitelistToken`, `wrap`, `YIELD_RECIPIENT`, `zkUSDCBridge` |
 | [Ambient](../../sauce-protocols/references/registry/ambient.md) | crocSwapDex | `0xaaaaAAAACB71BF2C8CaE522EA5fa455571A74106` | `Ambient.CrocSwapDex` |
 | [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cUSDCv3 | `0xB2f97c1Bd3bf02f5e74d13f02E3e26F93D77CE44` | `CompoundV3.CUSDCv3` |
+| [Compound V3](../../sauce-protocols/references/registry/compound-v3.md) | cometRewards | `0x70167D30964cbFDc315ECAe02441Af747bE0c5Ee` | `CompoundV3.CometRewards` |
 | [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerBank](../../sauce-protocols/references/registry/layerbank.md) | core | `0xEC53c830f4444a8A56455c6836b5D2aA794289Aa` | `Layerbank.Core` |
 | [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |

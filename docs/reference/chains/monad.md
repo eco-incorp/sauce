@@ -40,10 +40,10 @@ function main() {
   const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(pot) == held);
-  // `AaveV3.Pool` is Monad's pool: `0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Monad's oracle: `0x0c02b2c2038066C10Eab8fe1D5Cdb73d5a78A1Bf`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Monad.AaveV3.Pool == AaveV3.Pool);
+  require(Monad.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -63,9 +63,10 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../protocols/aave-v3.md) | pool | `0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef` | `AaveV3.Pool` |
+| [Aave V3](../protocols/aave-v3.md) | oracle | `0x0c02b2c2038066C10Eab8fe1D5Cdb73d5a78A1Bf` | `AaveV3.Oracle` |
+| [Aave V3](../protocols/aave-v3.md) | pool | `0x69a5F9AD4f96ebf0a0C792dD42a01cC5C0102fef` | `AaveV3.Pool`; not on this deployment: `borrow`, `dropReserve`, `liquidationCall`, `repay`, `repayWithATokens`, `repayWithPermit`, `resetIsolationModeTotalDebt`, `setUserUseReserveAsCollateral`, `supply`, `supplyWithPermit`, `withdraw` |
 | [Aave V3](../protocols/aave-v3.md) | poolAddressesProvider | `0x34793Fb9935F7bB5E5aE920fb963F39063E7A615` | `AaveV3.PoolAddressesProvider` |
-| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger`; not on this deployment: `initialize` |
 | [Morpho Blue](../protocols/morpho-blue.md) | morpho | `0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee` | `MorphoBlue.Morpho` |
 | [PancakeSwap V2](../protocols/pancakeswap-v2.md) | factory | `0x02a84c1b3BBD7401a5f7fa98a384EBC70bB5749E` | `PancakeswapV2.Factory` |
 | [PancakeSwap V2](../protocols/pancakeswap-v2.md) | router | `0xB1Bc24c34e88f7D43D5923034E3a14B24DaACfF9` | `PancakeswapV2.Router` |

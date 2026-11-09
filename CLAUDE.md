@@ -195,6 +195,7 @@ pnpm --filter './actions' test:unit      # no mainnet state
 pnpm --filter './actions' test:mainnet   # real mainnet contracts, replayed locally
 pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
 pnpm --filter './sdk' gen-source-globals # regenerate the contract table and both languages' types
+pnpm --filter './sdk' gen-registry-abis  # regenerate the registry ABIs, their twins and omitted.json
 ```
 
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
@@ -641,30 +642,138 @@ program declares it in scope, and as the caller's where the compile binds it. On
 holds no EVM contract, and the Solana lowering never sees an absent token: `checkNames` refuses a
 live `pot.<TOKEN>` of one and `withoutDead` has blanked a ruled-out one.
 
-**Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
-checks each function, event and custom error of each `abis.ts` export against
-`test/fixtures/registry-abi/evidence.json`: the
-deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
-proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
-exists, its outputs, mutability and struct field names must match. An event's topic and an
-error's selector must be carried by the deployed code (a PUSH32 before its LOG, a constant before
-its REVERT), an event's `indexed` flags must match the verified ABI, and each event's captured real
-log (`logs` in the fixture, where a deployment has emitted one) must decode, strictly, with the
-registry's own declaration. `targets.json` beside it is the
-hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, narrowed
-by `chains` where one role's deployments run different releases, or representative `instances` for
-interface ABIs), `probes` (extra signatures to ask a selector router about), and every exception
-with its reason — `exempt` (a deployment that legitimately differs),
-`unverified` (no verified source on any keyless source; the selector is still checked) and
-`unverifiable`. An
-exception that stops applying fails the test. `required` names an overload a consumer binds (with
-the consumer): the registry need not declare every overload a contract has, but it must keep
-declaring those, and removing one fails the test. So does a new export with no target, a deployment
-of a targeted role the evidence does not cover (an `addresses.ts` edit not yet recaptured, or one
-no export's `chains` includes), and a `<X>ABI.json` twin that is missing or no longer matches
-`abis.ts` (regenerate with `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
-used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
-takes every ABI type, so declare the deployed one.
+**Every registry ABI is the deployed contract's full ABI, pinned to it offline.** An `abis.ts`
+export is the FULL verified ABI of the contract it speaks for — every function, event and custom
+error of the implementation behind its proxies and of every facet its selector router reaches —
+and, where its deployments run different releases, their union. `scripts/gen-registry-abis.mjs`
+writes each export and its `<X>ABI.json` twin from `test/fixtures/registry-abi/evidence.json`
+(`--check` exits 1 when stale; `registry-abi.test.ts` runs it): what `abis.ts` already declares is
+kept as written, comments included (each comment inside an entry is hoisted above it), so a program
+that compiles keeps compiling, and the evidence's other functions, events and errors are added,
+sorted by name and argument count — but for a name's overloads the registry declared before it took
+full ABIs, which come first in their order then (`test/fixtures/registry-abi/baseline-order.json`,
+main's twins at 92af3e34, written once): a lookup by name with no argument count (`methodOf`,
+`selectorOf`, `abi.find` by name) takes a name's first overload, so `selectorOf(router, "execute")`
+stays `0x3593564c` beside the added `execute(bytes,bytes[])`; `registry-default-overload.test.ts`
+holds every export, twin, descriptor and chain view to it. A function no deployment dispatches is
+not added. What cannot be exposed is left out and listed, with why, in the generated
+`test/fixtures/registry-abi/omitted.json`,
+which the registry's generated documents render: a second overload of one name and argument count
+(a call picks its overload by argument count; the registry's is kept, else the one `overloads`
+names, else the most dispatched), overloads mixing reads and writes, a name the SDK reads as its own
+(an accessor's properties, a value's methods, a sibling contract on a protocol's default contract),
+and a function or event an interface's instances declare differently. A registry function that
+would be left out for its name fails the generator instead. A function the deployments drop stays
+in `abis.ts` until removed by hand: the test fails it (no deployment dispatches it).
+
+A FUNCTION LEFT OUT FOR ITS NAME OR ITS ARITY ALONE IS STILL CALLED, BY ITS SIGNATURE. Its
+`omitted.json` entry carries its ABI item (`function`; its reason ends "called by its signature"),
+and `gen-source-globals.mjs` writes it into `CONTRACT_LINKS` as `bySignature` on every contract of
+the export, with `bySignatureWithheld` per chain for the signatures that chain's role deployment
+does not run as declared (`descriptorOn(chain)` drops them from its `bySignature`). Today that is
+21 same-arity overloads and 2 accessor-name collisions (Beefy `Vault.available()`, ENS
+`BaseRegistrar.available(uint256)`) at export level, carried on 25 contracts. A program calls any
+function of a namespace contract by its canonical signature (name and parameter types, tuples in
+parentheses, no names or spaces): `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](…)`,
+chain-qualified (`Base.<Namespace>.<Contract>[…]`), on a `const` holding the contract, after
+`.at(addr)`, or on an interface bound in the same expression (`Beefy.Vault(v)["available()"]()`).
+`protocol-rewrite.ts` (shape H) lowers it to a binding of that one function,
+`I<Protocol>_<Contract>_<selector>` (`_On<Chain>` after it where that chain's deployment declares the
+function otherwise, `shapes`), so the bytes equal the call by name where the name reaches the
+function. Refused: through a protocol's default contract (`Permit2["…"](…)`) and on a bound
+interface held in a local (both by the rewrite, the latter at the binding); a signature not the
+contract's (naming the nearest five) and one the chain's deployment withholds (naming the chains
+that run it), by `method-refusals.ts#signatureRefusal`, which the names check (`absent-names.ts`)
+applies to a namespace contract and the rewrite to a bound one; a call by name to a function only
+reachable by signature gets `bySignatureHint`'s spelling. `source-globals.generated.ts` declares
+them as string-keyed members for TypeScript closures. They are not in the `<X>ABI.json` twin.
+`registry-abi.test.ts` checks each against the evidence like every other function — dispatch,
+outputs, mutability, struct field names, `unverified` where no verified source declares it, and
+per-chain withholding (`bySignatureWithheld`; none is served declared otherwise) — and holds
+`bySignature` on each contract of the export to `omitted.json`. The registry documents list them
+under each ABI, apart from the rest left out, with each contract's spelling and the deployments
+that withhold them.
+
+A ROLE'S DEPLOYMENT ON ONE CHAIN MAY NOT RUN ALL OF ITS UNION AS DECLARED. `gen-source-globals.mjs`
+writes, per singleton contract and chain, two tables in `CONTRACT_LINKS`. `shapes`: each function
+that chain's deployment dispatches and its verified ABI declares with the same signature and other
+outputs, mutability or struct field names, as that verified fragment (Ethereum's and Polygon's
+`CometRewards.rewardConfig`, three fields to the ABI's four; Base's `CbETH.mint`, no return value).
+`withheld`: every other function it does not run as declared (it does not dispatch the selector,
+its verified ABI declares only another overload of the name, or its declaration would mix reads
+and writes among the name's overloads). The descriptor's `descriptorOn(chain)` view drops the
+withheld and carries the reshaped in place of the ABI's (`shapesOn`), the chain's names module
+imports that view's ABI, and a program compiled for the chain that calls a withheld one is
+refused, naming the chains that run it (`AaveV3.Pool`'s L2-only `supply(bytes32)` on Ethereum,
+`CbETH.exchangeRate()` on Base), while a reshaped one compiles as its deployment declares it. The
+host accessors call the view too, so their TypeScript types (the ABI's declaration) can differ
+from what a call on that chain decodes, and `toSauceScript()` refuses a reshaped method, whose
+twin import would declare it otherwise. An interface (a by-address contract) has no chain to
+filter by: it is its representative instances' union. Withholding and reshaping apply to
+NAMESPACE names only. An explicit twin import (`import X from "./protocols/<slug>/<Export>.json"`)
+and a caller's `contracts` are the registry's ABI for the contract — what `omitted.json` leaves
+out is not in it, and what it leaves out for name or arity is reached only through the namespace,
+by signature — with the same entries on every chain and no per-chain withholding or
+reshaping, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin is bound
+to is matched against a deployment, and none is to be added. The registry documents say so beside
+each twin's import line, list each deployment's withheld and reshaped functions, and say of an
+interface whose captured instances do not all dispatch the same selectors that not every contract
+it reaches runs every function listed (`gen-skills-references.mjs`, reading `evidence.json` at
+generation time).
+
+`test/registry-abi.test.ts` checks each function, event and custom error of each export against the
+evidence: some deployment must dispatch each function's selector (after resolving EIP-1167 clones,
+EIP-1967/beacon/legacy proxy slots, `implementation()` getters — asked of proxy-shaped code, and of
+larger code that DELEGATECALLs and dispatches one, a delegator forwarding each function by name such
+as Moonwell's and Benqi's markets, which stays a layer of its own rather than a wrapper —
+`delegates`, and diamond or selector routers), and where a verified ABI exists, its outputs,
+mutability and struct field names must match; a role's deployment that does not match must
+withhold it, or carry its verified declaration under `shapes` where it dispatches the selector and
+declares the signature otherwise, and one that does match must do neither; an
+interface instance that declares it otherwise needs an `exempt`. An event or error ships only where
+some deployment's code carries it (a PUSH32 before its LOG, an anonymous event's LOG of as many
+topics as it indexes, a constant before its REVERT), `unverified` or not: the generator leaves the
+rest out as "no deployment carries it", and records each shipped one a deployment's code does not
+carry under `uncarried` in `omitted.json`, which the test holds both ways. It must match a verified
+declaration (`indexed` flags and `anonymous` included), or have an `unverified` entry; each event a
+target lists under `logs` must have a captured real log that decodes, strictly, with the registry's
+own declaration. And every function, event and error the deployments verifiably declare is either
+in the export or in `omitted.json`: nothing is trimmed silently. `targets.json` beside it is the
+hand-written half (its `note` defines every key): which deployments evidence which export (`roles`
+from `addresses.ts`, narrowed by `chains` where one role's deployments run different releases, or
+representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
+about), `unresolved` (a router inventory's facet no deployment reaches, and why), `delegates`
+(getters naming the contracts it delegates to, each captured as a layer: Comet's fallback's
+`extensionDelegate()`, Euler EVault's `MODULE_TOKEN()` and its seven other modules), `overloads`,
+`default` (the contract `<Protocol>.<method>(…)` calls where a
+protocol has several singletons: Aave V3's Pool), `standard` (an interface whose instances are
+examples of an ERC or a protocol's interface — ERC-20, ERC-4626, ERC-3156's lender, Morpho Blue's
+IOracle: its ABI is its pinned reference interface alone, each function where every instance
+dispatches it, so an example's own functions never reach every token), `common` (an interface
+whose instances run different implementations: only what every instance declares alike — Pendle's
+markets and SYs), and every exception with its reason — `exempt`, `unverified` (no verified source
+on any keyless source; the selector is still checked) and `unverifiable`. The generator fails
+`standard` or `common` on an export a role is bound to. An exception that stops applying fails the
+test. `required` names an overload a consumer binds (with the consumer); removing one fails the
+test. So does a new export with no target, a deployment of a targeted role the evidence does not
+cover (an `addresses.ts` edit not yet recaptured, or one no export's `chains` includes), and a stale
+twin. The widened-type workaround the registry used to carry (`uint32` for `uint24`, `uint256` for
+`bytes32`/`int*`) is gone: the pinned compiler takes every ABI type, so declare the deployed one.
+
+A contract with no verified source on any keyless explorer takes the functions of a REFERENCE
+INTERFACE its deployed code dispatches: `test/fixtures/registry-abi/reference/` holds each as a
+canonical ABI file, and `index.json` names it per export with its exact provenance (an npm package
+version or a repository commit) and sha256, which the test re-hashes. Each function adopted that
+way is an `unverified` entry naming that source. Never write a function no source declares.
+
+A router that names one selector's facet at a time (Pendle's `selectorToFacet`, 0x's
+`getFunctionImplementation`, Paraswap's `getImplementation`) reveals only the facets a candidate
+selector reaches, so `index.json`'s `inventories` lists every facet its maker publishes, each its
+interface pinned by sha256; the capture asks the router about every function listed and records
+each deployment's `router` (the lookups it answers, or `facets()` for a loupe's whole table) and
+which facets it reached. A facet's functions reach the registry only from its deployed code's
+verified ABI, never from the inventory. The test fails a per-selector router with no inventory, a
+facet no deployment reaches without an `unresolved` reason, and a stale `unresolved`.
 
 A target may name a protocol this tree does not have yet (one another branch adds): the suite skips
 it and the capture carries its evidence over untouched, so the evidence can land before the
@@ -674,17 +783,38 @@ captured: no EVM ABI applies to them.
 Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
 reads `dist/`), then
 `node scripts/capture-registry-abi.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…] [slug ...]`
-from `sdk/`, with no slugs for everything (about 540 deployments; responses cache under
-`node_modules/.cache/registry-abi/`, and `--no-cache` bypasses that). Without `--recapture` it
-refuses to run. `--chains` narrows the run to those chains' deployments and keeps every other
-chain's evidence as captured. RPC endpoints come only from the `--rpc-config` file, a JSON object of
-chain id to URL. Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the
-committed `sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The
-script reads nothing from the environment and has no public fallback: before its first request it
-fails, listing each chain id the selected deployments need that the file does not give. Verified
-ABIs come from Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
-or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
-a contract upgrade to look at, not noise.
+from `sdk/`, with no slugs for everything (about 750 deployments on 27 chains; responses cache under
+`node_modules/.cache/registry-abi/`, and `--no-cache` bypasses that), then
+`pnpm --filter './sdk' gen-registry-abis` and `gen-source-globals`. Without `--recapture` it refuses
+to run. Each export's instances are captured together, again until no instance adds a candidate:
+dispatch is recorded for every function any of them verifiably declares, on every one of them.
+`--chains` narrows the run to those chains' deployments and keeps every other chain's evidence as
+captured. RPC endpoints come only from the `--rpc-config` file, a JSON object of chain id to a URL
+or a list of URLs (a failed request moves along the list, and an empty code or zero storage answer
+is asked of the others before it is believed: a lagging node once dropped a Pool's implementation).
+Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the committed
+`sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The script
+reads nothing from the environment and has no public fallback: before its first request it fails,
+listing each chain id the selected deployments need that the file does not give. Verified ABIs come
+from Sourcify, Blockscout and keyless Etherscan-compatible APIs. An explorer that refuses (any
+status but 404, as HTTP 401/403: Base, Arbitrum and Polygon Blockscout sit behind a challenge page)
+is recorded as `abiErrors`, never as "unverified". A READ THAT FAILS IS NEVER AN ANSWER: a null
+carrier means code was read and does not carry the event or error, and `gen-registry-abis.mjs` leaves
+out what no deployment carries, so every code read (layers, facets, linked libraries:
+`scripts/lib/registry-capture.mjs`) throws when it cannot be answered and the run stops before it
+writes; a node that aborts a call is no revert; a proxy chain deeper than the guard is refused, not
+cut short; and a deployment whose layers could not be resolved is recorded with `error`, which both
+generators refuse (`readableRows`). `registry-capture-failclosed.test.ts` drives those reads with a
+reader that fails. A layer an explorer refused first takes the verified ABI of the same runtime
+code elsewhere (another captured layer, or the address on another configured chain), byte-equal by
+keccak and recorded as `sameCodeAs`; else a deployment whose layers and code are unchanged keeps the
+fragments the previous capture verified from that source, the source marked
+`carried: { date, partial }`. A carry from a capture before the registry took full ABIs kept only
+the registry's names then, so it is `partial`: `omitted.json` lists each under `partial` and the
+registry documents say that export may lack what that deployment runs; the test fails an unlisted
+one. The fixture must never hold an endpoint or key; the suite greps it. Review the fixture diff
+before committing it: a changed layer code hash or facet is a contract upgrade to look at, not
+noise.
 
 **Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
 issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against

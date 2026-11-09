@@ -1,6 +1,189 @@
 {
   "abi": [
     {
+      "name": "allPools",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allPoolsLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "clPoolTape",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "clPoolTapeManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        },
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "defaultSwapHook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "defaultUnstakedFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "discountRegistry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "discountRegistryManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "enableTickSpacing",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        },
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "factoryRegistry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "getPool",
       "type": "function",
       "stateMutability": "view",
@@ -26,14 +209,446 @@
       ]
     },
     {
-      "name": "allPoolsLength",
+      "name": "getPoolSwapHook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_pool",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSwapFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "getUnstakedFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "isPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "legacyCLFactory",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolByTokenIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
           "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolByTokenIndexLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolByTokenIndexPaginated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_start",
+          "type": "uint256"
+        },
+        {
+          "name": "_end",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_poolByTokenIndexPaginated",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "poolImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolsIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        },
+        {
+          "name": "creationTimestamp",
+          "type": "uint48"
+        }
+      ]
+    },
+    {
+      "name": "poolsIndexLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolsIndexPaginated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_start",
+          "type": "uint256"
+        },
+        {
+          "name": "_end",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_poolsIndexPaginated",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "pool",
+              "type": "address"
+            },
+            {
+              "name": "creationTimestamp",
+              "type": "uint48"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "poolSwapHook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setClPoolTape",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_clPoolTape",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setClPoolTapeManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_clPoolTapeManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultSwapHook",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_swapHook",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDefaultUnstakedFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_defaultUnstakedFee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDiscountRegistry",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_discountRegistry",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDiscountRegistryManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_discountRegistryManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolSwapHook",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_pools",
+          "type": "address[]"
+        },
+        {
+          "name": "_swapHooks",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSwapFeeManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_swapFeeManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSwapFeeModule",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_swapFeeModule",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUnstakedFeeManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_unstakedFeeManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setUnstakedFeeModule",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_unstakedFeeModule",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setVoter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_voter",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapFeeManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "swapFeeModule",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tickSpacings",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int24[]"
         }
       ]
     },
@@ -51,6 +666,295 @@
         {
           "name": "",
           "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "tokenIndexLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_length",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "tokenIndexPaginated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_start",
+          "type": "uint256"
+        },
+        {
+          "name": "_end",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_tokenIndexPaginated",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "unstakedFeeManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "unstakedFeeModule",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "voter",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ClPoolTapeChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "clPoolTape",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ClPoolTapeManagerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "clPoolTapeManager",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DefaultSwapHookChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "swapHook",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DefaultUnstakedFeeChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldUnstakedFee",
+          "type": "uint24",
+          "indexed": true
+        },
+        {
+          "name": "newUnstakedFee",
+          "type": "uint24",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DiscountRegistryChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "discountRegistry",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DiscountRegistryManagerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "discountRegistryManager",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PoolSwapHookChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pool",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "swapHook",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SwapFeeManagerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeManager",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeManager",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SwapFeeModuleChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeModule",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeModule",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TickSpacingEnabled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "tickSpacing",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "fee",
+          "type": "uint24",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UnstakedFeeManagerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeManager",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeManager",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UnstakedFeeModuleChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldFeeModule",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newFeeModule",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "VoterSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "voter",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

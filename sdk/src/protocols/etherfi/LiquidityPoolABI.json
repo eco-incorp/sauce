@@ -1,6 +1,197 @@
 {
   "abi": [
     {
+      "name": "addEthAmountLockedForWithdrawal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "amountForShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_share",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "amountPerShareCeil",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "batchCreateBeaconValidators",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_depositData",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "publicKey",
+              "type": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "depositDataRoot",
+              "type": "bytes32"
+            },
+            {
+              "name": "ipfsHashForEncryptedValidatorKey",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "_bidIds",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_etherFiNode",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "batchRegister",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_depositData",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "publicKey",
+              "type": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "depositDataRoot",
+              "type": "bytes32"
+            },
+            {
+              "name": "ipfsHashForEncryptedValidatorKey",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "_bidIds",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_etherFiNode",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "blacklister",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "burnEEthShares",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burnEEthSharesForNonETHWithdrawal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_amountSharesToBurn",
+          "type": "uint256"
+        },
+        {
+          "name": "_withdrawalValueInETH",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "confirmAndFundBeaconValidators",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_depositData",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "publicKey",
+              "type": "bytes"
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "depositDataRoot",
+              "type": "bytes32"
+            },
+            {
+              "name": "ipfsHashForEncryptedValidatorKey",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "name": "_validatorSizeWei",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "payable",
@@ -11,6 +202,1107 @@
           "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_referral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "deposit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_user",
+          "type": "address"
+        },
+        {
+          "name": "_referral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "depositToRecipient",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_recipient",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_referral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "eETH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "escrowMigrationCompleted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "etherFiAdminContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "etherFiRedemptionManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeRecipient",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTotalEtherClaimOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_user",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getTotalPooledEther",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "initializeOnUpgradeV2",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "lastPauseTimestamp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "pauser",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquifier",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MAX_PAUSE_DURATION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MAX_POSITIVE_REBASE_BPS",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxWithdrawAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "membershipManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MIN_PAUSE_DURATION",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minWithdrawAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nodesManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pausedUntil",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PAUSER_UNTIL_COOLDOWN",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pauseUntil",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "pauseUntilDuration",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "priorityWithdrawalQueue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "proxiableUUID",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "rebase",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_accruedRewards",
+          "type": "int128"
+        },
+        {
+          "name": "_protocolFees",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "registerValidatorSpawner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_user",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "requestMembershipNFTWithdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "fee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "requestWithdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "requestWithdrawWithPermit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        },
+        {
+          "name": "_permit",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "value",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "v",
+              "type": "uint8"
+            },
+            {
+              "name": "r",
+              "type": "bytes32"
+            },
+            {
+              "name": "s",
+              "type": "bytes32"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "roleRegistry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "setFeeRecipient",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeRecipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxWithdrawAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_maxWithdrawAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinWithdrawAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minWithdrawAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPauseUntilDuration",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_pauseUntilDuration",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setValidatorSizeWei",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_validatorSizeWei",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "SHARE_UNIT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sharesForAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sharesForWithdrawalAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stakingManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "totalValueInLp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "totalValueOutOfLp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "transferLockedEthForPriority",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint128"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "unpauseUntil",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "unregisterValidatorSpawner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_user",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgradeTo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgradeToAndCall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "newImplementation",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "validatorSizeWei",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "validatorSpawner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "registered",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_recipient",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdrawRequestNFT",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "source",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "referral",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EEthSharesBurnedForNonETHWithdrawal",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amountSharesToBurn",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "withdrawalValueInETH",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MaxWithdrawAmountSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "maxWithdrawAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MinWithdrawAmountSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "minWithdrawAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PausedUntil",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pausedUntil",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauseUntilDurationSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "pauseUntilDuration",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ProtocolFeePaid",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "protocolFees",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Rebase",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "totalEthLocked",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "totalEEthShares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UnpausedUntil",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "UpdatedFeeRecipient",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newFeeRecipient",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Upgraded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "implementation",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ValidatorSpawnerRegistered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ValidatorSpawnerUnregistered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Withdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "source",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "AlreadyMigrated",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "AlreadyPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "AlreadyRegistered",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractNotPausedUntil",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractPausedUntil",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "pausedUntil",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "EETHRateDeflation",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "IncorrectCaller",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InsufficientLiquidity",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidPauseUntilDuration",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidShareAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidValidatorSize",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidWithdrawalAmount",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "MigrationNotComplete",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotPaused",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotRegistered",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PauserCooldownStillActive",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "RebaseExceedsPositiveCap",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SendFail",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

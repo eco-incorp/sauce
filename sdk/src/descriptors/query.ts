@@ -8,6 +8,7 @@ import {
 } from "../chains/canonical.js";
 import { getProtocol } from "../protocols/index.js";
 import type { ProtocolInfo } from "../core/types.js";
+import { descriptorOn } from "./derive.js";
 import { DESCRIPTORS, byChain, byProtocol, byProtocolAndContract } from "./registry.js";
 import type { ContractDescriptor, DescriptorMethod, ResolvedContract } from "./types.js";
 
@@ -93,7 +94,7 @@ export function descriptorChains(descriptor: ContractDescriptor): readonly Canon
   return descriptor.chains.map((slug) => requireChain(slug));
 }
 
-/** THE thin resolver: (chain, protocol, contract) -> address + abi + methods for that chain, or undefined. E2.3's typed accessor tree is a walk over this, not a reimplementation of it. */
+/** THE thin resolver: (chain, protocol, contract) -> address + abi + methods for that chain, or undefined. E2.3's typed accessor tree is a walk over this, not a reimplementation of it. A deployed contract's descriptor and methods are those its deployment on the chain runs (`descriptorOn`). */
 export function describeContract(
   chain: ChainRef,
   protocol: string,
@@ -101,11 +102,12 @@ export function describeContract(
 ): ResolvedContract | undefined {
   const resolvedChain = resolveChain(chain);
   if (resolvedChain === undefined) return undefined;
-  const descriptor = getDescriptor(protocol, contract);
-  if (descriptor === undefined) return undefined;
-  if (descriptor.kind !== "interface") {
-    const address = addressOn(descriptor, resolvedChain);
+  const full = getDescriptor(protocol, contract);
+  if (full === undefined) return undefined;
+  if (full.kind !== "interface") {
+    const address = addressOn(full, resolvedChain);
     if (address === undefined) return undefined;
+    const descriptor = descriptorOn(full, resolvedChain.id);
     return {
       descriptor,
       chain: resolvedChain,
@@ -114,9 +116,9 @@ export function describeContract(
     };
   }
   return {
-    descriptor,
+    descriptor: full,
     chain: resolvedChain,
-    methods: new Map(descriptor.methods.map((m) => [m.name, m])),
+    methods: new Map(full.methods.map((m) => [m.name, m])),
   };
 }
 

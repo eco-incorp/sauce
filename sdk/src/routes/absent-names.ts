@@ -72,6 +72,14 @@ import {
   type Scope,
 } from "./lexical-scope.js";
 import { lexicalBindings } from "./lexical-bindings.js";
+import {
+  bySignatureHint,
+  isWithheld,
+  listed,
+  methodListing,
+  signatureRefusal,
+  withheldRefusal,
+} from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
 import { SCALAR_METHODS } from "./protocol-rewrite.js";
 import { resolveTokenMap } from "./token-registry.js";
@@ -306,13 +314,6 @@ function unwrap(node: AstNode): AstNode {
   return at;
 }
 
-/** A list of chains for a message: every one, or the first few and how many more. */
-function listed(slugs: readonly string[]): string {
-  return slugs.length <= 8
-    ? slugs.join(", ")
-    : `${slugs.slice(0, 8).join(", ")} and ${slugs.length - 8} more`;
-}
-
 /** Every chain's native coin's symbol. */
 let natives: ReadonlySet<string> | undefined;
 function nativeSymbols(): ReadonlySet<string> {
@@ -471,10 +472,11 @@ export function checkNames(
         namespace.defaultContract === undefined
           ? undefined
           : namespace.members.get(namespace.defaultContract);
-      const methods =
-        fallback !== undefined && fallback.kind !== "ambiguous"
-          ? new Set(fallback.descriptor.methods.map((method) => method.name))
-          : new Set<string>();
+      const target = fallback === undefined || fallback.kind === "ambiguous" ? undefined : fallback;
+      const full = target?.kind === "deployed" ? target.full : target?.descriptor;
+      // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+      const called = validating ? full : target?.descriptor;
+      const methods = new Set(called?.methods.map((method) => method.name));
       if (role === "callee" && methods.has(name)) {
         return {
           kind: "contract",
@@ -483,9 +485,12 @@ export function checkNames(
           chain: on,
           namespace,
           contract: namespace.defaultContract!,
-          entry: fallback!,
+          entry: target!,
           viaDefault: name,
         };
+      }
+      if (role === "callee" && full !== undefined && isWithheld(full, called!, name)) {
+        return fail(node, withheldRefusal(`${shown}(…)`, name, full, on));
       }
       return fail(
         node,
@@ -1087,16 +1092,27 @@ export function checkNames(
     if (owner?.kind !== "contract" || owner.viaDefault !== undefined) return;
     const { entry } = owner;
     if (entry.kind !== "deployed" && entry.kind !== "absent") return;
-    const { protocol, contract } = entry.descriptor;
-    const methods = [...new Set(entry.descriptor.methods.map((method) => method.name))];
-    const known = `${protocol}.${contract}'s vendored ABI (known methods: ${methods.join(", ")})`;
+    // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+    const full = entry.kind === "deployed" ? entry.full : entry.descriptor;
+    const descriptor = validating ? full : entry.descriptor;
+    const { protocol, contract } = descriptor;
+    const methods = [...new Set(descriptor.methods.map((method) => method.name))];
     const property = prop<AstNode>(node, "property");
+    // The listing (an edit distance to every method name, for a large contract) and the withheld
+    // lookup are built only in the refusals below: a call, a balance or an address read that
+    // succeeds pays for neither. A withheld method is absent from `methods`, so none returns early.
     if (role === "callee") {
       // A scalar method reads the contract's address (`protocol-rewrite.ts`, shape G).
       if (methods.includes(read) || SCALAR_METHODS.has(read)) return;
+      if (isWithheld(full, descriptor, read)) {
+        fail(property, withheldRefusal(`${owner.shown}.${read}(…)`, read, full, owner.chain));
+      }
       fail(
         property,
-        `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${known}.` + meant(read, methods),
+        `\`${owner.shown}.${read}(…)\`: \`${read}\` is not in ${protocol}.${contract}'s vendored ABI ` +
+          `${methodListing(methods, read)}.` +
+          meant(read, methods) +
+          bySignatureHint(owner.shown, read, full),
       );
     }
     // Read, the binding's address, or a balance: of the native coin, or of a token the chain has.
@@ -1116,14 +1132,45 @@ export function checkNames(
           `\`${owner.shown}.${read}(…)\`.`,
       );
     }
+    if (isWithheld(full, descriptor, read))
+      fail(property, withheldRefusal(`${owner.shown}.${read}`, read, full, owner.chain));
     fail(
       property,
-      `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${known} nor a token ` +
+      `\`${owner.shown}.${read}\`: \`${read}\` is neither a method of ${protocol}.${contract}'s ` +
+        `vendored ABI ${methodListing(methods, read)} nor a token ` +
         `${validating ? "any chain" : chain.slug} registers.` +
         meant(read, [...methods, ...names.tokens.keys(), BALANCE_MEMBER]) +
         ` \`<holder>.<TOKEN>\` reads the holder's balance of a token, and ` +
         `\`<holder>.${BALANCE_MEMBER}\` its native coin.`,
     );
+  };
+
+  /**
+   * `<contract>["<signature>"](…)` of a registry contract, `node`: a function its deployment on the
+   * contract's chain runs, by its canonical signature, one its ABI has or one it leaves out for its
+   * name or arity alone (`bySignature`). Refused, naming the nearest signatures or the chains whose
+   * deployment runs it, otherwise.
+   */
+  const contractSignature = (node: AstNode, signature: string, at: Scope | undefined): void => {
+    let owner: Reference | undefined;
+    try {
+      owner = referenceOf(prop(node, "object"), at, ".[…]");
+    } catch {
+      return;
+    }
+    if (owner?.kind !== "contract" || owner.viaDefault !== undefined) return;
+    const { entry } = owner;
+    if (entry.kind !== "deployed" && entry.kind !== "absent") return;
+    // Checked as on any chain (code a test rules out), the contract has its whole ABI.
+    const full = entry.kind === "deployed" ? entry.full : entry.descriptor;
+    const refusal = signatureRefusal(
+      `${owner.shown}["${signature}"](…)`,
+      signature,
+      full,
+      validating ? full : entry.descriptor,
+      owner.chain,
+    );
+    if (refusal !== undefined) fail(prop(node, "property"), refusal);
   };
 
   /** Visits the statements of a list in its own scope; the rest after a decided `if` that always
@@ -1493,8 +1540,13 @@ export function checkNames(
           );
         }
         visit(object, "value", `.${read}`, at);
-        if (prop<boolean>(node, "computed")) visit(property, "value", "value", at);
-        else if (read !== "[…]") contractMember(node, read, role, at);
+        if (prop<boolean>(node, "computed")) {
+          visit(property, "value", "value", at);
+          const signature = property.type === "Literal" ? prop<unknown>(property, "value") : 0;
+          if (role === "callee" && typeof signature === "string") {
+            contractSignature(node, signature, at);
+          }
+        } else if (read !== "[…]") contractMember(node, read, role, at);
         return;
       }
       case "Property":

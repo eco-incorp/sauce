@@ -24,6 +24,7 @@
  */
 import {
   encodeFunctionData,
+  toFunctionSignature,
   type Abi,
   type AbiStateMutability,
   type Account,
@@ -127,7 +128,9 @@ export interface ContractCallBase {
     readonly value: bigint;
   };
   /** The call as SauceScript. Its `./protocols/<slug>/<Export>.json` import is one the route
-   *  compiler serves, so `source` compiles with no resolver option. */
+   *  compiler serves, so `source` compiles with no resolver option. That import is the ABI's twin,
+   *  so a method the chain's deployment declares otherwise (`ContractDescriptor.shapesOn`) is
+   *  refused: a program calls it through its namespace, as the deployment declares it. */
   toSauceScript(opts?: SauceScriptOptions): {
     readonly imports: readonly string[];
     readonly statement: string;
@@ -299,6 +302,13 @@ export function makeContractCall(
     if (descriptor.abiExport === undefined) {
       throw new Error(
         `toSauceScript: ${descriptor.protocol}.${descriptor.contract} has no vendored abiExport — use encode()/toCall() instead`,
+      );
+    }
+    if (descriptor.shapesOn[chain.id]?.some((fn) => toFunctionSignature(fn) === method.signature)) {
+      throw new Error(
+        `toSauceScript: ${label}: its deployment on ${chain.slug} declares ${method.signature} otherwise than ` +
+          `${descriptor.abiExport}.json, which the statement would import — call it through its namespace in a ` +
+          "program, which takes the deployment's declaration, or use encode()/toCall() instead",
       );
     }
     const binding = opts.binding ?? descriptor.contract;

@@ -34,16 +34,47 @@ function main() {
 
 ### `RETHABI`
 
-`import RETHABI from "./protocols/rocket-pool/RETHABI.json";` Speaks for: rETH.
+`import RETHABI from "./protocols/rocket-pool/RETHABI.json";` Speaks for: rETH. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `RocketPool` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `allowance(address owner, address spender) view returns (uint256)`
+- `approve(address spender, uint256 amount) returns (bool)`
+- `balanceOf(address account) view returns (uint256)`
+- `burn(uint256 _rethAmount)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `depositExcess() payable`
+- `depositExcessCollateral()`
+- `getCollateralRate() view returns (uint256)`
+- `getEthValue(uint256 _rethAmount) view returns (uint256)`
 - `getExchangeRate() view returns (uint256)`
 - `getRethValue(uint256 _ethAmount) view returns (uint256)`
-- `getEthValue(uint256 _rethAmount) view returns (uint256)`
-- `burn(uint256 _rethAmount)`
-- `balanceOf(address account) view returns (uint256)`
+- `getTotalCollateral() view returns (uint256)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `mint(uint256 _ethAmount, address _to)`
+- `name() view returns (string)`
+- `symbol() view returns (string)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address recipient, uint256 amount) returns (bool)`
+- `transferFrom(address sender, address recipient, uint256 amount) returns (bool)`
+- `version() view returns (uint8)`
 
 ### `RocketDepositPoolABI`
 
-`import RocketDepositPoolABI from "./protocols/rocket-pool/RocketDepositPoolABI.json";` Speaks for: rocketDepositPool.
+`import RocketDepositPoolABI from "./protocols/rocket-pool/RocketDepositPoolABI.json";` Speaks for: rocketDepositPool. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `RocketPool` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `assignDeposits()`
 - `deposit() payable`
+- `getBalance() view returns (uint256)`
+- `getExcessBalance() view returns (uint256)`
+- `getMaximumDepositAmount() view returns (uint256)`
+- `getNodeBalance() view returns (uint256)`
+- `getUserBalance() view returns (int256)`
+- `maybeAssignDeposits() returns (bool)`
+- `nodeCreditWithdrawal(uint256 _amount)`
+- `nodeDeposit(uint256 _totalAmount) payable`
+- `receiveVaultWithdrawalETH() payable`
+- `recycleDissolvedDeposit() payable`
+- `recycleExcessCollateral() payable`
+- `recycleLiquidatedStake() payable`
+- `version() view returns (uint8)`
+- `withdrawExcessBalance(uint256 _amount)`
