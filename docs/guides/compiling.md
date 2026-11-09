@@ -8,10 +8,10 @@
 
 This page is for a TypeScript developer who has done [Sauce from TypeScript](typescript-quick-start.md)
 and can write a program ([Write your first program](write-your-first-program.md)). Each section
-compiles one kind of program. Install the package and viem in your project first:
+compiles one kind of program. With Node.js 24 or newer, install the library and viem locally first:
 
 ```sh
-npm install @eco-incorp/sauce viem
+npm install --engine-strict @eco-incorp/sauce@latest viem
 ```
 
 The compiler is already in the package, and the output is a program a Sauce engine runs, not a

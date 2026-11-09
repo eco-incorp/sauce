@@ -47,12 +47,23 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 
 ## Getting the command
 
-Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer); `sauce --version` checks
-it, and `sauce update` upgrades it the way it was installed (`sauce update --check` only reports the
+Use Node.js 24 or newer. Install the global CLI with
+`npm install --global --engine-strict @eco-incorp/sauce@latest`; `sauce --version` checks it.
+Keep both `@latest` and `--engine-strict`: unversioned npm installs on unsupported Node can select
+an obsolete CLI release; strict installation refuses an unsupported runtime. Upgrade Node first,
+then reinstall. Without an install, run
+`npx --engine-strict -y @eco-incorp/sauce@latest <command>` in its place. Never run a bare
+`npx sauce` outside a project that depends on the package: npx then fetches and runs npm's unrelated
+`sauce` package.
+
+`sauce update` upgrades it the way it was installed (`sauce update --check` only reports the
 latest; a line on stderr saying a newer `sauce` is available changes nothing the command did, and
-`--no-update-check` leaves it out). Without an install, run `npx -y @eco-incorp/sauce <command>` in
-its place. Never run a bare `npx sauce` outside a project that depends on the package: npx then
-fetches and runs npm's unrelated `sauce` package.
+`--no-update-check` leaves it out).
+
+For a project-local CLI, `npm install --engine-strict -D -E @eco-incorp/sauce@latest` saves an exact
+development dependency; the project's npm scripts then run that pinned copy, not the global CLI.
+For application imports, install the library locally with
+`npm install --engine-strict @eco-incorp/sauce@latest viem` instead.
 
 ## Commands
 
