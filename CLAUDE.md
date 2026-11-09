@@ -6,6 +6,12 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+**The SDK's major version is only for changes SDK users would notice.** An engine, compiler or Kitchen
+major that the SDK absorbs with no change to SauceScript or to the exports, commands and tools users call
+is a `feat` or a `fix` here, never `!` or a `BREAKING CHANGE:` footer. The commit message sets the
+release version, and the release pipeline refuses a major unless a person confirms it. Read
+[What a major means](#what-a-major-means) before writing a commit or a PR title.
+
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
 **Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
 a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
@@ -1893,11 +1899,92 @@ No chain deployment is implied by these release addresses.
 
 ## Publishing
 
-Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin v1.2.3` (or manual
-`workflow_dispatch`). Builds all areas, fetches the SVM engine binaries, stamps the **root**
-`package.json` version, and publishes the single `@eco-incorp/sauce` to **public npmjs.com only**
-(`NPM_TOKEN`). GitHub Packages was dropped deliberately — `publish.yml:12` records why. Only the root
-version is published; workspace packages stay `private`.
+Commit-driven (`.github/workflows/publish.yml`): nobody types a version or pushes a tag. Dispatch the
+workflow on `main`; its `plan` job reads the Conventional Commit history since the newest `vX.Y.Z`
+tag and computes the next version with `.github/scripts/release-version.mjs` — `feat` is a minor,
+`fix`, `perf` and `revert` a patch, a `!` header or a `BREAKING CHANGE:` footer a **major** (any type),
+and `docs`, `chore`, `ci`, `test`, `refactor`, `style` and `build` release nothing. These are
+eco-incorp/v12's rules, except that a major is the SDK's own and the pipeline refuses one unless
+`allow_major` is ticked (see [What a major means](#what-a-major-means)).
+Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary (a dry
+run has its own concurrency group, so it never waits behind or cancels a real release).
+`node .github/scripts/release-version.mjs` computes the same number locally, **after
+`git fetch --tags`**: `v1.0.0` is on no branch, so a plain fetch or pull never receives it and a local
+run would count from `v0.99.18`. Locally npm is not consulted (see below); `--notes <file>` writes the
+notes. Then Checks and Lint gate the commit, the build stamps the **root** `package.json` version and
+fetches the SVM engine binaries, and the single `@eco-incorp/sauce` goes to **public npmjs.com only**
+(`NPM_TOKEN`). Only after that does a separate `contents: write` job create the `vX.Y.Z` tag and the
+GitHub release, from the plan's own number and notes (the default-branch ruleset requires a pull
+request, so nothing is pushed to `main`). The baseline is found by tag name, not by reachability:
+`v1.0.0` was cut from a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub
+Packages was dropped deliberately — the header of `publish.yml` records why. Only the root version is
+published; workspace packages stay `private`.
+
+### What a major means
+
+**The SDK's major version is the SDK's own, and moves only for a change SDK users would notice.** A
+user notices a SauceScript program that stops compiling or behaves differently, a removed or renamed
+export, subpath, `sauce` command or flag, or MCP tool, a chain the CLI stops accepting, or a Pot, Kitchen
+or address they already use that stops working. A component's own major is not that. The engines, the
+compiler and the Kitchens version independently and release majors of their own (an engine that drops an
+opcode, a compiler that changes its JavaScript API); when the SDK absorbs it, with no change to SauceScript
+or to anything above, the SDK moves by a minor or a patch, and the pin bump in `releases.json` is a `feat`
+or a `fix`. The changelog's `### Compiler and engines` entry records what the component release changed.
+
+Write the commit to match, because the pipeline reads it:
+
+- Put `!` after the type, or a `BREAKING CHANGE:` footer, on a commit **only** if SDK users would notice.
+  Never for "the engine or compiler had a breaking change". Say that in the body in plain words, without
+  starting a line with `BREAKING CHANGE`.
+- A squash merge carries every commit's message, so one intermediate commit with the footer marks the
+  whole PR. Check the commits before merging, not only the title (`validate` checks only the title).
+- The marker works on a commit of any type (`refactor!`, `chore!`, `docs!`), and a `revert:` of a marked
+  commit does not undo it.
+- When unsure whether users would notice, ask the reviewer; do not mark it. A wrong major cannot be
+  taken back (npm never reissues a version), while a missed one is fixed on the next release with
+  `release_as` set to the major and `allow_major` ticked (`allow_major` alone only permits a major).
+
+The pipeline refuses to plan a major (computed from the commits, or given as `release_as`) unless the
+dispatch ticks `allow_major`. That is a person saying users will notice. Refusal lists the commits that
+asked for it. If the marker was wrong, publish the number it should have been with `release_as`, and
+reword future commits.
+
+**The plan is held to npm.** The baseline tag must be a version npm has, and the newest stable one.
+A tag npm lacks (pushed by hand) or a version npm has that no tag names stops the plan with an error.
+npm records no `gitHead` for this package, so nothing else could tie a version to its commit: without
+this, a dispatch after a failed `release` job would compute the same version from a newer commit,
+skip the publish, and tag that commit, which the tarball does not contain.
+
+**Recovery when `publish` succeeded and `release` failed: use "Re-run failed jobs" on that same run,
+never a new dispatch** (a new one is refused). It keeps the run's commit, number and notes, so the tag
+lands on the commit that was published; re-running the tag step after it succeeded changes nothing,
+and it refuses to touch a tag that sits on another commit. `publish` itself never skips a version that
+is already on npm, on any attempt: it cannot show whose it is, and a re-run number says nothing about
+which run published it. If that step failed after npm accepted the tarball, compare the registry's
+tarball with this commit's `pnpm pack`, then tag by hand. If the run can no longer be re-run, an admin
+tags the commit the run built (shown on its page) `vX.Y.Z` and creates the release by hand; the next
+dispatch then continues from that tag.
+
+**A misstated number.** A merged commit message cannot be edited, and a revert of a `feat!` still
+counts as breaking, so the computed number can be wrong. Dispatch with `release_as` (`X.Y.Z`, above
+the newest release) to publish that number instead; it replaces only the number, never the decision
+to release, and the summary shows both. Releases from a `release/*` maintenance line are not
+supported: a real run is refused on any ref but `main`.
+
+**Hardening this repository does not have, and the workflow cannot provide.** The "refuse any ref but
+`main`" check lives in the file it guards, so it is a convenience, not an access control: a dispatch
+or a tag push runs the `publish.yml` of the ref it names, every commit from before this change still
+carries the old one (a `v*` tag-push trigger and a dispatch with a typed `version`, neither checked),
+and `NPM_TOKEN` is an organisation secret granted to the repository, with no environment scoping it
+to a ref. What closes that is repository administration: an environment (`npm`) whose deployment
+branches are `main` only, holding the token instead of the organisation, referenced by `environment:`
+on the `publish` job and on `deprecate.yml`; and a tag ruleset on `refs/tags/v*`. A ruleset can stop a
+tag moving or being deleted. Whether it can also reserve creation for this workflow depends on its
+bypass list, because the release job creates the tag with `GITHUB_TOKEN`: check that before relying on
+it. Neither is set today.
+
+`docs/changelog.md` is not written by the pipeline and the ruleset needs a pull request for it: dispatch
+with `dry_run` for the number, land the `docs(changelog)` entry (it drives no release), then release.
 
 The package ships `docs/**/*.md` and `docs/examples/*.ts`. README and scaffold links are **relative
 paths**, so one spelling renders in the repository, on the npm page and inside the published
