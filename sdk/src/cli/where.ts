@@ -39,7 +39,9 @@ function reasonOf(error: unknown, file: string, chain: CanonicalChain): string {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line !== "" && !line.startsWith(`${file} does not compile`));
-  const first = (lines[0] ?? "does not compile")
+  // The compiler wraps its diagnostic (`compiling the program failed │ ├─▶ … ╰─▶ <cause>`).
+  const cause = lines.find((line) => line.startsWith("╰─▶ "))?.slice("╰─▶ ".length);
+  const first = (cause ?? lines[0] ?? "does not compile")
     .replace(/^error:\s*/i, "")
     .replace(/^[A-Za-z]+: /, "");
   const sentence = /^(.*?[.!?])(\s|$)/.exec(first)?.[1] ?? first;

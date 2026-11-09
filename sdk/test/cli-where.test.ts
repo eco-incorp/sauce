@@ -40,6 +40,16 @@ describe("sauce where", () => {
     expect(supported.chains.every((each) => each.support === "supported")).toBe(true);
   });
 
+  it("gives the compiler's own cause, not its generic wrapper", () => {
+    const bad = 'function main() {\n  require(nope > 0, "x");\n}\n';
+    const out = whereCommand({ file, text: bad, chains: [requireChain("base")] }, files);
+    const json = out.json as { chains: { compiles: boolean; reason?: string }[] };
+    expect(json.chains[0]?.compiles).toBe(false);
+    expect(json.chains[0]?.reason).not.toMatch(/compiling the program failed/);
+    expect(json.chains[0]?.reason).toMatch(/nope/);
+    expect(out.text).toMatch(/nope/);
+  });
+
   it("refuses the chains a // @target header rules out, as compile does", () => {
     type Out = { chains: { chain: string; compiles: boolean; reason?: string }[] };
     const chains = [requireChain("base"), requireChain("solana")];
