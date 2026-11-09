@@ -59,7 +59,31 @@ describe("sauce units", () => {
       token: "0x0000000000000000000000000000000000000001",
       decimals: 8,
     });
-    expect(out.json).toMatchObject({ decimals: 8, baseUnits: "200000000" });
+    expect(out.json).toMatchObject({
+      address: "0x0000000000000000000000000000000000000001",
+      decimals: 8,
+      baseUnits: "200000000",
+    });
+    const mint = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+    expect(
+      unitsCommand({ chain: solana, amount: "1", token: mint, decimals: 6 }).json,
+    ).toMatchObject({ address: mint, decimals: 6, baseUnits: "1000000" });
+  });
+
+  it("takes --decimals only with an address or mint, so a misspelled symbol is still refused", () => {
+    for (const token of ["USCD", "0x123", "0x00000000000000000000000000000000000000zz"]) {
+      expect(() => unitsCommand({ chain: base, amount: "1", token, decimals: 6 })).toThrow(
+        /--decimals requires a token address or mint, not a symbol/,
+      );
+    }
+    for (const token of ["WSLO", "0x0000000000000000000000000000000000000001"]) {
+      expect(() => unitsCommand({ chain: solana, amount: "1", token, decimals: 9 })).toThrow(
+        /--decimals requires a token address or mint, not a symbol/,
+      );
+    }
+    expect(() => unitsCommand({ chain: base, amount: "1", token: "USCD" })).toThrow(
+      /has no token USCD.*: give its address with --decimals <n>/,
+    );
   });
 
   it("refuses what it would have to round or guess", () => {

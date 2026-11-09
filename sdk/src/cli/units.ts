@@ -4,7 +4,8 @@
  * as `--fund` writes them. The token is named the way a program names it, a symbol
  * `sauce globals` lists for the chain, or by address, with its decimals given by `--decimals`.
  */
-import { formatUnits, parseUnits } from "viem";
+import { isAddress as isSolanaAddress } from "@solana/kit";
+import { formatUnits, isAddress, parseUnits } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import { wordsOf } from "../evm/effects.js";
@@ -62,7 +63,22 @@ function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimal
 
     return { symbol: found.symbol, address: found.mint ?? found.address, decimals: found.decimals };
   }
-  if (input.decimals !== undefined) return { symbol: input.token, decimals: input.decimals };
+  if (input.decimals !== undefined) {
+    // --decimals stands in for the registry only for a token named by address or mint: a
+    // misspelled symbol (USCD) is refused here, not given the decimals and printed.
+    const isTokenAddress =
+      input.chain.kind === "evm"
+        ? isAddress(input.token, { strict: false })
+        : isSolanaAddress(input.token);
+    if (!isTokenAddress) {
+      throw new UsageError(
+        `--decimals requires a token address or mint, not a symbol: ${input.chain.name} has ` +
+          `no token ${input.token}`,
+      );
+    }
+
+    return { symbol: input.token, address: input.token, decimals: input.decimals };
+  }
   const close = tokens
     .filter((token) => token.stock === undefined)
     .map((token) => token.symbol)
@@ -70,7 +86,7 @@ function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimal
   throw new UsageError(
     `${input.chain.name} has no token ${input.token}` +
       (close.length === 0 ? "" : ` (it knows ${close.join(", ")})`) +
-      ": give its decimals with --decimals <n>, or see `sauce globals --chain " +
+      ": give its address with --decimals <n>, or see `sauce globals --chain " +
       `${input.chain.slug} --search <text>\``,
   );
 }
