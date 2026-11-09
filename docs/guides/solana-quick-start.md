@@ -20,7 +20,7 @@ charges a small fee for each cook ([glossary](../concepts/glossary.md)).
 - Node.js 24 or newer and the `sauce` command. If you have not done the quick start, install it:
 
 ```sh
-npm install -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 ```
 
 **You will have:** a Solana wallet, a Pot on Solana, and a program that paid 1 USDC from that Pot,

@@ -70,7 +70,7 @@ A `.ts` example:
 1. Install the package and viem in your project:
 
    ```sh
-   npm install @eco-incorp/sauce viem
+   npm install --engine-strict @eco-incorp/sauce@latest viem
    ```
 
 2. Set `"type": "module"` in your project's `package.json` (or name the copy `example.mts`).

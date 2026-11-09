@@ -14,6 +14,30 @@ Every failure exits with a status other than 0: 2 for a mistyped command, 1 for 
 A message names the flag to pass where one would fix it. With `--json`, a simulation that reverts
 leads its JSON with `reverted: true` and `error`.
 
+## Installation or startup fails
+
+**Symptoms.** npm reports `EBADENGINE`, the CLI fails at startup, or an install appears to succeed
+but provides `sauce-dev-tools` instead of `sauce`.
+
+**Cause.** Installation and the CLI require Node.js 24 or newer. On unsupported Node versions,
+an unversioned npm install can select an obsolete compatible release instead of the current one.
+An install without strict engine checks can also leave an unsupported current release installed.
+
+**Fix.** Upgrade Node to 24 or newer, then reinstall in the same shell:
+
+```sh
+node --version
+npm install --global --engine-strict @eco-incorp/sauce@latest
+sauce --version
+```
+
+`@latest` selects the current release; `--engine-strict` refuses an unsupported runtime. For a
+local library, reinstall in your project with
+`npm install --engine-strict @eco-incorp/sauce@latest viem`. For a local development CLI, use
+`npm install --engine-strict -D -E @eco-incorp/sauce@latest`, then `npx sauce --version`.
+If a desktop agent still uses an older Node, update its `PATH` and restart it
+([MCP setup](mcp.md#add-the-server-to-your-agent)).
+
 ## The program does not compile
 
 ### `` `recipient` is not a declared variable ``
@@ -147,10 +171,11 @@ the Kitchen mints, from its `potInitCodeHash()`. Where the command keeps the Pot
 your other Pots on the chain, each with its release.
 
 **Fix.** When the Kitchen is newer than the SDK, upgrade the package (`sauce update`, or
-`npm i @eco-incorp/sauce@latest` in a project), then run the command again. When the message names
-an older release instead (`mints Pots of compiler …, which @eco-incorp/sauce … pair with`), the
-chain's Kitchen has not been upgraded yet: use one of the SDK versions it names on that chain. A
-listed Pot of your SDK's release still cooks: name it with `--pot <address>`.
+`npm install --engine-strict @eco-incorp/sauce@latest` in a project), then run the command again.
+When the message names an older release instead (`mints Pots of compiler …, which
+@eco-incorp/sauce … pair with`), the chain's Kitchen has not been upgraded yet: use one of the SDK
+versions it names on that chain. A listed Pot of your SDK's release still cooks: name it with
+`--pot <address>`.
 
 ### `… is a Pot of compiler …, which @eco-incorp/sauce … pair with`
 
