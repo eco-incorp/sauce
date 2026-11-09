@@ -50,6 +50,16 @@ describe("sauce where", () => {
     expect(out.text).toMatch(/nope/);
   });
 
+  it("names a missing import in the compiler's own cause", () => {
+    const bad =
+      'import { nope } from "./not-there.js";\nfunction main(): Uint256 {\n  return nope();\n}\n';
+    const out = whereCommand(
+      { file: "probe.sauce.ts", text: bad, chains: [requireChain("base")] },
+      files,
+    );
+    expect(out.text).toContain('failed to import module "./not-there.js"');
+  });
+
   it("refuses the chains a // @target header rules out, as compile does", () => {
     type Out = { chains: { chain: string; compiles: boolean; reason?: string }[] };
     const chains = [requireChain("base"), requireChain("solana")];
