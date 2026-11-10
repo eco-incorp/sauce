@@ -24,21 +24,14 @@
  * ABI: a scalar entry argument occupies one word at `PROGRAM_BYTES + slot*32`, and a dynamic array
  * spends its word on a pointer to `[count][element…]`, ABI-style, rooted at the start of `args`.
  *
- * §4 CANONICALITY — WHY THIS IS STRICTER THAN THE ENGINE. Measured on a real v12 runtime, the engine
- * ACCEPTS five payloads this decoder rejects — `SETTLE_REJECTIONS.filter(r => r.engineAccepts)` is the
- * list, and the suite pins it, so this prose is a description and not the source of truth. They are: a
- * `tokens_ptr` other than 96 (it follows any offset), trailing bytes past the token array, a token
- * word whose upper 12 bytes are dirty (the call target is masked to 160 bits, so it sweeps the same
- * token), a dirty RECIPIENT word, and a ZERO recipient. The first three move the same tokens against
- * any ERC20. The last two both follow from one fact: the engine passes the recipient word through
- * UNMASKED and never inspects it, so what refuses them is the callee's own `address` / zero check —
- * against a token that omits those (Vyper, older solc, a forwarding proxy) they deliver too, the zero
- * case to address(0).
- * Each is a DIFFERENT byte string producing IDENTICAL behavior. Accepting them would make the decode
- * non-injective and put `encodeSettleProgram`'s re-encode-and-compare (§5) at odds with a
- * decode-and-compare, so ALL of them are refused — the recipient cases included, precisely because
- * whether they are caught depends on the callee rather than on the payload. An accepted payload is the UNIQUE
- * byte encoding of the values it decodes to.
+ * §4 CANONICALITY — WHY THIS IS STRICTER THAN THE ENGINE. The current 426-byte program still runs
+ * a non-canonical tokens pointer, trailing bytes, and a zero recipient (the last may be refused by
+ * the token). `SETTLE_REJECTIONS.filter(r => r.engineAccepts)` records these cases. Different byte
+ * strings can produce identical behavior, so accepting them would make decoding non-injective and
+ * disagree with re-encode-and-compare (§5). An accepted payload is the UNIQUE byte encoding of its
+ * decoded values. The historical 410-byte program also accepted dirty token and recipient words;
+ * compiler 2.6.2 checks both addresses in the 426-byte program. The decoder rejects dirty words for
+ * both pins, without depending on compiler or token validation.
  *
  * DO NOT PORT A POSITIONAL DECODER ONTO THIS WIRE. Values here are fixed 32-byte words and the
  * tokens head word is a POINTER, not a value (see the layout at the top of this file) — so a reader
@@ -370,11 +363,11 @@ function parseToDecoded(parse: SettleParse): DecodedSettleProgram | null {
  *
  *  - a non-canonical tokens pointer: the engine follows it, this reads at the canonical offset, so the
  *    two name different TOKENS.
- *  - a dirty RECIPIENT word: `recipient` is masked here, but the engine does not mask that word (§4),
- *    so execution addresses a different 256-bit key than the masked answer would suggest.
+ *  - a dirty RECIPIENT word: historical programs pass it through unmasked, so a masked report could
+ *    describe a different recipient. Current programs reject the word instead.
  *
- *  A dirty TOKEN word is NOT declined: the engine masks a call target to 160 bits, so there the masked
- *  answer is exactly what executes, and reporting it is what shows the payload's true meaning. */
+ *  Dirty TOKEN words remain visible as masked diagnostic addresses for historical programs. This is
+ *  not execution approval: strict decoding rejects them, as does the current 426-byte program. */
 export function bestEffortDecode(parse: SettleParse): DecodedSettleProgram | null {
   // Both declines read STATE, not `fatal.code`. Gating on the code would be correct only while the
   // pointer check is the first non-returning fatal: add an earlier one, reorder the scan, or hand this

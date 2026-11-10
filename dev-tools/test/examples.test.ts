@@ -103,8 +103,8 @@ for (const tsFile of tsScripts) {
   const jsFile = tsFile.replace(/\.ts$/, ".js");
   if (!jsScripts.includes(jsFile)) continue;
   test(`sauce/ts/${tsFile} matches sauce/js/${jsFile}`, () => {
-    // The compiler reads the annotated source directly, so the .ts twin needs no strip step —
-    // the annotations are erased by the frontend, which is exactly the parity being asserted.
+    // Compile the original annotated source. Exact parity requires equivalent entry contracts,
+    // including the explicit address-range guards in the raw-word examples.
     const jsSource = readFileSync(join(JS_DIR, jsFile), "utf-8");
     const tsSource = readFileSync(join(TS_DIR, tsFile), "utf-8");
     const jsHex = Buffer.from(compile(jsSource, BASE_DIRS).bytecode).toString("hex");

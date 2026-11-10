@@ -99,6 +99,10 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
+The compiler 2.6.2 settlement program also rejects dirty token and recipient address words before
+calling a token. Historical 410-byte programs did not perform those entry checks; verifier strictness
+does not depend on them.
+
 This surface verifies the pinned **ABI-v1** settlement artifact. Historical compact-encoded
 payloads are not accepted by the settlement decoder. Compiler 2.6 produces ABI-v1 only.
 

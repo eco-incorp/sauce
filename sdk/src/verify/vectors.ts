@@ -114,8 +114,8 @@ export interface RejectionVector {
  * engine RUNS them and produces exactly the behavior of the canonical payload beside them, so they
  * are distinct byte strings with identical meaning. A decoder that accepts any of them is not
  * injective, and `encodeSettleProgram` re-encode-and-compare stops agreeing with decode-and-compare.
- * `upperBytes` is the sharpest: the engine masks a call target to 160 bits, so twelve arbitrary
- * bytes ride along in a token word and sweep the very same token.
+ * The historical 410-byte program also accepted dirty token and recipient words. The current
+ * 426-byte program checks both addresses itself; those cases remain decoder rejections below.
  *
  * Each vector's `code` is reachable under ANY check order, so a Go or Solidity reimplementation is not
  * required to match this decoder's sequence to pass. `tokensPointer` is the one that has to be built
@@ -143,19 +143,15 @@ export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
     name: "upperBytes — tokens[0] carries 0xff in all 12 bytes above its address",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffff833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
-    engineAccepts: true,
-    sweepsIdentically: true,
+    engineAccepts: false,
+    sweepsIdentically: false,
   },
   {
     name: "dirtyRecipient — the recipient word carries 0xff above its address",
     args: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffff42000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
-    // The engine passes the RECIPIENT word through unmasked -- unlike a token word, which it masks as
-    // a CALL target -- so it executes this payload and emits `a9059cbb <dirty recipient> ...`. The
-    // revert against a solc ERC20 is that callee's own dirty-`address` ABI check, not the engine's.
-    // A token that does not perform it (Vyper, older solc, a raw-forwarding proxy) delivers to the
-    // same recipient as the canonical payload, which is the non-injectivity §4 exists to refuse.
-    engineAccepts: true,
+    // Compiler 2.6.2 checks the entry Address before any token call.
+    engineAccepts: false,
     sweepsIdentically: false,
   },
   {
