@@ -133,6 +133,7 @@ describe("the sauce command's flags as the tools' inputs", () => {
       ["pot"],
       ["globals"],
       ["price"],
+      ["units"],
       ["pools"],
       ["inspect"],
       ["verify"],
@@ -511,6 +512,55 @@ describe("sauce_price", () => {
     );
     assert.match(message, /its decimals are not known: give them as 0x[0-9a-fA-F]{40}:<decimals>/);
     assert.match(message, /or an endpoint \(rpcUrl or --config\) to read them from the token/);
+  });
+});
+
+describe("sauce_units", () => {
+  /** `sauce units --json` with the same input, offline: what the tool must return. */
+  async function command(...argv: string[]): Promise<Record<string, unknown>> {
+    let stdout = "";
+    const io = { ...nodeIo(), stdout: (text: string) => void (stdout += text), stderr: () => {} };
+    assert.equal(await runCli(["--no-update-check", "units", ...argv, "--json"], io), 0);
+
+    return JSON.parse(stdout) as Record<string, unknown>;
+  }
+
+  it("returns what sauce units prints, both ways, by symbol or by address", async () => {
+    const out = ok(await mcp.call("sauce_units", { chain: "base", amount: "1.5", token: "usdc" }));
+    assert.deepEqual(out, await command("--chain", "base", "1.5", "usdc"));
+    assert.equal(out.baseUnits, "1500000");
+    const back = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "1500000n", token: "USDC" }),
+    );
+    assert.deepEqual([back.amount, back.baseUnits], ["1.5", "1500000"]);
+    const mint = ok(
+      await mcp.call("sauce_units", { chain: "solana", amount: "0.25", token: "WSOL" }),
+    );
+    assert.equal(mint.baseUnits, "250000000");
+    const token = `0x${"12".repeat(20)}`;
+    const byAddress = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "2", token, decimals: 18 }),
+    );
+    assert.deepEqual(byAddress, await command("--chain", "base", "2", token, "--decimals", "18"));
+  });
+
+  it("notes a bare integer that reads like base units, and says decimals, not --decimals", async () => {
+    const out = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "1500000", token: "USDC" }),
+    );
+    assert.equal(out.baseUnits, "1500000000000");
+    assert.deepEqual(out.notes, [
+      "1500000 USDC: that is 1.5 million USDC; for base units write 1500000n",
+    ]);
+    const message = failed(
+      await mcp.call("sauce_units", { chain: "base", amount: "1", token: `0x${"12".repeat(20)}` }),
+    );
+    assert.match(message, /pass decimals <n>/);
+    assert.doesNotMatch(message, /--decimals/);
+    assert.match(
+      failed(await mcp.call("sauce_units", { chain: "base", amount: "1.0000001", token: "USDC" })),
+      /cannot be written exactly/,
+    );
   });
 });
 

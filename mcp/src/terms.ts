@@ -62,6 +62,7 @@ export const FLAG_INPUTS: readonly FlagInput[] = [
   { flags: ["search"], input: "search" },
   { flags: ["sqrt-price-x96"], input: "sqrtPriceX96" },
   { flags: ["pool"], input: "pool" },
+  { flags: ["decimals"], input: "decimals" },
   { flags: ["v4-key"], input: "v4Pools" },
   { flags: ["pay"], input: "pay" },
   { flags: ["price-limit"], input: "priceLimit" },
@@ -115,7 +116,7 @@ const STEPS: ReadonlyArray<readonly [RegExp, string]> = [
     command("sauce run"),
     "a signed run (sign sauce_tx's transactions with any signer, then sauce_send them)",
   ],
-  [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|pools)"), "sauce_$1"],
+  [command("sauce (globals|compile|simulate|tx|pot|inspect|verify|price|units|pools)"), "sauce_$1"],
   // `sauce sign --cancel …` is the cancel input: sauce_signed_cook builds it, sauce_sign sends it.
   [command("sauce sign --cancel"), "sauce_signed_cook with cancel (sauce_sign, from a wallet)"],
   // A signed cook's one signature (`sauce sign --signature <hex>`): sauce_signed_cook's signature.
