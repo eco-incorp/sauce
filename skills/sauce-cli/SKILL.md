@@ -40,6 +40,10 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
   `--fund` and `--assume-balance` take **whole tokens** (`USDC:1` is 1 USDC, `USDC:1000000` a
   million), base units there only with a trailing `n` (`USDC:1000000n` is 1 USDC). A token the
   chain does not register is `<address>:<amount>`, in its own decimals.
+  `sauce units --chain base 1.5 USDC` prints `1500000`, the number `--args` takes, and
+  `sauce units --chain base 1500000n USDC` reads base units back as `1.5`; a token the chain has no
+  symbol for is named by its address (a mint on Solana) with `--decimals <n>`, and `--json` prints
+  one object.
 - **Transactions are built only on supported chains** (`sauce-overview`; the list of refused
   commands is below).
 - `sauce <command> --help` lists every option; on Solana the same commands apply, with the
@@ -61,6 +65,7 @@ fetches and runs npm's unrelated `sauce` package.
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce pools`    | Lists a pair's price-limit pools on a chain, deepest first, with their prices     |
 | `sauce price`    | Turns a price, or a pool's now, into `sqrtPriceX96`, the limits and `priceLimit`  |
+| `sauce units`    | Turns whole tokens into the base units `--args` takes, or base units back; no RPC |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
 | `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
