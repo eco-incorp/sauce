@@ -149,6 +149,7 @@ describe("@eco-incorp/sauce/verify", () => {
       const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith("upperBytes"))!;
       const parse = parseSettleProgram(settlePayload(trap.args));
       expect(parse.tokenWords[0]! >> 160n).not.toBe(0n);
+      expect(parse.fatal?.message).toContain("non-canonical address word");
       expect(bestEffortDecode(parse)!.tokens[0]).toBe(SETTLE_VECTORS[0]!.tokens[0]!.toLowerCase());
     });
 

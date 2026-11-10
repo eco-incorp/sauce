@@ -313,7 +313,7 @@ function dirtyWord(word: bigint, label: string): string | null {
   const upper = word >> BigInt(SETTLE_WIRE.ADDRESS_BYTES * 8);
   return upper === 0n
     ? null
-    : `${label} has nonzero bytes above its ${SETTLE_WIRE.ADDRESS_BYTES}-byte address (upper 0x${upper.toString(16)}) — the engine masks them away, so accepting this would make two byte strings decode alike`;
+    : `${label} has nonzero bytes above its ${SETTLE_WIRE.ADDRESS_BYTES}-byte address (upper 0x${upper.toString(16)}) — non-canonical address word; the upper bytes must be zero`;
 }
 
 function render(payload: unknown): string {

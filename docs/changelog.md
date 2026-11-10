@@ -103,6 +103,24 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## Unreleased
+
+Compiler 2.6.2; engine and Kitchen versions are unchanged from SDK 1.0.0.
+
+### Compiler and engines
+
+- Recompiled EVM settlement programs are now 426 bytes, not the historical 410 bytes shipped in
+  SDK 0.99.16–1.0.0. Default verifiers do not recognize the other version. Validators fail with
+  `TOKENS_OFFSET`; observer helpers can return `null` silently. Upgrade verifiers to accept both
+  explicit `{ hash, bytes }` pins **before** moving producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
+- Recompiled programs now reject malformed runtime `bool` values outside `0`/`1`, and EVM
+  `Address`/`Account` entry words or decoded addresses with bits above 160. Declared nested entries
+  and decoded arrays/tuples are checked too; imported-interface `Address` fields remain an exception.
+  SVM addresses remain full public keys. Existing compiled programs are unchanged; recompiling adds
+  checks, bytes and gas/CU cost. The compiler's
+  [release stability notes](https://github.com/eco-incorp/v12/blob/40a75a11e94658d72ef892bb8e10568135c19eb0/compiler/STABILITY.md)
+  describe the checks and exceptions.
+
 ## SDK 1.0.0 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.18:
