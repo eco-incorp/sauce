@@ -86,6 +86,7 @@ describe("public artifacts from an explicitly pinned earlier compiler row", () =
     "unknown source",
     "source row changed",
     "target digest changed",
+    "target ABI digest changed",
     "asset digest changed",
     "derived identity changed",
   ])("refuses %s before writing artifacts", (scenario) => {
@@ -98,6 +99,8 @@ describe("public artifacts from an explicitly pinned earlier compiler row", () =
         ].version = "0.0.0";
       if (scenario === "target digest changed")
         f.target["v12-evm"].assets["runtime.creation.hex"] = `0x${"00".repeat(32)}`;
+      if (scenario === "target ABI digest changed")
+        f.target["kitchen-evm"].assets["abis.json"] = "00".repeat(32);
       const result = f.run();
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("refused, nothing written");

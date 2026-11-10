@@ -93,6 +93,8 @@ const FALSE_RETURN_ERC20 = JSON.parse(
     "utf8",
   ),
 ) as { creationCode: Hex };
+const historical: Hex =
+  "0xa50201fad1514702000eb19000b6d002019a0120955402019a21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200a6b00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d14642020197b1d8f1e3e4d0f1e3e4e52295549b010121020065b0d40201ba01209554f1e3e4e50201da012095540100d4970100e164990024010100000470a08231000462a301a10120970100d348020104b1d2d147020104b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d146020112b1020188b0d0d6970100e164990024010100000470a08231000462a301a10120970100d14802017eb1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302016fb1d0a101200100e19701014302016bb19000b602017db00100d3d997724502017db19000b6e00101f121e1e0020106b0e101208ae1d18905200000000031009000b6";
 
 const DEPLOYER = privateKeyToAccount(
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -460,8 +462,6 @@ describeEvm("settle payload execution on the real V12 EVM engine", () => {
   }
 
   it("the historical 410-byte program still sweeps a dirty token word", async () => {
-    const historical: Hex =
-      "0xa50201fad1514702000eb19000b6d002019a0120955402019a21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200a6b00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d14642020197b1d8f1e3e4d0f1e3e4e52295549b010121020065b0d40201ba01209554f1e3e4e50201da012095540100d4970100e164990024010100000470a08231000462a301a10120970100d348020104b1d2d147020104b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d146020112b1020188b0d0d6970100e164990024010100000470a08231000462a301a10120970100d14802017eb1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302016fb1d0a101200100e19701014302016bb19000b602017db00100d3d997724502017db19000b6e00101f121e1e0020106b0e101208ae1d18905200000000031009000b6";
     const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith("upperBytes"))!;
     const canonical = SETTLE_VECTORS[0]!;
     const token = canonical.tokens[0] as Address;
@@ -473,6 +473,26 @@ describeEvm("settle payload execution on the real V12 EVM engine", () => {
     expect(await sendTo(sauce.pot, sauce.cookData(payload))).toBe("success");
     expect((await balanceOf(token, recipient)) - before).toBe(held);
     expect(await balanceOf(token, sauce.pot)).toBe(0n);
+  }, 60_000);
+
+  it("rejects a dirty recipient even when the token accepts every ABI word", async () => {
+    const token: Address = "0x00000000000000000000000000000000000000fa";
+    // Return one for balanceOf and transfer without decoding an address or changing balances.
+    await testClient.setCode({ address: token, bytecode: "0x600160005260206000f3" });
+    const canonical = encodeSettleProgram(
+      [token],
+      0n,
+      SETTLE_VECTORS[0]!.recipient,
+      SETTLE_PROGRAM,
+    );
+    const args = canonical.slice(2 + SETTLE_WIRE.PROGRAM_BYTES * 2);
+    const recipientAt = 2 * SETTLE_WIRE.WORD_BYTES * 2;
+    const dirty = args.slice(0, recipientAt) + "ff".repeat(12) + args.slice(recipientAt + 24);
+    expect(await sendTo(sauce.pot, sauce.cookData((historical + dirty) as Hex))).toBe("success");
+    expect(await sendTo(sauce.pot, sauce.cookData((SETTLE_PROGRAM + dirty) as Hex))).toBe(
+      "reverted",
+    );
+    expect(await sendTo(sauce.pot, sauce.cookData(canonical))).toBe("success");
   }, 60_000);
 
   describe("the traps — payloads the ENGINE cannot tell from the canonical one", () => {
