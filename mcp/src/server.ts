@@ -97,6 +97,7 @@ export function instructions(
     "   A fixed sequence of protocol operations can be an actions document in JSON instead:",
     "   sauce_actions (the sauce-actions skill says how).",
     "2. sauce_compile until it compiles; entryParams is what main takes, as args.",
+    "   An amount in args is in the token's smallest unit: sauce_units turns 1.5 USDC into it.",
     ...(local
       ? [
           "   Over stdio a program file on this machine is given by path (relative to the",

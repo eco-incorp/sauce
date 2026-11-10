@@ -113,6 +113,7 @@ import {
   svmVerifyCommand,
   tokenGiven,
   txCommand,
+  unitsCommand,
   UsageError,
   verifyCommand,
   withoutShebang,
@@ -1203,6 +1204,7 @@ export const TOOL_NAMES = [
   "sauce_chains",
   "sauce_globals",
   "sauce_price",
+  "sauce_units",
   "sauce_pools",
   "sauce_compile",
   "sauce_actions",
@@ -1649,6 +1651,60 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
       return { json, notes: now.notes };
     },
+  );
+
+  tool(
+    "sauce_units",
+    {
+      title: "Turn an amount into a token's smallest unit, or back",
+      description:
+        "An amount of one token in whole tokens and in its smallest unit, the integer a " +
+        "program's main takes as args: 1.5 USDC is 1500000 on Base (6 decimals). `amount` is " +
+        "whole tokens (1.5, 1000) or base units ending in n (1500000n), as fund writes them; a " +
+        "bare integer at or above 10^decimals is read as whole tokens and noted. The decimals " +
+        "come from the registries the compile resolves (a symbol in any case: usdc is USDC); a " +
+        "token the chain has no symbol for is named by its 0x address or Solana mint, with " +
+        "`decimals`. An amount with more decimal places than the token has, or more than the " +
+        "chain's token amounts hold, is refused, never rounded. Reads nothing.",
+      input: {
+        chain: chainRef,
+        amount: z
+          .string()
+          .min(1)
+          .max(100)
+          .describe("Whole tokens (1.5), or the smallest unit ending in n (1500000n)."),
+        token: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe(
+            "A symbol the chain registers (USDC, in any case), or a token's 0x address or " +
+              "Solana mint with `decimals`.",
+          ),
+        decimals: z
+          .number()
+          .int()
+          .min(0)
+          .max(99)
+          .optional()
+          .describe("The token's decimals, for a token named by address or mint."),
+      },
+      output: {
+        chain: z.string(),
+        token: z.string(),
+        decimals: z.number(),
+        amount: z.string(),
+        baseUnits: z.string(),
+      },
+      annotations: PURE,
+    },
+    (args) =>
+      unitsCommand({
+        chain: parseChain(String(args.chain), "chain"),
+        amount: args.amount,
+        token: args.token,
+        ...(args.decimals === undefined ? {} : { decimals: args.decimals }),
+      }),
   );
 
   tool(

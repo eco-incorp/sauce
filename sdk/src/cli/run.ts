@@ -107,6 +107,7 @@ import {
 } from "./sign.js";
 import { simulateCommand } from "./simulate.js";
 import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
+import { unitsCommand } from "./units.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -2705,6 +2706,52 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       });
     },
   },
+  units: {
+    usage: "sauce units --chain <slug|id> <amount> <token> [--decimals <n>] [--json]",
+    summary: "Turn an amount in whole tokens into the smallest unit main takes, or back",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain whose token it is" },
+      decimals: {
+        type: "string",
+        value: "<n>",
+        help: "The token's decimals, for a token the chain has no symbol for",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so",
+      "1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile",
+      "resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An",
+      "amount with more decimal places than the token has is refused, never rounded. A token",
+      "the chain has no symbol for is named by its address, with --decimals. Base units end in",
+      "n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,",
+      "and a note on stderr says so.",
+      "",
+      "Examples:",
+      "  sauce units --chain base 1.5 USDC",
+      "  sauce units --chain base 1500000n USDC",
+      "  sauce units --chain solana 0.25 WSOL --json",
+      "  sauce units --chain base 2 0x… --decimals 18",
+    ].join("\n"),
+    run: (args) => {
+      if (args.positionals.length !== 2) {
+        throw new UsageError("give the amount and the token: sauce units --chain base 1.5 USDC");
+      }
+      const [amount, token] = args.positionals as [string, string];
+      const decimals = stringFlag(args, "decimals");
+      if (decimals !== undefined && !/^\d{1,2}$/.test(decimals)) {
+        throw new UsageError(`--decimals: ${decimals} is not a number of decimals`);
+      }
+
+      return unitsCommand({
+        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
+        amount,
+        token,
+        ...(decimals === undefined ? {} : { decimals: Number(decimals) }),
+      });
+    },
+  },
   price: {
     usage: [
       "sauce price --chain <slug|id> <price> <quote> per <base> [--offline] [--json]",
@@ -3389,11 +3436,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: { ...MCP_FLAGS, ...HELP },
     details: [
       "The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half",
-      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,",
-      "sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim, sauce_simulate,",
-      "sauce_inspect and sauce_verify; sauce_send, which broadcasts what the caller signed; the",
-      "agent skills as tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as",
-      "resources, at sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also",
+      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_units, sauce_pools,",
+      "sauce_compile, sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim,",
+      "sauce_simulate, sauce_inspect and sauce_verify; sauce_send, which broadcasts what the",
+      "caller signed; the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>; and a prompt,",
+      "sauce_write_program. Over stdio it also",
       "has the wallet tools and the",
       "store tools (below). No tool takes a key or a password: a transaction comes back unsigned,",
       "for the user's own wallet, or is sent from one of the server's own wallets.",
