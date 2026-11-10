@@ -30,7 +30,7 @@ version, in both directions:
 
 | Component | Version |
 | --- | --- |
-| Compiler, `@eco-incorp/sauce-compiler` | 2.6.1 |
+| Compiler, `@eco-incorp/sauce-compiler` | 2.6.2 |
 | EVM engine, `v12-evm` | 1.3.0 |
 | EVM Kitchen, `kitchen-evm` | 1.3.0 |
 | Solana engine, `v12-svm` | 1.4.0 |

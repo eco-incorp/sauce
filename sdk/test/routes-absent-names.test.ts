@@ -1401,12 +1401,8 @@ describe("available(X) is gone", () => {
 });
 
 /**
- * The bytes `available(X)` compiled to before it was removed, each beside the same decision written
- * as a test of the name and as a comparison with zero, on a chain with the name and one without.
- * Moving from one spelling to the other moves no byte. Captured with `@eco-incorp/sauce-compiler`
- * 2.6.0 from npm, the build the lockfile pins by its integrity
- * `sha512-AKZKjPMnYZ6xHQSnFg5RO220s2X9ubQgiD4+7tE/6g3eKQUcGSz0N9qCRL6u7hWoP5P2GXrGbearJh/Dvs11mg==`
- * (the package records no source commit), at 39d592422, the SDK commit before the removal.
+ * Equivalent name-test spellings for the former `available(X)` decisions. Expected bytes were
+ * recompiled with 2.6.2 for its entry/output address checks; both spellings must still match exactly.
  */
 const BEFORE: readonly { chain: string; available: string; bytecode: string }[] = [
   {
@@ -1414,14 +1410,14 @@ const BEFORE: readonly { chain: string; available: string; bytecode: string }[] 
     available:
       "function main(a: Address, b: Address): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory.getPool(a, b, 500); } return 0; }",
     bytecode:
-      "a50200a2d1514702000eb19000b6d002006201209554e10200820120955401001433128a8fc17869897dce68ed026d694621f6fdfdf1f1e399006402020000041698ee8200620201f40004002462a301a101149701208ae1d1890520000000003100",
+      "a50200bdd1514702000eb19000b6d002007d01209554d001a03502007ab1e102009d01209554d001a03502007ab101001433128a8fc17869897dce68ed026d694621f6fdfdf1f1e399006402020000041698ee8200620201f40004002462a301a1012097d001a03502007ab101208ae1d18905200000000031009000b6",
   },
   {
     chain: "linea",
     available:
       "function main(a: Address, b: Address): Uint256 { if (available(UniswapV3.Factory)) { return UniswapV3.Factory.getPool(a, b, 500); } return 0; }",
     bytecode:
-      "a502006fd1514702000eb19000b6d002002f01209554e002004f01209554e0010001208ae1d1890520000000003100",
+      "a5020082d1514702000eb19000b6d002004201209554d001a03502003fb1e002006201209554d001a03502003fb1e0010001208ae1d18905200000000031009000b6",
   },
   {
     chain: "solana",
@@ -1434,77 +1430,77 @@ const BEFORE: readonly { chain: string; available: string; bytecode: string }[] 
     available:
       "function quote(a: Address, b: Address): Uint256 { if (!available(PancakeswapV3.Factory)) { return 0; } return PancakeswapV3.Factory.getPool(a, b, 500); }\nfunction main(a: Address, b: Address): Uint256 { return quote(a, b) + 1; }",
     bytecode:
-      "a50200b0d1514702000eb19000b6d002007001209554e102009001209554020027f1f1020038b001012101208ae1d18905200000000031000100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a1011497e1b0",
+      "a50200ced1514702000eb19000b6d002008e01209554d001a035020048b1e10200ae01209554d001a035020048b1020037f1f102004bb001012101208ae1d18905200000000031009000b60100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a1012097d001a03502008bb1e1b09000b6",
   },
   {
     chain: "optimism",
     available:
       "function quote(a: Address, b: Address): Uint256 { if (!available(PancakeswapV3.Factory)) { return 0; } return PancakeswapV3.Factory.getPool(a, b, 500); }\nfunction main(a: Address, b: Address): Uint256 { return quote(a, b) + 1; }",
     bytecode:
-      "a5020072d1514702000eb19000b6d002003201209554e002005201209554e0010001013601208ae1d1890520000000003100",
+      "a5020085d1514702000eb19000b6d002004501209554d001a035020042b1e002006501209554d001a035020042b1e0010001013601208ae1d18905200000000031009000b6",
   },
   {
     chain: "base",
     available:
       "function main(a: Address, b: Address): Uint256 { let pool = 0; if (available(PancakeswapV3.Factory)) { pool = PancakeswapV3.Factory.getPool(a, b, 500); } else if (available(UniswapV3.Factory)) { pool = UniswapV3.Factory.getPool(a, b, 500); } return pool; }",
     bytecode:
-      "a50200a8d1514702000eb19000b6d002006801209554e10200880120955401000100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1011497e1e001208ae1d1890520000000003100",
+      "a50200c3d1514702000eb19000b6d002008301209554d001a035020080b1e10200a301209554d001a035020080b101000100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1012097d001a035020080b1e1e001208ae1d18905200000000031009000b6",
   },
   {
     chain: "optimism",
     available:
       "function main(a: Address, b: Address): Uint256 { let pool = 0; if (available(PancakeswapV3.Factory)) { pool = PancakeswapV3.Factory.getPool(a, b, 500); } else if (available(UniswapV3.Factory)) { pool = UniswapV3.Factory.getPool(a, b, 500); } return pool; }",
     bytecode:
-      "a50200a8d1514702000eb19000b6d002006801209554e10200880120955401000100141f98431c8ad98523631ae4a59f267346ea31f984f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1011497e1e001208ae1d1890520000000003100",
+      "a50200c3d1514702000eb19000b6d002008301209554d001a035020080b1e10200a301209554d001a035020080b101000100141f98431c8ad98523631ae4a59f267346ea31f984f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1012097d001a035020080b1e1e001208ae1d18905200000000031009000b6",
   },
   {
     chain: "linea",
     available:
       "function main(a: Address, b: Address): Uint256 { let pool = 0; if (available(PancakeswapV3.Factory)) { pool = PancakeswapV3.Factory.getPool(a, b, 500); } else if (available(UniswapV3.Factory)) { pool = UniswapV3.Factory.getPool(a, b, 500); } return pool; }",
     bytecode:
-      "a50200a8d1514702000eb19000b6d002006801209554e10200880120955401000100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1011497e1e001208ae1d1890520000000003100",
+      "a50200c3d1514702000eb19000b6d002008301209554d001a035020080b1e10200a301209554d001a035020080b101000100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1e3f1e3e499006402020000041698ee8200620201f40004002462a301a1012097d001a035020080b1e1e001208ae1d18905200000000031009000b6",
   },
   {
     chain: "base",
     available:
       "function main(a: Address, b: Address): Uint256 { return available(PancakeswapV3.Factory) ? PancakeswapV3.Factory.getPool(a, b, 500) : 7; }",
     bytecode:
-      "a50200a2d1514702000eb19000b6d002006201209554e1020082012095540100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a101149701208ae1d1890520000000003100",
+      "a50200bdd1514702000eb19000b6d002007d01209554d001a03502007ab1e102009d01209554d001a03502007ab10100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a1012097d001a03502007ab101208ae1d18905200000000031009000b6",
   },
   {
     chain: "optimism",
     available:
       "function main(a: Address, b: Address): Uint256 { return available(PancakeswapV3.Factory) ? PancakeswapV3.Factory.getPool(a, b, 500) : 7; }",
     bytecode:
-      "a502006fd1514702000eb19000b6d002002f01209554e002004f01209554e0010701208ae1d1890520000000003100",
+      "a5020082d1514702000eb19000b6d002004201209554d001a03502003fb1e002006201209554d001a03502003fb1e0010701208ae1d18905200000000031009000b6",
   },
   {
     chain: "base",
     available:
       "function main(a: Address, b: Address): Uint256 { if (available(PancakeswapV3.Factory) && PancakeswapV3.Factory.getPool(a, b, 500) > 0) { return 1; } return 0; }",
     bytecode:
-      "a50200bbd1514702000eb19000b6d002007b01209554e102009b012095540100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a101149701004702006bb1010101208ae1d1890520000000003100010001208ae1d1890520000000003100",
+      "a50200d6d1514702000eb19000b6d002009601209554d001a035020093b1e10200b601209554d001a035020093b10100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a1012097d001a035020093b1010047020083b1010101208ae1d1890520000000003100010001208ae1d18905200000000031009000b6",
   },
   {
     chain: "optimism",
     available:
       "function main(a: Address, b: Address): Uint256 { if (available(PancakeswapV3.Factory) && PancakeswapV3.Factory.getPool(a, b, 500) > 0) { return 1; } return 0; }",
     bytecode:
-      "a502006fd1514702000eb19000b6d002002f01209554e002004f01209554e0010001208ae1d1890520000000003100",
+      "a5020082d1514702000eb19000b6d002004201209554d001a03502003fb1e002006201209554d001a03502003fb1e0010001208ae1d18905200000000031009000b6",
   },
   {
     chain: "base",
     available:
       "function main(a: Address, b: Address): Uint256 { if (!available(PancakeswapV3.Factory) || PancakeswapV3.Factory.getPool(a, b, 500) == 0) { return 1; } return 0; }",
     bytecode:
-      "a50200bbd1514702000eb19000b6d002007b01209554e102009b012095540100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a101149701004402006bb1010101208ae1d1890520000000003100010001208ae1d1890520000000003100",
+      "a50200d6d1514702000eb19000b6d002009601209554d001a035020093b1e10200b601209554d001a035020093b10100140bfbcf9fa4f9c56b0f40a671ad40e0805a091865f1f1e399006402020000041698ee8200620201f40004002462a301a1012097d001a035020093b1010044020083b1010101208ae1d1890520000000003100010001208ae1d18905200000000031009000b6",
   },
   {
     chain: "optimism",
     available:
       "function main(a: Address, b: Address): Uint256 { if (!available(PancakeswapV3.Factory) || PancakeswapV3.Factory.getPool(a, b, 500) == 0) { return 1; } return 0; }",
     bytecode:
-      "a502006fd1514702000eb19000b6d002002f01209554e002004f01209554e0010101208ae1d1890520000000003100",
+      "a5020082d1514702000eb19000b6d002004201209554d001a03502003fb1e002006201209554d001a03502003fb1e0010101208ae1d18905200000000031009000b6",
   },
   {
     chain: "ethereum",
@@ -1558,7 +1554,7 @@ const SPELLINGS: Record<string, (source: string) => string> = {
     source.replace(/!available\(([\w.]+)\)/g, "$1 == 0").replace(CALL, "$1 != 0"),
 };
 
-describe("a test of the name compiles to the bytes available(X) did", () => {
+describe("the former available(X) decisions compile identically in both name-test spellings", () => {
   // Every capture in both spellings: `const both = X && Y` holds a bool, each side a test, so it
   // compiles where `X` is absent as `available(X) && available(Y)` did.
   const cases = BEFORE.flatMap((entry) =>

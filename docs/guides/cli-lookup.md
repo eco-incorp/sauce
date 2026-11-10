@@ -295,7 +295,7 @@ sauce verify 0x<tx hash> --chain base
 Anything else is rejected, with a code and the reason, and the command exits 1:
 
 ```text
-rejected (PROGRAM_TRUNCATED): decodeSettleProgram: payload is 314 bytes, shorter than the 410-byte settle program
+rejected (PROGRAM_TRUNCATED): decodeSettleProgram: payload is 314 bytes, shorter than the 426-byte settle program
 ```
 
 [Verification](verification.md) says what a pass proves and what it does not.
