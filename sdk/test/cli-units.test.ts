@@ -4,6 +4,7 @@
  */
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
+import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { findToken, unitsCommand } from "../src/cli/units.js";
 import type { SourceToken } from "../src/routes/source-globals.js";
 
@@ -86,6 +87,46 @@ describe("sauce units", () => {
     );
   });
 
+  it("asks for --decimals, not an address, when an address the registry lacks has none", () => {
+    expect(() =>
+      unitsCommand({
+        chain: base,
+        amount: "1",
+        token: "0x0000000000000000000000000000000000000001",
+      }),
+    ).toThrow(
+      "Base has no token 0x0000000000000000000000000000000000000001 in its registry: pass " +
+        "--decimals <n> for a token the registry doesn't have",
+    );
+    expect(() =>
+      unitsCommand({
+        chain: solana,
+        amount: "1",
+        token: "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin",
+      }),
+    ).toThrow(/in its registry: pass --decimals <n>/);
+  });
+
+  it("refuses an amount larger than the chain's token amounts hold", () => {
+    const uint256Max = 2n ** 256n - 1n;
+    expect(
+      unitsCommand({ chain: base, amount: `${uint256Max}n`, token: "USDC" }).json,
+    ).toMatchObject({ baseUnits: uint256Max.toString() });
+    expect(() =>
+      unitsCommand({ chain: base, amount: `${uint256Max + 1n}n`, token: "USDC" }),
+    ).toThrow(/more than a uint256 holds/);
+    expect(() => unitsCommand({ chain: base, amount: `${uint256Max}`, token: "USDC" })).toThrow(
+      /more than a uint256 holds/,
+    );
+    const u64Max = 2n ** 64n - 1n;
+    expect(unitsCommand({ chain: solana, amount: `${u64Max}n`, token: "WSOL" }).json).toMatchObject(
+      { baseUnits: u64Max.toString() },
+    );
+    expect(() => unitsCommand({ chain: solana, amount: `${u64Max + 1n}n`, token: "WSOL" })).toThrow(
+      /more than a u64 holds/,
+    );
+  });
+
   it("refuses what it would have to round or guess", () => {
     expect(() => unitsCommand({ chain: base, amount: "1.2345678", token: "USDC" })).toThrow(
       /7 decimal places; USDC has 6/,
@@ -125,5 +166,58 @@ describe("sauce units", () => {
     expect(findToken(tokens, "0x0000000000000000000000000000000000000001", "Base")?.symbol).toBe(
       "uSDC",
     );
+  });
+});
+
+describe("sauce units from the command line", () => {
+  async function sauce(
+    ...argv: string[]
+  ): Promise<{ code: number; stdout: string; stderr: string }> {
+    let stdout = "";
+    let stderr = "";
+    const io: CliIo = {
+      ...nodeIo(),
+      canAsk: () => false,
+      confirm: async () => undefined,
+      stdout: (text) => void (stdout += text),
+      stderr: (text) => void (stderr += text),
+    };
+    const code = await runCli(["--no-update-check", ...argv], io);
+
+    return { code, stdout, stderr };
+  }
+
+  it("takes exactly the amount and the token", async () => {
+    for (const positionals of [["1.5"], ["1.5", "USDC", "extra"]]) {
+      const run = await sauce("units", "--chain", "base", ...positionals);
+      expect(run.code).not.toBe(0);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("give the amount and the token");
+    }
+  });
+
+  it("refuses --decimals that is not a number of decimals", async () => {
+    for (const decimals of ["six", "1.5", "100"]) {
+      const run = await sauce(
+        "units",
+        "--chain",
+        "base",
+        "1",
+        "0x0000000000000000000000000000000000000001",
+        "--decimals",
+        decimals,
+      );
+      expect(run.code).not.toBe(0);
+      expect(run.stderr).toContain(`--decimals: ${decimals} is not a number of decimals`);
+    }
+  });
+
+  it("prints JSON on stdout and the note on stderr under --json", async () => {
+    const run = await sauce("units", "--chain", "base", "1500000", "USDC", "--json");
+    expect(run.code).toBe(0);
+    const json = JSON.parse(run.stdout) as Record<string, unknown>;
+    const note = "1500000 USDC: that is 1.5 million USDC; for base units write 1500000n";
+    expect(json).toMatchObject({ token: "USDC", baseUnits: "1500000000000", note });
+    expect(run.stderr).toContain(note);
   });
 });

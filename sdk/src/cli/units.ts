@@ -63,13 +63,13 @@ function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimal
 
     return { symbol: found.symbol, address: found.mint ?? found.address, decimals: found.decimals };
   }
+  const isTokenAddress =
+    input.chain.kind === "evm"
+      ? isAddress(input.token, { strict: false })
+      : isSolanaAddress(input.token);
   if (input.decimals !== undefined) {
     // --decimals stands in for the registry only for a token named by address or mint: a
     // misspelled symbol (USCD) is refused here, not given the decimals and printed.
-    const isTokenAddress =
-      input.chain.kind === "evm"
-        ? isAddress(input.token, { strict: false })
-        : isSolanaAddress(input.token);
     if (!isTokenAddress) {
       throw new UsageError(
         `--decimals requires a token address or mint, not a symbol: ${input.chain.name} has ` +
@@ -78,6 +78,12 @@ function tokenOf(input: UnitsInput): { symbol: string; address?: string; decimal
     }
 
     return { symbol: input.token, address: input.token, decimals: input.decimals };
+  }
+  if (isTokenAddress) {
+    throw new UsageError(
+      `${input.chain.name} has no token ${input.token} in its registry: pass --decimals <n> ` +
+        "for a token the registry doesn't have",
+    );
   }
   const close = tokens
     .filter((token) => token.stock === undefined)
@@ -123,6 +129,15 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
         `${units} ${token.symbol}: that is ${wordsOf(units)} ${token.symbol}; for base units ` +
         `write ${units}n`;
     }
+  }
+  // The most a token amount can hold on the chain: a uint256 on EVM, an SPL token's u64 on Solana.
+  const [limit, limitName] =
+    input.chain.kind === "evm" ? [2n ** 256n - 1n, "uint256"] : [2n ** 64n - 1n, "u64"];
+  if (baseUnits > limit) {
+    throw new UsageError(
+      `${input.amount} ${token.symbol} is ${baseUnits} in its smallest unit, more than a ` +
+        `${limitName} holds (${limit})`,
+    );
   }
   const whole = formatUnits(baseUnits, token.decimals);
   const text = [
