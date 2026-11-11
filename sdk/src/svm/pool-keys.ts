@@ -30,22 +30,21 @@
  *
  * Phoenix's markets are not derived from their pair: a program names a market by its address.
  *
- * Nothing here reads the cluster. The addresses are derived; whether a pool is there, the cook reads
- * as it is built.
+ * Each cluster's programs, configs, AmmConfigs and fee tiers are its row of `venue-table.ts`: a key
+ * names the pool the program derives on the cluster the program runs on, and a venue the cluster
+ * lacks finds none. The addresses are derived; whether a pool is there, the cook reads as it is
+ * built.
  */
-import { address, getAddressEncoder, type Address } from "@solana/kit";
+import { getAddressEncoder, type Address } from "@solana/kit";
 
-import {
-  BYREAL_PROGRAM_ID,
-  CREMA_PROGRAM_ID,
-  CROPPER_PROGRAM_ID,
-  DEFITUNA_PROGRAM_ID,
-  ORCA_WHIRLPOOL_PROGRAM_ID,
-  PANCAKESWAP_CLMM_PROGRAM_ID,
-  RAYDIUM_CLMM_PROGRAM_ID,
-  STABBLE_CLMM_PROGRAM_ID,
-} from "./venues/index.js";
+import type { SvmTokenCluster } from "../routes/token-registry.js";
 import { memoizedFindProgramAddressSync } from "./venues/pda-memo.js";
+import {
+  svmVenueRow,
+  svmVenueWithheld,
+  type SvmNamespaceVenue,
+  type SvmVenueRow,
+} from "./venue-table.js";
 
 /** What a venue's key is: a whirlpool's tick spacing, or a Raydium-code pool's fee. */
 export type SvmPoolKind = "tick spacing" | "fee";
@@ -104,20 +103,15 @@ const u16 = (value: number, littleEndian: boolean): Uint8Array => {
 };
 
 /** A whirlpool's: `["whirlpool", config, lower, higher, tier]`, its tiers `[index, spacing]`. */
-const whirlpool = (
-  namespace: string,
-  program: Address,
-  config: Address,
-  feeTiers: readonly (readonly [index: number, tickSpacing: number])[],
-): SvmKeyedVenue => ({
+const whirlpool = (namespace: string, row: SvmVenueRow): SvmKeyedVenue => ({
   namespace,
-  program,
+  program: row.program,
   key: "tick spacing",
   refinement: "feeTierIndex",
-  feeTiers: feeTiers.map(([index, tickSpacing]) => ({ index, tickSpacing })),
+  feeTiers: row.feeTiers!.map(([index, tickSpacing]) => ({ index, tickSpacing })),
   seeds: (lower, higher, index) => [
     text("whirlpool"),
-    key32(config),
+    key32(row.config!),
     lower,
     higher,
     u16(index, true),
@@ -125,185 +119,107 @@ const whirlpool = (
 });
 
 /** A Raydium-code pool's: `["pool", ammConfig, lower, higher]`, its configs `[index, fee, spacing]`. */
-const raydium = (
-  namespace: string,
-  program: Address,
-  configs: readonly (readonly [index: number, fee: number, tickSpacing: number])[],
-): SvmKeyedVenue => ({
+const raydium = (namespace: string, row: SvmVenueRow): SvmKeyedVenue => ({
   namespace,
-  program,
+  program: row.program,
   key: "fee",
   refinement: "tickSpacing",
-  configs: configs.map(([index, fee, tickSpacing]) => ({ index, fee, tickSpacing })),
+  configs: row.ammConfigs!.map(([index, fee, tickSpacing]) => ({ index, fee, tickSpacing })),
   seeds: (lower, higher, index) => [
     text("pool"),
-    key32(svmAmmConfig(program, index)),
+    key32(svmAmmConfig(row.program, index)),
     lower,
     higher,
   ],
 });
 
 /**
- * Each venue a program finds pools at by key, by its namespace. A Raydium-code program's configs
- * are every one it kept at indexes 0 to 199 when read, and a whirlpool program's fee tiers every
- * one its config kept at indexes 0 to 4095, each pinned by its account in
- * `test/fixtures/svm-pool-keys/amm-configs.json` (`scripts/dump-amm-configs.mjs`).
+ * Each venue a program finds pools at by key, by its namespace: its venue, how its pool is derived
+ * and what its key and refinement are, the same on every cluster.
  */
-export const SVM_KEYED_VENUES: Readonly<Record<string, SvmKeyedVenue>> = {
-  "Raydium.CLMM": raydium("Raydium.CLMM", RAYDIUM_CLMM_PROGRAM_ID, [
-    [0, 100, 10],
-    [1, 2500, 60],
-    [2, 500, 10],
-    [3, 10000, 120],
-    [4, 100, 1],
-    [5, 500, 1],
-    [6, 200, 1],
-    [7, 300, 1],
-    [8, 400, 1],
-    [9, 20000, 120],
-    [10, 1000, 10],
-    [11, 1500, 10],
-    [12, 1600, 10],
-    [13, 1800, 10],
-    [14, 2000, 10],
-    [15, 4000, 60],
-    [16, 6000, 60],
-    [17, 8000, 60],
-    [18, 30000, 120],
-    [19, 40000, 120],
-    [20, 5000, 60],
-  ]),
-  "Pancakeswap.CLMM": raydium("Pancakeswap.CLMM", PANCAKESWAP_CLMM_PROGRAM_ID, [
-    [0, 100, 10],
-    [1, 2500, 60],
-    [2, 500, 10],
-    [3, 10000, 120],
-    [4, 100, 1],
-    [5, 500, 1],
-    [6, 200, 1],
-    [7, 300, 1],
-    [8, 400, 1],
-    [9, 20000, 120],
-    [10, 1000, 10],
-    [11, 1500, 10],
-    [12, 1600, 10],
-    [13, 1800, 10],
-    [14, 2000, 10],
-    [15, 4000, 60],
-    [16, 6000, 60],
-    [17, 8000, 60],
-    [18, 30000, 120],
-    [19, 40000, 120],
-    [20, 3000, 60],
-    [21, 800, 1],
-  ]),
-  "Byreal.CLMM": raydium("Byreal.CLMM", BYREAL_PROGRAM_ID, [
-    [1, 100, 1],
-    [2, 500, 1],
-    [3, 4000, 60],
-    [4, 5000, 60],
-    [5, 6000, 60],
-    [6, 400, 1],
-    [7, 2500, 60],
-    [8, 200, 1],
-    [9, 300, 1],
-    [10, 1000, 10],
-    [11, 2000, 10],
-    [12, 10000, 120],
-    [20, 20000, 120],
-    [21, 200, 10],
-    [22, 100, 120],
-    [50, 3000, 60],
-    [51, 8000, 60],
-    [52, 1, 1],
-    [53, 50, 1],
-  ]),
-  "Stabble.CLMM": raydium("Stabble.CLMM", STABBLE_CLMM_PROGRAM_ID, [
-    [0, 50, 1],
-    [1, 50, 1],
-    [2, 60, 1],
-    [3, 70, 1],
-    [4, 80, 1],
-    [5, 90, 1],
-    [6, 100, 1],
-    [7, 250, 1],
-    [8, 500, 1],
-    [9, 750, 1],
-    [10, 1000, 1],
-    [11, 2500, 1],
-    [12, 5000, 1],
-    [13, 7500, 1],
-    [14, 10000, 1],
-    [15, 12500, 1],
-    [16, 17500, 1],
-    [17, 20000, 1],
-  ]),
-  "Orca.Whirlpool": whirlpool(
-    "Orca.Whirlpool",
-    ORCA_WHIRLPOOL_PROGRAM_ID,
-    address("2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ"),
-    [
-      [1, 1],
-      [2, 2],
-      [4, 4],
-      [8, 8],
-      [16, 16],
-      [64, 64],
-      [96, 96],
-      [128, 128],
-      [256, 256],
-      [1025, 64],
-      [1026, 1],
-      [1027, 2],
-      [1028, 4],
-      [1029, 8],
-      [1030, 16],
-      [1031, 96],
-      [1032, 128],
-      [1033, 256],
-      [1034, 32896],
-      [1035, 16],
-      [1036, 128],
-      [2049, 128],
-      [2050, 16],
-      [2051, 64],
-      [32896, 32896],
-    ],
-  ),
-  "Cropper.Whirlpool": whirlpool(
-    "Cropper.Whirlpool",
-    CROPPER_PROGRAM_ID,
-    address("2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL"),
-    [
-      [1, 1],
-      [2, 2],
-      [4, 4],
-      [8, 8],
-      [16, 16],
-      [64, 64],
-      [128, 128],
-      [256, 256],
-    ],
-  ),
-  "Defituna.Fusion": {
-    namespace: "Defituna.Fusion",
-    program: DEFITUNA_PROGRAM_ID,
+export const SVM_KEYED_NAMESPACES: Readonly<
+  Record<
+    string,
+    {
+      readonly venue: SvmNamespaceVenue;
+      readonly key: SvmPoolKind;
+      readonly refinement?: SvmPoolRefinement;
+      readonly build: (namespace: string, row: SvmVenueRow) => SvmKeyedVenue;
+    }
+  >
+> = {
+  "Raydium.CLMM": { venue: "raydium-clmm", key: "fee", refinement: "tickSpacing", build: raydium },
+  "Pancakeswap.CLMM": {
+    venue: "pancakeswap-clmm",
+    key: "fee",
+    refinement: "tickSpacing",
+    build: raydium,
+  },
+  "Byreal.CLMM": { venue: "byreal", key: "fee", refinement: "tickSpacing", build: raydium },
+  "Stabble.CLMM": { venue: "stabble-clmm", key: "fee", refinement: "tickSpacing", build: raydium },
+  "Orca.Whirlpool": {
+    venue: "orca-whirlpool",
     key: "tick spacing",
-    seeds: (lower, higher, spacing) => [text("fusion_pool"), lower, higher, u16(spacing, true)],
+    refinement: "feeTierIndex",
+    build: whirlpool,
+  },
+  "Cropper.Whirlpool": {
+    venue: "cropper",
+    key: "tick spacing",
+    refinement: "feeTierIndex",
+    build: whirlpool,
+  },
+  "Defituna.Fusion": {
+    venue: "defituna",
+    key: "tick spacing",
+    build: (namespace, row) => ({
+      namespace,
+      program: row.program,
+      key: "tick spacing",
+      seeds: (lower, higher, spacing) => [text("fusion_pool"), lower, higher, u16(spacing, true)],
+    }),
   },
   "Crema.CLMM": {
-    namespace: "Crema.CLMM",
-    program: CREMA_PROGRAM_ID,
+    venue: "crema",
     key: "tick spacing",
-    seeds: (lower, higher, spacing) => [
-      text("clmmpool"),
-      key32(address("2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox")),
-      lower,
-      higher,
-      u16(spacing, true),
-    ],
+    build: (namespace, row) => ({
+      namespace,
+      program: row.program,
+      key: "tick spacing",
+      seeds: (lower, higher, spacing) => [
+        text("clmmpool"),
+        key32(row.config!),
+        lower,
+        higher,
+        u16(spacing, true),
+      ],
+    }),
   },
 };
+
+const keyedOn = new Map<SvmTokenCluster, Map<string, SvmKeyedVenue | null>>();
+
+/**
+ * The venue `namespace` names on `cluster`, whose pools a program finds by key there: its program,
+ * configs or fee tiers and seeds from the cluster's row of `venue-table.ts`. Undefined for a
+ * namespace that finds no pool by key, and for a venue the cluster lacks.
+ */
+export function svmKeyedVenue(
+  namespace: string,
+  cluster: SvmTokenCluster,
+): SvmKeyedVenue | undefined {
+  const byNamespace = keyedOn.get(cluster) ?? new Map<string, SvmKeyedVenue | null>();
+  keyedOn.set(cluster, byNamespace);
+  let venue = byNamespace.get(namespace);
+  if (venue === undefined) {
+    const keyed = SVM_KEYED_NAMESPACES[namespace];
+    const row = keyed === undefined ? undefined : svmVenueRow(keyed.venue, cluster);
+    venue = row === undefined ? null : keyed!.build(namespace, row);
+    byNamespace.set(namespace, venue);
+  }
+
+  return venue ?? undefined;
+}
 
 /** A Raydium-code program's AmmConfig at `index`: `["amm_config", index]`, big-endian. */
 export function svmAmmConfig(program: Address, index: number): Address {
@@ -330,18 +246,25 @@ const tiersAt = (venue: SvmKeyedVenue, spacing: bigint, index?: bigint): SvmFeeT
 
 /**
  * Why `key` (and `refinement`, a Raydium-code pool's tick spacing beside its fee or a whirlpool's
- * fee tier index beside its tick spacing) names no pool at the venue's, or undefined: a fee must be
- * one of the program's configs, and a spacing given with it that config's; a whirlpool's tick
- * spacing alone its static tier's, and an index given with it one of its tiers'; any other tick
- * spacing a whole number from 1 to 65535.
+ * fee tier index beside its tick spacing) names no pool at the venue's on `cluster`, or undefined:
+ * a fee must be one of the program's configs there, and a spacing given with it that config's; a
+ * whirlpool's tick spacing alone its static tier's, and an index given with it one of its tiers';
+ * any other tick spacing a whole number from 1 to 65535.
  */
 export function svmPoolKeyProblem(
+  cluster: SvmTokenCluster,
   namespace: string,
   key: bigint,
   refinement?: bigint,
 ): string | undefined {
-  const venue = SVM_KEYED_VENUES[namespace];
-  if (venue === undefined) return `${namespace} finds no pool by key`;
+  if (SVM_KEYED_NAMESPACES[namespace] === undefined) return `${namespace} finds no pool by key`;
+  const venue = svmKeyedVenue(namespace, cluster);
+  if (venue === undefined) {
+    const withheld = svmVenueWithheld(SVM_KEYED_NAMESPACES[namespace]!.venue, cluster);
+    return withheld === undefined
+      ? `${namespace} has no program on Solana's ${cluster}`
+      : `${namespace} is not supported on Solana's ${cluster}: ${withheld}`;
+  }
   if (venue.feeTiers !== undefined) {
     const tiers = tiersAt(venue, key);
     if (tiers.length === 0) {
@@ -391,21 +314,22 @@ export function svmPoolKeyProblem(
 }
 
 /**
- * Every pool the key may name at the venue for the pair, which {@link svmPoolKeyProblem} accepts:
- * the one a tick spacing derives (a whirlpool's on its static tier, or on the tier given), or one
- * under each config charging the fee (at the spacing, given one). Which of them is there is the
- * cluster's to say.
+ * Every pool the key may name at the venue for the pair on `cluster`, which
+ * {@link svmPoolKeyProblem} accepts: the one a tick spacing derives (a whirlpool's on its static
+ * tier, or on the tier given), or one under each config charging the fee (at the spacing, given
+ * one). Which of them is there is the cluster's to say.
  */
 export function svmPoolCandidates(
+  cluster: SvmTokenCluster,
   namespace: string,
   tokenA: Address,
   tokenB: Address,
   key: bigint,
   refinement?: bigint,
 ): SvmPoolCandidate[] {
-  const problem = svmPoolKeyProblem(namespace, key, refinement);
+  const problem = svmPoolKeyProblem(cluster, namespace, key, refinement);
   if (problem !== undefined) throw new Error(problem);
-  const venue = SVM_KEYED_VENUES[namespace]!;
+  const venue = svmKeyedVenue(namespace, cluster)!;
   const [a, b] = [key32(tokenA), key32(tokenB)];
   const lower = compare(a, b) < 0;
   const [first, second] = lower ? [a, b] : [b, a];

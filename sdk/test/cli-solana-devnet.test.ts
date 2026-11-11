@@ -228,6 +228,25 @@ describe("still runs on solana-devnet", () => {
   });
 });
 
+describe("a define named like the SDK's own", () => {
+  it.each(["solana", "solana-devnet"])(
+    "sauce compile --define __SAUCE_RAYDIUM_CLMM_PROGRAM is refused on %s",
+    async (chain) => {
+      const swap = file(
+        "swap.sauce.ts",
+        "function main(pool: Address) { return Raydium.CLMM.swap(pool, USDC, WSOL, 1, 10, 0); }\n",
+      );
+      const run = await sauce(
+        ...["compile", swap, "--chain", chain, "--json"],
+        ...["--define", `__SAUCE_RAYDIUM_CLMM_PROGRAM=0x${"ab".repeat(32)}`],
+      );
+      expect(run.code).toBe(1);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toMatch(/`__SAUCE_RAYDIUM_CLMM_PROGRAM` is reserved/);
+    },
+  );
+});
+
 describe("an endpoint serves the cluster the chain names", () => {
   it.each([
     [MAINNET_GENESIS, "mainnet-beta"],

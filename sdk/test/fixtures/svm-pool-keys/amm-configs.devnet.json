@@ -1,0 +1,255 @@
+{
+  "$comment": "As devnet held them when read, each account's owner, lamports and data: under venues, every AmmConfig of the cluster's Raydium-code programs, index 0 to 199 (the program address of [\"amm_config\", index] as a big-endian u16), its trade fee rate (millionths) a u32 at 47 and its tick spacing a u16 at 51; under whirlpools, every fee tier of the cluster's WhirlpoolsConfigs, index 0 to 4095 (the program address of [\"fee_tier\", config, index] as a little-endian u16), a static tier's tick spacing a u16 at 40, an adaptive-fee tier's index a u16 at 40 and its tick spacing a u16 at 42. Written by scripts/dump-amm-configs.mjs --redump --rpc-config <file> --cluster devnet; svm/pool-keys.test.ts holds svm/venue-table.ts's devnet rows to it.",
+  "read": "2026-10-27T18:03:04.601Z",
+  "venues": {
+    "Raydium.CLMM": {
+      "program": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH",
+      "configs": [
+        {
+          "index": 0,
+          "address": "CD4aJtX11cqTCAc83nxSPkkh5JW2yjD6uwHeovjqQ1qu",
+          "owner": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/7AAC4mJd9OnFIQtsX94VZL461PzulxhCZo9bpNA8NkyZ6ecDUAQDECQAAPABAnAAAAAAAALiYl306cUhC2xf3hVkvjrU/O6XGEJmj1uk0Dw2TJnp5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 1,
+          "address": "F8aaMZVpXaQHk3Qo9BPDhsa7RgpfrfiRsk8L3iXnq3AT",
+          "owner": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//AQC4mJd9OnFIQtsX94VZL461PzulxhCZo9bpNA8NkyZ6ecDUAQBkAAAAAQBAnAAAAAAAALiYl306cUhC2xf3hVkvjrU/O6XGEJmj1uk0Dw2TJnp5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "FZdkW5jiYsjTnCVqFqPrxrQisQkCYrohd7ArZhoKnM8q",
+          "owner": "DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AgC4mJd9OnFIQtsX94VZL461PzulxhCZo9bpNA8NkyZ6ecDUAQD0AQAACgBAnAAAAAAAALiYl306cUhC2xf3hVkvjrU/O6XGEJmj1uk0Dw2TJnp5AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    },
+    "Stabble.CLMM": {
+      "program": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+      "configs": [
+        {
+          "index": 0,
+          "address": "5waGmTN1wazZMqTw1FBRabW2DoK6XRkHC1vqAQWJF8wd",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9AACLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAAAAAAAAAAAAAQAAAAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 1,
+          "address": "37uEmetdbRidGRyM5dUn5d3TWbC2U35LpkCrj2xX4VzS",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AQCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 2,
+          "address": "5uJG2imjdUmbwQEMkZSSZyRMjikWfiQcHY6Y9k7VgMnA",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+AgCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 3,
+          "address": "346Nv5n8nRZS6aJBacBZzcwxfGCvfhBzXbBQpzzMi155",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/9AwCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 4,
+          "address": "G9V59kBC6hpbyJzfJZafaH4Bs1Zi7HZVV97su31ajXZS",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+BACLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 5,
+          "address": "DQBv2bXRwYRNmXX7eib3kG9uv7DxaRvxLSzDJ3dWPS41",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BQCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 6,
+          "address": "AZ6njnLfg7K85LhELRDUnhswwZkh3ct29twQaW8UaxeR",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//BgCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 7,
+          "address": "6JeNQD3y9k9zBtcEv9RaWwuX8TphBbku5krk4tooEso2",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+BwCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 8,
+          "address": "dwfGmkWZkUYncNTonCRtaZ5sf4PCAqGKGWgqF4K1pH7",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//CACLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDECQAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 9,
+          "address": "DVQg8E8qHYiaVDSkcdKPj4GeNcCJcnti3YLrvnTDCDL7",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CQCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQBkAAAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 10,
+          "address": "BCM8wqkRfYHPk7SvpMezK5kFzSBpVEA7FUp7EEtqBVp6",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/4CgCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQAQJwAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 11,
+          "address": "4th9ZwRvFX9yJQp1yFXVkCYQxbCAxPLKKh2RyTLbuVXP",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/+CwCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQDUMAAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 12,
+          "address": "BpoXx51iZiAwk6AB13ZqYpktnkoFjoZgiQVfV63gRgLF",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DACLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQCYOgAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 13,
+          "address": "Dba99UQ9HLhjUr2bEVHDbC4pGx3y8ATZNZ1TZFLM7cQg",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2/8DQCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQCYOgAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 14,
+          "address": "3fZgcBAYjvci6TatVZfk9pdmmTGpgcVKwXV4BiLRV8Er",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DgCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQCYOgAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "index": 15,
+          "address": "8Fv84TDfeSVYxGBCgCDYWhF4nVsUqAnot1TsNE6yCNk8",
+          "owner": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+          "lamports": "1705200",
+          "base64Data": "2vQhaMvLK2//DwCLAvCstG7PJ2D0I/X8BgmVNHDoiMMh/MQ7y2Wjau8EAMDUAQCYOgAAAQBAnAAAAAAAAIsC8Ky0bs8nYPQj9fwGCZU0cOiIwyH8xDvLZaNq7wQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+      ]
+    }
+  },
+  "whirlpools": {
+    "Orca.Whirlpool": {
+      "program": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+      "config": "FcrweFY1G9HJAHG5inkGB6pKg1HZ6x9UC2WioAfWrGkR",
+      "feeTiers": [
+        {
+          "index": 1,
+          "address": "CtfHwxDmdYtoWyeSyh3NUWk43FnehVhhtwuYdWwZcVyt",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagEAZAA="
+        },
+        {
+          "index": 2,
+          "address": "HgiLjqu6BW5fa9hBgK9GJ8WoTpY4cjWq47RjazbfzbSH",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagIAyAA="
+        },
+        {
+          "index": 4,
+          "address": "2PdLb9QP1NJUbv8iLx4YycbGHep9NvATpqbt7A7BvFEp",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagQAkAE="
+        },
+        {
+          "index": 8,
+          "address": "DV9sQ4gQTYeEodFap6xiiJkcmYYr94EPFmu7gWXaQTym",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojaggA9AE="
+        },
+        {
+          "index": 16,
+          "address": "8tXXA2fUehmJtBZuAiCR3rzP7UGUCM9DCVyM4G8PL1R9",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojahAA6AM="
+        },
+        {
+          "index": 32,
+          "address": "Gyk4CgZDzYv7YvsG4ELLgR12vVuDrghb6EFhSM1gerRj",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojaiAA0Ac="
+        },
+        {
+          "index": 64,
+          "address": "nhg1SS1hNFnJKZrJ9FBf3L6SxTjwEnkehN7dmAbg25t",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojakAA0Ac="
+        },
+        {
+          "index": 128,
+          "address": "G319n1BPjeXjAfheDxYe8KWZM7FQhQCJerWRK2nZYtiJ",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojaoAAoA8="
+        },
+        {
+          "index": 256,
+          "address": "6b8hEAH62GoPqbmgsR3DTFFoBefbZU7hE24uNXHPHR7i",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagABECc="
+        },
+        {
+          "index": 1025,
+          "address": "9rohZQZ92PBNiH2NK8PLmaUPes3BoGnghxGU7jwWD9tq",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "2672640",
+          "base64Data": "kxCQdC+SlS7ZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagEEQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAuAseAFgCiBNAnAAAoIYBAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        {
+          "index": 2049,
+          "address": "DASotMWbuG3rJiQ9NpY1omvqp641be2XoRaxdYnkxcRb",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "2672640",
+          "base64Data": "kxCQdC+SlS7ZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagEIgABpV+yf2JGPR6IAJGoE412aCvbZy0/8VGsB2q8ISdapIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAECceAFgCiBMQJwAAqGEAAIAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        {
+          "index": 2050,
+          "address": "GthRJvbvfy8zw6vd9E5ttzXKcEgyfVFtKoYiNHdz3fZT",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "2672640",
+          "base64Data": "kxCQdC+SlS7ZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagIIEABpV+yf2JGPR6IAJGoE412aCvbZy0/8VGsB2q8ISdapIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAYeAFgCiBMQJwAA0GwEABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        {
+          "index": 2051,
+          "address": "GmuwwGrYuwzHRYGeZhzDt6Dxd377P9vy6ympUE84C2hB",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "2672640",
+          "base64Data": "kxCQdC+SlS7ZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojagMIQABpV+yf2JGPR6IAJGoE412aCvbZy0/8VGsB2q8ISdapIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAuAseAFgCiBMQJwAAcBEBAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        },
+        {
+          "index": 32896,
+          "address": "8EHtyN3DBseSZzHYkxXuT2GDoPmqmKEtbbaNrabFZhdL",
+          "owner": "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+          "lamports": "1197120",
+          "base64Data": "OEufTI5EvmnZM2o99I82HlcG5pw8trbZF3TkeTXIUm3loPWfIVojaoCAECc="
+        }
+      ]
+    }
+  }
+}

@@ -65,14 +65,16 @@ describe("solana-testnet", () => {
     }
   });
 
-  it("has no Solana venue: their pools are mainnet's", () => {
+  it("has no Solana venue: no venue has a program on testnet", () => {
     expect(sourceGlobals(testnet).venues ?? []).toEqual([]);
     expect(() =>
       compileSauceProgram(
         "solana-testnet",
         "function main(pool: Address) { return Orca.Whirlpool.swap(pool, WSOL, WSOL, 1, 0, 0); }",
       ),
-    ).toThrow(/`Orca\.Whirlpool` is not on solana-testnet/);
+    ).toThrow(
+      "`Orca.Whirlpool` is not on solana-testnet: Orca Whirlpools has no program on Solana's testnet.",
+    );
   });
 
   it("supports testnet transactions where the release is deployed", () => {

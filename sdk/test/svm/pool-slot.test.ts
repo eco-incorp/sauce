@@ -64,7 +64,7 @@ describe("svmPoolSlot", () => {
       [lower, p.payA],
       [higher, p.payB],
     ] as const) {
-      const slot = await svmPoolSlot(load, p.pool, pay);
+      const slot = await svmPoolSlot(load, p.pool, pay, "mainnet-beta");
       expect(svmSlotAccounts(slot)).toEqual([
         p.program,
         p.pool,
@@ -94,7 +94,7 @@ describe("svmPoolSlot", () => {
         const missing = ticks.slice(present);
         const partial: OwnedAccountLoader = async (at) =>
           missing.includes(at as never) ? null : load(at);
-        const slot = await svmPoolSlot(partial, p.pool, pay);
+        const slot = await svmPoolSlot(partial, p.pool, pay, "mainnet-beta");
         expect(svmSlotAccounts(slot).slice(6)).toEqual(expected);
       }
     }
@@ -102,15 +102,32 @@ describe("svmPoolSlot", () => {
 
   it("refuses a pool no price-limit venue owns, and a token its pair does not hold", async () => {
     const usdcUsdt = pool("stabble-clmm-usdc-usdt");
-    await expect(svmPoolSlot(load, usdcUsdt.pool, WSOL)).rejects.toThrow(
+    await expect(svmPoolSlot(load, usdcUsdt.pool, WSOL, "mainnet-beta")).rejects.toThrow(
       `Stabble CLMM pool ${usdcUsdt.pool} trades`,
     );
     const book = pool("manifest-sol-usdc");
-    await expect(svmPoolSlot(load, book.pool, USDC)).rejects.toThrow(
+    await expect(svmPoolSlot(load, book.pool, USDC, "mainnet-beta")).rejects.toThrow(
       "which is not a venue a namespace swaps at",
     );
     const nowhere = address("11111111111111111111111111111112") as Address;
-    await expect(svmPoolSlot(load, nowhere, USDC)).rejects.toThrow("has no account");
+    await expect(svmPoolSlot(load, nowhere, USDC, "mainnet-beta")).rejects.toThrow(
+      "has no account",
+    );
+  });
+
+  it("on devnet, refuses a pool of mainnet's Raydium program or of devnet's legacy one", async () => {
+    // Devnet's Raydium CLMM is its own program (DRayAUg…): mainnet's, and the legacy devnet program
+    // `devi51…`, own no pool a namespace swaps at there, whatever the pool's bytes.
+    const p = pool("raydium-clmm-sol-usdc");
+    await expect(svmPoolSlot(load, p.pool, USDC, "devnet")).rejects.toThrow(
+      `${p.pool} is owned by ${p.program}, which is not a venue a namespace swaps at on devnet`,
+    );
+    const legacy = address("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+    const forged: OwnedAccountLoader = async (at) =>
+      at === p.pool ? { data: BYTES.get(at)!, owner: legacy } : load(at);
+    await expect(svmPoolSlot(forged, p.pool, USDC, "devnet")).rejects.toThrow(
+      `${p.pool} is owned by ${legacy}, which is not a venue a namespace swaps at on devnet`,
+    );
   });
 
   it.each([
@@ -132,7 +149,7 @@ describe("svmPoolSlot", () => {
         read.push(at);
         return at === p.pool ? { data: forged, owner: p.program } : load(at);
       };
-      await expect(svmPoolSlot(forgedLoad, p.pool, USDC)).rejects.toThrow(
+      await expect(svmPoolSlot(forgedLoad, p.pool, USDC, "mainnet-beta")).rejects.toThrow(
         `${p.pool} is not a ${what}: its account is another of the program's`,
       );
       expect(read).toEqual([p.pool]);
@@ -159,13 +176,13 @@ describe("svmPoolSlot", () => {
       address("CoaxzEh8p5YyGLcj36Eo3cUThVJxeKCs7qvLAGDYwBcz"),
       address("59YuGWPunbchD2mbi9U7qvjWQKQReGeepn4ZSr9zz9Li"),
     ];
-    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, WSOL))).toEqual([
+    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, WSOL, "mainnet-beta"))).toEqual([
       ...head,
       BIN_ARRAYS[-90],
       BIN_ARRAYS[-91],
       SYSTEM,
     ]);
-    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, USDC))).toEqual([
+    expect(svmSlotAccounts(await svmPoolSlot(load, p.pool, USDC, "mainnet-beta"))).toEqual([
       ...head,
       BIN_ARRAYS[-90],
       BIN_ARRAYS[-89],
@@ -187,6 +204,7 @@ describe("svmPoolSlot", () => {
       bitmap((bits) => clear(bits, -90)),
       p.pool,
       USDC,
+      "mainnet-beta",
     );
     expect(above.ticks).toEqual([BIN_ARRAYS[-89], BIN_ARRAYS[-88], SYSTEM]);
     // Nothing marked below -90: paying SOL, its one array.
@@ -196,6 +214,7 @@ describe("svmPoolSlot", () => {
       }),
       p.pool,
       WSOL,
+      "mainnet-beta",
     );
     expect(alone.ticks).toEqual([BIN_ARRAYS[-90], SYSTEM, SYSTEM]);
     await expect(
@@ -203,6 +222,7 @@ describe("svmPoolSlot", () => {
         bitmap((bits) => bits.fill(0)),
         p.pool,
         WSOL,
+        "mainnet-beta",
       ),
     ).rejects.toThrow("no bin array holds liquidity below its active bin");
   });
@@ -220,19 +240,19 @@ describe("svmPoolSlot", () => {
     const at = (index: number) => tickArray(p, 30720 + 60 * index);
     // Paying USDC the price rises: from its array at 49800, which holds nothing, up to the marked
     // 49860 and 50040. Paying SPCX_US it falls: to 48060 and 47400.
-    expect((await svmPoolSlot(load, p.pool, USDC)).ticks).toEqual([
+    expect((await svmPoolSlot(load, p.pool, USDC, "mainnet-beta")).ticks).toEqual([
       extension,
       await at(319),
       await at(322),
     ]);
-    expect((await svmPoolSlot(load, p.pool, SPCX_US)).ticks).toEqual([
+    expect((await svmPoolSlot(load, p.pool, SPCX_US, "mainnet-beta")).ticks).toEqual([
       extension,
       await at(289),
       await at(278),
     ]);
     // With no extension there, the pool's swap cannot run: its slot is refused, never half made.
     const without: OwnedAccountLoader = async (at) => (at === extension ? null : load(at));
-    await expect(svmPoolSlot(without, p.pool, USDC)).rejects.toThrow(
+    await expect(svmPoolSlot(without, p.pool, USDC, "mainnet-beta")).rejects.toThrow(
       "its price is past its own tick bitmap, and it has no bitmap extension",
     );
   });
@@ -258,7 +278,7 @@ describe("svmPoolSlot", () => {
     const started = performance.now();
     // Paying USDC: 50,040 above the price; the second place the price's own array, 49,800, which
     // exists and holds nothing (never one past the price that way).
-    expect((await svmPoolSlot(marked(one, true), p.pool, USDC)).ticks).toEqual([
+    expect((await svmPoolSlot(marked(one, true), p.pool, USDC, "mainnet-beta")).ticks).toEqual([
       extension,
       await tickArray(p, 50040),
       await tickArray(p, 49800),
@@ -266,10 +286,10 @@ describe("svmPoolSlot", () => {
     // Nothing marked and no array there: every start searched, then refused, not half made.
     const none = new Uint8Array(one);
     none.fill(0, 40);
-    await expect(svmPoolSlot(marked(none, false), p.pool, USDC)).rejects.toThrow(
+    await expect(svmPoolSlot(marked(none, false), p.pool, USDC, "mainnet-beta")).rejects.toThrow(
       "it has 0 tick arrays near its price, and its swap takes 2",
     );
-    await expect(svmPoolSlot(marked(none, false), p.pool, SPCX_US)).rejects.toThrow(
+    await expect(svmPoolSlot(marked(none, false), p.pool, SPCX_US, "mainnet-beta")).rejects.toThrow(
       "it has 0 tick arrays near its price, and its swap takes 2",
     );
     // Four slots, each searching the whole extension: well under a second.
@@ -298,13 +318,13 @@ describe("svmPoolSlot", () => {
           ? { data: marks, owner: p.program }
           : load(at);
     // Paying SPCX_US, the lower key, the price falls: -61440, then -61500.
-    expect((await svmPoolSlot(marked, p.pool, SPCX_US)).ticks).toEqual([
+    expect((await svmPoolSlot(marked, p.pool, SPCX_US, "mainnet-beta")).ticks).toEqual([
       extension,
       await tickArray(p, -61440),
       await tickArray(p, -61500),
     ]);
     // Paying USDC it rises: -30780 that way, then the nearest the other way, -61440.
-    expect((await svmPoolSlot(marked, p.pool, USDC)).ticks).toEqual([
+    expect((await svmPoolSlot(marked, p.pool, USDC, "mainnet-beta")).ticks).toEqual([
       extension,
       await tickArray(p, -30780),
       await tickArray(p, -61440),
@@ -326,7 +346,7 @@ describe("svmPoolSlot", () => {
       inFlight--;
       return load(at);
     };
-    const slot = await svmPoolSlot(slow, p.pool, USDC);
+    const slot = await svmPoolSlot(slow, p.pool, USDC, "mainnet-beta");
     expect(most).toBeGreaterThan(1);
     for (const tick of slot.ticks) expect(BYTES.has(tick)).toBe(true);
     expect(new Set(slot.ticks).size).toBe(3);
@@ -368,7 +388,7 @@ describe("slot:<pool>:<token>.<part>, the account-name form", () => {
       return load(at);
     };
     // What reading the slot once reads of the pool.
-    await svmPoolSlot(counting, p.pool, USDC);
+    await svmPoolSlot(counting, p.pool, USDC, "mainnet-beta");
     const once = reads;
     reads = 0;
     const slots = new Map();
@@ -397,6 +417,7 @@ describe("slot:<pool>:<token>.<part>, the account-name form", () => {
         async (at) => (at === p.pool ? { data: next, owner: p.program } : load(at)),
         p.pool,
         USDC,
+        "mainnet-beta",
       );
       if (fresh.ticks[0] !== before.value) {
         data = next;

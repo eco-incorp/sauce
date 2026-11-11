@@ -90,6 +90,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   MAX_TICK_INDEX,
   MIN_TICK_INDEX,
@@ -104,7 +105,8 @@ import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.
 import { parseMintExtensions } from "../../token-extensions.js";
 
 const SLUG = "defituna";
-export const DEFITUNA_PROGRAM_ID = address("fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9");
+/** DefiTuna's Fusion program on Solana's mainnet, which this adapter quotes. */
+export const DEFITUNA_PROGRAM_ID = svmMainnetProgram("defituna");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 export const FUSION_POOL_ACCOUNT_SIZE = 423;
 /** sha256('account:FusionPool')[0..8] (IDL-given: [254,204,207,98,25,181,29,67]). */
@@ -182,8 +184,12 @@ function hasDiscriminator(data: Uint8Array, discriminator: readonly number[]): b
 function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
-async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  return memoizedGetProgramDerivedAddress(DEFITUNA_PROGRAM_ID, [
+async function deriveTickArrayPda(
+  program: Address,
+  pool: Address,
+  startTick: number,
+): Promise<Address> {
+  return memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     new TextEncoder().encode(String(startTick)),
@@ -235,6 +241,7 @@ function scanTickArray(data: Uint8Array, startTick: number, tickSpacing: number)
  * per-array scan above instead of a fixed-offset walk.
  */
 async function resolveWindow(
+  program: Address,
   load: AccountLoader,
   pool: Address,
   tickCurrentIndex: number,
@@ -247,7 +254,7 @@ async function resolveWindow(
     number,
   ];
   const tickArrays = (await Promise.all(
-    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+    startTicks.map((start) => deriveTickArrayPda(program, pool, start)),
   )) as [Address, Address, Address];
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
   // rejection is re-thrown only if the readable prefix actually reaches it.
@@ -312,10 +319,14 @@ async function resolveWindow(
   return { tickArrays, startTicks, boundaries, edge, readable, hasActiveOrder };
 }
 
-/** Fetch + decode one FusionPool and freeze both directions' boundary windows. Read-only against the loader. */
+/**
+ * Fetch + decode one FusionPool and freeze both directions' boundary windows. Read-only against the
+ * loader. Its tick arrays are derived under `program`: DefiTuna's on Solana's mainnet unless given.
+ */
 export async function fetchDefiTunaPoolConfig(
   owned: OwnedAccountLoader,
   pool: Address,
+  program: Address = DEFITUNA_PROGRAM_ID,
 ): Promise<DefiTunaPoolConfig> {
   const load = accountDataLoader(owned);
   const data = await load(pool);
@@ -361,8 +372,8 @@ export async function fetchDefiTunaPoolConfig(
   const tickSpacing = Number(readUintLE(data, OFF_TICK_SPACING, 2));
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
   const [aToB, bToA] = await Promise.all([
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, true),
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, false),
   ]);
 
   return {

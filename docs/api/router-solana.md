@@ -60,6 +60,27 @@ writes the same bytes itself too, because a call into `…Data` would cost it ab
 | OpenBook v2      | `opnb2LAfJYbRMAHHvqjCwQxanZn7ReEHp1k81EohpZb`  |                   | `openbookV2AtLimit`      | `openbookV2Cpi`      | `openbookV2Data`, `openbookV2LotsData`     |
 | Manifest         | `MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms`  |                   | `manifest` (no limit)    | `manifestCpi`        | `manifestData`                             |
 
+The programs in the table are mainnet's. A venue's program is its cluster's: the library writes
+none, and each function's guard reads its venue's from a define the compile supplies. The SDK's
+compiles for a Solana chain supply them for its cluster. A raw `compile()` of the Solana arm takes
+them from `svmRouterDefines(cluster)` in `@eco-incorp/sauce/svm` (`"mainnet-beta"` or `"devnet"`),
+a record of 256-bit values, written as the `[name, value]` text pairs the compiler's `defines`
+takes, and fails, naming the define, without them:
+
+```ts
+import { compile } from "@eco-incorp/sauce/compiler";
+import { svmRouterDefines } from "@eco-incorp/sauce/svm";
+
+const defines = Object.entries(svmRouterDefines("devnet")).map(
+  ([name, value]): [string, string] => [name, value.toString()],
+);
+compile({ target: "svm", resolve, resolvePackage, defines });
+```
+
+For a venue the cluster lacks the define is an address no program can be deployed at, so a swap
+there reverts as one at another venue's pool does. [Solana Devnet](../reference/chains/solana-devnet.md)
+lists devnet's venues and programs.
+
 ### Arguments
 
 The forms at a price take:

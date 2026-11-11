@@ -41,7 +41,8 @@ import {
   type SafeWrite,
   type TokenImports,
 } from "./token-rewrite.js";
-import { resolveTokenMap, svmTokenRows } from "./token-registry.js";
+import { resolveTokenMap, svmClusterOf, svmTokenRows } from "./token-registry.js";
+import { svmRouterDefines } from "../svm/venue-table.js";
 import { rewriteSvmTokenSyntax } from "./svm-token-rewrite.js";
 import { rewriteContractResults } from "./contract-results.js";
 import {
@@ -180,6 +181,29 @@ interface CompileInputs {
   readonly stops: readonly string[];
 }
 
+/**
+ * The prefix of the define names the SDK reserves for its own values: each Solana venue's program,
+ * which `@sauce/router`'s guards read (`svm/venue-table.ts#SVM_ROUTER_PROGRAM_DEFINES`).
+ */
+const RESERVED_DEFINE_PREFIX = "__SAUCE_";
+
+/**
+ * Refuses a caller's define or token named with {@link RESERVED_DEFINE_PREFIX}: a define reaches
+ * every module the compile loads, so a caller's value would replace the cluster's in a guard.
+ */
+function refuseReservedNames(
+  what: "define" | "token",
+  record: Readonly<Record<string, unknown>> | undefined,
+): void {
+  const name = Object.keys(record ?? {}).find((key) => key.startsWith(RESERVED_DEFINE_PREFIX));
+  if (name === undefined) return;
+  throw new RangeError(
+    `\`${name}\` is reserved: \`${RESERVED_DEFINE_PREFIX}\` names carry the SDK's own values ` +
+      `(each Solana venue's program, which \`@sauce/router\`'s guards check), so a ${what} cannot ` +
+      `be given one. Rename your ${what}.`,
+  );
+}
+
 /** `options` read once (`CompileInputs`): each property read one time, each list and record copied. */
 function readCompileInputs(
   options: SauceCompileOptions,
@@ -187,6 +211,8 @@ function readCompileInputs(
 ): CompileInputs {
   const { target, tokens, resolve, resolvePackage, defines, contracts, accessors, ambient } =
     options;
+  refuseReservedNames("define", defines);
+  refuseReservedNames("token", tokens);
 
   return {
     target,
@@ -226,25 +252,31 @@ function definesOf(
   return tokens === undefined ? sharedChainDefines(chain) : chainDefines(chain, { tokens });
 }
 
-/** The chain's defines a compile starts from: its token map, then its scope's values, merged once
- *  for each pair of them. A chain's own map and values are one object each on every compile
- *  (`resolveTokenMap`, `sharedChainDefines`), so their merge is kept, by both. */
+/** The chain's defines a compile starts from: its token map, then its scope's values, then on
+ *  Solana the cluster's `@sauce/router` program defines (`svmRouterDefines`), last so that nothing
+ *  replaces them, merged once for each of them. A chain's own map, values and program defines are
+ *  one object each on every compile (`resolveTokenMap`, `sharedChainDefines`, `svmRouterDefines`),
+ *  so their merge is kept. */
 const baseDefinesCache = new WeakMap<
   ReadonlyMap<string, bigint>,
-  WeakMap<object, Readonly<Record<string, DefineValue>>>
+  WeakMap<object, WeakMap<object, Readonly<Record<string, DefineValue>>>>
 >();
 const NO_SCOPE = {};
+const NO_PROGRAMS = {};
 
 function baseDefines(
   tokenMap: ReadonlyMap<string, bigint>,
   scoped: Readonly<Record<string, DefineValue>> | undefined,
+  programs: Readonly<Record<string, bigint>> | undefined,
 ): Readonly<Record<string, DefineValue>> {
   const byScope = baseDefinesCache.get(tokenMap) ?? new WeakMap();
   baseDefinesCache.set(tokenMap, byScope);
-  let merged = byScope.get(scoped ?? NO_SCOPE);
+  const byPrograms = byScope.get(scoped ?? NO_SCOPE) ?? new WeakMap();
+  byScope.set(scoped ?? NO_SCOPE, byPrograms);
+  let merged = byPrograms.get(programs ?? NO_PROGRAMS);
   if (merged === undefined) {
-    merged = Object.freeze({ ...Object.fromEntries(tokenMap), ...scoped });
-    byScope.set(scoped ?? NO_SCOPE, merged);
+    merged = Object.freeze({ ...Object.fromEntries(tokenMap), ...scoped, ...programs });
+    byPrograms.set(programs ?? NO_PROGRAMS, merged);
   }
   return merged;
 }
@@ -548,18 +580,27 @@ function compileForChain(
   // a latent gap where a direct compileSauceRoute(..., { tokens }) call emitted a bare `USDC`
   // token argument (the symbol, not a literal) with no `USDC` define at all. Then THIS chain's
   // scoped values, when `compileSauceProgram` supplied a scope (ambient.ts#chainDefines resolves the
-  // SAME registry, so the token symbols agree), and the caller's own defines over both.
+  // SAME registry, so the token symbols agree), and the caller's own defines over both. The
+  // cluster's program defines go last, over the caller's too, though a caller's reserved name is
+  // already refused (`refuseReservedNames`).
   const scoped = scope.chainDefines?.(chain);
+  // On Solana, each venue's program on the chain's cluster, which `@sauce/router`'s guards read
+  // (`svm/venue-table.ts#svmRouterDefines`): the library writes none, so every Solana compile names
+  // its cluster's.
+  const cluster = svmClusterOf(chain);
+  const programs = cluster === undefined ? undefined : svmRouterDefines(cluster);
   // The chain's values are one frozen object for a chain's own map and scope (`baseDefines`), handed
   // over as they are when the caller adds none, so the compile adapter converts them once.
   const chainValues =
-    tokenMap.size > 0 || scoped !== undefined ? baseDefines(tokenMap, scoped) : undefined;
+    tokenMap.size > 0 || scoped !== undefined || programs !== undefined
+      ? baseDefines(tokenMap, scoped, programs)
+      : undefined;
   const defines: Readonly<Record<string, DefineValue>> | undefined =
     chainValues === undefined
       ? inputs.defines
       : inputs.defines === undefined || Object.keys(inputs.defines).length === 0
         ? chainValues
-        : { ...chainValues, ...inputs.defines };
+        : { ...chainValues, ...inputs.defines, ...programs };
 
   // The names the compile binds beside the source: the caller's defines, its contract bindings and
   // each name its ambient modules export that a pass reads as the SDK's: the Pot's two names,
@@ -771,6 +812,7 @@ function compileForChain(
         source,
         svmTokenValues(tokenMap, inputs.defines),
         svmTokenRows(chain),
+        cluster!,
         // The caller's values, which a holder may name as a key: its defines.
         new Map(
           Object.entries(inputs.defines ?? {}).filter(

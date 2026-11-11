@@ -26,22 +26,23 @@ import {
 import type { Address } from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { svmTokenRows } from "../routes/token-registry.js";
+import { svmClusterOf, svmTokenRows, type SvmTokenCluster } from "../routes/token-registry.js";
 import { svmPublicKey } from "../svm/account-names.js";
 import {
   svmAmmConfig,
+  svmKeyedVenue,
   svmPoolCandidates,
   svmPoolKeyProblem,
-  SVM_KEYED_VENUES,
+  SVM_KEYED_NAMESPACES,
 } from "../svm/pool-keys.js";
 import { coalescingOwnedAccountLoader, kitBatchAccountLoader } from "../svm/loader.js";
 import type { OwnedAccountLoader } from "../svm/venues/types.js";
 import {
   PHOENIX_BASE_MINT_AT,
   SVM_CLMM_LAYOUT,
-  SVM_PRICE_LIMIT_VENUES,
   svmClmmSlot,
   svmPhoenixSlot,
+  svmPriceLimitVenues,
   type SvmPoolLayout,
   type SvmPriceLimitVenue,
   type SvmSlot,
@@ -63,7 +64,7 @@ type Layout = SvmPoolLayout;
 type SvmVenue = SvmPriceLimitVenue;
 const CLMM = SVM_CLMM_LAYOUT;
 
-export { SVM_PRICE_LIMIT_VENUES, type SvmSlot };
+export type { SvmSlot };
 
 export interface SvmPoolsInput {
   readonly chain: CanonicalChain;
@@ -177,7 +178,8 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
   const skipped: { venue: string; pool: Address; why: string }[] = [];
   const checked: { venue: string; program: Address; pools: number; error?: string }[] = [];
 
-  for (const venue of SVM_PRICE_LIMIT_VENUES) {
+  const cluster = svmClusterOf(chain)!;
+  for (const venue of svmPriceLimitVenues(cluster)) {
     let found: { pubkey: Address; data: Uint8Array }[];
     try {
       found = await programAccounts(
@@ -204,7 +206,19 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
       const read =
         venue.layout === "phoenix"
           ? await phoenixPool(venue, pubkey, data, first, second, load)
-          : await clmmPool(rpc, ask, venue, pubkey, data, lower, higher, first, second, load);
+          : await clmmPool(
+              rpc,
+              ask,
+              venue,
+              cluster,
+              pubkey,
+              data,
+              lower,
+              higher,
+              first,
+              second,
+              load,
+            );
       if ("why" in read) skipped.push({ venue: venue.name, pool: pubkey, why: read.why });
       else listed.push(read);
     }
@@ -518,6 +532,7 @@ async function clmmPool(
   rpc: Rpc,
   ask: Ask,
   venue: SvmVenue,
+  cluster: SvmTokenCluster,
   pool: Address,
   data: Uint8Array,
   lower: Mint,
@@ -550,7 +565,7 @@ async function clmmPool(
     fee = le(data, 172, 2);
   }
   if (liquidity === 0n || sqrt === 0n) return { why: "no liquidity at its price" };
-  const key = keyOf(venue, pool, data, first, second);
+  const key = keyOf(venue, cluster, pool, data, first, second);
   const slots: Record<string, SvmSlot> = {};
   const unfilled: Record<string, string> = {};
   for (const pay of [first, second]) {
@@ -576,20 +591,25 @@ async function clmmPool(
 }
 
 /**
- * How a program finds `pool` by key, `<Venue>.pool(<first>, <second>, <key>)`: a whirlpool's,
- * DefiTuna's and Crema's tick spacing from its own bytes, with a whirlpool's fee tier after it where
- * the tier is not the spacing's static one; a Raydium-code pool's fee from its config, with the
- * config's tick spacing after it where the venue keeps another config at that fee. Only where that
- * key derives this pool; none where the SDK does not know the pool's config or fee tier.
+ * How a program finds `pool` by key on `cluster`, `<Venue>.pool(<first>, <second>, <key>)`: a
+ * whirlpool's, DefiTuna's and Crema's tick spacing from its own bytes, with a whirlpool's fee tier
+ * after it where the tier is not the spacing's static one; a Raydium-code pool's fee from its
+ * config, with the config's tick spacing after it where the venue keeps another config at that
+ * fee. Only where that key derives this pool; none where the SDK does not know the pool's config or
+ * fee tier.
  */
 function keyOf(
   venue: SvmVenue,
+  cluster: SvmTokenCluster,
   pool: Address,
   data: Uint8Array,
   first: Mint,
   second: Mint,
 ): string | undefined {
-  const keyed = Object.values(SVM_KEYED_VENUES).find((one) => one.program === venue.program);
+  const namespace = Object.keys(SVM_KEYED_NAMESPACES).find(
+    (one) => SVM_KEYED_NAMESPACES[one]!.venue === venue.venue,
+  );
+  const keyed = namespace === undefined ? undefined : svmKeyedVenue(namespace, cluster);
   if (keyed === undefined) return undefined;
   let key: bigint;
   let refinement: bigint | undefined;
@@ -609,8 +629,15 @@ function keyOf(
     if (offset === undefined) return undefined;
     key = le(data, offset, 2);
   }
-  if (svmPoolKeyProblem(keyed.namespace, key, refinement) !== undefined) return undefined;
-  const candidates = svmPoolCandidates(keyed.namespace, first.mint, second.mint, key, refinement);
+  if (svmPoolKeyProblem(cluster, keyed.namespace, key, refinement) !== undefined) return undefined;
+  const candidates = svmPoolCandidates(
+    cluster,
+    keyed.namespace,
+    first.mint,
+    second.mint,
+    key,
+    refinement,
+  );
   if (!candidates.some((one) => one.pool === pool)) return undefined;
 
   return `${keyed.namespace}.pool(${first.symbol}, ${second.symbol}, ${key}${refinement === undefined ? "" : `, ${refinement}`})`;
@@ -661,7 +688,7 @@ async function phoenixPool(
           ),
     );
   }
-  const slot = await svmPhoenixSlot(market, load);
+  const slot = await svmPhoenixSlot(venue.program, market, load);
 
   return {
     venue: venue.name,

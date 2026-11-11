@@ -18,52 +18,54 @@
  * The orders are those `router.svm.js`'s functions send, which its tests check, account for account
  * and role for role, against the instructions eco-incorp/sauce-recipes builds for the same pools.
  */
+import { svmMainnetProgram } from "./venue-table.js";
 
 /** The venues `@sauce/router`'s Solana arm swaps, by the recipes' venue names: at a limit, then an
- *  exact input. */
+ *  exact input. Each `program` is the venue's on Solana's mainnet; the ten a program names by
+ *  namespace (`venue-table.ts`) keep their program on each cluster, `svmVenueRow(venue, cluster)`. */
 export const ROUTER_SVM_VENUES = {
   "raydium-clmm": {
-    program: "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+    program: svmMainnetProgram("raydium-clmm"),
     data: "raydiumClmmData",
     cpi: "raydiumClmmCpi",
   },
   "pancakeswap-clmm": {
-    program: "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
+    program: svmMainnetProgram("pancakeswap-clmm"),
     data: "pancakeswapClmmData",
     cpi: "pancakeswapClmmCpi",
   },
   byreal: {
-    program: "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
+    program: svmMainnetProgram("byreal"),
     data: "byrealData",
     cpi: "byrealCpi",
   },
   "stabble-clmm": {
-    program: "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
+    program: svmMainnetProgram("stabble-clmm"),
     data: "stabbleClmmData",
     cpi: "stabbleClmmCpi",
   },
   "orca-whirlpool": {
-    program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+    program: svmMainnetProgram("orca-whirlpool"),
     data: "orcaWhirlpoolData",
     cpi: "orcaWhirlpoolCpi",
   },
   cropper: {
-    program: "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
+    program: svmMainnetProgram("cropper"),
     data: "cropperData",
     cpi: "cropperCpi",
   },
   defituna: {
-    program: "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
+    program: svmMainnetProgram("defituna"),
     data: "defitunaData",
     cpi: "defitunaCpi",
   },
   crema: {
-    program: "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+    program: svmMainnetProgram("crema"),
     data: "cremaData",
     cpi: "cremaCpi",
   },
   phoenix: {
-    program: "PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY",
+    program: svmMainnetProgram("phoenix"),
     data: "phoenixData",
     cpi: "phoenixCpi",
   },
@@ -224,7 +226,7 @@ export const ROUTER_SVM_VENUES = {
     cpi: "guacswapCpi",
   },
   "meteora-dlmm": {
-    program: "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo",
+    program: svmMainnetProgram("meteora-dlmm"),
     data: "meteoraDlmmData",
     cpi: "meteoraDlmmCpi",
   },
