@@ -20,6 +20,7 @@ it with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsign
 transaction for another wallet to sign.
 
 - [`sauce compile`](#sauce-compile): Compile a SauceScript program; print its bytecode
+- [`sauce where`](#sauce-where): Compile a program for every chain and list the ones it compiles on
 - [`sauce actions`](#sauce-actions): Lower an actions document to SauceScript for a chain; print the source and bytecode
 - [`sauce simulate`](#sauce-simulate): Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
 - [`sauce run`](#sauce-run): Compile, sign, send and wait for the cook on your Pot
@@ -57,6 +58,7 @@ Usage: sauce <command> [options]
 
 Commands:
   compile   Compile a SauceScript program; print its bytecode
+  where     Compile a program for every chain and list the ones it compiles on
   actions   Lower an actions document to SauceScript for a chain; print the source and bytecode
   simulate  Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
   run       Compile, sign, send and wait for the cook on your Pot
@@ -154,6 +156,33 @@ A --define the file never reads is named on stderr: it changes nothing.
 Examples:
   sauce compile pay.sauce.ts --chain base
   sauce compile split.sauce.ts --chain base --json --args 0x… 1000000
+```
+
+## `sauce where`
+
+```text
+Compile a program for every chain and list the ones it compiles on.
+
+Usage: sauce where <file | -> [--chains <slug,…>] [--supported] [--json]
+
+Options:
+      --chains <slug,…>   Only these chains, comma-separated (default: every chain Sauce knows)
+      --supported         Only the chains transactions are built and sent on
+      --source-dir <dir>  Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --json              Print one JSON object instead
+  -h, --help              Show this help
+      --no-update-check   No notice of a newer sauce, and no registry read for one
+
+Compiles the file once for each chain, the same compile `sauce compile` runs, and lists
+the chains it compiles on with the program's size, then the ones it does not with the
+first reason: most often a token or protocol that chain has no name for. It reads no
+chain and needs no key, so it answers whether a program written for Base also runs on
+Ethereum or Solana before a cook is built anywhere.
+
+Examples:
+  sauce where pay.sauce.ts
+  sauce where swap.sauce.ts --supported
+  sauce where pay.sauce.ts --chains base,ethereum,solana --json
 ```
 
 ## `sauce actions`
