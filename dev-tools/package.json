@@ -26,7 +26,7 @@
     "start:fork": "./scripts/start-fork.sh",
     "stop": "./scripts/stop-local.sh",
     "sync-price": "npx tsx scripts/sync-price.ts",
-    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts && tsx --test --test-concurrency=1 --test-timeout=120000 test/testing/node.test.ts test/testing/program.test.ts test/testing/local.test.ts test/testing/base.test.ts test/testing/record.test.ts test/testing/solana-local.test.ts test/testing/solana-record.test.ts test/testing/solana-examples.test.ts",
+    "test": "npx tsx test/examples.test.ts && npx tsx test/runner.test.ts && npx tsx test/svm-local.test.ts && tsx --test --test-concurrency=1 --test-timeout=120000 test/testing/examples.test.ts test/testing/node.test.ts test/testing/program.test.ts test/testing/local.test.ts test/testing/base.test.ts test/testing/record.test.ts test/testing/solana-local.test.ts test/testing/solana-record.test.ts test/testing/solana-examples.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
     "build": "tsc -p tsconfig.build.json && node -e \"require('fs').copyFileSync('src/testing/recorder.mjs', 'dist/testing/recorder.mjs')\""
   },
@@ -39,7 +39,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.1",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.2",
     "@uniswap/v3-core": "^1.0.1",
     "dotenv": "^17.3.1",
     "viem": "^2.45.1"

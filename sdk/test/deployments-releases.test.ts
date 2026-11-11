@@ -233,21 +233,26 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     );
   });
 
-  it("pairs compiler 2.6.1 only with the released TRY and capped-copy engines", () => {
-    const current = v12ReleaseSet("2.6.1");
-    expect(current["v12-evm"].version).toBe("1.3.0");
-    expect(current["kitchen-evm"].version).toBe("1.3.0");
-    expect(current["v12-svm"].version).toBe("1.4.0");
-    expect(current["kitchen-svm"].version).toBe("1.1.0");
-    const previous = v12ReleaseSet("2.5.0");
-    for (const target of ["evm", "svm"] as const) {
-      const component = target === "evm" ? "v12-evm" : "v12-svm";
-      expect(() =>
-        assertEngineRunsCompiler(target, previous[component].engine!, "2.6.1"),
-      ).toThrow();
-      expect(() => assertEngineRunsCompiler(target, current[component].engine!, "2.5.0")).toThrow();
-    }
-  });
+  it.each(["2.6.1", "2.6.2"])(
+    "pairs compiler %s only with the released TRY and capped-copy engines",
+    (compiler) => {
+      const current = v12ReleaseSet(compiler);
+      expect(current["v12-evm"].version).toBe("1.3.0");
+      expect(current["kitchen-evm"].version).toBe("1.3.0");
+      expect(current["v12-svm"].version).toBe("1.4.0");
+      expect(current["kitchen-svm"].version).toBe("1.1.0");
+      const previous = v12ReleaseSet("2.5.0");
+      for (const target of ["evm", "svm"] as const) {
+        const component = target === "evm" ? "v12-evm" : "v12-svm";
+        expect(() =>
+          assertEngineRunsCompiler(target, previous[component].engine!, compiler),
+        ).toThrow();
+        expect(() =>
+          assertEngineRunsCompiler(target, current[component].engine!, "2.5.0"),
+        ).toThrow();
+      }
+    },
+  );
 
   it("compares EVM engines case-insensitively", () => {
     const evm = v12ReleaseSet("2.3.0")["v12-evm"].engine!;

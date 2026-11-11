@@ -99,6 +99,10 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
+The compiler 2.6.2 settlement program also rejects dirty token and recipient address words before
+calling a token. Historical 410-byte programs did not perform those entry checks; verifier strictness
+does not depend on them.
+
 This surface verifies the pinned **ABI-v1** settlement artifact. Historical compact-encoded
 payloads are not accepted by the settlement decoder. Compiler 2.6 produces ABI-v1 only.
 
@@ -166,11 +170,12 @@ program and reports the engine it names.
 program with a different length. Passing an empty list accepts no program; it
 does not fall back to the default pin.
 
-Four earlier builds of the settlement program can still be accepted when you list them. The last
+Five earlier builds of the settlement program can still be accepted when you list them. The last
 two predate the sweep following `SafeERC20`:
 
 | Built by                                   | `bytes` | Published in     |
 | ------------------------------------------ | ------- | ---------------- |
+| Compiler 2.6.0 and 2.6.1                   | 410     | 0.99.16 – 1.0.0  |
 | Compiler 2.4.0 and 2.5.0                   | 435     | 0.99.5 – 0.99.15 |
 | Compiler 2.3.0, with the `SafeERC20` sweep | 435     | no release       |
 | Compiler 2.3.0                             | 356     | 0.99.2 – 0.99.4  |
@@ -178,11 +183,29 @@ two predate the sweep following `SafeERC20`:
 
 Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
 editor shows on hover. The current pin is
-`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 410-byte program
-produced by compilers 2.6.0 and 2.6.1, which compile it to the same bytes. An explicit list replaces
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 426-byte program
+produced by compiler 2.6.2. An explicit list replaces
 the default, so include the current pin
 alongside any historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
 adds one.
+
+SDK 1.0.0 verifiers reject the new 426-byte payload by default (`TOKENS_OFFSET`, because the old
+410-byte split precedes the hash check). Upgrade the verifier or add
+`--pin 0x1031878f71f7e8c62c3c8300027049cea2278d9674457d51c731bf812c14e40c:426`. The new default likewise requires an explicit
+410-byte historical pin to accept SDK 1.0.0 payloads.
+
+`decodeSettleCall` and `extractEvmSettleFromCalls` instead return `null` for an unrecognized program;
+they do not surface that error. An SDK 1.0.0 observer can silently stop recognizing new 426-byte
+cooks, and a new default observer can likewise miss historical 410-byte cooks.
+
+A bare hash in an accepted-pin list uses the **current** program length. After this upgrade,
+`validateSettleProgram(payload410, [hash410])` therefore splits at 426 bytes and fails with
+`TOKENS_OFFSET`. Pass `{ hash: hash410, bytes: 410 }` instead, including in observer pin lists.
+
+**Roll out verifiers before producers.** Upgrade observers and validators to accept both the current
+`{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: 426 }` pin and the explicit historical 410-byte pin, or add
+the new 426-byte pin to existing verifiers. Confirm both payload versions are recognized before
+moving producers to compiler 2.6.2. Keep the historical pin while old payloads still need recognition.
 
 A compiler change can change program bytes without changing a line of the source. So an SDK or
 compiler upgrade is the moment to check two separate things: which program version your application

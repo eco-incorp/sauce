@@ -3,7 +3,7 @@ import type { Hex } from "viem";
 import type { SettleFailureCode } from "./decode.js";
 
 /**
- * The compiled `recipes/settle.sauce.ts` program — 410 bytes, measured by compiling it with the
+ * The compiled `recipes/settle.sauce.ts` program — 426 bytes, measured by compiling it with the
  * published Rust compiler (`@eco-incorp/sauce-compiler`) against the package's own
  * `artifacts/IERC20.json`.
  *
@@ -13,7 +13,7 @@ import type { SettleFailureCode } from "./decode.js";
  * recompiles this and compares it: a LIVE pin.
  */
 export const SETTLE_PROGRAM: Hex =
-  "0xa50201fad1514702000eb19000b6d002019a0120955402019a21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200a6b00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d14642020197b1d8f1e3e4d0f1e3e4e52295549b010121020065b0d40201ba01209554f1e3e4e50201da012095540100d4970100e164990024010100000470a08231000462a301a10120970100d348020104b1d2d147020104b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d146020112b1020188b0d0d6970100e164990024010100000470a08231000462a301a10120970100d14802017eb1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302016fb1d0a101200100e19701014302016bb19000b602017db00100d3d997724502017db19000b6e00101f121e1e0020106b0e101208ae1d18905200000000031009000b6" as Hex;
+  "0xa502020ad1514702000eb19000b6d00201aa012095540201aa21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200aeb00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d146420201a7b1d8f1e3e4d0f1e3e4e5229554d001a0350201a7b19b010136020065b0d40201ca01209554f1e3e4e50201ea01209554d001a0350201a7b10100d4970100e164990024010100000470a08231000462a301a10120970100d348020114b1d2d147020114b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d147020198b1d0d6970100e164990024010100000470a08231000462a301a10120970100d14802018ab1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302017bb1d0a101200100e197010143020177b19000b6020189b00100d3d9977245020189b19000b6e00101f136e1e0d551d14602011eb1e101208ae1d18905200000000031009000b6" as Hex;
 
 export interface ConformanceVector {
   name: string;
@@ -114,8 +114,8 @@ export interface RejectionVector {
  * engine RUNS them and produces exactly the behavior of the canonical payload beside them, so they
  * are distinct byte strings with identical meaning. A decoder that accepts any of them is not
  * injective, and `encodeSettleProgram` re-encode-and-compare stops agreeing with decode-and-compare.
- * `upperBytes` is the sharpest: the engine masks a call target to 160 bits, so twelve arbitrary
- * bytes ride along in a token word and sweep the very same token.
+ * The historical 410-byte program also accepted dirty token and recipient words. The current
+ * 426-byte program checks both addresses itself; those cases remain decoder rejections below.
  *
  * Each vector's `code` is reachable under ANY check order, so a Go or Solidity reimplementation is not
  * required to match this decoder's sequence to pass. `tokensPointer` is the one that has to be built
@@ -143,19 +143,15 @@ export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
     name: "upperBytes — tokens[0] carries 0xff in all 12 bytes above its address",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001ffffffffffffffffffffffff833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
-    engineAccepts: true,
-    sweepsIdentically: true,
+    engineAccepts: false,
+    sweepsIdentically: false,
   },
   {
     name: "dirtyRecipient — the recipient word carries 0xff above its address",
     args: "0x00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000ffffffffffffffffffffffff42000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "DIRTY_ADDRESS_WORD",
-    // The engine passes the RECIPIENT word through unmasked -- unlike a token word, which it masks as
-    // a CALL target -- so it executes this payload and emits `a9059cbb <dirty recipient> ...`. The
-    // revert against a solc ERC20 is that callee's own dirty-`address` ABI check, not the engine's.
-    // A token that does not perform it (Vyper, older solc, a raw-forwarding proxy) delivers to the
-    // same recipient as the canonical payload, which is the non-injectivity §4 exists to refuse.
-    engineAccepts: true,
+    // Compiler 2.6.2 checks the entry Address before any token call.
+    engineAccepts: false,
     sweepsIdentically: false,
   },
   {
@@ -169,11 +165,8 @@ export const SETTLE_REJECTIONS: readonly RejectionVector[] = [
     name: "zeroRecipient — the recipient word is 0",
     args: "0x0000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda02913" as Hex,
     code: "ZERO_RECIPIENT",
-    // Same fact as `dirtyRecipient`, not a separate measurement: the engine passes the recipient word
-    // through unmasked and performs no check on it, so zero is simply another value of that word --
-    // there is no mechanism by which the engine would single it out. A standard solc ERC20's own
-    // zero-address check in `_transfer` is what refuses this; a callee that permits it sends the
-    // tokens to address(0).
+    // Zero passes the program's 160-bit range check, unlike a dirty recipient word.
+    // A standard token rejects it in `_transfer`; a permissive token can send to address(0).
     engineAccepts: true,
     sweepsIdentically: false,
   },

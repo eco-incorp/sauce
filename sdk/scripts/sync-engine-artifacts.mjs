@@ -681,14 +681,14 @@ const write = (name, artifact) => {
 // cover, cannot read them. Every artifact this script writes also ships inside the PUBLIC
 // `@eco-incorp/sauce` package on npmjs.com (`sdk/dist/artifacts`, written by this script in the
 // release build). A row names the published version that carries it — `npm: { version,
-// integrity }`, committed once that version is out — and this mode takes the artifacts from that
-// tarball. It never reads the GitHub credential and never touches the per-tag cache the private
+// integrity, compiler? }`. `compiler` explicitly names an earlier source row with identical assets.
+// It never reads the GitHub credential and never touches the per-tag cache the private
 // path keeps, so the two sources never mix; the private path never falls back to it.
 //
 // The same guarantees, all checked before anything is written:
 //   - the tarball hashes to the integrity COMMITTED in the row, not merely the one the registry
 //     reports, so it is the exact package the row was pinned to;
-//   - its own releases.json carries this row unchanged, so it was built for this compiler;
+//   - its own releases.json carries the committed source row; source and target assets are identical;
 //   - every release asset it carries matches this row's digest, exactly as the private path checks
 //     it: both SVM engines, both wire files, the Kitchen and its IDL, the EVM creation code;
 //   - what it carries DERIVED rather than as the release asset — the ABIs out of the two abis.json
@@ -771,20 +771,27 @@ function syncFromPublicPackage() {
   const artifact = (name) => read(`sdk/dist/artifacts/${name}`);
   const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
 
-  // Built from this row. A later package may carry an earlier one's `npm` pin, so that is left out.
+  // An explicit source compiler avoids requiring an unpublished SDK for a compiler-only bump.
+  const sourceCompiler = SET.npm.compiler ?? COMPILER;
+  const sourceSet = RELEASE_SETS.find((row) => row.compiler === sourceCompiler);
   const bare = (row) => {
     const copy = { ...row };
     delete copy.npm;
+    delete copy.compiler;
     return copy;
   };
   const shipped = parse(read("sdk/dist/deployments/releases.json"));
-  const shippedRow = shipped.releases?.find((row) => row.compiler === COMPILER);
+  const shippedRow = shipped.releases?.find((row) => row.compiler === sourceCompiler);
   if (
+    !sourceSet ||
     !shippedRow ||
-    !isDeepStrictEqual(bare(shippedRow), bare(SET)) ||
+    !isDeepStrictEqual(bare(shippedRow), bare(sourceSet)) ||
+    !isDeepStrictEqual(bare(sourceSet), bare(SET)) ||
     !isDeepStrictEqual(shipped.quoteRouter, RELEASE_TABLE.quoteRouter)
   ) {
-    refuse(`was not built from releases.json's ${COMPILER} row as committed here`);
+    refuse(
+      `does not carry the committed ${sourceCompiler} source row with the target ${COMPILER} assets`,
+    );
   }
 
   // Every release asset it carries, by this row's digest. `abis.json` is the one it carries only
@@ -826,7 +833,7 @@ function syncFromPublicPackage() {
   const same = (a, b) =>
     typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
   const held = {
-    compiler: deployments.compiler === COMPILER,
+    compiler: deployments.compiler === sourceCompiler,
     ...Object.fromEntries(
       ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].map((c) => [
         `${c} version`,
@@ -858,7 +865,12 @@ function syncFromPublicPackage() {
     refuse(`disagrees with releases.json's ${COMPILER} row on: ${disagree.join(", ")}`);
   }
 
-  // Verified: only now is anything written, byte for byte what the private path writes.
+  // Only compiler compatibility metadata changes; verified release artifacts remain byte-for-byte.
+  if (sourceCompiler !== COMPILER) {
+    derived.V12Deployments = Buffer.from(
+      `${JSON.stringify({ ...deployments, compiler: COMPILER }, null, 2)}\n`,
+    );
+  }
   for (const [name, bytes] of Object.entries(derived)) {
     for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), bytes);
   }

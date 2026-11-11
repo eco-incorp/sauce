@@ -304,9 +304,12 @@ decided to accept (`sauce verify --pin <hash:bytes>` on the command line).
 [Verifying settlement programs](verification.md#compiler-upgrades-and-historical-pins) lists the
 historical pins.
 
-Compiler 2.6 recompiles the bundled settlement program to 410 bytes with a new hash. The default
-validator accepts that new pin only. To keep accepting a 2.4/2.5 payload, add its 435-byte
-`{ hash, bytes }` record explicitly; do not weaken hash validation.
+Compiler 2.6.0 and 2.6.1 produced the historical 410-byte program. Compiler 2.6.2 produces the
+current 426-byte program with a new hash; default verifiers accept only their own version's pin.
+Upgrade verifiers to accept both explicit `{ hash, bytes }` records before upgrading producers.
+Observers can otherwise return `null` silently, while validation fails with `TOKENS_OFFSET`.
+Keep the explicit 410-byte pin for old payloads, or the 435-byte pin for 2.4/2.5 payloads, while
+those programs need recognition. Never weaken hash validation.
 
 ## Next
 
