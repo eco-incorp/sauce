@@ -375,6 +375,12 @@ try {
     const written = routerSvmDataTemplate('defituna', { aToB: true, minOut: 1n });
     assert.equal(Buffer.from(written.prefix).toString('hex'), 'f8c69e91e17587c8', 'routerSvmDataTemplate writes DefiTuna');
     console.log('Clean package install: the Solana router account orders and data templates resolve through ./svm');
+    // The Kitchen client builds an RPC client, so it is its own subpath and no part of the ./svm barrel.
+    const svmBarrel = await import('${name}/svm');
+    const svmClient = await import('${name}/svm/client');
+    assert.equal(typeof svmClient.createSauceSvmClient, 'function', 'createSauceSvmClient resolves through ./svm/client');
+    assert.ok(!('createSauceSvmClient' in svmBarrel), 'the ./svm barrel exports no RPC client');
+    console.log('Clean package install: the Kitchen client resolves through ./svm/client and not through ./svm');
     ${
       shipsEngine
         ? `

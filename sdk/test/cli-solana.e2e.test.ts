@@ -61,13 +61,13 @@ import {
   buildSetExecutionFeeInstruction,
   COOK_AND_PAY_DISCRIMINATOR,
   COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR,
-  createSauceSvmClient,
   deriveProgramDataPda,
   derivePotPda,
   getTransactionSize,
   KITCHEN_DISCRIMINATORS,
   MAX_POT_LEN,
 } from "../src/svm/index.js";
+import { createSauceSvmClient } from "../src/svm/client.js";
 import { svmSettleSource } from "../src/svm/recipes/index.js";
 import {
   describeSvm,

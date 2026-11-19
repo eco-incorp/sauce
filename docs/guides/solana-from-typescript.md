@@ -88,7 +88,7 @@ same manifest for a program that declares its `Account` parameters itself.
 
 ## Create the client
 
-`createSauceSvmClient` builds, signs and sends cooks. Its configuration:
+`createSauceSvmClient` builds, signs and sends cooks. It is the `@eco-incorp/sauce/svm/client` subpath, not part of `@eco-incorp/sauce/svm`, because it builds an RPC client of its own: `/svm` exports the client's types only, so a service that reads through its own transport imports `/svm` and loads no RPC client. Its configuration:
 
 | Field             | Required | What it is                                                                                                    |
 | ----------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
@@ -110,7 +110,8 @@ sign past a budget you set, and signs the quote as the cap:
 ```ts
 import { address, createSolanaRpc, type TransactionSigner } from "@solana/kit";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
-import { createSauceSvmClient, fetchExecutionFee, type CookVia } from "@eco-incorp/sauce/svm";
+import { fetchExecutionFee, type CookVia } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client";
 
 export async function createReleasedClient(
   rpcUrl: string,
@@ -140,11 +141,8 @@ nothing.
 ## Simulate a cook
 
 ```ts
-import {
-  createSauceSvmClient,
-  type AccountResolution,
-  type SauceSvmClientConfig,
-} from "@eco-incorp/sauce/svm";
+import type { AccountResolution, SauceSvmClientConfig } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client";
 import type { routes } from "@eco-incorp/sauce";
 
 export async function simulateProgram(

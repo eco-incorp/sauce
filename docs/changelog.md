@@ -107,6 +107,15 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 Compiler 2.6.2; engine and Kitchen versions are unchanged from SDK 1.0.0.
 
+### SDK
+
+- **Breaking:** `@eco-incorp/sauce/svm` no longer exports `createSauceSvmClient` at runtime. The function is the new
+  `@eco-incorp/sauce/svm/client` subpath, because it builds an RPC client (`createSolanaRpc`,
+  `createSolanaRpcSubscriptions`) and a runtime re-export made every `/svm` import load one. `/svm` still exports the
+  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types, `StagedBuffer`, `StagedArgs`,
+  `EnsuredLookupTable`) as types only. Migrate a value import:
+  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. Type imports from `/svm` need no change.
+
 ### Compiler and engines
 
 - Recompiled EVM settlement programs are now 426 bytes, not the historical 410 bytes shipped in

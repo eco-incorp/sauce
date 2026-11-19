@@ -15,7 +15,11 @@ export * from "./alt.js";
 export * from "./transaction.js";
 export * from "./kit.js";
 export * from "./send.js";
-export * from "./client.js";
+// `client.js` is re-exported as TYPES only: `createSauceSvmClient` builds an RPC client (`createSolanaRpc`,
+// `createSolanaRpcSubscriptions`), and a runtime re-export would make every `./svm` import load an RPC transport.
+// The function is the `@eco-incorp/sauce/svm/client` subpath; a consumer that only builds, resolves or reads
+// account data (a service behind its own RPC) imports this barrel with no RPC client in its module graph.
+export type * from "./client.js";
 export * from "./quoteSim.js";
 export * from "./cpi-probe.js";
 export * from "./loader.js";
