@@ -36,13 +36,11 @@ import {
   encodeErrorResult,
   encodeFunctionData,
   getAddress,
-  getContractAddress,
-  getCreate2Address,
   http,
-  keccak256,
   parseAbi,
   stringToHex,
   toFunctionSelector,
+  zeroAddress,
 } from "viem";
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -764,23 +762,36 @@ describeEvm("the opt-in CREATE3 release", () => {
     const potAbi = parseAbi([
       "function predictPot(address,bytes32,bool) view returns (address)",
       "function deployPot(address,bytes32,bool) returns (address)",
+      "function predictSharedPot(bytes32) view returns (address)",
     ]);
-    const child = getCreate2Address({
-      from: stack.kitchen,
-      salt: keccak256(
-        encodeAbiParameters([{ type: "address" }, { type: "bytes32" }, { type: "bool" }], args),
-      ),
-      bytecodeHash: set["kitchen-evm"].potProxyInitCodeHash as Hex,
-    });
-    const pot = getContractAddress({ from: child, nonce: 1n });
-    expect(
-      await publicClient.readContract({
+    for (const routerFixed of [false, true]) {
+      const onchain = await publicClient.readContract({
         address: stack.kitchen,
         abi: potAbi,
         functionName: "predictPot",
-        args,
-      }),
-    ).toBe(pot);
+        args: [OWNER.address, POT_SALT, routerFixed],
+      });
+      expect(v12PredictPot(OWNER.address, POT_SALT, { compiler: set.compiler, routerFixed })).toBe(
+        onchain,
+      );
+    }
+    const shared = await publicClient.readContract({
+      address: stack.kitchen,
+      abi: potAbi,
+      functionName: "predictSharedPot",
+      args: [POT_SALT],
+    });
+    expect(v12PredictPot(zeroAddress, POT_SALT, { compiler: set.compiler })).toBe(shared);
+    expect(() =>
+      v12PredictPot(zeroAddress, POT_SALT, { compiler: set.compiler, routerFixed: false }),
+    ).toThrow("shared Pots always have a fixed Router");
+    expect(() => v12PredictPot(OWNER.address, POT_SALT, { compiler: "2.6.2" })).toThrow(
+      "has no pinned CREATE3 Kitchen",
+    );
+    const pot = v12PredictPot(OWNER.address, POT_SALT, {
+      compiler: set.compiler,
+      routerFixed: true,
+    });
     expect(
       await sendAs(
         OWNER,

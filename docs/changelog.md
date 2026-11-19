@@ -113,6 +113,9 @@ The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and 
 SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
 Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
 their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
+Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen)
+to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
+CREATE3 Pots. Omitting the release selection still uses CREATE2.
 
 ### Compiler and engines
 
