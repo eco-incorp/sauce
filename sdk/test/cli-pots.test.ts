@@ -58,8 +58,8 @@ import {
   svmPotsCreated,
 } from "../src/cli/pots.js";
 import {
-  sdkCompilerVersion,
   V12_RELEASE_SETS,
+  v12DeployedReleaseSet,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
@@ -111,12 +111,13 @@ const clientOf = (chainId: number, reads: { hash?: Hex; gate?: Hex } = {}) =>
     },
   }) as unknown as PublicClient;
 
-const own = V12_RELEASE_SETS.find((set) => set.compiler === sdkCompilerVersion())!;
+const own = v12DeployedReleaseSet();
+const create2Sets = V12_RELEASE_SETS.filter((set) => set["kitchen-evm"].potInitCodeHash !== null);
 const KITCHEN = getAddress(own["kitchen-evm"].kitchen!);
 
 describe("which release minted an EVM Pot", () => {
-  it("tells every recorded release, and each kind of Pot, from the address alone", () => {
-    for (const set of V12_RELEASE_SETS) {
+  it("tells every recorded CREATE2 release and each legacy Pot kind from the address alone", () => {
+    for (const set of create2Sets) {
       const { kitchen, potInitCodeHash } = set["kitchen-evm"];
       const cases = [
         { owner: OWNER, fixed: false, kind: "private" },
@@ -147,7 +148,7 @@ describe("which release minted an EVM Pot", () => {
 
 describe("the release a Kitchen mints, and the SDK releases that pair with it", () => {
   it("tells a release by its Kitchen and the Pot init-code hash it reports", () => {
-    for (const set of V12_RELEASE_SETS) {
+    for (const set of create2Sets) {
       const { kitchen, potInitCodeHash } = set["kitchen-evm"];
       const family = evmKitchenRelease(
         kitchen!,
