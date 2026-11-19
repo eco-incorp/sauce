@@ -130,6 +130,9 @@ CREATE3 Pots. Omitting the release selection still uses CREATE2.
   checks, bytes and gas/CU cost. The compiler's
   [release stability notes](https://github.com/eco-incorp/v12/blob/40a75a11e94658d72ef892bb8e10568135c19eb0/compiler/STABILITY.md)
   describe the checks and exceptions.
+- Compiler 2.6.3 resolves bare package imports per importer. An ambient package uses the entry
+  program's mapping, not a dependency's mapping for the same name. The SDK still refuses a
+  bare `pot` if that ambient package exports `pot`.
 
 ## SDK 1.0.0 — 2026-10-27
 
