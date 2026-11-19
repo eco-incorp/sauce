@@ -304,10 +304,11 @@ from an earlier row can misread its programs, and an earlier compiler's programs
 can fail on a newer engine. `V12_RELEASE_SETS` (from
 `@eco-incorp/sauce/deployments`) holds one row per compiler version: the four v12
 releases that compiler pairs with, each asset's digest, and each engine's
-address or program id. `v12ReleaseSet()` describes the opt-in release artifacts for
-the installed compiler. `v12DeployedReleaseSet()` describes the compatible network
-defaults used by `v12EngineAddress()` and `v12SvmEngineProgramId()`. Availability of
-new artifacts does not move those defaults.
+address or program id. `v12ReleaseSet()` with no argument is the release the SDK's
+network defaults come from, the one `v12EngineAddress()` and `v12SvmEngineProgramId()`
+name (the same as `v12DeployedReleaseSet()`). `v12OptInReleaseSet()` is the installed
+compiler's own row, whose opt-in artifacts may not be deployed anywhere. Availability of
+new artifacts does not move the defaults.
 
 Every SDK builder that names an engine — `v12Pot.encodeCook`,
 `routes.buildSauceEvmCall`, the SVM engine instructions and the Kitchen cook
@@ -319,13 +320,14 @@ one you deployed yourself, is not refused: the SDK cannot tell what it is.
 ```ts
 import { assertEngineRunsCompiler, v12ReleaseSet } from "@eco-incorp/sauce/deployments";
 
-const set = v12ReleaseSet(); // this SDK's compiler and the four releases it pairs with
+const set = v12ReleaseSet(); // the release the SDK's network defaults come from
 console.log(set.compiler, set["v12-evm"].version, set["v12-svm"].version);
-assertEngineRunsCompiler("evm", set["v12-evm"].engine!); // passes: the pinned engine
+assertEngineRunsCompiler("evm", set["v12-evm"].engine!); // passes: the deployed engine
 ```
 
-`v12ReleaseSet(compiler)` returns another compiler's row, and throws for a
-compiler no row pairs with. When you run programs from a different compiler
+`v12ReleaseSet(compiler)` returns that compiler's own row, and throws for a
+compiler no row pairs with; `v12ReleaseSet(sdkCompilerVersion())` is
+`v12OptInReleaseSet()`. When you run programs from a different compiler
 version than the SDK's, pass that version as the third argument:
 `assertEngineRunsCompiler("evm", engine, compiler)`.
 

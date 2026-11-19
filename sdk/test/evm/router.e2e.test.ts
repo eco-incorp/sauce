@@ -45,7 +45,7 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12DeployedAddresses, v12ReleaseSet } from "../../src/deployments/index.js";
+import { v12DeployedAddresses, v12OptInReleaseSet } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
 import { deployReleaseStack, type ReleaseStackArtifacts } from "../../src/evm/release-stack.js";
@@ -732,7 +732,7 @@ describeEvm("the opt-in CREATE3 release", () => {
   });
 
   it("creates the predicted fixed Pot and pays an ordinary V3 swap through the release Router", async () => {
-    const set = v12ReleaseSet();
+    const set = v12OptInReleaseSet();
     const root = join(HERE, "../../src/artifacts/releases", set.compiler);
     const evm = join(root, `v12-evm-v${set["v12-evm"].version}`);
     const kitchenDir = join(root, `kitchen-evm-v${set["kitchen-evm"].version}`);

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { address } from "@solana/kit";
 import { encodeAbiParameters, hexToBytes } from "viem";
 import { compile } from "../../src/compiler.js";
-import { v12ReleaseSet } from "../../src/deployments/releases.js";
+import { v12OptInReleaseSet } from "../../src/deployments/releases.js";
 import { execute, expectOk, startEngine, svmArtifactsPresent, toBigInt } from "./engine-harness.js";
 
 /** Both clusters come from the v12-svm release, each pinned by tag AND digest in
@@ -73,7 +73,7 @@ describeClusters("ABI argument package on %s", (cluster) => {
   });
 
   it("runs the ABI program on the opt-in engine at its release ID with the unchanged Kitchen", async () => {
-    const set = v12ReleaseSet();
+    const set = v12OptInReleaseSet();
     const engine = set["v12-svm"];
     const root = fileURLToPath(new URL("../../src/artifacts/releases/", import.meta.url));
     const dir = join(root, set.compiler, `v12-svm-v${engine.version}`);

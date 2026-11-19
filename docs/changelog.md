@@ -86,6 +86,10 @@ Each SDK release and the five releases it pins:
 | 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
 | 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
+The **Deployed** row is the pairing the network defaults use: the engines compiler 2.6.2 was
+released with, which also run compiler 2.6.3's programs. The SDK's CLI labels that set with the
+SDK's own compiler, 2.6.3.
+
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
 each was built and tested with; an install could resolve a newer one, as
@@ -116,6 +120,10 @@ their bindings; the CREATE3 artifacts do not change where the CLI predicts or se
 Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen)
 to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
 CREATE3 Pots. Omitting the release selection still uses CREATE2.
+
+`v12ReleaseSet()` with no argument still returns the release the network defaults come from, as
+before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
+`v12ReleaseSet(compiler)` with that compiler's version.
 
 ### Compiler and engines
 

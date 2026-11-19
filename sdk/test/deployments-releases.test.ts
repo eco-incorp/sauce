@@ -20,6 +20,7 @@ import {
   v12DeployedAddresses,
   v12DeployedReleaseSet,
   v12EngineAddress,
+  v12OptInReleaseSet,
   v12ReleaseSet,
   v12SvmEngineProgramId,
   V12_RELEASE_SETS,
@@ -105,7 +106,13 @@ describe("the release table", () => {
     const { pot } = v12DeployedAddresses().evm;
     expect(set["kitchen-evm"].kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
     expect(set["kitchen-evm"].potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash.toLowerCase());
-    const available = v12ReleaseSet();
+    const available = v12OptInReleaseSet();
+    // The no-argument form keeps its old meaning, the deployed release; an explicit compiler is
+    // that compiler's own row.
+    expect(v12ReleaseSet()).toEqual(set);
+    expect(v12ReleaseSet()["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
+    expect(v12ReleaseSet()["kitchen-evm"].potInitCodeHash).not.toBeNull();
+    expect(v12ReleaseSet(sdkCompilerVersion())).toEqual(available);
     expect(available["v12-evm"].version).toBe("1.4.0");
     expect(available["kitchen-evm"].version).toBe("1.4.0");
     expect(available["v12-svm"].version).toBe("1.4.1");
@@ -301,7 +308,7 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
 const foreign = (component: "v12-evm" | "v12-svm"): string[] =>
   V12_RELEASE_SETS.filter(
     (row) =>
-      row[component].engine !== v12ReleaseSet()[component].engine &&
+      row[component].engine !== v12OptInReleaseSet()[component].engine &&
       row[component].engine !== v12DeployedReleaseSet()[component].engine,
   )
     .map((row) => row[component].engine)

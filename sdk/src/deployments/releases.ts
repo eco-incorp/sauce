@@ -59,8 +59,8 @@ export const V12_RELEASE_SETS: readonly V12ReleaseSet[] = (
 /** The compiler version this SDK compiles with — the one its pinned engines were synced for. */
 export const sdkCompilerVersion = (): string => v12DeployedAddresses().compiler;
 
-/** The release set for `compiler` (default: this SDK's), or a throw naming the known ones. */
-export function v12ReleaseSet(compiler: string = sdkCompilerVersion()): V12ReleaseSet {
+/** The row for exactly `compiler`, or a throw naming the known ones. */
+function releaseRow(compiler: string): V12ReleaseSet {
   const set = V12_RELEASE_SETS.find((row) => row.compiler === compiler);
   if (set === undefined) {
     throw new Error(
@@ -72,12 +72,28 @@ export function v12ReleaseSet(compiler: string = sdkCompilerVersion()): V12Relea
   return set;
 }
 
+/**
+ * The release set for `compiler`, or a throw naming the known ones. With no argument it is the
+ * release this SDK's network defaults come from ({@link v12DeployedReleaseSet}), as it was before
+ * opt-in artifacts shipped: the engine, Kitchen and Pot init-code hash it names are deployed. The
+ * installed compiler's own, possibly undeployed, row is {@link v12OptInReleaseSet} or
+ * `v12ReleaseSet(sdkCompilerVersion())`.
+ */
+export function v12ReleaseSet(compiler?: string): V12ReleaseSet {
+  return compiler === undefined ? v12DeployedReleaseSet() : releaseRow(compiler);
+}
+
+/** The installed compiler's own row: its releases may not be deployed, and no default uses them. */
+export function v12OptInReleaseSet(): V12ReleaseSet {
+  return releaseRow(sdkCompilerVersion());
+}
+
 /** The release that supplies the network defaults, with the installed compiler's provenance. */
 export function v12DeployedReleaseSet(): V12ReleaseSet {
-  const available = v12ReleaseSet();
+  const available = v12OptInReleaseSet();
   return available.deployedCompiler === undefined
     ? available
-    : { ...v12ReleaseSet(available.deployedCompiler), compiler: available.compiler };
+    : { ...releaseRow(available.deployedCompiler), compiler: available.compiler };
 }
 
 const ENGINE: Record<"evm" | "svm", "v12-evm" | "v12-svm"> = { evm: "v12-evm", svm: "v12-svm" };
