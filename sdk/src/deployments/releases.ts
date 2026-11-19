@@ -31,16 +31,20 @@ export interface V12ReleasePin {
   readonly engine?: string | null;
 }
 
-/** The EVM Kitchen's release: the Kitchen proxy and the init-code hash every Pot it mints is
- *  `CREATE2(kitchen, …, potInitCodeHash)` under — `null` until the release says. */
+/** The EVM Kitchen's release: legacy CREATE2 init-code identity or the qualified CREATE3 profile. */
 export interface V12KitchenEvmPin extends V12ReleasePin {
   readonly kitchen: string | null;
   readonly potInitCodeHash: string | null;
+  readonly potProfileHash?: string;
+  readonly potProxyInitCodeHash?: string;
+  readonly fixedRouter?: string;
 }
 
 /** One compiler version and the four releases its output pairs with. */
 export interface V12ReleaseSet {
   readonly compiler: string;
+  /** A separately qualified release set kept as the network default. */
+  readonly deployedCompiler?: string;
   readonly "v12-evm": V12ReleasePin & { readonly engine: string | null };
   readonly "kitchen-evm": V12KitchenEvmPin;
   readonly "v12-svm": V12ReleasePin & { readonly engine: string | null };
@@ -68,6 +72,14 @@ export function v12ReleaseSet(compiler: string = sdkCompilerVersion()): V12Relea
   return set;
 }
 
+/** The release that supplies the network defaults, with the installed compiler's provenance. */
+export function v12DeployedReleaseSet(): V12ReleaseSet {
+  const available = v12ReleaseSet();
+  return available.deployedCompiler === undefined
+    ? available
+    : { ...v12ReleaseSet(available.deployedCompiler), compiler: available.compiler };
+}
+
 const ENGINE: Record<"evm" | "svm", "v12-evm" | "v12-svm"> = { evm: "v12-evm", svm: "v12-svm" };
 
 /** EVM addresses compare case-insensitively; SVM program ids are base58 and compare exactly. */
@@ -91,10 +103,15 @@ export function assertEngineRunsCompiler(
 
     return known !== null && sameEngine(target, known, engine);
   });
-  if (naming.length === 0 || naming.some((row) => row.compiler === compiler)) return;
+  if (naming.length === 0) return;
+  const compatible = V12_RELEASE_SETS.filter(
+    (row) =>
+      naming.includes(row) || naming.some((named) => named.compiler === row.deployedCompiler),
+  );
+  if (compatible.some((row) => row.compiler === compiler)) return;
 
   const { version } = naming[0]![component];
-  const runs = naming.map((row) => row.compiler).join(", ");
+  const runs = compatible.map((row) => row.compiler).join(", ");
   const own = V12_RELEASE_SETS.find((row) => row.compiler === compiler)?.[component];
   const instead =
     own === undefined

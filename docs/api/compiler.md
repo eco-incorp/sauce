@@ -304,9 +304,10 @@ from an earlier row can misread its programs, and an earlier compiler's programs
 can fail on a newer engine. `V12_RELEASE_SETS` (from
 `@eco-incorp/sauce/deployments`) holds one row per compiler version: the four v12
 releases that compiler pairs with, each asset's digest, and each engine's
-address or program id. The SDK pins one compiler and ships the engines of that
-compiler's row, so `v12EngineAddress()` and `v12SvmEngineProgramId()` always
-name engines that run the SDK's own programs.
+address or program id. `v12ReleaseSet()` describes the opt-in release artifacts for
+the installed compiler. `v12DeployedReleaseSet()` describes the compatible network
+defaults used by `v12EngineAddress()` and `v12SvmEngineProgramId()`. Availability of
+new artifacts does not move those defaults.
 
 Every SDK builder that names an engine — `v12Pot.encodeCook`,
 `routes.buildSauceEvmCall`, the SVM engine instructions and the Kitchen cook

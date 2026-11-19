@@ -50,7 +50,7 @@ import { PotStore } from "../src/cli/pot-store.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { potSalt } from "../src/deployments/pot.js";
 import {
-  v12ReleaseSet,
+  v12DeployedReleaseSet,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
@@ -1337,9 +1337,9 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       kitchen: KITCHEN,
       engine: v12SvmEngineProgramId(),
       release: {
-        compiler: v12ReleaseSet().compiler,
-        "v12-svm": v12ReleaseSet()["v12-svm"].version,
-        "kitchen-svm": v12ReleaseSet()["kitchen-svm"].version,
+        compiler: v12DeployedReleaseSet().compiler,
+        "v12-svm": v12DeployedReleaseSet()["v12-svm"].version,
+        "kitchen-svm": v12DeployedReleaseSet()["kitchen-svm"].version,
       },
       sdk: expect.any(String),
       recordedAt: expect.any(String),

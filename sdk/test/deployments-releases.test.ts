@@ -18,6 +18,7 @@ import {
   assertEngineRunsCompiler,
   sdkCompilerVersion,
   v12DeployedAddresses,
+  v12DeployedReleaseSet,
   v12EngineAddress,
   v12ReleaseSet,
   v12SvmEngineProgramId,
@@ -91,9 +92,9 @@ describe("the release table", () => {
     }
   });
 
-  it("the synced artifacts are the row of the compiler that is installed", () => {
+  it("keeps deployed defaults separate from the installed compiler's opt-in artifacts", () => {
     expect(sdkCompilerVersion()).toBe(resolvedCompilerVersion());
-    const set = v12ReleaseSet();
+    const set = v12DeployedReleaseSet();
     const { releases } = v12DeployedAddresses();
     for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
       expect([component, releases[component].version]).toEqual([component, set[component].version]);
@@ -104,9 +105,26 @@ describe("the release table", () => {
     const { pot } = v12DeployedAddresses().evm;
     expect(set["kitchen-evm"].kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
     expect(set["kitchen-evm"].potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash.toLowerCase());
+    const available = v12ReleaseSet();
+    expect(available["v12-evm"].version).toBe("1.4.0");
+    expect(available["kitchen-evm"].version).toBe("1.4.0");
+    expect(available["v12-svm"].version).toBe("1.4.1");
+    expect(available["kitchen-svm"].version).toBe("1.1.0");
+    expect(set["v12-evm"].version).toBe("1.3.0");
+    expect(set["v12-svm"].version).toBe("1.4.0");
+    for (const [target, component] of [
+      ["evm", "v12-evm"],
+      ["svm", "v12-svm"],
+    ] as const) {
+      expect(() => assertEngineRunsCompiler(target, set[component].engine!)).not.toThrow();
+      expect(() => assertEngineRunsCompiler(target, available[component].engine!)).not.toThrow();
+      expect(() =>
+        assertEngineRunsCompiler(target, available[component].engine!, "2.6.2"),
+      ).toThrow();
+    }
   });
 
-  it("names the Kitchen and the Pot init-code hash of every kitchen-evm release, the same in every row", () => {
+  it("keeps a Kitchen release's legacy init-code hash or CREATE3 profile identity stable", () => {
     const hashOf = new Map<string, string>();
     for (const row of V12_RELEASE_SETS) {
       const pin = row["kitchen-evm"];
@@ -114,14 +132,19 @@ describe("the release table", () => {
         row.compiler,
         expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
       ]);
-      expect([row.compiler, pin.potInitCodeHash]).toEqual([
+      const hash = pin.potProfileHash ?? pin.potInitCodeHash;
+      expect([row.compiler, hash]).toEqual([
         row.compiler,
         expect.stringMatching(/^0x[0-9a-f]{64}$/),
       ]);
-      // A release mints under one hash, whichever row names it.
+      if (pin.potProfileHash !== undefined) {
+        expect(pin.potInitCodeHash).toBeNull();
+        expect(pin.potProxyInitCodeHash).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(pin.fixedRouter).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      }
       const seen = hashOf.get(pin.version);
-      if (seen !== undefined) expect(pin.potInitCodeHash).toBe(seen);
-      hashOf.set(pin.version, pin.potInitCodeHash!);
+      if (seen !== undefined) expect(hash).toBe(seen);
+      hashOf.set(pin.version, hash!);
     }
   });
 
@@ -139,7 +162,7 @@ describe("the release table", () => {
       );
       // The public source (`SAUCE_ARTIFACT_SOURCE=npm`) caches no addresses.json: the installed
       // row is then held to the V12Deployments.json the sync wrote, which carries the same three.
-      if (path === undefined && row.compiler !== sdkCompilerVersion()) continue;
+      if (path === undefined && pin.version !== deployed.releases["kitchen-evm"].version) continue;
       const published =
         path === undefined
           ? {
@@ -150,17 +173,16 @@ describe("the release table", () => {
           : (JSON.parse(readFileSync(path, "utf8")) as {
               version: string;
               contracts: { kitchen: { address: string } };
-              pot: { initCodeHash: string };
+              pot: { initCodeHash?: string; potProfileHash?: string };
             });
-      expect([pin.version, published.version]).toEqual([pin.version, pin.version]);
+      expect(published.version).toBe(pin.version);
       expect([pin.version, pin.kitchen?.toLowerCase()]).toEqual([
         pin.version,
         published.contracts.kitchen.address.toLowerCase(),
       ]);
-      expect([pin.version, pin.potInitCodeHash]).toEqual([
-        pin.version,
-        published.pot.initCodeHash.toLowerCase(),
-      ]);
+      expect(published.pot.potProfileHash ?? published.pot.initCodeHash).toBe(
+        pin.potProfileHash ?? pin.potInitCodeHash,
+      );
       checked++;
     }
     // The installed row is always checked: the sync fetched its release or wrote its addresses.
@@ -192,7 +214,7 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     }
   });
 
-  it("refuses other compilers unless their row explicitly shares the engine", () => {
+  it("refuses other compilers unless their row or deployed default explicitly shares the engine", () => {
     expect(crossings.length).toBeGreaterThan(0);
     for (const { own, other } of crossings) {
       for (const target of ["evm", "svm"] as const) {
@@ -200,7 +222,10 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
         const engine = own[component].engine;
         if (engine === null) continue;
         const check = () => assertEngineRunsCompiler(target, engine, other.compiler);
-        if (engine === other[component].engine) expect(check).not.toThrow();
+        const deployed =
+          other.deployedCompiler === undefined ? undefined : v12ReleaseSet(other.deployedCompiler);
+        if (engine === other[component].engine || engine === deployed?.[component].engine)
+          expect(check).not.toThrow();
         else
           expect(check).toThrow(`is ${component} ${own[component].version}, which runs compiler`);
       }
@@ -274,7 +299,11 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
 
 /** An engine the table names for a compiler that is NOT this SDK's — what every builder refuses. */
 const foreign = (component: "v12-evm" | "v12-svm"): string[] =>
-  V12_RELEASE_SETS.filter((row) => row[component].engine !== v12ReleaseSet()[component].engine)
+  V12_RELEASE_SETS.filter(
+    (row) =>
+      row[component].engine !== v12ReleaseSet()[component].engine &&
+      row[component].engine !== v12DeployedReleaseSet()[component].engine,
+  )
     .map((row) => row[component].engine)
     .filter((engine): engine is string => engine !== null);
 

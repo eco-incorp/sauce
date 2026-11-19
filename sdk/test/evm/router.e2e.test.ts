@@ -36,7 +36,10 @@ import {
   encodeErrorResult,
   encodeFunctionData,
   getAddress,
+  getContractAddress,
+  getCreate2Address,
   http,
+  keccak256,
   parseAbi,
   stringToHex,
   toFunctionSelector,
@@ -44,9 +47,10 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12DeployedAddresses } from "../../src/deployments/index.js";
+import { v12DeployedAddresses, v12ReleaseSet } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
+import { deployReleaseStack, type ReleaseStackArtifacts } from "../../src/evm/release-stack.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import { potFromReleasedBytecode } from "./pot-address.js";
@@ -713,5 +717,112 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       // Unplanted, the same cook on the same pools lands.
       expect(await sendAs(OWNER, sauce.pot, cookOf(s, PROFITABLE))).toBe("success");
     });
+  });
+});
+
+describeEvm("the opt-in CREATE3 release", () => {
+  beforeAll(async () => {
+    anvil = await spawnAnvil(PORT);
+  });
+
+  afterAll(async () => {
+    if (anvil?.exitCode === null) {
+      const exited = once(anvil, "exit");
+      anvil.kill();
+      await exited;
+    }
+  });
+
+  it("creates the predicted fixed Pot and pays an ordinary V3 swap through the release Router", async () => {
+    const set = v12ReleaseSet();
+    const root = join(HERE, "../../src/artifacts/releases", set.compiler);
+    const evm = join(root, `v12-evm-v${set["v12-evm"].version}`);
+    const kitchenDir = join(root, `kitchen-evm-v${set["kitchen-evm"].version}`);
+    const engine = json<{
+      contracts: Pick<ReleaseStackArtifacts["deployments"]["contracts"], "engine">;
+    }>(join(evm, "addresses.json")).contracts.engine;
+    const kitchenRelease = json<ReleaseStackArtifacts["deployments"]>(
+      join(kitchenDir, "addresses.json"),
+    );
+    const { contracts } = json<{ contracts: Record<string, { abi: Abi; bytecode: Hex }> }>(
+      join(kitchenDir, "abis.json"),
+    );
+    const stack = await deployReleaseStack(
+      { publicClient, testClient, walletClient },
+      OWNER.address,
+      {
+        deployments: { ...kitchenRelease, contracts: { ...kitchenRelease.contracts, engine } },
+        runtimeCreationCode: readFileSync(join(evm, "runtime.creation.hex"), "utf8").trim() as Hex,
+        routerBytecode: contracts.Router!.bytecode,
+        kitchen: contracts.Kitchen!,
+        kitchenProxyBytecode: contracts.KitchenProxy!.bytecode,
+      },
+    ).catch((error: Error) => {
+      throw new Error(`opt-in EVM stack deployment failed on local anvil (${error.name})`);
+    });
+    const args = [OWNER.address, POT_SALT, true] as const;
+    const potAbi = parseAbi([
+      "function predictPot(address,bytes32,bool) view returns (address)",
+      "function deployPot(address,bytes32,bool) returns (address)",
+    ]);
+    const child = getCreate2Address({
+      from: stack.kitchen,
+      salt: keccak256(
+        encodeAbiParameters([{ type: "address" }, { type: "bytes32" }, { type: "bool" }], args),
+      ),
+      bytecodeHash: set["kitchen-evm"].potProxyInitCodeHash as Hex,
+    });
+    const pot = getContractAddress({ from: child, nonce: 1n });
+    expect(
+      await publicClient.readContract({
+        address: stack.kitchen,
+        abi: potAbi,
+        functionName: "predictPot",
+        args,
+      }),
+    ).toBe(pot);
+    expect(
+      await sendAs(
+        OWNER,
+        stack.kitchen,
+        encodeFunctionData({
+          abi: potAbi,
+          functionName: "deployPot",
+          args,
+        }),
+      ),
+    ).toBe("success");
+    expect(await potRouter(pot)).toBe(stack.router);
+
+    const [a, b] = [await deploy(MOCK_ERC20.creationCode), await deploy(MOCK_ERC20.creationCode)];
+    const [tokenIn, tokenOut] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+    const pool = await deploy(
+      `${MOCK_V3_POOL.creationCode}${encodeAbiParameters(
+        [{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "uint256" }],
+        [tokenIn, tokenOut, 3000, 2n * 10n ** 18n],
+      ).slice(2)}` as Hex,
+    );
+    for (const [token, to] of [
+      [tokenIn, pot],
+      [tokenOut, pool],
+    ] as const) {
+      expect(
+        await sendAs(
+          OWNER,
+          token,
+          encodeFunctionData({
+            abi: erc20,
+            functionName: "mint",
+            args: [to, 10_000n],
+          }),
+        ),
+      ).toBe("success");
+    }
+    const source = `import { uniswapV3 } from "@sauce/router";
+function main() { uniswapV3(${BigInt(pool)}n, ${BigInt(tokenIn)}n, ${BigInt(tokenOut)}n, 1000n, 0n, 0n, ctx.self()); }`;
+    const { calls } = compileSauceRoute("base", source, { engine: stack.engine, pot });
+    expect(await sendAs(OWNER, pot, calls[0]!.data)).toBe("success");
+    expect(await balance(tokenIn, pool)).toBe(1000n);
+    expect(await balance(tokenOut, pot)).toBe(2000n);
   });
 });

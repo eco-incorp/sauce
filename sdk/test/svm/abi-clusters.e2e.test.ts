@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { address } from "@solana/kit";
 import { encodeAbiParameters, hexToBytes } from "viem";
 import { compile } from "../../src/compiler.js";
+import { v12ReleaseSet } from "../../src/deployments/releases.js";
 import { execute, expectOk, startEngine, svmArtifactsPresent, toBigInt } from "./engine-harness.js";
 
 /** Both clusters come from the v12-svm release, each pinned by tag AND digest in
@@ -64,6 +68,24 @@ describeClusters("ABI argument package on %s", (cluster) => {
     const expected = cluster === "mainnet" ? 1399811149n : 1399811150n;
     expect(toBigInt(result.returnData)).toBe(expected + 15n);
     const wire = JSON.parse(readFileSync(wireJson as string, "utf8"));
+    expect(wire.chainId).toBe(Number(expected));
+    expect(wire.isa.revision).toBe(artifact.isaRevision);
+  });
+
+  it("runs the ABI program on the opt-in engine at its release ID with the unchanged Kitchen", async () => {
+    const set = v12ReleaseSet();
+    const engine = set["v12-svm"];
+    const root = fileURLToPath(new URL("../../src/artifacts/releases/", import.meta.url));
+    const dir = join(root, set.compiler, `v12-svm-v${engine.version}`);
+    const harness = await startEngine(
+      1_700_000_000n,
+      join(dir, `engine-${cluster}.so`),
+      address(engine.engine!),
+    );
+    const result = expectOk(await execute(harness, payload(args), {}));
+    const wire = JSON.parse(readFileSync(join(dir, `engine-wire-${cluster}.json`), "utf8"));
+    const expected = cluster === "mainnet" ? 1399811149n : 1399811150n;
+    expect(toBigInt(result.returnData)).toBe(expected + 15n);
     expect(wire.chainId).toBe(Number(expected));
     expect(wire.isa.revision).toBe(artifact.isaRevision);
   });

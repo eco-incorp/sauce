@@ -27,7 +27,7 @@ import {
   v12EngineAddress,
   v12KitchenAddress,
   v12PotDerivation,
-  v12ReleaseSet,
+  v12DeployedReleaseSet,
 } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi } from "../src/evm/engine.js";
@@ -52,7 +52,7 @@ const IMPORTED = privateKeyToAccount(IMPORTED_KEY);
 
 /** What every record of a Pot the pinned release minted on Base says of it. */
 const released = () => {
-  const set = v12ReleaseSet();
+  const set = v12DeployedReleaseSet();
 
   return {
     schema: "sauce.pot/1",

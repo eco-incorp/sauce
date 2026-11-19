@@ -63,7 +63,8 @@ Each SDK release and the five releases it pins:
 
 | SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| Unreleased | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| Deployed   | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -105,7 +106,13 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## Unreleased
 
-Compiler 2.6.2; engine and Kitchen versions are unchanged from SDK 1.0.0.
+The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
+support from the compiler's main line are not included.
+
+The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and unchanged
+SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
+Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
+their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
 
 ### Compiler and engines
 
