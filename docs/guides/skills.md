@@ -45,10 +45,12 @@ load it, its model, its body, the mistakes to avoid, and its files.
 ## Install them in a project
 
 `sauce skills install` copies the skills of the `sauce` command that runs it to where coding agents
-read them, in the project it runs in (`--dir <project>` names another):
+read them, in the project it runs in (`--dir <project>` names another).
+
+Use Node.js 24 or newer to install and run the global CLI:
 
 ```sh
-npm i -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce skills install
 ```
 

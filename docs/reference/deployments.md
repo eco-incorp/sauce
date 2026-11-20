@@ -22,15 +22,15 @@ engine build, so a program compiled for either reads chain id 1399811150; `solan
 own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue
 deployments: the SDK's Solana venues remain mainnet-only.
 
-## The release
+## Deployed defaults
 
-The compiler this package pins, and the four components its programs run on. They pair by exact
-version, in both directions:
-[which engine runs a program](../api/compiler.md#which-engine-runs-a-program).
+The compiler the SDK pins and the engine and Kitchen versions it uses by default. Opt-in
+release artifacts can differ from these deployments; see the
+[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program).
 
 | Component | Version |
 | --- | --- |
-| Compiler, `@eco-incorp/sauce-compiler` | 2.6.1 |
+| Compiler, `@eco-incorp/sauce-compiler` | 2.6.3 |
 | EVM engine, `v12-evm` | 1.3.0 |
 | EVM Kitchen, `kitchen-evm` | 1.3.0 |
 | Solana engine, `v12-svm` | 1.4.0 |
@@ -56,6 +56,7 @@ hash:
 
 `v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula
 and the hash, and `sauce pot --owner <address>` prints an owner's Pot.
+For opt-in releases, see [CREATE3 Pot prediction](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
 
 ## Solana
 

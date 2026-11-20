@@ -51,7 +51,11 @@ import { fundingFor } from "../src/cli/inputs.js";
 import { keeping } from "../src/cli/keep.js";
 import { PotStore, type PotKind, type PotRecord } from "../src/cli/pot-store.js";
 import { nodeIo, type CliIo } from "../src/cli/run.js";
-import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
+import {
+  v12DeployedReleaseSet,
+  v12EngineAddress,
+  v12KitchenAddress,
+} from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
@@ -92,7 +96,7 @@ const UPGRADE = /Upgrade @eco-incorp\/sauce \(sauce update\)/;
 const releaseOf = (set: typeof OLD_RELEASE): string =>
   `compiler ${set.compiler} (v12-evm ${set["v12-evm"].version}, kitchen-evm ${set["kitchen-evm"].version})`;
 /** The release this SDK pins. */
-const OWN = releaseOf(v12ReleaseSet());
+const OWN = releaseOf(v12DeployedReleaseSet());
 /** kitchen-evm 1.2.0's release, and the SDK releases that pinned it (`docs/changelog.md`). */
 const OLD = releaseOf(OLD_RELEASE);
 const OLD_SDKS = "@eco-incorp/sauce 0.99.9 to 0.99.15";

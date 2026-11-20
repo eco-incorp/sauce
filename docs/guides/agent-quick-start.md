@@ -33,7 +33,7 @@ minutes.
 ## 1. Install the command
 
 ```sh
-npm install -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce --version
 ```
 

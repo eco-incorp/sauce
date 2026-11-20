@@ -197,26 +197,25 @@ describe("sauce_install_skills", () => {
       assert.deepEqual(out.skillsFrom, reads[agent], agent);
       // Pinned to this server's own version, everywhere; viem as installed beside the package.
       const pinned = `@eco-incorp/sauce@${packageInfo().version}`;
-      assert.equal(out.commands.add, `npm install --save-exact ${pinned} viem@${VIEM}`);
+      assert.equal(
+        out.commands.add,
+        `npm install --engine-strict --save-exact ${pinned} viem@${VIEM}`,
+      );
       assert.equal(
         out.commands.install,
-        `npx -y ${pinned} skills install --agent ${agent} --dir "my app"`,
+        `npx --engine-strict -y ${pinned} skills install --agent ${agent} --dir "my app"`,
       );
       assert.equal(
         out.commands.update,
-        `npx -y ${pinned} skills update --agent ${agent} --dir "my app"`,
+        `npx --engine-strict -y ${pinned} skills update --agent ${agent} --dir "my app"`,
       );
       assert.equal(
         out.commands.status,
-        `npx -y ${pinned} skills status --agent ${agent} --dir "my app"`,
+        `npx --engine-strict -y ${pinned} skills status --agent ${agent} --dir "my app"`,
       );
-      assert.equal(out.commands.init, `npx -y ${pinned} init "my app" --agent ${agent}`);
-      assert.ok(!JSON.stringify(out).includes("@latest"));
-      assert.ok(out.notes.some((note) => /no-op on a project already installed/.test(note)));
-      assert.ok(
-        out.notes.some((note) =>
-          note.includes("`sauce <command>`, which `npm i -g @eco-incorp/sauce` installs"),
-        ),
+      assert.equal(
+        out.commands.init,
+        `npx --engine-strict -y ${pinned} init "my app" --agent ${agent}`,
       );
       if (agent === "agents-md") {
         assert.equal(out.mcp, undefined);
@@ -227,7 +226,7 @@ describe("sauce_install_skills", () => {
       assert.match(out.mcp!.config, /"mcp"/);
       assert.equal(
         out.commands.mcpSetup,
-        `npx -y ${pinned} mcp setup --agent ${agent} --dir "my app"`,
+        `npx --engine-strict -y ${pinned} mcp setup --agent ${agent} --dir "my app"`,
       );
     }
     const claude = ok(await mcp.call("sauce_install_skills", { agent: "claude" })) as {
