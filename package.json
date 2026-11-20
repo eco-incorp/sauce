@@ -59,6 +59,10 @@
       "types": "./sdk/dist/svm/index.d.ts",
       "default": "./sdk/dist/svm/index.js"
     },
+    "./svm/client": {
+      "types": "./sdk/dist/svm/client.d.ts",
+      "default": "./sdk/dist/svm/client.js"
+    },
     "./svm/engine": {
       "types": "./sdk/dist/svm/engine-public.d.ts",
       "default": "./sdk/dist/svm/engine-public.js"

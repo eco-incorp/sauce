@@ -25,12 +25,12 @@ import {
   buildExecuteTransaction,
   buildInitializeExecutionFeeInstruction,
   buildSetExecutionFeeInstruction,
-  createSauceSvmClient,
   deriveExecutionFeeConfigPda,
   derivePotPda,
   deriveProgramDataPda,
   MAX_POT_LEN,
 } from "@eco-incorp/sauce-source/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce-source/svm/client";
 import type { AccountResolution, SignedExecuteTransaction } from "@eco-incorp/sauce-source/svm";
 import {
   svmEnginePath,

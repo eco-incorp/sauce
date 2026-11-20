@@ -28,11 +28,11 @@ import {
   buildExecuteInstruction,
   buildHeapFramePrepend,
   buildSetExecutionFeeInstruction,
-  createSauceSvmClient,
   deriveProgramDataPda,
   derivePotPda,
   ENGINE_FAULTS,
 } from "../../src/svm/index.js";
+import { createSauceSvmClient } from "../../src/svm/client.js";
 import {
   HARNESS_POT_SALT,
   buildExecuteTransactionForHarness,

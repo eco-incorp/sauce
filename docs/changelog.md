@@ -221,6 +221,17 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   transactions are built and sent on, `--source-dir` works as it does for `sauce compile`, and
   `--json` prints each chain's result.
 
+### SDK
+
+- **Moved import:** `createSauceSvmClient` is now imported from `@eco-incorp/sauce/svm/client`, not
+  `@eco-incorp/sauce/svm`. Change value imports to
+  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. `/svm` still re-exports the
+  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types,
+  `StagedBuffer`, `StagedArgs`, `EnsuredLookupTable`) as types only, so type imports need no change.
+  This prevents a `/svm` import from loading Sauce's Kitchen client implementation, which constructs
+  its own RPC clients when called; other barrel modules still load `@solana/kit` and its
+  dependencies.
+
 **Also breaking:** `createSauceSvmClient` is imported from `@eco-incorp/sauce/svm/client`, no longer
 from `@eco-incorp/sauce/svm`; type imports from `/svm` are unchanged.
 

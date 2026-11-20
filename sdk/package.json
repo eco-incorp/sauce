@@ -38,6 +38,10 @@
       "types": "./dist/svm/index.d.ts",
       "default": "./dist/svm/index.js"
     },
+    "./svm/client": {
+      "types": "./dist/svm/client.d.ts",
+      "default": "./dist/svm/client.js"
+    },
     "./svm/engine": {
       "types": "./dist/svm/engine-public.d.ts",
       "default": "./dist/svm/engine-public.js"

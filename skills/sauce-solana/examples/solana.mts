@@ -34,7 +34,6 @@ import {
   buildCookInstruction,
   buildExecuteTransaction,
   buildHeapFramePrepend,
-  createSauceSvmClient,
   deriveExecutionFeeConfigPda,
   derivePotPda,
   generateKeyPairSigner,
@@ -44,6 +43,7 @@ import {
   resolveSvmAccountName,
   svmRentExempt,
 } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
