@@ -196,63 +196,6 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   `.catch(() => { … })` on a call that is the one member of an object literal, a `uint256` output
   included. A `.gas()` now compiles on a receiver whose own call already has one, and on a receiver
   whose first step is a computed `.at()` address (`({ p: C.at(a + 1) }).p.w().gas(n)`).
-
-### Compiler and engines
-
-- **Compiler 2.6.1 → 2.6.3:** The SauceScript bullets above describe the changed gas caps, ABI
-  checks, refusals and forms that now compile. Recompiling adds checks, bytes and gas/CU cost;
-  already-compiled programs are unchanged. Recompiled EVM settlement programs are now 426 bytes,
-  not the historical 410 bytes shipped in SDK 0.99.16–1.0.0. Default verifiers do not recognize the
-  other version: validators fail with `TOKENS_OFFSET`, and observer helpers can return `null`
-  silently. Upgrade verifiers to accept both explicit `{ hash, bytes }` pins **before** moving
-  producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
-  Bare package imports now resolve per importer; an ambient package uses the entry program's
-  mapping, not a dependency's mapping for the same name. The SDK still refuses a bare `pot` if
-  that ambient package exports `pot`.
-- **v12-evm 1.3.0 → 1.4.0 (opt-in):** The engine authenticates the CREATE3 Pot profile and must
-  be selected with its matching Kitchen and Router; keep the old engine for existing CREATE2
-  Pots. Signature checks now require a complete `ecrecover` reply and the exact ERC-1271 return
-  word. Newly allocated memory is cleared after reuse, so a fresh array does not expose values
-  from an earlier caught call. The network defaults do not select this engine.
-- **kitchen-evm 1.3.0 → 1.4.0 (opt-in):** New private, fixed-Router and shared Pots use CREATE3;
-  existing CREATE2 Pots keep their addresses and bindings. Before funding a prediction or
-  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen),
-  including deploying any funded but undeployed CREATE2 Pot first. The old constructor-only
-  `potParameters()` method is removed. The Router preserves a V3 or Maverick V2 leg's spend
-  receipt and an outer flash callback's authorization when the pool runs another leg. The
-  network defaults keep the prior Kitchen and Router.
-- **v12-svm 1.4.0 → 1.4.1 (opt-in):** Instruction decoding is cheaper per cook; the instruction
-  format, account order and opcode semantics are unchanged. The Solana Kitchen remains 1.1.0,
-  and network defaults keep engine 1.4.0.
-
-### The `sauce` command and the MCP server
-
-- **Added: `sauce units` turns an amount in whole tokens into the smallest unit a program's `main`
-  takes, and back.** `sauce units --chain base 1.5 USDC` prints `1500000`, the integer `--args`
-  takes; `1500000n USDC` goes the other way, with the trailing `n` that `--fund` uses for base
-  units. The token is a symbol in any case, an address or a Solana mint, and its decimals come from
-  the registries the compile reads, so the number is the one the program sees on that chain; a
-  token the chain has no symbol for is named by its address or mint with `--decimals`. An amount
-  that would need rounding (a nonzero digit past the token's decimals) is refused, never rounded,
-  and a bare integer at or above 10^decimals (`1500000 USDC`) is read as whole tokens, with the
-  note `--fund` gives.
-  `--json` prints one object. The MCP server has it as `sauce_units`.
-- **Added: `sauce where <file>` lists the chains a SauceScript program compiles on.** It compiles
-  the file for every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and
-  needing no key; an actions document is refused, and `sauce compile <file> --chain <slug>`
-  compiles those. It lists each chain the program compiles on with its size, then the chains it
-  does not compile on, grouped by the first reason, most often a token or protocol that chain has
-  no name for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the
-  chains transactions are built and sent on, `--source-dir` works as it does for `sauce compile`,
-  and `--json` prints each chain's result.
-- **Changed: `sauce globals --json` lists methods only for the namespace or interface `--protocol`
-  names**, as the text output does. Every other contract and interface keeps its name, address and
-  the rest. On Base the whole listing was 1.6 MB, most of it methods, and is now 49 KB; on Ethereum
-  it was 3.0 MB and is now 191 KB. `sauce_globals` drops an interface's methods the same way unless
-  `protocol` names it, as it already dropped a contract's: 33 KB on Base, from 322 KB.
-
-### The registry
-
 - **Added** (EVM): **every protocol namespace carries its contract's full verified ABI.** A registry
   ABI was the few functions a program was expected to call; it is now every function the contract's
   deployments declare in their verified source and dispatch, and every event and error their code
@@ -321,6 +264,60 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   "`getPol` is not in uniswap-v3.Factory's vendored ABI (7 known methods; nearest: getPool,
   createPool, owner, setOwner, parameters). Did you mean `getPool`?". One with six or fewer still
   lists every method ("known methods: price").
+
+### Compiler and engines
+
+- **Compiler 2.6.1 → 2.6.3:** The SauceScript bullets above describe the changed gas caps, ABI
+  checks, refusals and forms that now compile. Recompiling adds checks, bytes and gas/CU cost;
+  already-compiled programs are unchanged. Recompiled EVM settlement programs are now 426 bytes,
+  not the historical 410 bytes shipped in SDK 0.99.16–1.0.0. Default verifiers do not recognize the
+  other version: validators fail with `TOKENS_OFFSET`, and observer helpers can return `null`
+  silently. Upgrade verifiers to accept both explicit `{ hash, bytes }` pins **before** moving
+  producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
+  Bare package imports now resolve per importer; an ambient package uses the entry program's
+  mapping, not a dependency's mapping for the same name. The SDK still refuses a bare `pot` if
+  that ambient package exports `pot`.
+- **v12-evm 1.3.0 → 1.4.0 (opt-in):** The engine authenticates the CREATE3 Pot profile and must
+  be selected with its matching Kitchen and Router; keep the old engine for existing CREATE2
+  Pots. Signature checks now require a complete `ecrecover` reply and the exact ERC-1271 return
+  word. Newly allocated memory is cleared after reuse, so a fresh array does not expose values
+  from an earlier caught call. The network defaults do not select this engine.
+- **kitchen-evm 1.3.0 → 1.4.0 (opt-in):** New private, fixed-Router and shared Pots use CREATE3;
+  existing CREATE2 Pots keep their addresses and bindings. Before funding a prediction or
+  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen),
+  including deploying any funded but undeployed CREATE2 Pot first. The old constructor-only
+  `potParameters()` method is removed. The Router preserves a V3 or Maverick V2 leg's spend
+  receipt and an outer flash callback's authorization when the pool runs another leg. The
+  network defaults keep the prior Kitchen and Router.
+- **v12-svm 1.4.0 → 1.4.1 (opt-in):** Instruction decoding is cheaper per cook; the instruction
+  format, account order and opcode semantics are unchanged. The Solana Kitchen remains 1.1.0,
+  and network defaults keep engine 1.4.0.
+
+### The `sauce` command and the MCP server
+
+- **Added: `sauce units` turns an amount in whole tokens into the smallest unit a program's `main`
+  takes, and back.** `sauce units --chain base 1.5 USDC` prints `1500000`, the integer `--args`
+  takes; `1500000n USDC` goes the other way, with the trailing `n` that `--fund` uses for base
+  units. The token is a symbol in any case, an address or a Solana mint, and its decimals come from
+  the registries the compile reads, so the number is the one the program sees on that chain; a
+  token the chain has no symbol for is named by its address or mint with `--decimals`. An amount
+  that would need rounding (a nonzero digit past the token's decimals) is refused, never rounded,
+  and a bare integer at or above 10^decimals (`1500000 USDC`) is read as whole tokens, with the
+  note `--fund` gives.
+  `--json` prints one object. The MCP server has it as `sauce_units`.
+- **Added: `sauce where <file>` lists the chains a SauceScript program compiles on.** It compiles
+  the file for every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and
+  needing no key; an actions document is refused, and `sauce compile <file> --chain <slug>`
+  compiles those. It lists each chain the program compiles on with its size, then the chains it
+  does not compile on, grouped by the first reason, most often a token or protocol that chain has
+  no name for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the
+  chains transactions are built and sent on, `--source-dir` works as it does for `sauce compile`,
+  and `--json` prints each chain's result.
+- **Changed: `sauce globals --json` lists methods only for the namespace or interface `--protocol`
+  names**, as the text output does. Every other contract and interface keeps its name, address and
+  the rest. On Base the whole listing was 1.6 MB, most of it methods, and is now 49 KB; on Ethereum
+  it was 3.0 MB and is now 191 KB. `sauce_globals` drops an interface's methods the same way unless
+  `protocol` names it, as it already dropped a contract's: 33 KB on Base, from 322 KB.
 
 ### The agent skills and the manual
 
