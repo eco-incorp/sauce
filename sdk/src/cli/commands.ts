@@ -219,8 +219,9 @@ export const sourceDirOf = (input: ProgramInput): string =>
   resolvePath(input.sourceDir ?? (input.stdin === true ? "." : dirname(resolvePath(input.file))));
 
 /**
- * Compiles the file as a standalone program, turning a failure into one message about the file.
- * `onContract` is told each protocol contract the compile resolves.
+ * Compiles the file as a standalone program, turning a failure into one message about the file:
+ * a `CliError` whose `cause` is the compile's own error, the compiler's (with its `diagnostics`) or
+ * the SDK's refusal. `onContract` is told each protocol contract the compile resolves.
  */
 export function compileProgram(
   input: ProgramInput,
@@ -244,6 +245,7 @@ export function compileProgram(
           ? `\nhint: the program came from stdin, so its relative imports resolve against ` +
             `${sourceDirOf(input)}: pass --source-dir <dir> to resolve them elsewhere`
           : ""),
+      { cause: error },
     );
   }
 }

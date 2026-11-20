@@ -6,6 +6,7 @@
 import { compile as compileRaw } from "sauce-compiler";
 
 import { compile } from "../src/compiler.js";
+import { compileDiagnostics } from "../src/wasm-compiler.js";
 import { compileSauceProgram, compileSauceRoute } from "../src/routes/sauce-route.js";
 
 const SOURCE = "function main(): Uint256 {\n  const a: Uint256 = 1;\n  a = 2;\n  return a;\n}\n";
@@ -68,5 +69,29 @@ describe("a compile error's message is plain text", () => {
     expect(error.message).toBe(raw.message.replace(SGR, ""));
     expect(error.diagnostics).toEqual(raw.diagnostics);
     expect(Array.isArray(error.stack)).toBe(true);
+  });
+});
+
+describe("compileDiagnostics", () => {
+  it("reads the compiler's own error, as the SDK throws it", () => {
+    const raw = thrown(() => compileRaw(options));
+    const error = thrown(() => compileSauceProgram("base", SOURCE));
+    expect(compileDiagnostics(error)).toEqual(raw.diagnostics);
+    expect(compileDiagnostics(error)?.length).toBeGreaterThan(0);
+  });
+
+  it("is an empty list where the compiler placed nothing: a module that does not resolve", () => {
+    const missing =
+      'import { f } from "./nowhere.js";\nfunction main(): Uint256 {\n  return f();\n}\n';
+    expect(compileDiagnostics(thrown(() => compileSauceProgram("base", missing)))).toEqual([]);
+  });
+
+  it("is undefined for the SDK's own refusal, though the compiler's error is its cause", () => {
+    const unknown = "function main(to: Address) {\n  FOOBAR.transfer(to, 1);\n}\n";
+    const error = thrown(() => compileSauceProgram("base", unknown));
+    expect(compileDiagnostics((error as { cause?: unknown }).cause)).toBeDefined();
+    expect(compileDiagnostics(error)).toBeUndefined();
+    expect(compileDiagnostics(new Error("not the compiler's"))).toBeUndefined();
+    expect(compileDiagnostics("text")).toBeUndefined();
   });
 });

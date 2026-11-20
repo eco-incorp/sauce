@@ -14,6 +14,7 @@ import {
   functionCacheStats,
   type CompileOptions,
   type CompileResult,
+  type Diagnostic,
 } from "sauce-compiler";
 import { ready as readyWasm, type WasmSource } from "sauce-compiler/ready";
 
@@ -86,4 +87,19 @@ export function compile(options: CompileOptions): CompileResult {
     if (error instanceof Error) plain(error);
     throw error;
   }
+}
+
+/**
+ * The compiler's diagnostics for a failed compile: each source error it placed, in source order,
+ * with its message, its span and, for most, a stable `code`. They are read off the compiler's own
+ * error, which `compile` throws as it is: an empty list where the compiler placed nothing (a module
+ * that does not resolve, an option), and `undefined` for any other error. That includes the SDK's
+ * own refusals, which may keep the compiler's error as their `cause` but say more than it does, so
+ * `cause` is never followed.
+ */
+export function compileDiagnostics(error: unknown): readonly Diagnostic[] | undefined {
+  const diagnostics: unknown =
+    error instanceof Error ? (error as { diagnostics?: unknown }).diagnostics : undefined;
+
+  return Array.isArray(diagnostics) ? (diagnostics as Diagnostic[]) : undefined;
 }
