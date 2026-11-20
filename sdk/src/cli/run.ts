@@ -1742,6 +1742,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     ].join("\n"),
     run: (args, io) => {
       const { file, text, stdin } = programText(io, fileOperand(args));
+      if (isActionsDocument(text)) {
+        throw new UsageError(
+          `${file} is an actions document: sauce where takes a SauceScript program; compile a ` +
+            "document with sauce compile <file> --chain <slug>",
+        );
+      }
       const list = stringFlag(args, "chains");
       const sourceDir = stringFlag(args, "source-dir");
       const chains =

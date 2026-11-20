@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { nodeIo } from "../src/cli/run.js";
+import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { whereCommand } from "../src/cli/where.js";
 
 const files = nodeIo();
@@ -77,5 +77,40 @@ describe("sauce where", () => {
       reason: "the file's `// @target svm` does not match EVM chains",
     });
     expect(svm.chains[1]).toMatchObject({ chain: "solana", compiles: true });
+  });
+});
+
+describe("sauce where from the command line", () => {
+  it("refuses an actions document instead of reporting that it compiles on no chain", async () => {
+    const document = JSON.stringify({
+      version: 1,
+      actions: [
+        { type: "argument", name: "amount" },
+        {
+          type: "uniswapV3Swap",
+          tokenIn: "USDC",
+          tokenOut: "WETH",
+          factory: "UniswapV3.Factory",
+          fee: 500,
+          amountOutMin: "1",
+          recipient: "pot",
+        },
+      ],
+    });
+    let stdout = "";
+    let stderr = "";
+    const io: CliIo = {
+      ...nodeIo(),
+      readText: () => document,
+      stdout: (text) => void (stdout += text),
+      stderr: (text) => void (stderr += text),
+    };
+    const code = await runCli(["--no-update-check", "where", "swap-by-key.json"], io);
+    expect(code).toBe(2);
+    expect(stdout).toBe("");
+    const message =
+      "swap-by-key.json is an actions document: sauce where takes a SauceScript program; " +
+      "compile a document with sauce compile <file> --chain <slug>";
+    expect(stderr).toBe(`sauce where: ${message}\nRun \`sauce where --help\` for usage.\n`);
   });
 });
