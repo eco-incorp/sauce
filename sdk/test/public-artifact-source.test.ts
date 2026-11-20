@@ -58,7 +58,10 @@ function fixture(scenario?: string, available = false) {
   const integrity = `sha512-${createHash("sha512").update(readFileSync(archive)).digest("base64")}`;
   if (available) {
     const current = local.releases.find((row: { compiler: string }) => row.compiler === "2.6.3");
-    if (scenario !== "no public release pin") current.npm = { version: "1.0.0", integrity };
+    // The committed row names the published 1.1.0: the fixture's tarball stands in for it, and the
+    // refusal has no pin at all, so neither reaches the registry.
+    if (scenario === "no public release pin") delete current.npm;
+    else current.npm = { version: "1.0.0", integrity };
   } else {
     local.releases = local.releases.filter((row: { compiler: string }) => row.compiler !== "2.6.3");
     target.compiler = "2.6.3";
