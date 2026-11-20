@@ -21,12 +21,13 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, posix, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { keccak256 } from "viem";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
+import { auditSourceMaps } from "./lib/source-maps.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // Taken from the SDK's own devDependency rather than written out here, so this consumer typechecks
@@ -127,38 +128,24 @@ try {
     },
   );
   const [{ filename, files: packed }] = JSON.parse(output);
-  // The package ships no source maps. A map points into sources the package mostly does not carry,
-  // and a file whose `sourceMappingURL` names a map the package lacks sends a debugger, a bundler
-  // or an editor after a file that is not there. So no packed file is a map, and none names one
-  // the package does not carry (an inline `data:` map carries itself).
+  // A map ships only as a `.d.ts.map` whose every source ships too, so Go to Definition lands in a
+  // shipped `.ts`. No other map ships, and no `sourceMappingURL` in a packed file names a map the
+  // package does not: found as Node finds one (anywhere, after code too, `//` or `/*`, `#` or `@`),
+  // every one held to the rule, the last, which Node takes, and each before it; an inline `data:`
+  // map is refused. The SDK build's prune (`prune-source-maps.mjs`) applies the same rule,
+  // `lib/source-maps.mjs`, to the same npm list.
   const packedPaths = new Set(packed.map((file) => file.path));
-  const maps = [...packedPaths].filter((path) => path.endsWith(".map"));
+  const refused = auditSourceMaps(root, packedPaths);
   assert.deepEqual(
-    maps.slice(0, 10),
+    refused.slice(0, 10),
     [],
-    `the package ships no source map: ${maps.length} packed (the first ten listed)`,
+    "the package ships a source map only as a .d.ts.map whose sources it ships, and no " +
+      `sourceMappingURL naming another: ${refused.length} refused (the first ten listed)`,
   );
-  const dangling = [...packedPaths]
-    .filter((path) => /\.(?:[cm]?js|[cm]?ts)$/.test(path))
-    .flatMap((path) =>
-      [...readFileSync(join(root, path), "utf8").matchAll(/^\/\/[#@] sourceMappingURL=(\S+)\s*$/gm)]
-        .map((match) => match[1])
-        .filter(
-          (url) =>
-            !url.startsWith("data:") &&
-            !packedPaths.has(posix.normalize(posix.join(posix.dirname(path), url))),
-        )
-        .map((url) => `${path} -> ${url}`),
-    );
-  assert.deepEqual(
-    dangling.slice(0, 10),
-    [],
-    `no packed file names a source map the package does not ship: ${dangling.length} do (the ` +
-      "first ten listed)",
-  );
+  const declarationMaps = [...packedPaths].filter((path) => path.endsWith(".d.ts.map")).length;
   console.log(
-    `Packed: ${packedPaths.size} files, no source map among them, and no sourceMappingURL to one ` +
-      "the package lacks",
+    `Packed: ${packedPaths.size} files; ${declarationMaps} declaration maps, each naming only ` +
+      "sources the package ships, and no other map or sourceMappingURL",
   );
   writeFileSync(join(work, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(

@@ -2134,12 +2134,23 @@ which is what proves the relative targets also ship. An absolute
 `github.com/eco-incorp/sauce/blob/…/docs/…` URL is rejected: it pins a branch and breaks in the
 tarball. New public doc links must target files shipped in the package.
 
-The package ships no source maps. The configs the build compiles with (`sdk/tsconfig.json`,
-`actions/tsconfig.json`, `mcp/tsconfig.json`, `dev-tools/tsconfig.build.json`) leave `sourceMap`
-and `declarationMap` unset: a map points into sources the package mostly does not carry. Unset,
-never `false`: ts-jest maps a test's TypeScript unless its tsconfig turns `sourceMap` off, and
-`sdk/tsconfig.test.json` extends `sdk/tsconfig.json`. `check-packed-package.mjs` fails a packed
-`.map` and any packed file whose `sourceMappingURL` names a file the package does not carry.
+The package ships a source map only where it works: a `.d.ts.map` whose every source ships too (the
+protocols' and the Hylo venue's, under `sdk/src`), so Go to Definition in a consumer's editor lands
+in the shipped `.ts`. `sdk/tsconfig.json` sets `declarationMap` and leaves `sourceMap` unset;
+`actions/tsconfig.json`, `mcp/tsconfig.json` and `dev-tools/tsconfig.build.json` leave both unset,
+since none of their sources ship. Unset, never `false`: ts-jest maps a test's TypeScript unless its
+tsconfig turns `sourceMap` off, and `sdk/tsconfig.test.json` extends `sdk/tsconfig.json`. The rule
+is `scripts/lib/source-maps.mjs`. It finds a `sourceMappingURL` as Node does, anywhere, in a line
+or a block comment, after code too, with `@` beside `#`, and holds every one in a file to the rule,
+not only the last, which Node takes, since readers differ in which they take; an inline `data:` map
+is refused. The SDK's build ends with `scripts/prune-source-maps.mjs`, which deletes every other map
+and takes off the trailer tsc wrote to name it (`//# sourceMappingURL=<name>.map`, the last line of
+a file in a workspace's `dist`), and changes nothing else: the pattern also matches inside strings,
+regular expressions and longer comments, where a cut breaks the file, so any other refused
+`sourceMappingURL` fails the build, named, and is fixed where it is written. What ships is npm's own
+list (`npm pack --dry-run --json`), never a reading of `files`; the prune runs in the build, not a
+`prepack` hook, because the packed check packs with `--ignore-scripts` and publish.yml publishes
+with `pnpm publish`. `check-packed-package.mjs` holds the tarball to the same rule.
 
 **Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
 SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine
