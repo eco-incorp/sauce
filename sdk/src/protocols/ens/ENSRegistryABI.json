@@ -1,6 +1,39 @@
 {
   "abi": [
     {
+      "name": "isApprovedForAll",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "operator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "old",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "owner",
       "type": "function",
       "stateMutability": "view",
@@ -14,6 +47,23 @@
         {
           "name": "",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "recordExists",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
         }
       ]
     },
@@ -35,6 +85,22 @@
       ]
     },
     {
+      "name": "setApprovalForAll",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "setOwner",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -46,6 +112,30 @@
         {
           "name": "owner",
           "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setRecord",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "resolver",
+          "type": "address"
+        },
+        {
+          "name": "ttl",
+          "type": "uint64"
         }
       ],
       "outputs": []
@@ -65,6 +155,182 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "setSubnodeOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        },
+        {
+          "name": "label",
+          "type": "bytes32"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "setSubnodeRecord",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        },
+        {
+          "name": "label",
+          "type": "bytes32"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "resolver",
+          "type": "address"
+        },
+        {
+          "name": "ttl",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setTTL",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        },
+        {
+          "name": "ttl",
+          "type": "uint64"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ttl",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "ApprovalForAll",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewOwner",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "label",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewResolver",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "resolver",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewTTL",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "ttl",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "node",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

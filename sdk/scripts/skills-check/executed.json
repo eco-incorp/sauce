@@ -96,7 +96,8 @@
   "compileOnly": {
     "sauce-globals/examples/globals.sauce.ts": "compiled, and its token-write lowering pinned, by globals.mts; no suite executes it",
     "sauce-protocols/examples/protocols.sauce.ts": "compiled by protocols.mts for chains with and without PancakeSwap V3; no suite executes it",
-    "sauce-script/examples/twap.sauce.ts": "compiled by skills:check and by the MCP sauce_compile test; no suite executes it",
+    "sauce-script/examples/nft-handover.sauce.ts": "compiled by skills:check and, with its IERC721.json given in modules, by the MCP sauce_compile test; no suite executes it",
+    "sauce-script/examples/twap.sauce.ts": "compiled by skills:check; no suite executes it",
     "sauce-swaps/examples/swap-leg.sauce.ts": "compiled by swaps.mts for Base and Arbitrum; no suite executes it"
   }
 }

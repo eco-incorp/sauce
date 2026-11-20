@@ -30,10 +30,10 @@ chain does not have it.
 
 ```sauce chain=metis
 function main() {
-  // `AaveV3.Pool` is Metis's pool: `0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Metis's oracle: `0x38D36e85E47eA6ff0d18B0adF12E5fC8984A6f8e`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Metis.AaveV3.Pool == AaveV3.Pool);
+  require(Metis.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -49,4 +49,6 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57` | `AaveV3.Pool` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | oracle | `0x38D36e85E47eA6ff0d18B0adF12E5fC8984A6f8e` | `AaveV3.Oracle` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | pool | `0x90df02551bB792286e8D4f13E0e357b4Bf1D6a57` | `AaveV3.Pool`; not on this deployment: `configureEModeCategory`, `configureEModeCategoryIsolated`, `getIsEModeCategoryIsolated` |
+| [Aave V3](../../sauce-protocols/references/registry/aave-v3.md) | poolAddressesProvider | `0xB9FABd7500B2C6781c35Dd48d54f81fc2299D7AF` | `AaveV3.PoolAddressesProvider` |

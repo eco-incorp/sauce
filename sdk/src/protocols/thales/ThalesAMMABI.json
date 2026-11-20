@@ -1,6 +1,55 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "availableToBuyFromAMM",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_available",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "availableToSellToAMM",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_available",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "buyFromAMM",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -30,6 +79,1391 @@
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyFromAmmQuote",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_quote",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyFromAmmQuoteWithDifferentCollateral",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "collateral",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "collateralQuote",
+          "type": "uint256"
+        },
+        {
+          "name": "sUSDToPay",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyFromAMMWithDifferentCollateralAndReferrer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedPayout",
+          "type": "uint256"
+        },
+        {
+          "name": "additionalSlippage",
+          "type": "uint256"
+        },
+        {
+          "name": "collateral",
+          "type": "address"
+        },
+        {
+          "name": "_referrer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyFromAMMWithReferrer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedPayout",
+          "type": "uint256"
+        },
+        {
+          "name": "additionalSlippage",
+          "type": "uint256"
+        },
+        {
+          "name": "_referrer",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyPriceImpact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_priceImpact",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "capPerMarket",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "curveOnrampEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "curveSUSD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "dai",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getCapPerAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_cap",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "impliedVolatilityPerAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        },
+        {
+          "name": "_priceFeed",
+          "type": "address"
+        },
+        {
+          "name": "_sUSD",
+          "type": "address"
+        },
+        {
+          "name": "_capPerMarket",
+          "type": "uint256"
+        },
+        {
+          "name": "_deciMath",
+          "type": "address"
+        },
+        {
+          "name": "_min_spread",
+          "type": "uint256"
+        },
+        {
+          "name": "_max_spread",
+          "type": "uint256"
+        },
+        {
+          "name": "_minimalTimeLeftToMaturity",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initNonReentrant",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "isMarketInAMMTrading",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isTrading",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastPauseTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidityPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "manager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "max_spread",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxAllowedPegSlippagePercentage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxSupportedPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "min_spread",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "min_spreadPerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimalTimeLeftToMaturity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minSupportedPrice",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nominatedOwner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "nominateNewOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "price",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "priceToReturn",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "priceFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "referrals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "referrerFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "retrieveSUSDAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "safeBox",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "safeBoxFeePerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "safeBoxImpact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sellPriceImpact",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_impact",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sellToAMM",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "expectedPayout",
+          "type": "uint256"
+        },
+        {
+          "name": "additionalSlippage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "sellToAmmQuote",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "position",
+          "type": "uint8"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "_quote",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setAmmUtils",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_ammUtils",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCapPerAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "_cap",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCurveSUSD",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_curveSUSD",
+          "type": "address"
+        },
+        {
+          "name": "_dai",
+          "type": "address"
+        },
+        {
+          "name": "_usdc",
+          "type": "address"
+        },
+        {
+          "name": "_usdt",
+          "type": "address"
+        },
+        {
+          "name": "_curveOnrampEnabled",
+          "type": "bool"
+        },
+        {
+          "name": "_maxAllowedPegSlippagePercentage",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setImpliedVolatilityPerAsset",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32"
+        },
+        {
+          "name": "_impliedVolatility",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLiquidityPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_liquidityPool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimalTimeLeftToMaturity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minimalTimeLeftToMaturity",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinMaxSpread",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minspread",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxspread",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinMaxSupportedPriceAndCap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minSupportedPrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_maxSupportedPrice",
+          "type": "uint256"
+        },
+        {
+          "name": "_capPerMarket",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinSpreadPerAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        },
+        {
+          "name": "newFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_paused",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPositionalMarketManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_manager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceFeedAndSUSD",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_priceFeed",
+          "type": "address"
+        },
+        {
+          "name": "_sUSD",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSafeBoxData",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_safeBox",
+          "type": "address"
+        },
+        {
+          "name": "_safeBoxImpact",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSafeBoxFeePerAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        },
+        {
+          "name": "newFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStakingThalesAndReferrals",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_stakingThales",
+          "type": "address"
+        },
+        {
+          "name": "_referrals",
+          "type": "address"
+        },
+        {
+          "name": "_referrerFee",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setWhitelistedAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_address",
+          "type": "address"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "spentOnMarket",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "stakingThales",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "sUSD",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnershipAtInit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "proxyAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferTokens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "all",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "usdc",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "usdt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "whitelistedAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BoughtFromAmm",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "buyer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "market",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "position",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sUSDPaid",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "susd",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BoughtOptionType",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "buyer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "sUSDPaid",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "inTheMoney",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BoughtWithDiscount",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "buyer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sUSDPaid",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldOwner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerNominated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauseChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "isPaused",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ReferrerPaid",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "refferer",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "trader",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "volume",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetCapPerAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_cap",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetImpliedVolatilityPerAsset",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "_impliedVolatility",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetMaxSpread",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_spread",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetMinimalTimeLeftToMaturity",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_minimalTimeLeftToMaturity",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetMinMaxSupportedPriceCapPerMarket",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "minPrice",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "maxPrice",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "capPerMarket",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetMinSpread",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_spread",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetPositionalMarketManager",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_manager",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetPriceFeed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_priceFeed",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetSafeBoxImpact",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_safeBoxImpact",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetSUSD",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sUSD",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SoldToAMM",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "seller",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "market",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "position",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sUSDPaid",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "susd",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": false
         }
       ]
     }

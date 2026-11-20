@@ -5,8 +5,7 @@
 // what it already owes, in USDC. Refuses an amount above it; the market itself refuses a borrow
 // below its minimum. Returns the market's utilization and its supply and borrow APRs (each scaled
 // by 1e18: 50000000000000000 is 5%), what the Pot could borrow before borrowing, and what it owes
-// after. The market's reads the registry's Comet ABI does not declare are in CometMarket.json beside
-// this file, as Compound III's Comet interface declares them.
+// after.
 //
 //   sauce run compound-borrow.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <collateral> <amount> <to>
@@ -21,7 +20,6 @@
 //
 //   sauce run compound-borrow.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 1000000000000000000 1000000000 <to>
-import CometMarket from "./CometMarket.json";
 
 const SECONDS_PER_YEAR = 31536000;
 const FACTOR_SCALE = 1000000000000000000;
@@ -44,7 +42,7 @@ function main(
   }
 
   // 2. The market: its utilization, and the per-second rates at it, as yearly rates.
-  const market = CometMarket.at(CompoundV3.CUSDCv3);
+  const market = CompoundV3.CUSDCv3;
   const utilization = market.getUtilization();
   const supplyApr = market.getSupplyRate(utilization) * SECONDS_PER_YEAR;
   const borrowApr = market.getBorrowRate(utilization) * SECONDS_PER_YEAR;

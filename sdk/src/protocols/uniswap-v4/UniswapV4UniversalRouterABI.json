@@ -35,6 +35,313 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "msgSender",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "uniswapV3SwapCallback",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount0Delta",
+          "type": "int256"
+        },
+        {
+          "name": "amount1Delta",
+          "type": "int256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unlockCallback",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "V3_POSITION_MANAGER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "V4_POSITION_MANAGER",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BalanceTooLow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ContractLocked",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "DeltaNotNegative",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currency",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DeltaNotPositive",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currency",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "ExecutionFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "commandIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "message",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "FromAddressIsNotOwner",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InputLengthMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InsufficientETH",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InsufficientToken",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidAction",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "action",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "InvalidBips",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidCommandType",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "commandType",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "InvalidEthSender",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidPath",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidReserves",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LengthMismatch",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAuthorizedForToken",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "NotPoolManager",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "OnlyMintAllowed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SliceOutOfBounds",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "TransactionDeadlinePassed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnsafeCast",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "UnsupportedAction",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "action",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "V2InvalidPath",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V2TooLittleReceived",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V2TooMuchRequested",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V3InvalidAmountOut",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V3InvalidCaller",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V3InvalidSwap",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V3TooLittleReceived",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V3TooMuchRequested",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "V4TooLittleReceived",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "minAmountOutReceived",
+          "type": "uint256"
+        },
+        {
+          "name": "amountReceived",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "V4TooMuchRequested",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "maxAmountInRequested",
+          "type": "uint256"
+        },
+        {
+          "name": "amountRequested",
+          "type": "uint256"
+        }
+      ]
     }
   ]
 }

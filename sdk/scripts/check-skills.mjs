@@ -388,7 +388,7 @@ function parseSkill(dir) {
     runners: files.filter((f) => f.endsWith(".mts")).map((f) => join(examplesDir, f)),
     programs: files.filter((f) => f.endsWith(".sauce.ts")).map((f) => join(examplesDir, f)),
     // A `.json` example is an actions document, or — a JSON array — a contract's ABI that a
-    // program beside it imports (`import IOracle from "./IOracle.json"`): a module, not an example.
+    // program beside it imports (`import IERC721 from "./IERC721.json"`): a module, not an example.
     documents: files
       .filter((f) => f.endsWith(".json") && !isAbi(join(examplesDir, f)))
       .map((f) => join(examplesDir, f)),
@@ -431,22 +431,13 @@ const inlineCode = (skill) =>
 // than in the skills, where a marker would mean nothing to the agent reading them, and an entry the
 // skill no longer needs fails the check, so the list cannot outlive its reason.
 const UNDECLARED_NAMES = {
-  "sauce-script": {
-    arr: "the rejected `arr.push(x)`: JavaScript's push, which SauceScript has no form of",
-  },
   "sauce-cli": {
     get_wallets:
       "Coinbase Wallet MCP's tool that gives the user's wallet addresses, a third-party MCP server's, not the package's",
     wallet_addresses:
       "Phantom MCP's tool that gives its wallet's addresses, a third-party MCP server's, not the package's",
   },
-  "sauce-protocols": {
-    executeOperation:
-      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why Aave's flash loan does not port",
-  },
   "sauce-swaps": {
-    executeOperation:
-      "Aave's flash-loan callback, which a receiver contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
     uniswapV3FlashCallback:
       "Uniswap V3's flash callback, which a borrower contract implements and a Pot cannot: named to say why the Router's flash is the one a program has",
   },
@@ -650,8 +641,10 @@ function wording(skill, file) {
     for (const [pattern, what] of NOT_PORTABLE)
       if (pattern.test(line)) fail(where(i), `names ${what}`);
     // A name a chain lacks is zero there and a program tests it, `if (X)`: the call is removed. A
-    // runner is exempt: it compiles the call to pin the refusal, and teaches no program.
-    if (!file.endsWith(".mts") && /\bavailable\(/.test(line))
+    // runner is exempt: it compiles the call to pin the refusal, and teaches no program. So is a
+    // contract's own function of that name: in a signature (`["available()"]`) or a generated
+    // registry file's declaration.
+    if (!file.endsWith(".mts") && !isGenerated(file) && /(?<!["'.])\bavailable\(/.test(line))
       fail(where(i), "calls `available(...)`, which is removed; test the name itself, `if (X)`");
     // A skill named in code is one the package ships: a renamed or removed skill fails here.
     for (const m of line.matchAll(/`(sauce-[a-z0-9-]+)`/g))
@@ -661,7 +654,8 @@ function wording(skill, file) {
       if (!resolve(dirname(file), m[0]).startsWith(SKILLS_DIR + "/"))
         fail(where(i), `names ${m[0]}, a path that leaves the skills directory`);
     }
-    for (const m of line.matchAll(/\]\(([^)\s#]*)(?:#([^)\s]*))?\)/g)) {
+    // A link outside inline code: `X["<signature>"](…)` in a code span is a call, not a link.
+    for (const m of line.replace(/`[^`]*`/g, "``").matchAll(/\]\(([^)\s#]*)(?:#([^)\s]*))?\)/g)) {
       const [, path, fragment] = m;
       if (/^[a-z]+:/i.test(path)) continue;
       const target = path ? resolve(dirname(file), path) : file;

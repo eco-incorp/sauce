@@ -1,0 +1,59 @@
+[
+  {
+    "type": "function",
+    "name": "adminAction",
+    "inputs": [
+      {
+        "name": "action",
+        "type": "uint8"
+      },
+      {
+        "name": "value",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "PoolProtocolFeeCollected",
+    "inputs": [
+      {
+        "name": "feeCollected",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "isTokenA",
+        "type": "bool",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PoolSetLendingFeeRate",
+    "inputs": [
+      {
+        "name": "lendingFeeRateD18",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PoolSetProtocolFeeRatio",
+    "inputs": [
+      {
+        "name": "protocolFeeRatioD3",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  }
+]

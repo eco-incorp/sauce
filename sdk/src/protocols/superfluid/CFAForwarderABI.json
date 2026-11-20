@@ -34,6 +34,297 @@
       ]
     },
     {
+      "name": "deleteFlow",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "userData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getAccountFlowInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lastUpdated",
+          "type": "uint256"
+        },
+        {
+          "name": "flowrate",
+          "type": "int96"
+        },
+        {
+          "name": "deposit",
+          "type": "uint256"
+        },
+        {
+          "name": "owedDeposit",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAccountFlowrate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flowrate",
+          "type": "int96"
+        }
+      ]
+    },
+    {
+      "name": "getBufferAmountByFlowrate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "flowrate",
+          "type": "int96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bufferAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFlowInfo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lastUpdated",
+          "type": "uint256"
+        },
+        {
+          "name": "flowrate",
+          "type": "int96"
+        },
+        {
+          "name": "deposit",
+          "type": "uint256"
+        },
+        {
+          "name": "owedDeposit",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getFlowOperatorPermissions",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "flowOperator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "permissions",
+          "type": "uint8"
+        },
+        {
+          "name": "flowrateAllowance",
+          "type": "int96"
+        }
+      ]
+    },
+    {
+      "name": "getFlowrate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "flowrate",
+          "type": "int96"
+        }
+      ]
+    },
+    {
+      "name": "grantPermissions",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "flowOperator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "revokePermissions",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "flowOperator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "setFlowrate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "flowrate",
+          "type": "int96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "setFlowrateFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "flowrate",
+          "type": "int96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "updateFlow",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -67,7 +358,7 @@
       ]
     },
     {
-      "name": "deleteFlow",
+      "name": "updateFlowOperatorPermissions",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
@@ -76,16 +367,16 @@
           "type": "address"
         },
         {
-          "name": "sender",
+          "name": "flowOperator",
           "type": "address"
         },
         {
-          "name": "receiver",
-          "type": "address"
+          "name": "permissions",
+          "type": "uint8"
         },
         {
-          "name": "userData",
-          "type": "bytes"
+          "name": "flowrateAllowance",
+          "type": "int96"
         }
       ],
       "outputs": [
@@ -94,6 +385,11 @@
           "type": "bool"
         }
       ]
+    },
+    {
+      "name": "CFA_FWD_INVALID_FLOW_RATE",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

@@ -1,5 +1,44 @@
 export const CCIPRouterABI = [
   {
+    name: "acceptOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "applyRampUpdates",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "onRampUpdates",
+        type: "tuple[]",
+        components: [
+          { name: "destChainSelector", type: "uint64" },
+          { name: "onRamp", type: "address" },
+        ],
+      },
+      {
+        name: "offRampRemoves",
+        type: "tuple[]",
+        components: [
+          { name: "sourceChainSelector", type: "uint64" },
+          { name: "offRamp", type: "address" },
+        ],
+      },
+      {
+        name: "offRampAdds",
+        type: "tuple[]",
+        components: [
+          { name: "sourceChainSelector", type: "uint64" },
+          { name: "offRamp", type: "address" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
     name: "ccipSend",
     type: "function",
     stateMutability: "payable",
@@ -25,6 +64,13 @@ export const CCIPRouterABI = [
       },
     ],
     outputs: [{ name: "messageId", type: "bytes32" }],
+  },
+  {
+    name: "getArmProxy",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
   },
   {
     name: "getFee",
@@ -54,10 +100,205 @@ export const CCIPRouterABI = [
     outputs: [{ name: "fee", type: "uint256" }],
   },
   {
+    name: "getOffRamps",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "sourceChainSelector", type: "uint64" },
+          { name: "offRamp", type: "address" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getOnRamp",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "destChainSelector", type: "uint64" }],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "getSupportedTokens",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "chainSelector", type: "uint64" }],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "getWrappedNative",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
     name: "isChainSupported",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "chainSelector", type: "uint64" }],
     outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "isOffRamp",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "sourceChainSelector", type: "uint64" },
+      { name: "offRamp", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "MAX_RET_BYTES",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "recoverTokens",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenAddress", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "routeMessage",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "message",
+        type: "tuple",
+        components: [
+          { name: "messageId", type: "bytes32" },
+          { name: "sourceChainSelector", type: "uint64" },
+          { name: "sender", type: "bytes" },
+          { name: "data", type: "bytes" },
+          {
+            name: "destTokenAmounts",
+            type: "tuple[]",
+            components: [
+              { name: "token", type: "address" },
+              { name: "amount", type: "uint256" },
+            ],
+          },
+        ],
+      },
+      { name: "gasForCallExactCheck", type: "uint16" },
+      { name: "gasLimit", type: "uint256" },
+      { name: "receiver", type: "address" },
+    ],
+    outputs: [
+      { name: "success", type: "bool" },
+      { name: "retData", type: "bytes" },
+      { name: "gasUsed", type: "uint256" },
+    ],
+  },
+  {
+    name: "setWrappedNative",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "wrappedNative", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "transferOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "to", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "typeAndVersion",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "MessageExecuted",
+    type: "event",
+    inputs: [
+      { name: "messageId", type: "bytes32", indexed: false },
+      { name: "sourceChainSelector", type: "uint64", indexed: false },
+      { name: "offRamp", type: "address", indexed: false },
+      { name: "calldataHash", type: "bytes32", indexed: false },
+    ],
+  },
+  {
+    name: "OffRampAdded",
+    type: "event",
+    inputs: [
+      { name: "sourceChainSelector", type: "uint64", indexed: true },
+      { name: "offRamp", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "OffRampRemoved",
+    type: "event",
+    inputs: [
+      { name: "sourceChainSelector", type: "uint64", indexed: true },
+      { name: "offRamp", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "OnRampSet",
+    type: "event",
+    inputs: [
+      { name: "destChainSelector", type: "uint64", indexed: true },
+      { name: "onRamp", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "OwnershipTransferred",
+    type: "event",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "OwnershipTransferRequested",
+    type: "event",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+    ],
+  },
+  { name: "BadARMSignal", type: "error", inputs: [] },
+  { name: "FailedToSendValue", type: "error", inputs: [] },
+  { name: "InsufficientFeeTokenAmount", type: "error", inputs: [] },
+  { name: "InvalidMsgValue", type: "error", inputs: [] },
+  { name: "InvalidRecipientAddress", type: "error", inputs: [{ name: "to", type: "address" }] },
+  {
+    name: "OffRampMismatch",
+    type: "error",
+    inputs: [
+      { name: "chainSelector", type: "uint64" },
+      { name: "offRamp", type: "address" },
+    ],
+  },
+  { name: "OnlyOffRamp", type: "error", inputs: [] },
+  {
+    name: "UnsupportedDestinationChain",
+    type: "error",
+    inputs: [{ name: "destChainSelector", type: "uint64" }],
   },
 ] as const;

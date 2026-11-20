@@ -1,6 +1,2485 @@
 {
   "abi": [
     {
+      "name": "buy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "adapter",
+              "type": "address"
+            },
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "route",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "index",
+                  "type": "uint256"
+                },
+                {
+                  "name": "targetExchange",
+                  "type": "address"
+                },
+                {
+                  "name": "percent",
+                  "type": "uint256"
+                },
+                {
+                  "name": "payload",
+                  "type": "bytes"
+                },
+                {
+                  "name": "networkFee",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buyOnAugustusRFQTryBatchFill",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "orderInfos",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "order",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "nonceAndMeta",
+                  "type": "uint256"
+                },
+                {
+                  "name": "expiry",
+                  "type": "uint128"
+                },
+                {
+                  "name": "makerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "takerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "maker",
+                  "type": "address"
+                },
+                {
+                  "name": "taker",
+                  "type": "address"
+                },
+                {
+                  "name": "makerAmount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "takerAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "takerTokenFillAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "permitTakerAsset",
+              "type": "bytes"
+            },
+            {
+              "name": "permitMakerAsset",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmountMax",
+          "type": "uint256"
+        },
+        {
+          "name": "toAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "buyOnAugustusRFQTryBatchFillWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "orderInfos",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "order",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "nonceAndMeta",
+                  "type": "uint256"
+                },
+                {
+                  "name": "expiry",
+                  "type": "uint128"
+                },
+                {
+                  "name": "makerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "takerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "maker",
+                  "type": "address"
+                },
+                {
+                  "name": "taker",
+                  "type": "address"
+                },
+                {
+                  "name": "makerAmount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "takerAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "takerTokenFillAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "permitTakerAsset",
+              "type": "bytes"
+            },
+            {
+              "name": "permitMakerAsset",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmountMax",
+          "type": "uint256"
+        },
+        {
+          "name": "toAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "buyOnUniswap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "amountInMax",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "path",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "buyOnUniswapFork",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "factory",
+          "type": "address"
+        },
+        {
+          "name": "initCode",
+          "type": "bytes32"
+        },
+        {
+          "name": "amountInMax",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "path",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "buyOnUniswapV2Fork",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "amountInMax",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "name": "pools",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "buyOnUniswapV2ForkWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "amountInMax",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOut",
+          "type": "uint256"
+        },
+        {
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "name": "pools",
+          "type": "uint256[]"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "DEFAULT_ADMIN_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "directBalancerV2GivenInSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "swaps",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "poolId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "assetInIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "assetOutIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "userData",
+                  "type": "bytes"
+                }
+              ]
+            },
+            {
+              "name": "assets",
+              "type": "address[]"
+            },
+            {
+              "name": "funds",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "sender",
+                  "type": "address"
+                },
+                {
+                  "name": "fromInternalBalance",
+                  "type": "bool"
+                },
+                {
+                  "name": "recipient",
+                  "type": "address"
+                },
+                {
+                  "name": "toInternalBalance",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "limits",
+              "type": "int256[]"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "directBalancerV2GivenOutSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "swaps",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "poolId",
+                  "type": "bytes32"
+                },
+                {
+                  "name": "assetInIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "assetOutIndex",
+                  "type": "uint256"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "userData",
+                  "type": "bytes"
+                }
+              ]
+            },
+            {
+              "name": "assets",
+              "type": "address[]"
+            },
+            {
+              "name": "funds",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "sender",
+                  "type": "address"
+                },
+                {
+                  "name": "fromInternalBalance",
+                  "type": "bool"
+                },
+                {
+                  "name": "recipient",
+                  "type": "address"
+                },
+                {
+                  "name": "toInternalBalance",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "limits",
+              "type": "int256[]"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "vault",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "directCurveV1Swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "exchange",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "i",
+              "type": "int128"
+            },
+            {
+              "name": "j",
+              "type": "int128"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "swapType",
+              "type": "uint8"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "needWrapNative",
+              "type": "bool"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "directCurveV2Swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "exchange",
+              "type": "address"
+            },
+            {
+              "name": "poolAddress",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "i",
+              "type": "uint256"
+            },
+            {
+              "name": "j",
+              "type": "uint256"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "swapType",
+              "type": "uint8"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "needWrapNative",
+              "type": "bool"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "directUniV3Buy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "exchange",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "bytes"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "directUniV3Swap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "exchange",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "isApproved",
+              "type": "bool"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "bytes"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getAdapterData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "getFeeWallet",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPartnerFeeStructure",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "partner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "partnerShare",
+              "type": "uint256"
+            },
+            {
+              "name": "noPositiveSlippage",
+              "type": "bool"
+            },
+            {
+              "name": "positiveSlippageToUser",
+              "type": "bool"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint16"
+            },
+            {
+              "name": "partnerId",
+              "type": "string"
+            },
+            {
+              "name": "data",
+              "type": "bytes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getRoleAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMember",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "index",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoleMemberCount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getRouterData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "getTokenTransferProxy",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getVersion",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "grantRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "hasRole",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initializeAdapter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "adapter",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initializeRouter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "router",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isAdapterInitialized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isRouterInitialized",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "key",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "megaSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "fromAmountPercent",
+                  "type": "uint256"
+                },
+                {
+                  "name": "path",
+                  "type": "tuple[]",
+                  "components": [
+                    {
+                      "name": "to",
+                      "type": "address"
+                    },
+                    {
+                      "name": "totalNetworkFee",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "adapters",
+                      "type": "tuple[]",
+                      "components": [
+                        {
+                          "name": "adapter",
+                          "type": "address"
+                        },
+                        {
+                          "name": "percent",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "networkFee",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "route",
+                          "type": "tuple[]",
+                          "components": [
+                            {
+                              "name": "index",
+                              "type": "uint256"
+                            },
+                            {
+                              "name": "targetExchange",
+                              "type": "address"
+                            },
+                            {
+                              "name": "percent",
+                              "type": "uint256"
+                            },
+                            {
+                              "name": "payload",
+                              "type": "bytes"
+                            },
+                            {
+                              "name": "networkFee",
+                              "type": "uint256"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "multiSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "to",
+                  "type": "address"
+                },
+                {
+                  "name": "totalNetworkFee",
+                  "type": "uint256"
+                },
+                {
+                  "name": "adapters",
+                  "type": "tuple[]",
+                  "components": [
+                    {
+                      "name": "adapter",
+                      "type": "address"
+                    },
+                    {
+                      "name": "percent",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "networkFee",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "route",
+                      "type": "tuple[]",
+                      "components": [
+                        {
+                          "name": "index",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "targetExchange",
+                          "type": "address"
+                        },
+                        {
+                          "name": "percent",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "payload",
+                          "type": "bytes"
+                        },
+                        {
+                          "name": "networkFee",
+                          "type": "uint256"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "onERC1155BatchReceived",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_operator",
+          "type": "address"
+        },
+        {
+          "name": "_from",
+          "type": "address"
+        },
+        {
+          "name": "_ids",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_values",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "onERC1155Received",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_operator",
+          "type": "address"
+        },
+        {
+          "name": "_from",
+          "type": "address"
+        },
+        {
+          "name": "_id",
+          "type": "uint256"
+        },
+        {
+          "name": "_value",
+          "type": "uint256"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "onERC721Received",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4"
+        }
+      ]
+    },
+    {
+      "name": "partialSwapOnAugustusRFQ",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "address"
+            },
+            {
+              "name": "takerAsset",
+              "type": "address"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "makerPermit",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "partialSwapOnAugustusRFQNFT",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "makerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "makerPermit",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "partialSwapOnAugustusRFQNFTWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "makerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "makerPermit",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "partialSwapOnAugustusRFQWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "address"
+            },
+            {
+              "name": "takerAsset",
+              "type": "address"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "makerPermit",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "protectedMegaSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "fromAmountPercent",
+                  "type": "uint256"
+                },
+                {
+                  "name": "path",
+                  "type": "tuple[]",
+                  "components": [
+                    {
+                      "name": "to",
+                      "type": "address"
+                    },
+                    {
+                      "name": "totalNetworkFee",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "adapters",
+                      "type": "tuple[]",
+                      "components": [
+                        {
+                          "name": "adapter",
+                          "type": "address"
+                        },
+                        {
+                          "name": "percent",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "networkFee",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "route",
+                          "type": "tuple[]",
+                          "components": [
+                            {
+                              "name": "index",
+                              "type": "uint256"
+                            },
+                            {
+                              "name": "targetExchange",
+                              "type": "address"
+                            },
+                            {
+                              "name": "percent",
+                              "type": "uint256"
+                            },
+                            {
+                              "name": "payload",
+                              "type": "bytes"
+                            },
+                            {
+                              "name": "networkFee",
+                              "type": "uint256"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "protectedMultiSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "path",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "to",
+                  "type": "address"
+                },
+                {
+                  "name": "totalNetworkFee",
+                  "type": "uint256"
+                },
+                {
+                  "name": "adapters",
+                  "type": "tuple[]",
+                  "components": [
+                    {
+                      "name": "adapter",
+                      "type": "address"
+                    },
+                    {
+                      "name": "percent",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "networkFee",
+                      "type": "uint256"
+                    },
+                    {
+                      "name": "route",
+                      "type": "tuple[]",
+                      "components": [
+                        {
+                          "name": "index",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "targetExchange",
+                          "type": "address"
+                        },
+                        {
+                          "name": "percent",
+                          "type": "uint256"
+                        },
+                        {
+                          "name": "payload",
+                          "type": "bytes"
+                        },
+                        {
+                          "name": "networkFee",
+                          "type": "uint256"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "protectedSimpleBuy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "callees",
+              "type": "address[]"
+            },
+            {
+              "name": "exchangeData",
+              "type": "bytes"
+            },
+            {
+              "name": "startIndexes",
+              "type": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "protectedSimpleSwap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "callees",
+              "type": "address[]"
+            },
+            {
+              "name": "exchangeData",
+              "type": "bytes"
+            },
+            {
+              "name": "startIndexes",
+              "type": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receivedAmount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "registerPartner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "partner",
+          "type": "address"
+        },
+        {
+          "name": "_partnerShare",
+          "type": "uint256"
+        },
+        {
+          "name": "_noPositiveSlippage",
+          "type": "bool"
+        },
+        {
+          "name": "_positiveSlippageToUser",
+          "type": "bool"
+        },
+        {
+          "name": "_feePercent",
+          "type": "uint16"
+        },
+        {
+          "name": "partnerId",
+          "type": "string"
+        },
+        {
+          "name": "_data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "revokeRole",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32"
+        },
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ROUTER_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "setFeeWallet",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeWallet",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setImplementation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "selector",
+          "type": "bytes4"
+        },
+        {
+          "name": "implementation",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "simpleBuy",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toToken",
+              "type": "address"
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "callees",
+              "type": "address[]"
+            },
+            {
+              "name": "exchangeData",
+              "type": "bytes"
+            },
+            {
+              "name": "startIndexes",
+              "type": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "simpleBuyNFT",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "fromToken",
+              "type": "address"
+            },
+            {
+              "name": "toTokenDetails",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "name": "toToken",
+                  "type": "uint256"
+                },
+                {
+                  "name": "toTokenID",
+                  "type": "uint256"
+                },
+                {
+                  "name": "toAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "fromAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "expectedAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "callees",
+              "type": "address[]"
+            },
+            {
+              "name": "exchangeData",
+              "type": "bytes"
+            },
+            {
+              "name": "startIndexes",
+              "type": "uint256[]"
+            },
+            {
+              "name": "values",
+              "type": "uint256[]"
+            },
+            {
+              "name": "beneficiary",
+              "type": "address"
+            },
+            {
+              "name": "partner",
+              "type": "address"
+            },
+            {
+              "name": "feePercent",
+              "type": "uint256"
+            },
+            {
+              "name": "permit",
+              "type": "bytes"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            },
+            {
+              "name": "uuid",
+              "type": "bytes16"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "simpleSwap",
       "type": "function",
       "stateMutability": "payable",
@@ -76,6 +2555,1005 @@
         {
           "name": "receivedAmount",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "supportsInterface",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "interfaceID",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "swapOnAugustusRFQ",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "address"
+            },
+            {
+              "name": "takerAsset",
+              "type": "address"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnAugustusRFQNFT",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "makerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnAugustusRFQNFTWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "makerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAsset",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAssetId",
+              "type": "uint256"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnAugustusRFQTryBatchFill",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "orderInfos",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "order",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "nonceAndMeta",
+                  "type": "uint256"
+                },
+                {
+                  "name": "expiry",
+                  "type": "uint128"
+                },
+                {
+                  "name": "makerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "takerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "maker",
+                  "type": "address"
+                },
+                {
+                  "name": "taker",
+                  "type": "address"
+                },
+                {
+                  "name": "makerAmount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "takerAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "takerTokenFillAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "permitTakerAsset",
+              "type": "bytes"
+            },
+            {
+              "name": "permitMakerAsset",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "toAmountMin",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnAugustusRFQTryBatchFillWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "orderInfos",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "order",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "nonceAndMeta",
+                  "type": "uint256"
+                },
+                {
+                  "name": "expiry",
+                  "type": "uint128"
+                },
+                {
+                  "name": "makerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "takerAsset",
+                  "type": "address"
+                },
+                {
+                  "name": "maker",
+                  "type": "address"
+                },
+                {
+                  "name": "taker",
+                  "type": "address"
+                },
+                {
+                  "name": "makerAmount",
+                  "type": "uint256"
+                },
+                {
+                  "name": "takerAmount",
+                  "type": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "name": "takerTokenFillAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "permitTakerAsset",
+              "type": "bytes"
+            },
+            {
+              "name": "permitMakerAsset",
+              "type": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "toAmountMin",
+          "type": "uint256"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnAugustusRFQWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "nonceAndMeta",
+              "type": "uint256"
+            },
+            {
+              "name": "expiry",
+              "type": "uint128"
+            },
+            {
+              "name": "makerAsset",
+              "type": "address"
+            },
+            {
+              "name": "takerAsset",
+              "type": "address"
+            },
+            {
+              "name": "maker",
+              "type": "address"
+            },
+            {
+              "name": "taker",
+              "type": "address"
+            },
+            {
+              "name": "makerAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "takerAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes"
+        },
+        {
+          "name": "wrapETH",
+          "type": "uint8"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnUniswap",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "path",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnUniswapFork",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "factory",
+          "type": "address"
+        },
+        {
+          "name": "initCode",
+          "type": "bytes32"
+        },
+        {
+          "name": "amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "path",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnUniswapV2Fork",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "name": "pools",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnUniswapV2ForkWithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "tokenIn",
+          "type": "address"
+        },
+        {
+          "name": "amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "weth",
+          "type": "address"
+        },
+        {
+          "name": "pools",
+          "type": "uint256[]"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnZeroXv2",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "exchange",
+          "type": "address"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnZeroXv2WithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "exchange",
+          "type": "address"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnZeroXv4",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "exchange",
+          "type": "address"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swapOnZeroXv4WithPermit",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "fromToken",
+          "type": "address"
+        },
+        {
+          "name": "toToken",
+          "type": "address"
+        },
+        {
+          "name": "fromAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOutMin",
+          "type": "uint256"
+        },
+        {
+          "name": "exchange",
+          "type": "address"
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        },
+        {
+          "name": "permit",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferTokens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "destination",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "WHITELISTED_ROLE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "AdapterInitialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "adapter",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "BoughtNFTV3",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "uuid",
+          "type": "bytes16",
+          "indexed": false
+        },
+        {
+          "name": "partner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feePercent",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "initiator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destTokenDetails",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "toToken",
+              "type": "uint256"
+            },
+            {
+              "name": "toTokenID",
+              "type": "uint256"
+            },
+            {
+              "name": "toAmount",
+              "type": "uint256"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "srcAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "expectedAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BoughtV3",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "uuid",
+          "type": "bytes16",
+          "indexed": false
+        },
+        {
+          "name": "partner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feePercent",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "initiator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "receivedAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "expectedAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RoleGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RoleRevoked",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RouterInitialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "router",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SwappedDirect",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "uuid",
+          "type": "bytes16",
+          "indexed": false
+        },
+        {
+          "name": "partner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feePercent",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "initiator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "kind",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "receivedAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "expectedAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SwappedV3",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "uuid",
+          "type": "bytes16",
+          "indexed": false
+        },
+        {
+          "name": "partner",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "feePercent",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "initiator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "beneficiary",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "srcAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "receivedAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "expectedAmount",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     }

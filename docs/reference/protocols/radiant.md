@@ -41,20 +41,18 @@ function main() {
 
 | Chain | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Arbitrum One](../chains/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool`; not on this deployment: `deposit`, `withdraw`, `borrow`, `repay` |
+| [Arbitrum One](../chains/arbitrum.md) | lendingPool | `0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1` | `Radiant.LendingPool` |
 
 ## ABI
 
 ### `RadiantLendingPoolABI`
 
-`import RadiantLendingPoolABI from "./protocols/radiant/RadiantLendingPoolABI.json";` Speaks for: lendingPool.
+`import RadiantLendingPoolABI from "./protocols/radiant/RadiantLendingPoolABI.json";` Speaks for: lendingPool. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Radiant` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)`
 - `withdraw(address asset, uint256 amount, address to) returns (uint256)`
 - `borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf)`
 - `repay(address asset, uint256 amount, uint256 rateMode, address onBehalfOf) returns (uint256)`
-
-Not on Arbitrum One's lendingPool (`0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1`), whose code does not dispatch them: `deposit`, `withdraw`, `borrow`, `repay`. Do not call them there: the call does not run the function, and whether it reverts is up to that code.
 
 ## Next
 

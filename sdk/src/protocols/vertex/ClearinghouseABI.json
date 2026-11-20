@@ -1,6 +1,717 @@
 {
   "abi": [
     {
+      "name": "_isAboveInitial",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_isUnderInitial",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "addEngine",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "engine",
+          "type": "address"
+        },
+        {
+          "name": "engineType",
+          "type": "uint8"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burnLp",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "bytes32"
+            },
+            {
+              "name": "productId",
+              "type": "uint32"
+            },
+            {
+              "name": "amount",
+              "type": "uint128"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimSequencerFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "subaccount",
+              "type": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "fees",
+          "type": "int128[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "bytes32"
+            },
+            {
+              "name": "productId",
+              "type": "uint32"
+            },
+            {
+              "name": "amount",
+              "type": "uint128"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "depositInsurance",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "amount",
+              "type": "uint128"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getEndpoint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getEngineByProduct",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getEngineByType",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "engineType",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getHealth",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        },
+        {
+          "name": "healthType",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "health",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "getInsurance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "getMaxHealthGroup",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "getNumProducts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "getOraclePricesX18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "healthGroup",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "spotPriceX18",
+              "type": "int128"
+            },
+            {
+              "name": "perpPriceX18",
+              "type": "int128"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getOraclePriceX18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "getOrderbook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getQuote",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRisk",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "longWeightInitialX18",
+              "type": "int128"
+            },
+            {
+              "name": "shortWeightInitialX18",
+              "type": "int128"
+            },
+            {
+              "name": "longWeightMaintenanceX18",
+              "type": "int128"
+            },
+            {
+              "name": "shortWeightMaintenanceX18",
+              "type": "int128"
+            },
+            {
+              "name": "largePositionPenaltyX18",
+              "type": "int128"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getSupportedEngines",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8[]"
+        }
+      ]
+    },
+    {
+      "name": "getVersion",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_endpoint",
+          "type": "address"
+        },
+        {
+          "name": "_quote",
+          "type": "address"
+        },
+        {
+          "name": "_fees",
+          "type": "address"
+        },
+        {
+          "name": "_clearinghouseLiq",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "insurance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "liquidateSubaccount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "bytes32"
+            },
+            {
+              "name": "liquidatee",
+              "type": "bytes32"
+            },
+            {
+              "name": "mode",
+              "type": "uint8"
+            },
+            {
+              "name": "healthGroup",
+              "type": "uint32"
+            },
+            {
+              "name": "amount",
+              "type": "int128"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "mintLp",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "bytes32"
+            },
+            {
+              "name": "productId",
+              "type": "uint32"
+            },
+            {
+              "name": "amountBase",
+              "type": "uint128"
+            },
+            {
+              "name": "quoteAmountLow",
+              "type": "uint128"
+            },
+            {
+              "name": "quoteAmountHigh",
+              "type": "uint128"
+            },
+            {
+              "name": "nonce",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "modifyProductConfig",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        },
+        {
+          "name": "riskStore",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "longWeightInitial",
+              "type": "int32"
+            },
+            {
+              "name": "shortWeightInitial",
+              "type": "int32"
+            },
+            {
+              "name": "longWeightMaintenance",
+              "type": "int32"
+            },
+            {
+              "name": "shortWeightMaintenance",
+              "type": "int32"
+            },
+            {
+              "name": "largePositionPenalty",
+              "type": "int32"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "rebate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "subaccounts",
+              "type": "bytes32[]"
+            },
+            {
+              "name": "amounts",
+              "type": "int128[]"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "registerProductForId",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "book",
+          "type": "address"
+        },
+        {
+          "name": "riskStore",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "longWeightInitial",
+              "type": "int32"
+            },
+            {
+              "name": "shortWeightInitial",
+              "type": "int32"
+            },
+            {
+              "name": "longWeightMaintenance",
+              "type": "int32"
+            },
+            {
+              "name": "shortWeightMaintenance",
+              "type": "int32"
+            },
+            {
+              "name": "largePositionPenalty",
+              "type": "int32"
+            }
+          ]
+        },
+        {
+          "name": "healthGroup",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setEndpoint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_endpoint",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "settlePnl",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "subaccounts",
+              "type": "bytes32[]"
+            },
+            {
+              "name": "productIds",
+              "type": "uint256[]"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "updateFeeRates",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "txn",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "user",
+              "type": "address"
+            },
+            {
+              "name": "productId",
+              "type": "uint32"
+            },
+            {
+              "name": "makerRateX18",
+              "type": "int64"
+            },
+            {
+              "name": "takerRateX18",
+              "type": "int64"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "upgradeClearinghouseLiq",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_clearinghouseLiq",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "withdrawCollateral",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -29,6 +740,85 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "ClearinghouseInitialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "endpoint",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "quote",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "fees",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ModifyCollateral",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "int128",
+          "indexed": false
+        },
+        {
+          "name": "subaccount",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "productId",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PRBMathSD59x18__SqrtOverflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "int256"
+        }
+      ]
     }
   ]
 }

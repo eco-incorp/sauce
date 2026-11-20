@@ -5,9 +5,8 @@
 // `amount` and pays at most `limit`. The Vault's own queryBatchSwap prices the same steps first, and
 // the program refuses a quote past `limit` before anything moves; the same bound goes to batchSwap
 // as its signed limits, so the Vault holds the trade to it as well. The Vault is approved for the
-// most the batch may take, and what it leaves is reset to zero. queryBatchSwap is not in the
-// registry's Vault ABI: BalancerV2Query.json beside this file declares it. Returns what the Pot
-// paid and what the recipient received, each measured as a balance change.
+// most the batch may take, and what it leaves is reset to zero. Returns what the Pot paid and what
+// the recipient received, each measured as a balance change.
 //
 //   sauce run balancer-batch-swap.sauce.ts --chain <chain> --keystore <keystore> \
 //     --args <givenOut> <firstPool> <secondPool> <tokenIn> <via> <tokenOut> <amount> <limit> <recipient>
@@ -34,7 +33,6 @@
 //     0xa6f548df93de924d73be7d25dc02554c6bd66db500020000000000000000000e \
 //     0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 \
 //     <wbtc> 1000000000 900000 <recipient>
-import BalancerV2Query from "./BalancerV2Query.json";
 
 function main(
   givenOut: bool,
@@ -72,7 +70,7 @@ function main(
 
   // The Vault's price for these steps now, per asset: what the Pot pays is positive, what the
   // recipient receives negative, and `via` nets to zero.
-  const quoted = BalancerV2Query.at(BalancerV2.Vault).queryBatchSwap(kind, swaps, assets, funds);
+  const quoted = BalancerV2.Vault.queryBatchSwap(kind, swaps, assets, funds);
   require(quoted[0] <= Int256(maxIn), "the pools want more tokenIn than the limit");
   require(-quoted[2] >= Int256(minOut), "the pools give less tokenOut than the limit");
 

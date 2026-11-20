@@ -223,9 +223,9 @@ TypeScript leaves them to their own project. The file it writes is this, `<packa
 }
 ```
 
-A contract ABI beside a program is typed by its default import, `import IOracle from
-"./IOracle.json"`, as a contract whose methods the editor does not check; the compile checks them
-against the ABI.
+A contract ABI beside a program, for a contract the registry does not record, is typed by its
+default import, `import IERC721 from "./IERC721.json"`, as a contract whose methods the editor does
+not check; the compile checks them against the ABI.
 
 `sauce skills install` and `sauce skills update` write the same file as `tsconfig.json` in each
 skills directory, so the skills' example programs open typed as well. Its declarations, like the

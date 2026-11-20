@@ -1,6 +1,505 @@
 {
   "abi": [
     {
+      "name": "addGovernor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address"
+        },
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addNativeLiquidity",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addPauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "addseq",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "delayedTransfers",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "delayPeriod",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "delayThresholds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "epochLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "epochVolumeCaps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "epochVolumes",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "executeDelayedTransfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "governors",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "increaseNoticePeriod",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "period",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isGovernor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isPauser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastOpTimestamps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxSend",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minAdd",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimalMaxSlippage",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "minSend",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nativeWrap",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "noticePeriod",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "notifyResetSigners",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pausers",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "relay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_relayRequest",
+          "type": "bytes"
+        },
+        {
+          "name": "_sigs",
+          "type": "bytes[]"
+        },
+        {
+          "name": "_signers",
+          "type": "address[]"
+        },
+        {
+          "name": "_powers",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeGovernor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removePauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceGovernor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "renouncePauser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "resetSigners",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_signers",
+          "type": "address[]"
+        },
+        {
+          "name": "_powers",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "resetTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "send",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -59,6 +558,688 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "setDelayPeriod",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_period",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDelayThresholds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_thresholds",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setEpochLength",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_length",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setEpochVolumeCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_caps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMaxSend",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinAdd",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinimalMaxSlippage",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_minimalMaxSlippage",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMinSend",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "_amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setWrap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_weth",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ssHash",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transfers",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "triggerTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unpause",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "updateSigners",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_triggerTime",
+          "type": "uint256"
+        },
+        {
+          "name": "_newSigners",
+          "type": "address[]"
+        },
+        {
+          "name": "_newPowers",
+          "type": "uint256[]"
+        },
+        {
+          "name": "_sigs",
+          "type": "bytes[]"
+        },
+        {
+          "name": "_curSigners",
+          "type": "address[]"
+        },
+        {
+          "name": "_curPowers",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "verifySigs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "_msg",
+          "type": "bytes"
+        },
+        {
+          "name": "_sigs",
+          "type": "bytes[]"
+        },
+        {
+          "name": "_signers",
+          "type": "address[]"
+        },
+        {
+          "name": "_powers",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_wdmsg",
+          "type": "bytes"
+        },
+        {
+          "name": "_sigs",
+          "type": "bytes[]"
+        },
+        {
+          "name": "_signers",
+          "type": "address[]"
+        },
+        {
+          "name": "_powers",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdraws",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "DelayedTransferAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelayedTransferExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelayPeriodUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "period",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelayThresholdUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "threshold",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EpochLengthUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "length",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EpochVolumeUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "cap",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovernorAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "GovernorRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LiquidityAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "seqnum",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "provider",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MaxSendUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MinAddUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MinSendUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauserAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PauserRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Relay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "transferId",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "srcChainId",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "srcTransferId",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ResetNotification",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "resetTime",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Send",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "transferId",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "dstChainId",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "nonce",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "maxSlippage",
+          "type": "uint32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SignersUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_signers",
+          "type": "address[]",
+          "indexed": false
+        },
+        {
+          "name": "_powers",
+          "type": "uint256[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Unpaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawDone",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "withdrawId",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "seqnum",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "refid",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

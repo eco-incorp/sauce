@@ -1,6 +1,226 @@
 {
   "abi": [
     {
+      "name": "addLiquidity",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "l1TokenAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "bondAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "bondToken",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "claimProtocolFeesCaptured",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "crossChainContracts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "adapter",
+          "type": "address"
+        },
+        {
+          "name": "spokePool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "disableL1TokenForLiquidityProvision",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "disputeRootBundle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "emergencyDeleteProposal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "enableL1TokenForLiquidityProvision",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "exchangeRateCurrent",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "executeRootBundle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "groupIndex",
+          "type": "uint256"
+        },
+        {
+          "name": "bundleLpFees",
+          "type": "uint256[]"
+        },
+        {
+          "name": "netSendAmounts",
+          "type": "int256[]"
+        },
+        {
+          "name": "runningBalances",
+          "type": "int256[]"
+        },
+        {
+          "name": "leafId",
+          "type": "uint8"
+        },
+        {
+          "name": "l1Tokens",
+          "type": "address[]"
+        },
+        {
+          "name": "proof",
+          "type": "bytes32[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "finder",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getCurrentTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "haircutReserves",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "haircutAmount",
+          "type": "int256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "identifier",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
       "name": "liquidityUtilizationCurrent",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -14,6 +234,111 @@
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidityUtilizationPostRelay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "relayedAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liveness",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "loadEthForL2Calls",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "lpFeeRatePerSecond",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lpTokenFactory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "multicall",
+      "type": "function",
+      "stateMutability": "payable",
+      "inputs": [
+        {
+          "name": "data",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "results",
+          "type": "bytes[]"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
         }
       ]
     },
@@ -51,6 +376,777 @@
         {
           "name": "undistributedLpFees",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "poolRebalanceRoute",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "destinationChainId",
+          "type": "uint256"
+        },
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "destinationToken",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "proposeRootBundle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "bundleEvaluationBlockNumbers",
+          "type": "uint256[]"
+        },
+        {
+          "name": "poolRebalanceLeafCount",
+          "type": "uint8"
+        },
+        {
+          "name": "poolRebalanceRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "relayerRefundRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "slowRelayRoot",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "protocolFeeCaptureAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeCapturePct",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "relaySpokePoolAdminFunction",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "chainId",
+          "type": "uint256"
+        },
+        {
+          "name": "functionData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "removeLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "lpTokenAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "sendEth",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "rootBundleProposal",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "poolRebalanceRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "relayerRefundRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "slowRelayRoot",
+          "type": "bytes32"
+        },
+        {
+          "name": "claimedBitMap",
+          "type": "uint256"
+        },
+        {
+          "name": "proposer",
+          "type": "address"
+        },
+        {
+          "name": "unclaimedPoolRebalanceLeafCount",
+          "type": "uint8"
+        },
+        {
+          "name": "challengePeriodEndTimestamp",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "setBond",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newBondToken",
+          "type": "address"
+        },
+        {
+          "name": "newBondAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCrossChainContracts",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l2ChainId",
+          "type": "uint256"
+        },
+        {
+          "name": "adapter",
+          "type": "address"
+        },
+        {
+          "name": "spokePool",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCurrentTime",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "time",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setDepositRoute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "originChainId",
+          "type": "uint256"
+        },
+        {
+          "name": "destinationChainId",
+          "type": "uint256"
+        },
+        {
+          "name": "originToken",
+          "type": "address"
+        },
+        {
+          "name": "depositsEnabled",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setIdentifier",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newIdentifier",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLiveness",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newLiveness",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "pause",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolRebalanceRoute",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "destinationChainId",
+          "type": "uint256"
+        },
+        {
+          "name": "l1Token",
+          "type": "address"
+        },
+        {
+          "name": "destinationToken",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setProtocolFeeCapture",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newProtocolFeeCaptureAddress",
+          "type": "address"
+        },
+        {
+          "name": "newProtocolFeeCapturePct",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "sync",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "timerAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "unclaimedAccumulatedProtocolFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "weth",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "BondSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newBondToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newBondAmount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CrossChainContractsSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l2ChainId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "adapter",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "spokePool",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "EmergencyRootBundleDeleted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolRebalanceRoot",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "relayerRefundRoot",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "slowRelayRoot",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "proposer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "IdentifierSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newIdentifier",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "L1TokenEnabledForLiquidityProvision",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "lpToken",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "L2TokenDisabledForLiquidityProvision",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "lpToken",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "LiquidityAdded",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "lpTokensMinted",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "liquidityProvider",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LiquidityRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "lpTokensBurnt",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "liquidityProvider",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "LivenessSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newLiveness",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Paused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "isPaused",
+          "type": "bool",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProposeRootBundle",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "challengePeriodEndTimestamp",
+          "type": "uint32",
+          "indexed": false
+        },
+        {
+          "name": "poolRebalanceLeafCount",
+          "type": "uint8",
+          "indexed": false
+        },
+        {
+          "name": "bundleEvaluationBlockNumbers",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "poolRebalanceRoot",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "relayerRefundRoot",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "slowRelayRoot",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "proposer",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProtocolFeeCaptureSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "newProtocolFeeCaptureAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newProtocolFeeCapturePct",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProtocolFeesCapturedClaimed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "accumulatedFees",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "RootBundleCanceled",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "disputer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "requestTime",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RootBundleDisputed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "disputer",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "requestTime",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RootBundleExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "groupIndex",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "leafId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "l1Tokens",
+          "type": "address[]",
+          "indexed": false
+        },
+        {
+          "name": "bundleLpFees",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "netSendAmounts",
+          "type": "int256[]",
+          "indexed": false
+        },
+        {
+          "name": "runningBalances",
+          "type": "int256[]",
+          "indexed": false
+        },
+        {
+          "name": "caller",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SetEnableDepositRoute",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "originChainId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "destinationChainId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "originToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "depositsEnabled",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetPoolRebalanceRoute",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "destinationChainId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "l1Token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "destinationToken",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SpokePoolAdminFunctionTriggered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "chainId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "message",
+          "type": "bytes",
+          "indexed": false
         }
       ]
     }

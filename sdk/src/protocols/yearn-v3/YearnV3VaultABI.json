@@ -1,6 +1,252 @@
 {
   "abi": [
     {
+      "name": "accept_role_manager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "accountant",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "add_role",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "role",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "add_strategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "new_strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "add_strategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "new_strategy",
+          "type": "address"
+        },
+        {
+          "name": "add_to_queue",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "allowance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "arg0",
+          "type": "address"
+        },
+        {
+          "name": "arg1",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "apiVersion",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "assess_share_of_unrealised_losses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "assets_needed",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "asset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "buy_debt",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "convertToAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "convertToShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "default_queue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "arg0",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "deposit",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -22,18 +268,192 @@
       ]
     },
     {
-      "name": "withdraw",
+      "name": "deposit_limit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "deposit_limit_module",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "DOMAIN_SEPARATOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "FACTORY",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "force_revoke_strategy",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "assets",
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "fullProfitUnlockDate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "future_role_manager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "get_default_queue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
         },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "role_manager",
+          "type": "address"
+        },
+        {
+          "name": "profit_max_unlock_time",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isShutdown",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastProfitUpdate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
         {
           "name": "receiver",
           "type": "address"
-        },
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxMint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
         {
           "name": "owner",
           "type": "address"
@@ -41,7 +461,344 @@
       ],
       "outputs": [
         {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        },
+        {
+          "name": "strategies",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "maxWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        },
+        {
+          "name": "strategies",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "minimum_total_idle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
           "name": "shares",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "arg0",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "permit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "previewDeposit",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewMint",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewRedeem",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "previewWithdraw",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pricePerShare",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "process_report",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "profitMaxUnlockTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "profitUnlockingRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
           "type": "uint256"
         }
       ]
@@ -72,12 +829,24 @@
       ]
     },
     {
-      "name": "convertToShares",
+      "name": "redeem",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "assets",
+          "name": "shares",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
           "type": "uint256"
         }
       ],
@@ -89,19 +858,290 @@
       ]
     },
     {
-      "name": "convertToAssets",
+      "name": "redeem",
       "type": "function",
-      "stateMutability": "view",
+      "stateMutability": "nonpayable",
       "inputs": [
         {
           "name": "shares",
           "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        },
+        {
+          "name": "strategies",
+          "type": "address[]"
         }
       ],
       "outputs": [
         {
           "name": "",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "remove_role",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "role",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "revoke_strategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "role_manager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "roles",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "arg0",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "set_accountant",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "new_accountant",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_default_queue",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "new_default_queue",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_deposit_limit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "deposit_limit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_deposit_limit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "deposit_limit",
+          "type": "uint256"
+        },
+        {
+          "name": "override",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_deposit_limit_module",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "deposit_limit_module",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_deposit_limit_module",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "deposit_limit_module",
+          "type": "address"
+        },
+        {
+          "name": "override",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_minimum_total_idle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "minimum_total_idle",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_role",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "role",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_use_default_queue",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "use_default_queue",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "set_withdraw_limit_module",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "withdraw_limit_module",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setProfitMaxUnlockTime",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "new_profit_max_unlock_time",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "shutdown_vault",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "strategies",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "arg0",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "activation",
+              "type": "uint256"
+            },
+            {
+              "name": "last_report",
+              "type": "uint256"
+            },
+            {
+              "name": "current_debt",
+              "type": "uint256"
+            },
+            {
+              "name": "max_debt",
+              "type": "uint256"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
         }
       ]
     },
@@ -118,7 +1158,7 @@
       ]
     },
     {
-      "name": "pricePerShare",
+      "name": "totalDebt",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
@@ -130,15 +1170,10 @@
       ]
     },
     {
-      "name": "balanceOf",
+      "name": "totalIdle",
       "type": "function",
       "stateMutability": "view",
-      "inputs": [
-        {
-          "name": "account",
-          "type": "address"
-        }
-      ],
+      "inputs": [],
       "outputs": [
         {
           "name": "",
@@ -147,12 +1182,24 @@
       ]
     },
     {
-      "name": "approve",
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
       "type": "function",
       "stateMutability": "nonpayable",
       "inputs": [
         {
-          "name": "spender",
+          "name": "receiver",
           "type": "address"
         },
         {
@@ -164,6 +1211,562 @@
         {
           "name": "",
           "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transfer_role_manager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "role_manager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "unlockedShares",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "update_debt",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "target_debt",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "update_debt",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "target_debt",
+          "type": "uint256"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "update_max_debt_for_strategy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address"
+        },
+        {
+          "name": "new_max_debt",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "use_default_queue",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "shares",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "uint256"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "max_loss",
+          "type": "uint256"
+        },
+        {
+          "name": "strategies",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_limit_module",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DebtPurchased",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DebtUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "current_debt",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "new_debt",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Deposit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RoleSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "role",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Shutdown",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "StrategyChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "change_type",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "StrategyReported",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "gain",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "loss",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "current_debt",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "protocol_fees",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "total_fees",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "total_refunds",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateAccountant",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "accountant",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UpdateDefaultQueue",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "new_default_queue",
+          "type": "address[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateDepositLimit",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "deposit_limit",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateDepositLimitModule",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "deposit_limit_module",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UpdatedMaxDebtForStrategy",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "strategy",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "new_debt",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateMinimumTotalIdle",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "minimum_total_idle",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateProfitMaxUnlockTime",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "profit_max_unlock_time",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateRoleManager",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "role_manager",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "UpdateUseDefaultQueue",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "use_default_queue",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "UpdateWithdrawLimitModule",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "withdraw_limit_module",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Withdraw",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "shares",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     }

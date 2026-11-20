@@ -57,14 +57,128 @@ function main() {
 
 ### `AlchemistABI`
 
-`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH.
+`import AlchemistABI from "./protocols/alchemix/AlchemistABI.json";` Speaks for: alchemistAlUSD, alchemistAlETH. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Alchemix` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `deposit(address yieldToken, uint256 amount, address recipient) returns (uint256 shares)`
-- `withdraw(address yieldToken, uint256 shares, address recipient) returns (uint256 amountWithdrawn)`
-- `mint(uint256 amount, address recipient)`
-- `burn(uint256 amount, address recipient) returns (uint256)`
-- `liquidate(address yieldToken, uint256 shares, uint256 minimumAmountOut) returns (uint256)`
+- `acceptAdmin()`
 - `accounts(address owner) view returns (int256 debt, address[] depositedTokens)`
+- `addUnderlyingToken(address underlyingToken, (uint256 repayLimitMinimum, uint256 repayLimitMaximum, uint256 repayLimitBlocks, uint256 liquidationLimitMinimum, uint256 liquidationLimitMaximum, uint256 liquidationLimitBlocks) config)`
+- `addYieldToken(address yieldToken, (address adapter, uint256 maximumLoss, uint256 maximumExpectedValue, uint256 creditUnlockBlocks) config)`
+- `admin() view returns (address)`
+- `approveMint(address spender, uint256 amount)`
+- `approveWithdraw(address spender, address yieldToken, uint256 shares)`
+- `BPS() view returns (uint256)`
+- `burn(uint256 amount, address recipient) returns (uint256)`
+- `configureCreditUnlockRate(address yieldToken, uint256 blocks)`
+- `configureLiquidationLimit(address underlyingToken, uint256 maximum, uint256 blocks)`
+- `configureMintingLimit(uint256 maximum, uint256 rate)`
+- `configureRepayLimit(address underlyingToken, uint256 maximum, uint256 blocks)`
+- `convertSharesToUnderlyingTokens(address yieldToken, uint256 shares) view returns (uint256)`
+- `convertSharesToYieldTokens(address yieldToken, uint256 shares) view returns (uint256)`
+- `convertUnderlyingTokensToShares(address yieldToken, uint256 amount) view returns (uint256)`
+- `convertUnderlyingTokensToYield(address yieldToken, uint256 amount) view returns (uint256)`
+- `convertYieldTokensToShares(address yieldToken, uint256 amount) view returns (uint256)`
+- `convertYieldTokensToUnderlying(address yieldToken, uint256 amount) view returns (uint256)`
+- `debtToken() view returns (address)`
+- `deposit(address yieldToken, uint256 amount, address recipient) returns (uint256 shares)`
+- `depositUnderlying(address yieldToken, uint256 amount, address recipient, uint256 minimumAmountOut) returns (uint256)`
+- `donate(address yieldToken, uint256 amount)`
+- `FIXED_POINT_SCALAR() view returns (uint256)`
+- `getLiquidationLimitInfo(address underlyingToken) view returns (uint256 currentLimit, uint256 rate, uint256 maximum)`
+- `getMintLimitInfo() view returns (uint256 currentLimit, uint256 rate, uint256 maximum)`
+- `getRepayLimitInfo(address underlyingToken) view returns (uint256 currentLimit, uint256 rate, uint256 maximum)`
+- `getSupportedUnderlyingTokens() view returns (address[])`
+- `getSupportedYieldTokens() view returns (address[])`
+- `getUnderlyingTokenParameters(address underlyingToken) view returns ((uint8 decimals, uint256 conversionFactor, bool enabled))`
+- `getUnderlyingTokensPerShare(address yieldToken) view returns (uint256)`
+- `getYieldTokenParameters(address yieldToken) view returns ((uint8 decimals, address underlyingToken, address adapter, uint256 maximumLoss, uint256 maximumExpectedValue, uint256 creditUnlockRate, uint256 activeBalance, uint256 harvestableBalance, uint256 totalShares, uint256 expectedValue, uint256 pendingCredit, uint256 distributedCredit, uint256 lastDistributionBlock, uint256 accruedWeight, bool enabled))`
+- `getYieldTokensPerShare(address yieldToken) view returns (uint256)`
+- `harvest(address yieldToken, uint256 minimumAmountOut)`
+- `initialize((address admin, address debtToken, address transmuter, uint256 minimumCollateralization, uint256 protocolFee, address protocolFeeReceiver, uint256 mintingLimitMinimum, uint256 mintingLimitMaximum, uint256 mintingLimitBlocks, address whitelist) params)`
+- `isSupportedUnderlyingToken(address underlyingToken) view returns (bool)`
+- `isSupportedYieldToken(address yieldToken) view returns (bool)`
+- `keepers(address) view returns (bool)`
+- `liquidate(address yieldToken, uint256 shares, uint256 minimumAmountOut) returns (uint256)`
+- `minimumCollateralization() view returns (uint256)`
+- `mint(uint256 amount, address recipient)`
+- `mintAllowance(address owner, address spender) view returns (uint256)`
+- `mintFrom(address owner, uint256 amount, address recipient)`
+- `multicall(bytes[] data) payable returns (bytes[] results)`
+- `normalizeDebtTokensToUnderlying(address underlyingToken, uint256 amount) view returns (uint256)`
+- `normalizeUnderlyingTokensToDebt(address underlyingToken, uint256 amount) view returns (uint256)`
+- `pendingAdmin() view returns (address)`
+- `poke(address owner)`
+- `positions(address owner, address yieldToken) view returns (uint256 shares, uint256 lastAccruedWeight)`
+- `protocolFee() view returns (uint256)`
+- `protocolFeeReceiver() view returns (address)`
+- `repay(address underlyingToken, uint256 amount, address recipient) returns (uint256)`
+- `sentinels(address) view returns (bool)`
+- `setKeeper(address keeper, bool flag)`
+- `setMaximumExpectedValue(address yieldToken, uint256 value)`
+- `setMaximumLoss(address yieldToken, uint256 value)`
+- `setMinimumCollateralization(uint256 value)`
+- `setPendingAdmin(address value)`
+- `setProtocolFee(uint256 value)`
+- `setProtocolFeeReceiver(address value)`
+- `setSentinel(address sentinel, bool flag)`
+- `setTokenAdapter(address yieldToken, address adapter)`
+- `setTransferAdapterAddress(address transferAdapterAddress)`
+- `setTransmuter(address value)`
+- `setUnderlyingTokenEnabled(address underlyingToken, bool enabled)`
+- `setYieldTokenEnabled(address yieldToken, bool enabled)`
+- `snap(address yieldToken)`
+- `sweep(address yieldToken)`
+- `totalValue(address owner) view returns (uint256)`
+- `transferAdapter() view returns (address)`
+- `transferDebtV1(address owner, int256 debt)`
+- `transmuter() view returns (address)`
+- `version() view returns (string)`
+- `whitelist() view returns (address)`
+- `withdraw(address yieldToken, uint256 shares, address recipient) returns (uint256 amountWithdrawn)`
+- `withdrawAllowance(address owner, address spender, address yieldToken) view returns (uint256)`
+- `withdrawFrom(address owner, address yieldToken, uint256 shares, address recipient) returns (uint256)`
+- `withdrawUnderlying(address yieldToken, uint256 shares, address recipient, uint256 minimumAmountOut) returns (uint256)`
+- `withdrawUnderlyingFrom(address owner, address yieldToken, uint256 shares, address recipient, uint256 minimumAmountOut) returns (uint256)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error ExpectedValueExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error IllegalArgument` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LiquidationLimitExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LossExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MintingLimitExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MulticallFailed` taking `(bytes,bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error RepayLimitExceeded` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error SlippageExceeded` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenDisabled` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Unauthorized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Undercollateralized` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UnsupportedToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AddUnderlyingToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event AddYieldToken` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ApproveMint` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ApproveWithdraw` taking `(address,address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Burn` taking `(address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event CreditUnlockRateUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Deposit` taking `(address,address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Donate` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Harvest` taking `(address,uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event KeeperSet` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Liquidate` taking `(address,address,address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event LiquidationLimitUpdated` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MaximumExpectedValueUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event MaximumLossUpdated` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Mint` taking `(address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event ProtocolFeeReceiverUpdated` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Repay` taking `(address,address,uint256,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event RepayLimitUpdated` taking `(address,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SentinelSet` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Snap` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SweepRewardTokens` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event SweepTokens` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event TokenAdapterUpdated` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event UnderlyingTokenEnabled` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event Withdraw` taking `(address,address,uint256,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event YieldTokenEnabled` taking `(address,bool)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ## Next
 

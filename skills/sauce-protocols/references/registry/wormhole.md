@@ -45,15 +45,92 @@ function main() {
 
 ### `WormholeCoreBridgeABI`
 
-`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge.
+`import WormholeCoreBridgeABI from "./protocols/wormhole/WormholeCoreBridgeABI.json";` Speaks for: coreBridge. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Wormhole` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `publishMessage(uint32 nonce, bytes payload, uint8 consistencyLevel) payable returns (uint64 sequence)`
+- `chainId() view returns (uint16)`
+- `evmChainId() view returns (uint256)`
+- `getCurrentGuardianSetIndex() view returns (uint32)`
+- `getGuardianSet(uint32 index) view returns ((address[] keys, uint32 expirationTime))`
+- `getGuardianSetExpiry() view returns (uint32)`
+- `governanceActionIsConsumed(bytes32 hash) view returns (bool)`
+- `governanceChainId() view returns (uint16)`
+- `governanceContract() view returns (bytes32)`
+- `initialize()`
+- `isFork() view returns (bool)`
+- `isInitialized(address impl) view returns (bool)`
 - `messageFee() view returns (uint256)`
+- `nextSequence(address emitter) view returns (uint64)`
+- `parseAndVerifyVM(bytes encodedVM) view returns ((uint8 version, uint32 timestamp, uint32 nonce, uint16 emitterChainId, bytes32 emitterAddress, uint64 sequence, uint8 consistencyLevel, bytes payload, uint32 guardianSetIndex, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, bytes32 hash) vm, bool valid, string reason)`
+- `parseContractUpgrade(bytes encodedUpgrade) pure returns ((bytes32 module, uint8 action, uint16 chain, address newContract) cu)`
+- `parseGuardianSetUpgrade(bytes encodedUpgrade) pure returns ((bytes32 module, uint8 action, uint16 chain, (address[] keys, uint32 expirationTime) newGuardianSet, uint32 newGuardianSetIndex) gsu)`
+- `parseRecoverChainId(bytes encodedRecoverChainId) pure returns ((bytes32 module, uint8 action, uint256 evmChainId, uint16 newChainId) rci)`
+- `parseSetMessageFee(bytes encodedSetMessageFee) pure returns ((bytes32 module, uint8 action, uint16 chain, uint256 messageFee) smf)`
+- `parseTransferFees(bytes encodedTransferFees) pure returns ((bytes32 module, uint8 action, uint16 chain, uint256 amount, bytes32 recipient) tf)`
+- `parseVM(bytes encodedVM) pure returns ((uint8 version, uint32 timestamp, uint32 nonce, uint16 emitterChainId, bytes32 emitterAddress, uint64 sequence, uint8 consistencyLevel, bytes payload, uint32 guardianSetIndex, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, bytes32 hash) vm)`
+- `publishMessage(uint32 nonce, bytes payload, uint8 consistencyLevel) payable returns (uint64 sequence)`
+- `quorum(uint256 numGuardians) pure returns (uint256 numSignaturesRequiredForQuorum)`
+- `submitContractUpgrade(bytes _vm)`
+- `submitNewGuardianSet(bytes _vm)`
+- `submitRecoverChainId(bytes _vm)`
+- `submitSetMessageFee(bytes _vm)`
+- `submitTransferFees(bytes _vm)`
+- `verifySignatures(bytes32 hash, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, (address[] keys, uint32 expirationTime) guardianSet) pure returns (bool valid, string reason)`
+- `verifyVM((uint8 version, uint32 timestamp, uint32 nonce, uint16 emitterChainId, bytes32 emitterAddress, uint64 sequence, uint8 consistencyLevel, bytes payload, uint32 guardianSetIndex, (bytes32 r, bytes32 s, uint8 v, uint8 guardianIndex)[] signatures, bytes32 hash) vm) view returns (bool valid, string reason)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event BeaconUpgraded` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `event GuardianSetAdded` taking `(uint32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `WormholeTokenBridgeABI`
 
-`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge.
+`import WormholeTokenBridgeABI from "./protocols/wormhole/WormholeTokenBridgeABI.json";` Speaks for: tokenBridge. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Wormhole` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `transferTokens(address token, uint256 amount, uint16 recipientChain, bytes32 recipient, uint256 arbiterFee, uint32 nonce) payable returns (uint64 sequence)`
+- `_parseTransferCommon(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer)`
+- `attestToken(address tokenAddress, uint32 nonce) payable returns (uint64 sequence)`
+- `bridgeContracts(uint16 chainId_) view returns (bytes32)`
+- `chainId() view returns (uint16)`
 - `completeTransfer(bytes encodedVm)`
+- `completeTransferAndUnwrapETH(bytes encodedVm)`
+- `completeTransferAndUnwrapETHWithPayload(bytes encodedVm) returns (bytes)`
+- `completeTransferWithPayload(bytes encodedVm) returns (bytes)`
+- `createWrapped(bytes encodedVm) returns (address token)`
+- `encodeAssetMeta((uint8 payloadID, bytes32 tokenAddress, uint16 tokenChain, uint8 decimals, bytes32 symbol, bytes32 name) meta) pure returns (bytes encoded)`
+- `encodeTransfer((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer) pure returns (bytes encoded)`
+- `encodeTransferWithPayload((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, bytes32 fromAddress, bytes payload) transfer) pure returns (bytes encoded)`
+- `evmChainId() view returns (uint256)`
+- `finality() view returns (uint8)`
+- `governanceActionIsConsumed(bytes32 hash) view returns (bool)`
+- `governanceChainId() view returns (uint16)`
+- `governanceContract() view returns (bytes32)`
+- `implementation() view returns (address)`
+- `initialize()`
+- `isFork() view returns (bool)`
+- `isInitialized(address impl) view returns (bool)`
+- `isTransferCompleted(bytes32 hash) view returns (bool)`
+- `isWrappedAsset(address token) view returns (bool)`
+- `outstandingBridged(address token) view returns (uint256)`
+- `parseAssetMeta(bytes encoded) pure returns ((uint8 payloadID, bytes32 tokenAddress, uint16 tokenChain, uint8 decimals, bytes32 symbol, bytes32 name) meta)`
+- `parsePayloadID(bytes encoded) pure returns (uint8 payloadID)`
+- `parseRecoverChainId(bytes encodedRecoverChainId) pure returns ((bytes32 module, uint8 action, uint256 evmChainId, uint16 newChainId) rci)`
+- `parseRegisterChain(bytes encoded) pure returns ((bytes32 module, uint8 action, uint16 chainId, uint16 emitterChainID, bytes32 emitterAddress) chain)`
+- `parseTransfer(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, uint256 fee) transfer)`
+- `parseTransferWithPayload(bytes encoded) pure returns ((uint8 payloadID, uint256 amount, bytes32 tokenAddress, uint16 tokenChain, bytes32 to, uint16 toChain, bytes32 fromAddress, bytes payload) transfer)`
+- `parseUpgrade(bytes encoded) pure returns ((bytes32 module, uint8 action, uint16 chainId, bytes32 newContract) chain)`
+- `registerChain(bytes encodedVM)`
+- `submitRecoverChainId(bytes encodedVM)`
+- `tokenImplementation() view returns (address)`
+- `transferTokens(address token, uint256 amount, uint16 recipientChain, bytes32 recipient, uint256 arbiterFee, uint32 nonce) payable returns (uint64 sequence)`
+- `transferTokensWithPayload(address token, uint256 amount, uint16 recipientChain, bytes32 recipient, uint32 nonce, bytes payload) payable returns (uint64 sequence)`
+- `updateWrapped(bytes encodedVm) returns (address token)`
+- `upgrade(bytes encodedVM)`
+- `WETH() view returns (address)`
+- `wormhole() view returns (address)`
+- `wrapAndTransferETH(uint16 recipientChain, bytes32 recipient, uint256 arbiterFee, uint32 nonce) payable returns (uint64 sequence)`
+- `wrapAndTransferETHWithPayload(uint16 recipientChain, bytes32 recipient, uint32 nonce, bytes payload) payable returns (uint64 sequence)`
 - `wrappedAsset(uint16 tokenChainId, bytes32 tokenAddress) view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `event AdminChanged` taking `(address,address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

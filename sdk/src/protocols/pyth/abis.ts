@@ -1,15 +1,79 @@
 export const PythOracleABI = [
   {
-    name: "updatePriceFeeds",
+    name: "chainId",
     type: "function",
-    stateMutability: "payable",
-    inputs: [{ name: "updateData", type: "bytes[]" }],
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    name: "executeGovernanceInstruction",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "encodedVM", type: "bytes" }],
     outputs: [],
   },
   {
-    // The feed id is a bytes32, and PythStructs.Price is signed where a price can be: `price` is an
-    // int64 and `expo` an int32 (usually negative, e.g. -8). The deployed implementation has no
-    // verified source; these are the Pyth SDK's IPyth/PythStructs types.
+    name: "getEmaPrice",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "bytes32" }],
+    outputs: [
+      {
+        name: "price",
+        type: "tuple",
+        components: [
+          { name: "price", type: "int64" },
+          { name: "conf", type: "uint64" },
+          { name: "expo", type: "int32" },
+          { name: "publishTime", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getEmaPriceNoOlderThan",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "id", type: "bytes32" },
+      { name: "age", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "price",
+        type: "tuple",
+        components: [
+          { name: "price", type: "int64" },
+          { name: "conf", type: "uint64" },
+          { name: "expo", type: "int32" },
+          { name: "publishTime", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getEmaPriceUnsafe",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "bytes32" }],
+    outputs: [
+      {
+        name: "price",
+        type: "tuple",
+        components: [
+          { name: "price", type: "int64" },
+          { name: "conf", type: "uint64" },
+          { name: "expo", type: "int32" },
+          { name: "publishTime", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  // The feed id is a bytes32, and PythStructs.Price is signed where a price can be: `price` is an
+  // int64 and `expo` an int32 (usually negative, e.g. -8). The deployed implementation has no
+  // verified source; these are the Pyth SDK's IPyth/PythStructs types.
+  {
     name: "getPrice",
     type: "function",
     stateMutability: "view",
@@ -28,10 +92,720 @@ export const PythOracleABI = [
     ],
   },
   {
+    name: "getPriceNoOlderThan",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "id", type: "bytes32" },
+      { name: "age", type: "uint256" },
+    ],
+    outputs: [
+      {
+        name: "price",
+        type: "tuple",
+        components: [
+          { name: "price", type: "int64" },
+          { name: "conf", type: "uint64" },
+          { name: "expo", type: "int32" },
+          { name: "publishTime", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getPriceUnsafe",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "bytes32" }],
+    outputs: [
+      {
+        name: "price",
+        type: "tuple",
+        components: [
+          { name: "price", type: "int64" },
+          { name: "conf", type: "uint64" },
+          { name: "expo", type: "int32" },
+          { name: "publishTime", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getTwapUpdateFee",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "updateData", type: "bytes[]" }],
+    outputs: [{ name: "feeAmount", type: "uint256" }],
+  },
+  {
     name: "getUpdateFee",
     type: "function",
     stateMutability: "view",
     inputs: [{ name: "updateData", type: "bytes[]" }],
     outputs: [{ name: "feeAmount", type: "uint256" }],
   },
+  {
+    name: "getValidTimePeriod",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "governanceDataSource",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "governanceDataSourceIndex",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+  },
+  {
+    name: "hashDataSource",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [
+      {
+        name: "ds",
+        type: "tuple",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+      },
+    ],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "initialize",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "wormhole", type: "address" },
+      { name: "dataSourceEmitterChainIds", type: "uint16[]" },
+      { name: "dataSourceEmitterAddresses", type: "bytes32[]" },
+      { name: "governanceEmitterChainId", type: "uint16" },
+      { name: "governanceEmitterAddress", type: "bytes32" },
+      { name: "governanceInitialSequence", type: "uint64" },
+      { name: "validTimePeriodSeconds", type: "uint256" },
+      { name: "singleUpdateFeeInWei", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "isValidDataSource",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "dataSourceChainId", type: "uint16" },
+      { name: "dataSourceEmitterAddress", type: "bytes32" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "isValidGovernanceDataSource",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "governanceChainId", type: "uint16" },
+      { name: "governanceEmitterAddress", type: "bytes32" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "lastExecutedGovernanceSequence",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint64" }],
+  },
+  {
+    name: "latestPriceInfoPublishTime",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "priceId", type: "bytes32" }],
+    outputs: [{ name: "", type: "uint64" }],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "parseAuthorizeGovernanceDataSourceTransferPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [{ name: "sgds", type: "tuple", components: [{ name: "claimVaa", type: "bytes" }] }],
+  },
+  {
+    name: "parseGovernanceInstruction",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedInstruction", type: "bytes" }],
+    outputs: [
+      {
+        name: "gi",
+        type: "tuple",
+        components: [
+          { name: "module", type: "uint8" },
+          { name: "action", type: "uint8" },
+          { name: "targetChainId", type: "uint16" },
+          { name: "payload", type: "bytes" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "parsePriceFeedUpdates",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "updateData", type: "bytes[]" },
+      { name: "priceIds", type: "bytes32[]" },
+      { name: "minPublishTime", type: "uint64" },
+      { name: "maxPublishTime", type: "uint64" },
+    ],
+    outputs: [
+      {
+        name: "priceFeeds",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "bytes32" },
+          {
+            name: "price",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+          {
+            name: "emaPrice",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "parsePriceFeedUpdatesUnique",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "updateData", type: "bytes[]" },
+      { name: "priceIds", type: "bytes32[]" },
+      { name: "minPublishTime", type: "uint64" },
+      { name: "maxPublishTime", type: "uint64" },
+    ],
+    outputs: [
+      {
+        name: "priceFeeds",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "bytes32" },
+          {
+            name: "price",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+          {
+            name: "emaPrice",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "parsePriceFeedUpdatesWithConfig",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "updateData", type: "bytes[]" },
+      { name: "priceIds", type: "bytes32[]" },
+      { name: "minAllowedPublishTime", type: "uint64" },
+      { name: "maxAllowedPublishTime", type: "uint64" },
+      { name: "checkUniqueness", type: "bool" },
+      { name: "checkUpdateDataIsMinimal", type: "bool" },
+      { name: "storeUpdatesIfFresh", type: "bool" },
+    ],
+    outputs: [
+      {
+        name: "priceFeeds",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "bytes32" },
+          {
+            name: "price",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+          {
+            name: "emaPrice",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+        ],
+      },
+      { name: "slots", type: "uint64[]" },
+    ],
+  },
+  {
+    name: "parseRequestGovernanceDataSourceTransferPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      {
+        name: "sgdsClaim",
+        type: "tuple",
+        components: [{ name: "governanceDataSourceIndex", type: "uint32" }],
+      },
+    ],
+  },
+  {
+    name: "parseSetDataSourcesPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      {
+        name: "sds",
+        type: "tuple",
+        components: [
+          {
+            name: "dataSources",
+            type: "tuple[]",
+            components: [
+              { name: "chainId", type: "uint16" },
+              { name: "emitterAddress", type: "bytes32" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "parseSetFeePayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [{ name: "sf", type: "tuple", components: [{ name: "newFee", type: "uint256" }] }],
+  },
+  {
+    name: "parseSetTransactionFeePayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [{ name: "stf", type: "tuple", components: [{ name: "newFee", type: "uint256" }] }],
+  },
+  {
+    name: "parseSetValidPeriodPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      { name: "svp", type: "tuple", components: [{ name: "newValidPeriod", type: "uint256" }] },
+    ],
+  },
+  {
+    name: "parseSetWormholeAddressPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      { name: "sw", type: "tuple", components: [{ name: "newWormholeAddress", type: "address" }] },
+    ],
+  },
+  {
+    name: "parseTwapPriceFeedUpdates",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "updateData", type: "bytes[]" },
+      { name: "priceIds", type: "bytes32[]" },
+    ],
+    outputs: [
+      {
+        name: "twapPriceFeeds",
+        type: "tuple[]",
+        components: [
+          { name: "id", type: "bytes32" },
+          { name: "startTime", type: "uint64" },
+          { name: "endTime", type: "uint64" },
+          {
+            name: "twap",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+          { name: "downSlotsRatio", type: "uint32" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "parseUpgradeContractPayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      { name: "uc", type: "tuple", components: [{ name: "newImplementation", type: "address" }] },
+    ],
+  },
+  {
+    name: "parseWithdrawFeePayload",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [{ name: "encodedPayload", type: "bytes" }],
+    outputs: [
+      {
+        name: "wf",
+        type: "tuple",
+        components: [
+          { name: "targetAddress", type: "address" },
+          { name: "fee", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "priceFeedExists",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "proxiableUUID",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "pythUpgradableMagic",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "", type: "uint32" }],
+  },
+  {
+    name: "queryPriceFeed",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "bytes32" }],
+    outputs: [
+      {
+        name: "priceFeed",
+        type: "tuple",
+        components: [
+          { name: "id", type: "bytes32" },
+          {
+            name: "price",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+          {
+            name: "emaPrice",
+            type: "tuple",
+            components: [
+              { name: "price", type: "int64" },
+              { name: "conf", type: "uint64" },
+              { name: "expo", type: "int32" },
+              { name: "publishTime", type: "uint256" },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: "renounceOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "singleUpdateFeeInWei",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "transactionFeeInWei",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "transferOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newOwner", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "updatePriceFeeds",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [{ name: "updateData", type: "bytes[]" }],
+    outputs: [],
+  },
+  {
+    name: "updatePriceFeedsIfNecessary",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "updateData", type: "bytes[]" },
+      { name: "priceIds", type: "bytes32[]" },
+      { name: "publishTimes", type: "uint64[]" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "upgradeTo",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newImplementation", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "upgradeToAndCall",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "newImplementation", type: "address" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "validDataSources",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "validTimePeriodSeconds",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "version",
+    type: "function",
+    stateMutability: "pure",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "wormhole",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "ContractUpgraded",
+    type: "event",
+    inputs: [
+      { name: "oldImplementation", type: "address", indexed: false },
+      { name: "newImplementation", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "DataSourcesSet",
+    type: "event",
+    inputs: [
+      {
+        name: "oldDataSources",
+        type: "tuple[]",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+        indexed: false,
+      },
+      {
+        name: "newDataSources",
+        type: "tuple[]",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+        indexed: false,
+      },
+    ],
+  },
+  {
+    name: "FeeSet",
+    type: "event",
+    inputs: [
+      { name: "oldFee", type: "uint256", indexed: false },
+      { name: "newFee", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "FeeWithdrawn",
+    type: "event",
+    inputs: [
+      { name: "targetAddress", type: "address", indexed: false },
+      { name: "fee", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "GovernanceDataSourceSet",
+    type: "event",
+    inputs: [
+      {
+        name: "oldDataSource",
+        type: "tuple",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+        indexed: false,
+      },
+      {
+        name: "newDataSource",
+        type: "tuple",
+        components: [
+          { name: "chainId", type: "uint16" },
+          { name: "emitterAddress", type: "bytes32" },
+        ],
+        indexed: false,
+      },
+      { name: "initialSequence", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    name: "Initialized",
+    type: "event",
+    inputs: [{ name: "version", type: "uint8", indexed: false }],
+  },
+  {
+    name: "OwnershipTransferred",
+    type: "event",
+    inputs: [
+      { name: "previousOwner", type: "address", indexed: true },
+      { name: "newOwner", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "PriceFeedUpdate",
+    type: "event",
+    inputs: [
+      { name: "id", type: "bytes32", indexed: true },
+      { name: "publishTime", type: "uint64", indexed: false },
+      { name: "price", type: "int64", indexed: false },
+      { name: "conf", type: "uint64", indexed: false },
+    ],
+  },
+  {
+    name: "TransactionFeeSet",
+    type: "event",
+    inputs: [
+      { name: "oldFee", type: "uint256", indexed: false },
+      { name: "newFee", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "Upgraded",
+    type: "event",
+    inputs: [{ name: "implementation", type: "address", indexed: true }],
+  },
+  {
+    name: "ValidPeriodSet",
+    type: "event",
+    inputs: [
+      { name: "oldValidPeriod", type: "uint256", indexed: false },
+      { name: "newValidPeriod", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "WormholeAddressSet",
+    type: "event",
+    inputs: [
+      { name: "oldWormholeAddress", type: "address", indexed: false },
+      { name: "newWormholeAddress", type: "address", indexed: false },
+    ],
+  },
+  { name: "InvalidArgument", type: "error", inputs: [] },
+  { name: "InvalidGovernanceDataSource", type: "error", inputs: [] },
+  { name: "InvalidGovernanceMessage", type: "error", inputs: [] },
+  { name: "InvalidGovernanceTarget", type: "error", inputs: [] },
+  { name: "InvalidUpdateDataSource", type: "error", inputs: [] },
+  { name: "InvalidWormholeVaa", type: "error", inputs: [] },
+  { name: "OldGovernanceMessage", type: "error", inputs: [] },
+  { name: "PriceFeedNotFoundWithinRange", type: "error", inputs: [] },
 ] as const;

@@ -1,40 +1,154 @@
 {
   "abi": [
     {
-      "name": "getTokenX",
+      "name": "approveForAll",
       "type": "function",
-      "stateMutability": "pure",
-      "inputs": [],
-      "outputs": [
+      "stateMutability": "nonpayable",
+      "inputs": [
         {
-          "name": "tokenX",
+          "name": "spender",
           "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
         }
-      ]
+      ],
+      "outputs": []
     },
     {
-      "name": "getTokenY",
+      "name": "balanceOf",
       "type": "function",
-      "stateMutability": "pure",
-      "inputs": [],
-      "outputs": [
+      "stateMutability": "view",
+      "inputs": [
         {
-          "name": "tokenY",
+          "name": "account",
           "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
         }
-      ]
-    },
-    {
-      "name": "getBinStep",
-      "type": "function",
-      "stateMutability": "pure",
-      "inputs": [],
+      ],
       "outputs": [
         {
           "name": "",
-          "type": "uint16"
+          "type": "uint256"
         }
       ]
+    },
+    {
+      "name": "balanceOfBatch",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "accounts",
+          "type": "address[]"
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "batchBalances",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "batchTransferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]"
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]"
+        },
+        {
+          "name": "amountsToBurn",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amounts",
+          "type": "bytes32[]"
+        }
+      ]
+    },
+    {
+      "name": "collectProtocolFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "collectedProtocolFees",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "flashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "amounts",
+          "type": "bytes32"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "forceDecay",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
     },
     {
       "name": "getActiveId",
@@ -45,22 +159,6 @@
         {
           "name": "activeId",
           "type": "uint24"
-        }
-      ]
-    },
-    {
-      "name": "getReserves",
-      "type": "function",
-      "stateMutability": "view",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "reserveX",
-          "type": "uint128"
-        },
-        {
-          "name": "reserveY",
-          "type": "uint128"
         }
       ]
     },
@@ -86,6 +184,133 @@
       ]
     },
     {
+      "name": "getBinStep",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "getFactory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "factory",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getIdFromPrice",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "price",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "getLBHooksParameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getNextNonEmptyBin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "swapForY",
+          "type": "bool"
+        },
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextId",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "getOracleParameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "sampleLifetime",
+          "type": "uint8"
+        },
+        {
+          "name": "size",
+          "type": "uint16"
+        },
+        {
+          "name": "activeSize",
+          "type": "uint16"
+        },
+        {
+          "name": "lastUpdated",
+          "type": "uint40"
+        },
+        {
+          "name": "firstTimestamp",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "getOracleSampleAt",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "lookupTimestamp",
+          "type": "uint40"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cumulativeId",
+          "type": "uint64"
+        },
+        {
+          "name": "cumulativeVolatility",
+          "type": "uint64"
+        },
+        {
+          "name": "cumulativeBinCrossed",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
       "name": "getPriceFromId",
       "type": "function",
       "stateMutability": "pure",
@@ -99,6 +324,74 @@
         {
           "name": "price",
           "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getProtocolFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "protocolFeeX",
+          "type": "uint128"
+        },
+        {
+          "name": "protocolFeeY",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "reserveX",
+          "type": "uint128"
+        },
+        {
+          "name": "reserveY",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getStaticFeeParameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "baseFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24"
         }
       ]
     },
@@ -161,6 +454,236 @@
       ]
     },
     {
+      "name": "getTokenX",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tokenX",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTokenY",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "tokenY",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getVariableFeeParameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "volatilityAccumulator",
+          "type": "uint24"
+        },
+        {
+          "name": "volatilityReference",
+          "type": "uint24"
+        },
+        {
+          "name": "idReference",
+          "type": "uint24"
+        },
+        {
+          "name": "timeOfLastUpdate",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "increaseOracleLength",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newLength",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "baseFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24"
+        },
+        {
+          "name": "activeId",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "isApprovedForAll",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "liquidityConfigs",
+          "type": "bytes32[]"
+        },
+        {
+          "name": "refundTo",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountsReceived",
+          "type": "bytes32"
+        },
+        {
+          "name": "amountsLeft",
+          "type": "bytes32"
+        },
+        {
+          "name": "liquidityMinted",
+          "type": "uint256[]"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "setHooksParameters",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "hooksParameters",
+          "type": "bytes32"
+        },
+        {
+          "name": "onHooksSetData",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setStaticFeeParameters",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "baseFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16"
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16"
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24"
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16"
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "swap",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -180,6 +703,535 @@
           "type": "bytes32"
         }
       ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ApprovalForAll",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollectedProtocolFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "feeRecipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "protocolFees",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CompositionFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "id",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "totalFees",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "protocolFees",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DepositedToBins",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "amounts",
+          "type": "bytes32[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FlashLoan",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "activeId",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "amounts",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "totalFees",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "protocolFees",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ForcedDecay",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "idReference",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "volatilityReference",
+          "type": "uint24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "HooksParametersSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "hooksParameters",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint64",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OracleLengthIncreased",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oracleLength",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "StaticFeeParametersSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "baseFactor",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "filterPeriod",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "decayPeriod",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "reductionFactor",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "variableFeeControl",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "protocolShare",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "maxVolatilityAccumulator",
+          "type": "uint24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Swap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "id",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "amountsIn",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "amountsOut",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "volatilityAccumulator",
+          "type": "uint24",
+          "indexed": false
+        },
+        {
+          "name": "totalFees",
+          "type": "bytes32",
+          "indexed": false
+        },
+        {
+          "name": "protocolFees",
+          "type": "bytes32",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "TransferBatch",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "WithdrawnFromBins",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "ids",
+          "type": "uint256[]",
+          "indexed": false
+        },
+        {
+          "name": "amounts",
+          "type": "bytes32[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BinHelper__LiquidityOverflow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "BinHelper__MaxLiquidityPerBinExceeded",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "FeeHelper__FeeTooLarge",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Hooks__CallFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidInitialization",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__AlreadyInitialized",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__EmptyMarketConfigs",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__FlashLoanCallbackFailed",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__InsufficientAmountIn",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__InvalidHooks",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__InvalidInput",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__OnlyFactory",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LBPair__ZeroAmount",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "LBPair__ZeroAmountsOut",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "LBToken__SelfApproval",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBToken__SpenderNotApproved",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "LBToken__TransferExceedsBalance",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "OracleHelper__InvalidOracleId",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PackedUint128Math__AddOverflow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PackedUint128Math__SubUnderflow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PairParametersHelper__InvalidParameter",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "ReentrancyGuardReentrantCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SafeCast__Exceeds24Bits",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Uint256x256Math__MulDivOverflow",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "Uint256x256Math__MulShiftOverflow",
+      "type": "error",
+      "inputs": []
     }
   ]
 }

@@ -563,7 +563,7 @@ against the deployed program before sending it.
   SwapRouter call, the path written in the program, exact input or exact output.
 - [examples/balancer-batch-swap.sauce.ts](examples/balancer-batch-swap.sauce.ts): a two-pool
   Balancer V2 batch swap, given in or given out, its limit held to the Vault's own
-  `queryBatchSwap`, which [examples/BalancerV2Query.json](examples/BalancerV2Query.json) declares.
+  `BalancerV2.Vault.queryBatchSwap`.
 - [examples/balancer-flash-cycle.sauce.ts](examples/balancer-flash-cycle.sauce.ts): a Balancer V2
   cycle through two pools in one `batchSwap` under zero limits, the profit to a recipient.
 - [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions and

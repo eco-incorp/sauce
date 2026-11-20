@@ -1,6 +1,468 @@
 {
   "abi": [
     {
+      "name": "acceptOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "confirmFeed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "aggregator",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "decimals",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "description",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "getAccessController",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getAnswer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "getCurrentPhaseId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "currentPhaseId",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "getFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "aggregator",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getNextRoundId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint80"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "nextRoundId",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "getPhase",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "phaseId",
+          "type": "uint16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "phase",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "phaseId",
+              "type": "uint16"
+            },
+            {
+              "name": "startingAggregatorRoundId",
+              "type": "uint80"
+            },
+            {
+              "name": "endingAggregatorRoundId",
+              "type": "uint80"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getPhaseFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "phaseId",
+          "type": "uint16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "aggregator",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPhaseRange",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "phaseId",
+          "type": "uint16"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "startingRoundId",
+          "type": "uint80"
+        },
+        {
+          "name": "endingRoundId",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "getPreviousRoundId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint80"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "previousRoundId",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "getProposedFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "proposedAggregator",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRoundData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "_roundId",
+          "type": "uint80"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "roundId",
+          "type": "uint80"
+        },
+        {
+          "name": "answer",
+          "type": "int256"
+        },
+        {
+          "name": "startedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "answeredInRound",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "getRoundFeed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint80"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "aggregator",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getTimestamp",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "isFeedEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "aggregator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "latestAnswer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "answer",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "latestRound",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "roundId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "latestRoundData",
       "type": "function",
       "stateMutability": "view",
@@ -38,7 +500,7 @@
       ]
     },
     {
-      "name": "getFeed",
+      "name": "latestTimestamp",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
@@ -53,8 +515,290 @@
       ],
       "outputs": [
         {
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "proposedGetRoundData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
+          "name": "roundId",
+          "type": "uint80"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "id",
+          "type": "uint80"
+        },
+        {
+          "name": "answer",
+          "type": "int256"
+        },
+        {
+          "name": "startedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "answeredInRound",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "proposedLatestRoundData",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "id",
+          "type": "uint80"
+        },
+        {
+          "name": "answer",
+          "type": "int256"
+        },
+        {
+          "name": "startedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "updatedAt",
+          "type": "uint256"
+        },
+        {
+          "name": "answeredInRound",
+          "type": "uint80"
+        }
+      ]
+    },
+    {
+      "name": "proposeFeed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        },
+        {
           "name": "aggregator",
           "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setAccessController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_accessController",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "typeAndVersion",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "version",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "base",
+          "type": "address"
+        },
+        {
+          "name": "quote",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "AccessControllerSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "accessController",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "FeedConfirmed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "denomination",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "latestAggregator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "previousAggregator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "nextPhaseId",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeedProposed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "denomination",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "proposedAggregator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "currentAggregator",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferRequested",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
         }
       ]
     }

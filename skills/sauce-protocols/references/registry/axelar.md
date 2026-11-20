@@ -45,21 +45,179 @@ function main() {
 
 ### `AxelarGasServiceABI`
 
-`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService.
+`import AxelarGasServiceABI from "./protocols/axelar/AxelarGasServiceABI.json";` Speaks for: gasService. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `acceptOwnership()`
+- `addExpressGas(bytes32 txHash, uint256 logIndex, address gasToken, uint256 gasFeeAmount, address refundAddress)`
+- `addGas(bytes32 txHash, uint256 logIndex, address gasToken, uint256 gasFeeAmount, address refundAddress)`
+- `addNativeExpressGas(bytes32 txHash, uint256 logIndex, address refundAddress) payable`
+- `addNativeGas(bytes32 txHash, uint256 logIndex, address refundAddress) payable`
+- `collectFees(address receiver, address[] tokens, uint256[] amounts)`
+- `contractId() pure returns (bytes32)`
+- `estimateGasFee(string destinationChain, string, bytes payload, uint256 executionGasLimit, bytes) view returns (uint256 gasEstimate)`
+- `gasCollector() view returns (address)`
+- `getGasInfo(string chain) view returns ((uint64 gasEstimationType, uint64 l1FeeScalar, uint128 axelarBaseFee, uint128 relativeGasPrice, uint128 relativeBlobBaseFee, uint128 expressFee))`
+- `implementation() view returns (address implementation_)`
+- `owner() view returns (address owner_)`
+- `payGas(address sender, string destinationChain, string destinationAddress, bytes payload, uint256 executionGasLimit, bool estimateOnChain, address refundAddress, bytes params) payable`
+- `payGasForContractCall(address sender, string destinationChain, string destinationAddress, bytes payload, address gasToken, uint256 gasFeeAmount, address refundAddress)`
+- `payGasForContractCallWithToken(address sender, string destinationChain, string destinationAddress, bytes payload, string symbol, uint256 amount, address gasToken, uint256 gasFeeAmount, address refundAddress)`
+- `payGasForExpressCall(address sender, string destinationChain, string destinationAddress, bytes payload, address gasToken, uint256 gasFeeAmount, address refundAddress)`
+- `payGasForExpressCallWithToken(address sender, string destinationChain, string destinationAddress, bytes payload, string symbol, uint256 amount, address gasToken, uint256 gasFeeAmount, address refundAddress)`
 - `payNativeGasForContractCall(address sender, string destinationChain, string destinationAddress, bytes payload, address refundAddress) payable`
+- `payNativeGasForContractCallWithToken(address sender, string destinationChain, string destinationAddress, bytes payload, string symbol, uint256 amount, address refundAddress) payable`
+- `payNativeGasForExpressCall(address sender, string destinationChain, string destinationAddress, bytes payload, address refundAddress) payable`
+- `payNativeGasForExpressCallWithToken(address sender, string destinationChain, string destinationAddress, bytes payload, string symbol, uint256 amount, address refundAddress) payable`
+- `pendingOwner() view returns (address owner_)`
+- `proposeOwnership(address newOwner)`
+- `refund(address receiver, address token, uint256 amount)`
+- `refund(bytes32 txHash, uint256 logIndex, address receiver, address token, uint256 amount)`
+- `setup(bytes data)`
+- `transferOwnership(address newOwner)`
+- `updateGasInfo(string[] chains, (uint64 gasEstimationType, uint64 l1FeeScalar, uint128 axelarBaseFee, uint128 relativeGasPrice, uint128 relativeBlobBaseFee, uint128 expressFee)[] gasUpdates)`
+- `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes params)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidAmounts` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOwnerAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotCollector` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `AxelarGatewayABI`
 
-`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway.
+`import AxelarGatewayABI from "./protocols/axelar/AxelarGatewayABI.json";` Speaks for: gateway. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `allTokensFrozen() pure returns (bool)`
+- `approveContractCall(bytes params, bytes32 commandId)`
+- `approveContractCallWithMint(bytes params, bytes32 commandId)`
+- `authModule() view returns (address)`
+- `burnToken(bytes params, bytes32)`
 - `callContract(string destinationChain, string contractAddress, bytes payload)`
 - `callContractWithToken(string destinationChain, string contractAddress, bytes payload, string symbol, uint256 amount)`
+- `contractId() pure returns (bytes32)`
+- `deployToken(bytes params, bytes32)`
+- `execute(bytes input)`
+- `getAddress(bytes32 key) view returns (address)`
+- `getBool(bytes32 key) view returns (bool)`
+- `getBytes(bytes32 key) view returns (bytes)`
+- `getInt(bytes32 key) view returns (int256)`
+- `getString(bytes32 key) view returns (string)`
+- `getUint(bytes32 key) view returns (uint256)`
+- `governance() view returns (address)`
+- `implementation() view returns (address)`
+- `isCommandExecuted(bytes32 commandId) view returns (bool)`
+- `isContractCallAndMintApproved(bytes32 commandId, string sourceChain, string sourceAddress, address contractAddress, bytes32 payloadHash, string symbol, uint256 amount) view returns (bool)`
+- `isContractCallApproved(bytes32 commandId, string sourceChain, string sourceAddress, address contractAddress, bytes32 payloadHash) view returns (bool)`
+- `mintLimiter() view returns (address)`
+- `mintToken(bytes params, bytes32)`
 - `sendToken(string destinationChain, string destinationAddress, string symbol, uint256 amount)`
+- `setTokenMintLimits(string[] symbols, uint256[] limits)`
+- `setup(bytes params)`
 - `tokenAddresses(string symbol) view returns (address)`
+- `tokenDeployer() view returns (address)`
+- `tokenFrozen(string) pure returns (bool)`
+- `tokenMintAmount(string symbol) view returns (uint256)`
+- `tokenMintLimit(string symbol) view returns (uint256)`
+- `transferGovernance(address newGovernance)`
+- `transferMintLimiter(address newMintLimiter)`
+- `transferOperatorship(bytes newOperatorsData, bytes32)`
+- `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes setupParams)`
+- `validateContractCall(bytes32 commandId, string sourceChain, string sourceAddress, bytes32 payloadHash) returns (bool valid)`
+- `validateContractCallAndMint(bytes32 commandId, string sourceChain, string sourceAddress, bytes32 payloadHash, string symbol, uint256 amount) returns (bool valid)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error InvalidAuthModule` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidGovernance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidTokenDeployer` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MintFailed` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotGovernance` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotMintLimiter` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSelf` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenDoesNotExist` taking `(string)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
 
 ### `AxelarITSABI`
 
-`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its.
+`import AxelarITSABI from "./protocols/axelar/AxelarITSABI.json";` Speaks for: its. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Axelar` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `acceptOperatorship(address fromOperator)`
+- `acceptOwnership()`
+- `chainName() view returns (string chainName_)`
+- `chainNameHash() view returns (bytes32)`
+- `contractCallValue(string sourceChain, string sourceAddress, bytes payload) view returns (address, uint256)`
+- `contractId() pure returns (bytes32)`
+- `deployedTokenManager(bytes32 tokenId) view returns (address tokenManager_)`
+- `deployInterchainToken(bytes32 salt, string destinationChain, string name, string symbol, uint8 decimals, bytes minter, uint256 gasValue) payable returns (bytes32 tokenId)`
+- `execute(bytes32 commandId, string sourceChain, string sourceAddress, bytes payload)`
+- `expressExecute(bytes32 commandId, string sourceChain, string sourceAddress, bytes payload) payable`
+- `gasService() view returns (address)`
+- `gateway() view returns (address)`
+- `gatewayCaller() view returns (address)`
+- `getExpressExecutor(bytes32 commandId, string sourceChain, string sourceAddress, bytes32 payloadHash) view returns (address expressExecutor)`
+- `hasRole(address account, uint8 role) view returns (bool)`
+- `implementation() view returns (address implementation_)`
+- `interchainTokenAddress(bytes32 tokenId) view returns (address tokenAddress)`
+- `interchainTokenDeployer() view returns (address)`
+- `interchainTokenFactory() view returns (address)`
+- `interchainTokenId(address sender, bytes32 salt) pure returns (bytes32 tokenId)`
 - `interchainTransfer(bytes32 tokenId, string destinationChain, bytes destinationAddress, uint256 amount, bytes metadata, uint256 gasValue) payable`
+- `isOperator(address addr) view returns (bool)`
+- `isTrustedAddress(string chain, string address_) view returns (bool)`
+- `linkToken(bytes32 salt, string destinationChain, bytes destinationTokenAddress, uint8 tokenManagerType, bytes linkParams, uint256 gasValue) payable returns (bytes32 tokenId)`
+- `migrateInterchainToken(bytes32 tokenId)`
+- `multicall(bytes[] data) payable returns (bytes[] results)`
+- `owner() view returns (address owner_)`
+- `paused() view returns (bool paused_)`
+- `pendingOwner() view returns (address owner_)`
+- `proposeOperatorship(address operator)`
+- `proposeOwnership(address newOwner)`
+- `registerCustomToken(bytes32 salt, address tokenAddress, uint8 tokenManagerType, bytes linkParams) payable returns (bytes32 tokenId)`
+- `registeredTokenAddress(bytes32 tokenId) view returns (address tokenAddress)`
+- `registerTokenMetadata(address tokenAddress, uint256 gasValue) payable`
+- `removeTrustedAddress(string chain)`
+- `setFlowLimits(bytes32[] tokenIds, uint256[] flowLimits)`
+- `setPauseStatus(bool paused)`
+- `setTrustedAddress(string chain, string address_)`
+- `setup(bytes data)`
+- `tokenHandler() view returns (address)`
+- `tokenManager() view returns (address)`
+- `tokenManagerAddress(bytes32 tokenId) view returns (address tokenManagerAddress_)`
+- `tokenManagerDeployer() view returns (address)`
+- `tokenManagerImplementation(uint256) view returns (address)`
+- `transferOperatorship(address operator)`
+- `transferOwnership(address newOwner)`
+- `transmitInterchainTransfer(bytes32 tokenId, address sourceAddress, string destinationChain, bytes destinationAddress, uint256 amount, bytes metadata) payable`
+- `trustedAddress(string chain) view returns (string trustedAddress_)`
+- `trustedAddressHash(string chain) view returns (bytes32 trustedAddressHash_)`
+- `upgrade(address newImplementation, bytes32 newImplementationCodeHash, bytes params)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CannotDeployRemotelyToSelf` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyData` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyParams` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyTokenSymbol` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error GatewayCallFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InsufficientValue` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidChainName` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidCodeHash` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidImplementation` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidMessageType` taking `(uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidOwnerAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidProposedRoles` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error LengthMismatch` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAllRoles` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MissingAnyOfRoles` taking `(address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error MulticallFailed` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotApprovedByGateway` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotInterchainTokenFactory` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotPaused` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotProxy` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotRemoteService` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error NotSupported` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error Pause` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error PostDeployFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenManagerDeploymentFailed` taking `(bytes)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenManagerDoesNotExist` taking `(bytes32)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error UntrustedChain` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

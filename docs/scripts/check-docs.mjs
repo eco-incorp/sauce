@@ -60,7 +60,10 @@ for (const directory of ["concepts", "guides", "api", "reference", "examples"]) 
 }
 const failures = [];
 for (const file of manual) {
-  const content = readFileSync(file, "utf8").replace(/```[^]*?```/g, "");
+  // Fenced blocks and inline code hold no links: `X["<signature>"](…)` in a code span is a call.
+  const content = readFileSync(file, "utf8")
+    .replace(/```[^]*?```/g, "")
+    .replace(/`[^`\n]*`/g, "``");
   for (const match of content.matchAll(/\[[^\]]*\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {
     const target = match[1].replace(/^<|>$/g, "");
     // Documentation links stay relative so they render in the repository, on the npm page and

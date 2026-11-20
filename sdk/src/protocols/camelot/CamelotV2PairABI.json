@@ -1,26 +1,146 @@
 {
   "abi": [
     {
-      "name": "getReserves",
+      "name": "allowance",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "decimals",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
-          "name": "_reserve0",
-          "type": "uint112"
+          "name": "",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "DOMAIN_SEPARATOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "drainWrongToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address"
         },
         {
-          "name": "_reserve1",
-          "type": "uint112"
-        },
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "factory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
         {
-          "name": "_token0FeePercent",
-          "type": "uint16"
-        },
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "FEE_DENOMINATOR",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
         {
-          "name": "_token1FeePercent",
-          "type": "uint16"
+          "name": "",
+          "type": "uint256"
         }
       ]
     },
@@ -46,7 +166,47 @@
       ]
     },
     {
-      "name": "stableSwap",
+      "name": "getReserves",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_reserve0",
+          "type": "uint112"
+        },
+        {
+          "name": "_reserve1",
+          "type": "uint112"
+        },
+        {
+          "name": "_token0FeePercent",
+          "type": "uint16"
+        },
+        {
+          "name": "_token1FeePercent",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_token0",
+          "type": "address"
+        },
+        {
+          "name": "_token1",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialized",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
@@ -58,26 +218,235 @@
       ]
     },
     {
-      "name": "token0",
+      "name": "kLast",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
           "name": "",
-          "type": "address"
+          "type": "uint256"
         }
       ]
     },
     {
-      "name": "token1",
+      "name": "MAX_FEE_PERCENT",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MINIMUM_LIQUIDITY",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
           "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "nonces",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "pairTypeImmutable",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "permit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "spender",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        },
+        {
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "name": "v",
+          "type": "uint8"
+        },
+        {
+          "name": "r",
+          "type": "bytes32"
+        },
+        {
+          "name": "s",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "PERMIT_TYPEHASH",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "precisionMultiplier0",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "precisionMultiplier1",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setFeePercent",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newToken0FeePercent",
+          "type": "uint16"
+        },
+        {
+          "name": "newToken1FeePercent",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPairTypeImmutable",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setStableSwap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "stable",
+          "type": "bool"
+        },
+        {
+          "name": "expectedReserve0",
+          "type": "uint112"
+        },
+        {
+          "name": "expectedReserve1",
+          "type": "uint112"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "skim",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "stableSwap",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
         }
       ]
     },
@@ -104,6 +473,358 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "amount0Out",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1Out",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        },
+        {
+          "name": "referrer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "sync",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "token0",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "token0FeePercent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "token1",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "token1FeePercent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint16"
+        }
+      ]
+    },
+    {
+      "name": "totalSupply",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "spender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Burn",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "DrainWrongToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FeePercentUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0FeePercent",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "token1FeePercent",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Mint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetPairTypeImmutable",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "SetStableSwap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "prevStableSwap",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "stableSwap",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Skim",
+      "type": "event",
+      "inputs": []
+    },
+    {
+      "name": "Swap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0In",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1In",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount0Out",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1Out",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "Sync",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "reserve0",
+          "type": "uint112",
+          "indexed": false
+        },
+        {
+          "name": "reserve1",
+          "type": "uint112",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
     }
   ]
 }

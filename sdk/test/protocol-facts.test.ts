@@ -101,10 +101,13 @@ describe("generated pages: an ABI's functions a deployment lacks", () => {
   const row = (chain: string): string =>
     cbeth.split("\n").find((line) => line.startsWith(`| [${chain}]`) && line.includes("cbETH"))!;
 
-  it("marks Base's cbETH, and only it", () => {
+  it("marks each chain's cbETH with the functions only the other chain's runs", () => {
     expect(row("Base")).toContain("`exchangeRate`");
     expect(row("Base")).toContain("not on this deployment");
-    expect(row("Ethereum")).not.toContain("not on this deployment");
+    // Base's bridged token's own functions are in the union too, and Ethereum's token lacks them.
+    expect(row("Ethereum")).toContain("not on this deployment");
+    expect(row("Ethereum")).toContain("`bridge`");
+    expect(row("Ethereum")).not.toContain("`exchangeRate`");
   });
 
   // Absent selectors say nothing about what the code does instead: Base's Augustus V5 address is a

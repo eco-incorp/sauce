@@ -206,8 +206,10 @@ there.
 Call a contract by name, in this order of preference:
 
 1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
-   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, at the chain's address. Which
-   namespaces, members and aliases exist is `sauce-globals`'s.
+   `AaveV3.Pool.supply(...)`, typed by the contract's whole verified ABI, at the chain's address.
+   Which namespaces, members and aliases exist is `sauce-globals`'s; a function the chain's own
+   deployment does not run is refused for that chain, naming the chains that run it, and one it
+   declares otherwise is called there as it declares it.
    - **A contract a call returns**: where the registry records which contract an address a
      function returns is (a factory's pool, a pool's tokens, a vault's asset; the function's line
      in its `sauce-protocols` registry file says so), call that contract's methods on the result,
@@ -223,13 +225,18 @@ Call a contract by name, in this order of preference:
 2. **A registry ABI import**, where the chain has no namespace for it: the protocol's registry file
    in `sauce-protocols` gives the line, such as
    `import VaultABI from "./protocols/erc4626/VaultABI.json"`, then
-   `VaultABI.at(vault).convertToAssets(shares)`.
-3. **The program's own ABI**, for a contract no registry knows or a function its registry ABI does
-   not declare: a JSON ABI file beside the program, holding only the functions the program calls,
-   with the deployed contract's types from its verified source, imported by relative path as its
-   default export: `import IOracle from "./IOracle.json"`, then `IOracle.at(pool).observe(...)`. The
-   `sauce` command reads it from beside the file; through the MCP server, pass it in `modules`
-   (`{ "IOracle.json": "<its JSON>" }`).
+   `VaultABI.at(vault).convertToAssets(shares)`. The import is the registry's ABI for the
+   contract: the functions its registry file lists, and none of those it lists as left out, with
+   the same entries on every chain and nothing withheld for one chain's deployment. Like an
+   `IERC20` import, it refuses no function it lists. Only a namespace name refuses a function the
+   chain's deployment does not run, so call a contract the chain records through its namespace.
+3. **The program's own ABI**, for a contract no registry records, such as an NFT collection: a
+   JSON ABI file beside the program, holding only the functions the program calls, with the
+   deployed contract's types from its verified source or the interface it implements, imported by
+   relative path as its default export: `import IERC721 from "./IERC721.json"`, then
+   `IERC721.at(nft).ownerOf(tokenId)`. The `sauce` command reads it from beside the file; through
+   the MCP server, pass it in `modules` (`{ "IERC721.json": "<its JSON>" }`). A contract the
+   registry records needs none: its namespace already carries every function its deployment runs.
 
 Never call through `evm.static` or `evm.call` with a hex selector where one of these exists: the
 typed call encodes arguments and names outputs. Select the field you need for clarity, but any read
@@ -247,6 +254,41 @@ function main(vault: Address, shares: Uint256): Uint256 {
   require(pool.token0().decimals() > 0, "token0 has no decimals");
   // An address the program is given: named by the interface that describes it.
   return Erc4626.Vault(vault).convertToAssets(shares);
+}
+```
+
+### A function called by its signature
+
+A namespace calls a function by name, picking among overloads by argument count. A function it
+leaves out by name (an overload taking as many arguments as the one it keeps, or a name the
+namespace keeps for itself, such as `available`) is called by its **canonical signature**: its
+name and parameter types, a tuple's in parentheses, with no names or spaces. Its contract's
+registry file in `sauce-protocols` lists each one with its exact spelling.
+
+- `Permit2.Permit2["permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"](…)`
+  on a namespace contract, `Base.Permit2.Permit2["…"](…)` qualified by chain, or on a `const`
+  holding it: `const f = UniswapV3.Factory; f["getPool(address,address,uint24)"](…)`;
+- `UniswapV3.Factory.at(factory)["getPool(address,address,uint24)"](…)` on another deployment;
+- `Beefy.Vault(vault)["available()"]()` on an interface, with the address in the same expression.
+
+The compiled program is the same as a call by name where the name reaches the function. Not
+through a protocol's default contract (`Permit2["…"](…)`), and not on a bound interface held in a
+`const`. A misspelled signature is refused, naming the nearest of the contract's own; one the
+chain's deployment does not run is refused for that chain, naming the chains that run it.
+
+```sauce chain=ethereum
+function main(
+  permitted: { token: Address; amount: Uint256 }[],
+  nonce: Uint256,
+  deadline: Uint256,
+  transfers: { to: Address; requestedAmount: Uint256 }[],
+  owner: Address,
+  signature: bytes,
+) {
+  // The batch overload takes as many arguments as the single one, so it is called by signature.
+  Permit2.Permit2[
+    "permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"
+  ]({ permitted, nonce, deadline }, transfers, owner, signature);
 }
 ```
 
@@ -477,9 +519,10 @@ add. For any message not here, search [references/builtins.md](references/builti
 ## Files
 
 - [examples/twap.sauce.ts](examples/twap.sauce.ts) finds a pool through `UniswapV3.Factory` and
-  reads its price history through its own ABI beside it,
-  [examples/IOracle.json](examples/IOracle.json), which declares the one function the registry's
-  pool ABI lacks, `observe`.
+  reads its price history through `UniswapV3.Pool`'s `observe`.
+- [examples/nft-handover.sauce.ts](examples/nft-handover.sauce.ts) hands over an NFT the Pot holds,
+  calling the collection, which no registry records, through its own ABI beside it,
+  [examples/IERC721.json](examples/IERC721.json).
 - [examples/saucescript.mts](examples/saucescript.mts) compiles a guarded program, asserts each
   rejection above, and pins what compiling for a chain adds.
 - [references/builtins.md](references/builtins.md) and

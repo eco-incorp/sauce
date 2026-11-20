@@ -34,8 +34,45 @@ function main() {
 
 ### `ExchangeRouterABI`
 
-`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter.
+`import ExchangeRouterABI from "./protocols/gmx-v2/ExchangeRouterABI.json";` Speaks for: exchangeRouter. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `GmxV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `createOrder(((address receiver, address cancellationReceiver, address callbackContract, address uiFeeReceiver, address market, address initialCollateralToken, address[] swapPath) addresses, (uint256 sizeDeltaUsd, uint256 initialCollateralDeltaAmount, uint256 triggerPrice, uint256 acceptablePrice, uint256 executionFee, uint256 callbackGasLimit, uint256 minOutputAmount, uint256 validFromTime) numbers, uint8 orderType, uint8 decreasePositionSwapType, bool isLong, bool shouldUnwrapNativeToken, bool autoCancel, bytes32 referralCode, bytes32[] dataList) params) payable returns (bytes32 orderKey)`
+- `cancelDeposit(bytes32 key) payable`
 - `cancelOrder(bytes32 key) payable`
+- `cancelShift(bytes32 key) payable`
+- `cancelWithdrawal(bytes32 key) payable`
+- `claimAffiliateRewards(address[] markets, address[] tokens, address receiver) payable returns (uint256[])`
+- `claimCollateral(address[] markets, address[] tokens, uint256[] timeKeys, address receiver) payable returns (uint256[])`
+- `claimFundingFees(address[] markets, address[] tokens, address receiver) payable returns (uint256[])`
+- `claimUiFees(address[] markets, address[] tokens, address receiver) payable returns (uint256[])`
+- `createDeposit(((address receiver, address callbackContract, address uiFeeReceiver, address market, address initialLongToken, address initialShortToken, address[] longTokenSwapPath, address[] shortTokenSwapPath) addresses, uint256 minMarketTokens, bool shouldUnwrapNativeToken, uint256 executionFee, uint256 callbackGasLimit, bytes32[] dataList) params) payable returns (bytes32)`
+- `createOrder(((address receiver, address cancellationReceiver, address callbackContract, address uiFeeReceiver, address market, address initialCollateralToken, address[] swapPath) addresses, (uint256 sizeDeltaUsd, uint256 initialCollateralDeltaAmount, uint256 triggerPrice, uint256 acceptablePrice, uint256 executionFee, uint256 callbackGasLimit, uint256 minOutputAmount, uint256 validFromTime) numbers, uint8 orderType, uint8 decreasePositionSwapType, bool isLong, bool shouldUnwrapNativeToken, bool autoCancel, bytes32 referralCode, bytes32[] dataList) params) payable returns (bytes32 orderKey)`
+- `createShift(((address receiver, address callbackContract, address uiFeeReceiver, address fromMarket, address toMarket) addresses, uint256 minMarketTokens, uint256 executionFee, uint256 callbackGasLimit, bytes32[] dataList) params) payable returns (bytes32)`
+- `createTwapOrder(((address receiver, address cancellationReceiver, address callbackContract, address uiFeeReceiver, address market, address initialCollateralToken, address[] swapPath) addresses, (uint256 sizeDeltaUsd, uint256 initialCollateralDeltaAmount, uint256 triggerPrice, uint256 acceptablePrice, uint256 executionFee, uint256 callbackGasLimit, uint256 minOutputAmount, uint256 validFromTime) numbers, uint8 orderType, uint8 decreasePositionSwapType, bool isLong, bool shouldUnwrapNativeToken, bool autoCancel, bytes32 referralCode, bytes32[] dataList) params, uint256 twapCount, uint256 interval) payable returns (bytes32[] orderKeys)`
+- `createWithdrawal(((address receiver, address callbackContract, address uiFeeReceiver, address market, address[] longTokenSwapPath, address[] shortTokenSwapPath) addresses, uint256 minLongTokenAmount, uint256 minShortTokenAmount, bool shouldUnwrapNativeToken, uint256 executionFee, uint256 callbackGasLimit, bytes32[] dataList) params) payable returns (bytes32)`
+- `dataStore() view returns (address)`
+- `depositHandler() view returns (address)`
+- `eventEmitter() view returns (address)`
+- `executeAtomicWithdrawal(((address receiver, address callbackContract, address uiFeeReceiver, address market, address[] longTokenSwapPath, address[] shortTokenSwapPath) addresses, uint256 minLongTokenAmount, uint256 minShortTokenAmount, bool shouldUnwrapNativeToken, uint256 executionFee, uint256 callbackGasLimit, bytes32[] dataList) params, (address[] tokens, address[] providers, bytes[] data) oracleParams) payable`
+- `externalHandler() view returns (address)`
+- `jitOrderHandler() view returns (address)`
+- `makeExternalCalls(address[] externalCallTargets, bytes[] externalCallDataList, address[] refundTokens, address[] refundReceivers) payable`
+- `multicall(bytes[] data) payable returns (bytes[] results)`
+- `orderHandler() view returns (address)`
+- `roleStore() view returns (address)`
+- `router() view returns (address)`
+- `sendNativeToken(address receiver, uint256 amount) payable`
 - `sendTokens(address token, address receiver, uint256 amount) payable`
+- `sendWnt(address receiver, uint256 amount) payable`
+- `setSavedCallbackContract(address market, address callbackContract) payable`
+- `setUiFeeFactor(uint256 uiFeeFactor) payable`
+- `shiftHandler() view returns (address)`
+- `updateOrder(bytes32 key, uint256 sizeDeltaUsd, uint256 acceptablePrice, uint256 triggerPrice, uint256 minOutputAmount, uint256 validFromTime, bool autoCancel) payable`
+- `withdrawalHandler() view returns (address)`
+
+Left out of this ABI, though its deployments declare them:
+
+- `error CollateralAlreadyClaimed` taking `(uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyHoldingAddress` taking `()`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error EmptyTokenTranferGasLimit` taking `(address)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error InvalidClaimCollateralInput` taking `(uint256,uint256,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.
+- `error TokenTransferError` taking `(address,address,uint256)`: no deployment carries it: its topic or selector is in the code of no captured layer, facet or linked library.

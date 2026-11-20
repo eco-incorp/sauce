@@ -1,6 +1,6 @@
 export const MorphoABI = [
   {
-    name: "supply",
+    name: "accrueInterest",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
@@ -15,41 +15,8 @@ export const MorphoABI = [
           { name: "lltv", type: "uint256" },
         ],
       },
-      { name: "assets", type: "uint256" },
-      { name: "shares", type: "uint256" },
-      { name: "onBehalf", type: "address" },
-      { name: "data", type: "bytes" },
     ],
-    outputs: [
-      { name: "assetsSupplied", type: "uint256" },
-      { name: "sharesSupplied", type: "uint256" },
-    ],
-  },
-  {
-    name: "withdraw",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      {
-        name: "marketParams",
-        type: "tuple",
-        components: [
-          { name: "loanToken", type: "address" },
-          { name: "collateralToken", type: "address" },
-          { name: "oracle", type: "address" },
-          { name: "irm", type: "address" },
-          { name: "lltv", type: "uint256" },
-        ],
-      },
-      { name: "assets", type: "uint256" },
-      { name: "shares", type: "uint256" },
-      { name: "onBehalf", type: "address" },
-      { name: "receiver", type: "address" },
-    ],
-    outputs: [
-      { name: "assetsWithdrawn", type: "uint256" },
-      { name: "sharesWithdrawn", type: "uint256" },
-    ],
+    outputs: [],
   },
   {
     name: "borrow",
@@ -75,6 +42,176 @@ export const MorphoABI = [
     outputs: [
       { name: "assetsBorrowed", type: "uint256" },
       { name: "sharesBorrowed", type: "uint256" },
+    ],
+  },
+  {
+    name: "createMarket",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          { name: "loanToken", type: "address" },
+          { name: "collateralToken", type: "address" },
+          { name: "oracle", type: "address" },
+          { name: "irm", type: "address" },
+          { name: "lltv", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "DOMAIN_SEPARATOR",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "enableIrm",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "irm", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "enableLltv",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "lltv", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    name: "extSloads",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "slots", type: "bytes32[]" }],
+    outputs: [{ name: "res", type: "bytes32[]" }],
+  },
+  {
+    name: "feeRecipient",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "flashLoan",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "assets", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "idToMarketParams",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "bytes32" }],
+    outputs: [
+      { name: "loanToken", type: "address" },
+      { name: "collateralToken", type: "address" },
+      { name: "oracle", type: "address" },
+      { name: "irm", type: "address" },
+      { name: "lltv", type: "uint256" },
+    ],
+  },
+  {
+    name: "isAuthorized",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "", type: "address" },
+      { name: "", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "isIrmEnabled",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "isLltvEnabled",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "liquidate",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          { name: "loanToken", type: "address" },
+          { name: "collateralToken", type: "address" },
+          { name: "oracle", type: "address" },
+          { name: "irm", type: "address" },
+          { name: "lltv", type: "uint256" },
+        ],
+      },
+      { name: "borrower", type: "address" },
+      { name: "seizedAssets", type: "uint256" },
+      { name: "repaidShares", type: "uint256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [
+      { name: "", type: "uint256" },
+      { name: "", type: "uint256" },
+    ],
+  },
+  {
+    name: "market",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "bytes32" }],
+    outputs: [
+      { name: "totalSupplyAssets", type: "uint128" },
+      { name: "totalSupplyShares", type: "uint128" },
+      { name: "totalBorrowAssets", type: "uint128" },
+      { name: "totalBorrowShares", type: "uint128" },
+      { name: "lastUpdate", type: "uint128" },
+      { name: "fee", type: "uint128" },
+    ],
+  },
+  {
+    name: "nonce",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "position",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "", type: "bytes32" },
+      { name: "", type: "address" },
+    ],
+    outputs: [
+      { name: "supplyShares", type: "uint256" },
+      { name: "borrowShares", type: "uint128" },
+      { name: "collateral", type: "uint128" },
     ],
   },
   {
@@ -104,6 +241,104 @@ export const MorphoABI = [
     ],
   },
   {
+    name: "setAuthorization",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "authorized", type: "address" },
+      { name: "newIsAuthorized", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "setAuthorizationWithSig",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "authorization",
+        type: "tuple",
+        components: [
+          { name: "authorizer", type: "address" },
+          { name: "authorized", type: "address" },
+          { name: "isAuthorized", type: "bool" },
+          { name: "nonce", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+        ],
+      },
+      {
+        name: "signature",
+        type: "tuple",
+        components: [
+          { name: "v", type: "uint8" },
+          { name: "r", type: "bytes32" },
+          { name: "s", type: "bytes32" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "setFee",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          { name: "loanToken", type: "address" },
+          { name: "collateralToken", type: "address" },
+          { name: "oracle", type: "address" },
+          { name: "irm", type: "address" },
+          { name: "lltv", type: "uint256" },
+        ],
+      },
+      { name: "newFee", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "setFeeRecipient",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newFeeRecipient", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "setOwner",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newOwner", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "supply",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          { name: "loanToken", type: "address" },
+          { name: "collateralToken", type: "address" },
+          { name: "oracle", type: "address" },
+          { name: "irm", type: "address" },
+          { name: "lltv", type: "uint256" },
+        ],
+      },
+      { name: "assets", type: "uint256" },
+      { name: "shares", type: "uint256" },
+      { name: "onBehalf", type: "address" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [
+      { name: "assetsSupplied", type: "uint256" },
+      { name: "sharesSupplied", type: "uint256" },
+    ],
+  },
+  {
     name: "supplyCollateral",
     type: "function",
     stateMutability: "nonpayable",
@@ -126,6 +361,32 @@ export const MorphoABI = [
     outputs: [],
   },
   {
+    name: "withdraw",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "marketParams",
+        type: "tuple",
+        components: [
+          { name: "loanToken", type: "address" },
+          { name: "collateralToken", type: "address" },
+          { name: "oracle", type: "address" },
+          { name: "irm", type: "address" },
+          { name: "lltv", type: "uint256" },
+        ],
+      },
+      { name: "assets", type: "uint256" },
+      { name: "shares", type: "uint256" },
+      { name: "onBehalf", type: "address" },
+      { name: "receiver", type: "address" },
+    ],
+    outputs: [
+      { name: "assetsWithdrawn", type: "uint256" },
+      { name: "sharesWithdrawn", type: "uint256" },
+    ],
+  },
+  {
     name: "withdrawCollateral",
     type: "function",
     stateMutability: "nonpayable",
@@ -146,5 +407,17 @@ export const MorphoABI = [
       { name: "receiver", type: "address" },
     ],
     outputs: [],
+  },
+] as const;
+
+// A market's oracle (`idToMarketParams(id).oracle`): Morpho Blue's IOracle, which every market's
+// oracle implements whatever else it declares.
+export const OracleABI = [
+  {
+    name: "price",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;

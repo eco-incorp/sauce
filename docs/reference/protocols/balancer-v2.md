@@ -66,14 +66,34 @@ function main() {
 
 ### `BalancerV2VaultABI`
 
-`import BalancerV2VaultABI from "./protocols/balancer-v2/BalancerV2VaultABI.json";` Speaks for: vault.
+`import BalancerV2VaultABI from "./protocols/balancer-v2/BalancerV2VaultABI.json";` Speaks for: vault. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `BalancerV2` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `swap((bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData) singleSwap, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, uint256 limit, uint256 deadline) payable returns (uint256 amountCalculated)`
 - `batchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, int256[] limits, uint256 deadline) payable returns (int256[] assetDeltas)`
-- `joinPool(bytes32 poolId, address sender, address recipient, (address[] assets, uint256[] maxAmountsIn, bytes userData, bool fromInternalBalance) request) payable`
+- `deregisterTokens(bytes32 poolId, address[] tokens)`
 - `exitPool(bytes32 poolId, address sender, address recipient, (address[] assets, uint256[] minAmountsOut, bytes userData, bool toInternalBalance) request)`
 - `flashLoan(address recipient, address[] tokens, uint256[] amounts, bytes userData)`
+- `getActionId(bytes4 selector) view returns (bytes32)`
+- `getAuthorizer() view returns (address)`
+- `getDomainSeparator() view returns (bytes32)`
+- `getInternalBalance(address user, address[] tokens) view returns (uint256[] balances)`
+- `getNextNonce(address user) view returns (uint256)`
+- `getPausedState() view returns (bool paused, uint256 pauseWindowEndTime, uint256 bufferPeriodEndTime)`
+- `getPool(bytes32 poolId) view returns (address, uint8)`
+- `getPoolTokenInfo(bytes32 poolId, address token) view returns (uint256 cash, uint256 managed, uint256 lastChangeBlock, address assetManager)`
 - `getPoolTokens(bytes32 poolId) view returns (address[] tokens, uint256[] balances, uint256 lastChangeBlock)`
+- `getProtocolFeesCollector() view returns (address)`
+- `hasApprovedRelayer(address user, address relayer) view returns (bool)`
+- `joinPool(bytes32 poolId, address sender, address recipient, (address[] assets, uint256[] maxAmountsIn, bytes userData, bool fromInternalBalance) request) payable`
+- `managePoolBalance((uint8 kind, bytes32 poolId, address token, uint256 amount)[] ops)`
+- `manageUserBalance((uint8 kind, address asset, uint256 amount, address sender, address recipient)[] ops) payable`
+- `queryBatchSwap(uint8 kind, (bytes32 poolId, uint256 assetInIndex, uint256 assetOutIndex, uint256 amount, bytes userData)[] swaps, address[] assets, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds) returns (int256[])`
+- `registerPool(uint8 specialization) returns (bytes32)`
+- `registerTokens(bytes32 poolId, address[] tokens, address[] assetManagers)`
+- `setAuthorizer(address newAuthorizer)`
+- `setPaused(bool paused)`
+- `setRelayerApproval(address sender, address relayer, bool approved)`
+- `swap((bytes32 poolId, uint8 kind, address assetIn, address assetOut, uint256 amount, bytes userData) singleSwap, (address sender, bool fromInternalBalance, address recipient, bool toInternalBalance) funds, uint256 limit, uint256 deadline) payable returns (uint256 amountCalculated)`
+- `WETH() view returns (address)`
 
 ## Next
 

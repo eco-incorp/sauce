@@ -1,23 +1,31 @@
 {
   "abi": [
     {
-      "name": "getPair",
+      "name": "allPairs",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "tokenA",
-          "type": "address"
-        },
-        {
-          "name": "tokenB",
-          "type": "address"
+          "name": "",
+          "type": "uint256"
         }
       ],
       "outputs": [
         {
-          "name": "pair",
+          "name": "",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allPairsLength",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
         }
       ]
     },
@@ -39,6 +47,137 @@
         {
           "name": "pair",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeTo",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "feeToSetter",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPair",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pair",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "migrator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pairCodeHash",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "setFeeTo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeTo",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setFeeToSetter",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_feeToSetter",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMigrator",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_migrator",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "PairCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "token0",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "token1",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "pair",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "",
+          "type": "uint256",
+          "indexed": false
         }
       ]
     }
