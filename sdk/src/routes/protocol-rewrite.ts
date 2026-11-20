@@ -201,13 +201,13 @@ interface BoundCandidate {
 
 /** How a call's callee names the function on its object: `.<method>`, or `["<signature>"]` (shape
  *  H) ending at `end`, the callee's end. */
-type Called =
+export type Called =
   | { readonly method: string; readonly signature?: undefined }
   | { readonly method?: undefined; readonly signature: string; readonly end: number };
 
 /** What `callee`, a call's, calls on its object, when it names a function: `.<method>` or
  *  `["<signature>"]`, a string. */
-function calledBy(callee: AstNode | undefined): Called | undefined {
+export function calledBy(callee: AstNode | undefined): Called | undefined {
   if (callee?.type !== "MemberExpression") return undefined;
   const property = (callee as { property?: AstNode }).property;
   if (!(callee as { computed?: boolean }).computed) {

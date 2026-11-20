@@ -285,3 +285,35 @@ describe("a signature refused", () => {
     );
   });
 });
+
+describe("what a function called by its signature returns, as by name", () => {
+  const GET_POOL = `UniswapV3.Factory["getPool(address,address,uint24)"](USDC, WETH, 500)`;
+  const BY_NAME = "UniswapV3.Factory.getPool(USDC, WETH, 500)";
+
+  it.each([
+    [
+      "a method on the pool it returns",
+      (call: string) => `function main() { return ${call}.liquidity(); }`,
+    ],
+    [
+      "a method on a const holding it",
+      (call: string) => `function main() { const pool = ${call}; return pool.liquidity(); }`,
+    ],
+    [
+      "the native balance of the address it returns",
+      (call: string) => `function main() { return ${call}.balance; }`,
+    ],
+  ])("%s compiles to the bytes the call by name does", (_what, program) => {
+    const byName = hex("ethereum", program(BY_NAME));
+    expect(byName.length).toBeGreaterThan(0);
+    expect(hex("ethereum", program(GET_POOL))).toBe(byName);
+  });
+
+  it("a token it returns: its safe write and its read compile to the bytes the call by name does", () => {
+    const program = (token: string): string =>
+      `function main(pool: Address, to: Address): Uint256 { ${token}.transfer(to, 1); return ${token}.decimals(); }`;
+    expect(hex("ethereum", program(`UniswapV3.Pool(pool)["token0()"]()`))).toBe(
+      hex("ethereum", program("UniswapV3.Pool(pool).token0()")),
+    );
+  });
+});
