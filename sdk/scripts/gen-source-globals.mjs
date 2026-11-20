@@ -513,9 +513,11 @@ function resultType(outputs, returns) {
 
 /** Method declarations of one ABI. A function whose types Sauce has no source spelling for is
  *  declared over `unknown`, so it stays callable from a typed closure and the compiler decides.
- *  `returnsOf(signature)` maps an annotated function's field paths to the contract types. Each of
+ *  `returnsOf(signature)` maps an annotated function's field paths to the contract types. Every
+ *  function is declared by its name and by its full signature
+ *  (`"getPool(address,address,uint24)"(…)`), the two spellings a program calls it by; each of
  *  `bySignature`, a function a program calls by its full signature only, is declared under that
- *  signature: `"permitTransferFrom(((address,uint256)[],uint256,uint256),…)"(…)`. */
+ *  signature alone. */
 function sourceMethods(abi, returnsOf, bySignature = []) {
   const declare = (key, method) => {
     const inputs = method.inputs.map((field) => valueType(field, true));
@@ -526,7 +528,9 @@ function sourceMethods(abi, returnsOf, bySignature = []) {
     return `  ${JSON.stringify(key)}(${args}): SauceCall<${output ?? "unknown"}>;`;
   };
   return [
-    ...abi.filter((entry) => entry.type === "function").map((m) => declare(m.name, m)),
+    ...abi
+      .filter((entry) => entry.type === "function")
+      .flatMap((m) => [declare(m.name, m), declare(signatureOf(m), m)]),
     ...bySignature.map((m) => declare(signatureOf(m), m)),
   ];
 }
