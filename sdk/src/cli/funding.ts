@@ -100,21 +100,27 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
         `(base units); got '${raw}'`,
     );
   }
-  const base = /^(\d+)n$/.exec(amount);
-  if (base === null && !/^\d+(\.\d+)?$/.test(amount)) {
+  const parsed = tokenAmount(amount);
+  if (parsed === undefined) {
     throw new UsageError(
       `${flag} ${raw}: '${amount}' is not an amount — whole tokens (1.5) or base units ending in n ` +
         "(1500000n)",
     );
   }
 
-  return tokenRequest(
-    raw,
-    what,
-    chain,
-    flag,
-    base === null ? { units: amount } : { base: BigInt(base[1]!) },
-  );
+  return tokenRequest(raw, what, chain, flag, parsed);
+}
+
+/**
+ * An amount as written, in the grammar `--fund` and `sauce units` share: whole tokens (`1.5`,
+ * `1000`), or base units with a trailing `n` (`1500000n`). Anything else, a separator, sign or
+ * exponent included, is undefined rather than read as another number.
+ */
+export function tokenAmount(amount: string): FundRequest["amount"] | undefined {
+  const base = /^(\d+)n$/.exec(amount);
+  if (base !== null) return { base: BigInt(base[1]!) };
+
+  return /^\d+(\.\d+)?$/.test(amount) ? { units: amount } : undefined;
 }
 
 /** The token `what` names on `chain`, with `amount` as given. */
