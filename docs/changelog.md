@@ -144,9 +144,10 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   receiver bound to a name first, one read from another call's answer
   (`C.at(C.at(a).pool()).swap(amount)`) and an argument that makes a call were not affected.
 - **Now refused (EVM): a `.gas()` on something that is not a call.** It used to cap a call that ran
-  before it, and now fails as a cap on something that is not a call: a cast of a field that sits
-  beside a call in its object literal (`Uint256(({ x: C.at(a).one(), v: n }).v).gas(n)`); a member
-  selected from an object literal whose other members make calls
+  before it. Each of these is now refused (`.gas()` must follow a contract call, `evm.call`,
+  `evm.static` or `evm.delegate`): a cast of a field that sits beside a call in its object literal
+  (`Uint256(({ x: C.at(a).one(), v: n }).v).gas(n)`); a member selected from an object literal whose
+  other members make calls
   (`Uint256(({ first: C.at(a).one(), later: C.at(b).one() }).first).gas(n)` capped the first call
   and ran the next one uncapped); and a cast of a right shift whose right side is not a constant
   (`Uint256(C.at(a).one() >> C.at(b).one()).gas(n)`, and a shift by a run-time local, by an
@@ -160,11 +161,12 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   `bool` was passed on as the callee sent it (an answer of `2` made `flag + 1` 3), an `address` was
   cut to its low 160 bits (`2^160 + 0xbeef` read as `0xbeef`, an account the callee never named; an
   element of an `address[]` kept the whole word) and a `bytesN` dropped whatever sat below its top
-  bytes. The check covers a single output, a field of a tuple or a struct and an element of an
-  array, and reading any part of a result checks all of it. It is made where the call is decoded,
-  so a `try` that holds the call catches the revert, and one that only reads a result made outside
-  it does not. A result nothing reads is still not decoded or checked, and a `bytes32` fills its
-  slot, so it has nothing to check.
+  bytes. The `bool` and `address` check covers a single output, a field of a tuple or a struct and
+  an element of an array, and reading any part of a result checks all of it; a fixed-bytes value is
+  read only as a method's sole output. The check is made where the call is decoded, so a `try` that
+  holds the call catches the revert, and one that only reads a result made outside it does not. A
+  result nothing reads is still not decoded or checked, and a `bytes32` fills its slot, so it has
+  nothing to check.
 - **Changed (both): `abi.decode` and entry parameters reject a dirty `bool` or `address` word.** A
   decoded `"bool"` read as `1` for any nonzero word, and a `bool` entry parameter was narrowed to
   `1` the same way; a decoded `"Address"` was masked to its low 20 bytes (`2^160 + 0xbeef` read as
@@ -180,10 +182,20 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   EVM chain an `Address` field of an `interface` the module imports is not checked either: declare
   the interface in the module, or spell the type inline.
 - **Now refused (EVM): a `.catch(() => { return n; })` on a `bool` call whose fallback `n` is not
-  `0` or `1`.** It compiled and answered `n` when the call failed, a value a `bool` never holds. An
-  `address` call's fallback already had to fit in 160 bits, and a fixed-bytes call's its width; both
-  still do. A fallback replaces only a call that failed: a call that succeeded with a dirty answer
-  reverts rather than taking it.
+  `0` or `1`.** It compiled and answered `n` when the call failed, a value a `bool` never holds. The
+  error is
+  ``the `.catch()` fallback must be a constant scalar that fits the declared ABI result width``.
+  An `address` call's fallback already had to fit in 160 bits, and a fixed-bytes call's its width;
+  both still do. A fallback replaces only a call that failed: a call that succeeded with a dirty
+  answer reverts rather than taking it.
+- **Added (EVM): more `.catch()`, `try` and `.gas()` forms compile.** A statement
+  `.catch(() => { … })`, or a `try` around nothing but the call, on a call whose one declared output
+  is an integer narrower than 256 bits (a `uint8` or an `int8`, alone, in a struct or in an array),
+  or whose several outputs include one (`getReserves()`), was refused and now compiles: the result is
+  discarded and the handler runs only when the call reverts. So does a statement
+  `.catch(() => { … })` on a call that is the one member of an object literal, a `uint256` output
+  included. A `.gas()` now compiles on a receiver whose own call already has one, and on a receiver
+  whose first step is a computed `.at()` address (`({ p: C.at(a + 1) }).p.w().gas(n)`).
 
 ### Compiler and engines
 
