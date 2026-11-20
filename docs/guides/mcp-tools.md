@@ -39,9 +39,9 @@ How many tools a server has depends on how it runs:
 
 | Server                                 | Tools | Left out                                                                |
 | -------------------------------------- | ----- | ----------------------------------------------------------------------- |
-| Over stdio (what an agent starts)      | 27    | nothing                                                                 |
-| Over stdio with `--no-wallets`         | 20    | the six `sauce_wallet_*` tools and `sauce_sign`                         |
-| Over stdio with `--no-stores`, or HTTP | 18    | the wallet tools, `sauce_sign`, `sauce_pot_list` and `sauce_pot_import` |
+| Over stdio (what an agent starts)      | 28    | nothing                                                                 |
+| Over stdio with `--no-wallets`         | 21    | the six `sauce_wallet_*` tools and `sauce_sign`                         |
+| Over stdio with `--no-stores`, or HTTP | 19    | the wallet tools, `sauce_sign`, `sauce_pot_list` and `sauce_pot_import` |
 
 | Tool                   | Like                   | Returns                                                                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
