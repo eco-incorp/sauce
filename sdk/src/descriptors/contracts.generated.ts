@@ -2,7 +2,7 @@
 // Every registry contract, as `descriptors/registry.ts` builds its descriptors and the host tree
 // (`Base.UniswapV3.QuoterV2`) types it. See the generator's header for where each entry comes from
 // and how it is named.
-import type { ContractLink, ReturnedContractLink } from "./links.js";
+import type { ContractLink, PriorOverloadsLink, ReturnedContractLink } from "./links.js";
 import type { AddressOnlyContract, Contract, InterfaceContract } from "./accessors.js";
 import * as aaveV2Abis from "../protocols/aave-v2/abis.js";
 import { deployments as aaveV2Deployments } from "../protocols/aave-v2/addresses.js";
@@ -804,6 +804,46 @@ export const RETURNED_CONTRACTS = [
   { protocol: "velodrome", abiExport: "VelodromePoolABI", signature: "token0()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
   { protocol: "velodrome", abiExport: "VelodromePoolABI", signature: "token1()", path: [], returns: { protocol: "erc20", contract: "ERC20" } },
 ] as const satisfies readonly ReturnedContractLink[];
+
+/** 36 names whose ABI added overloads to those it declared before the full ABIs. */
+export const PRIOR_OVERLOADS = [
+  { protocol: "aave-v3", abiExport: "PoolABI", name: "supply", signatures: ["supply(address,uint256,address,uint16)"] },
+  { protocol: "aave-v3", abiExport: "PoolABI", name: "withdraw", signatures: ["withdraw(address,uint256,address)"] },
+  { protocol: "aave-v3", abiExport: "PoolABI", name: "borrow", signatures: ["borrow(address,uint256,uint256,uint16,address)"] },
+  { protocol: "aave-v3", abiExport: "PoolABI", name: "repay", signatures: ["repay(address,uint256,uint256,address)"] },
+  { protocol: "aave-v3", abiExport: "PoolABI", name: "liquidationCall", signatures: ["liquidationCall(address,address,address,uint256,bool)"] },
+  { protocol: "camelot", abiExport: "CamelotV2PairABI", name: "swap", signatures: ["swap(uint256,uint256,address,bytes)"] },
+  { protocol: "convex", abiExport: "BaseRewardPoolABI", name: "getReward", signatures: ["getReward(address,bool)"] },
+  { protocol: "curve", abiExport: "CurveRouterNGABI", name: "exchange", signatures: ["exchange(address[11],uint256[5][5],uint256,uint256,address[5])","exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)"] },
+  { protocol: "curve", abiExport: "CurveRouterNGABI", name: "get_dy", signatures: ["get_dy(address[11],uint256[5][5],uint256,address[5])"] },
+  { protocol: "curve", abiExport: "CurveStableSwapABI", name: "exchange", signatures: ["exchange(int128,int128,uint256,uint256)"] },
+  { protocol: "curve", abiExport: "CurveStableSwapABI", name: "exchange_underlying", signatures: ["exchange_underlying(int128,int128,uint256,uint256)"] },
+  { protocol: "curve", abiExport: "CurveStableSwapABI", name: "add_liquidity", signatures: ["add_liquidity(uint256[],uint256)"] },
+  { protocol: "curve", abiExport: "CurveStableSwapABI", name: "remove_liquidity", signatures: ["remove_liquidity(uint256,uint256[])"] },
+  { protocol: "curve", abiExport: "CurveStableSwapABI", name: "remove_liquidity_one_coin", signatures: ["remove_liquidity_one_coin(uint256,int128,uint256)"] },
+  { protocol: "debridge", abiExport: "DlnDestinationABI", name: "fulfillOrder", signatures: ["fulfillOrder((uint64,bytes,uint256,bytes,uint256,uint256,bytes,uint256,bytes,bytes,bytes,bytes,bytes,bytes),uint256,bytes32,bytes,address)"] },
+  { protocol: "etherfi", abiExport: "LiquidityPoolABI", name: "deposit", signatures: ["deposit()"] },
+  { protocol: "fluid", abiExport: "FluidLendingABI", name: "deposit", signatures: ["deposit(uint256,address)"] },
+  { protocol: "fluid", abiExport: "FluidLendingABI", name: "withdraw", signatures: ["withdraw(uint256,address,address)"] },
+  { protocol: "fluid", abiExport: "FluidLendingABI", name: "redeem", signatures: ["redeem(uint256,address,address)"] },
+  { protocol: "harvest", abiExport: "VaultABI", name: "deposit", signatures: ["deposit(uint256)"] },
+  { protocol: "harvest", abiExport: "VaultABI", name: "withdraw", signatures: ["withdraw(uint256)"] },
+  { protocol: "hyperlane", abiExport: "HyperlaneMailboxABI", name: "dispatch", signatures: ["dispatch(uint32,bytes32,bytes)"] },
+  { protocol: "hyperlane", abiExport: "HyperlaneMailboxABI", name: "quoteDispatch", signatures: ["quoteDispatch(uint32,bytes32,bytes)"] },
+  { protocol: "maverick", abiExport: "MaverickV2FactoryABI", name: "lookup", signatures: ["lookup(address,address,uint256,uint256)"] },
+  { protocol: "permit2", abiExport: "Permit2ABI", name: "transferFrom", signatures: ["transferFrom(address,address,uint160,address)"] },
+  { protocol: "renzo", abiExport: "RestakeManagerABI", name: "deposit", signatures: ["deposit(address,uint256)"] },
+  { protocol: "renzo", abiExport: "RestakeManagerABI", name: "depositETH", signatures: ["depositETH()"] },
+  { protocol: "scroll-bridge", abiExport: "ScrollL1GatewayRouterABI", name: "depositETH", signatures: ["depositETH(uint256,uint256)"] },
+  { protocol: "scroll-bridge", abiExport: "ScrollL1GatewayRouterABI", name: "depositERC20", signatures: ["depositERC20(address,uint256,uint256)"] },
+  { protocol: "scroll-bridge", abiExport: "ScrollL1MessengerABI", name: "sendMessage", signatures: ["sendMessage(address,uint256,bytes,uint256)"] },
+  { protocol: "stader", abiExport: "StakePoolManagerABI", name: "deposit", signatures: ["deposit(address)"] },
+  { protocol: "tokemak", abiExport: "AutopoolABI", name: "totalAssets", signatures: ["totalAssets()"] },
+  { protocol: "tokemak", abiExport: "AutopoolABI", name: "convertToShares", signatures: ["convertToShares(uint256)"] },
+  { protocol: "tokemak", abiExport: "AutopoolABI", name: "convertToAssets", signatures: ["convertToAssets(uint256)"] },
+  { protocol: "yearn-v3", abiExport: "YearnV3VaultABI", name: "withdraw", signatures: ["withdraw(uint256,address,address)"] },
+  { protocol: "yearn-v3", abiExport: "YearnV3VaultABI", name: "redeem", signatures: ["redeem(uint256,address,address)"] },
+] as const satisfies readonly PriorOverloadsLink[];
 
 export interface AaveV2Contracts {
   readonly LendingPool: Contract<typeof aaveV2Abis.LendingPoolABI>;

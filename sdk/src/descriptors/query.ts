@@ -9,7 +9,13 @@ import {
 import { getProtocol } from "../protocols/index.js";
 import type { ProtocolInfo } from "../core/types.js";
 import { descriptorOn } from "./derive.js";
-import { DESCRIPTORS, byChain, byProtocol, byProtocolAndContract } from "./registry.js";
+import {
+  DESCRIPTORS,
+  PRIOR_OVERLOADS_BY_EXPORT,
+  byChain,
+  byProtocol,
+  byProtocolAndContract,
+} from "./registry.js";
 import type { ContractDescriptor, DescriptorMethod, ResolvedContract } from "./types.js";
 
 function normalizeKey(input: string): string {
@@ -94,6 +100,27 @@ export function descriptorChains(descriptor: ContractDescriptor): readonly Canon
   return descriptor.chains.map((slug) => requireChain(slug));
 }
 
+/**
+ * A resolved contract's methods by name: each name's last overload, except where its ABI added
+ * overloads to those the registry declared before the full ABIs: then the last of those the
+ * contract (as the chain's deployment runs it) still has, as it chose then.
+ */
+function methodsByName(descriptor: ContractDescriptor): ReadonlyMap<string, DescriptorMethod> {
+  const map = new Map(descriptor.methods.map((m) => [m.name, m]));
+  const prior = PRIOR_OVERLOADS_BY_EXPORT.get(`${descriptor.protocol}/${descriptor.abiExport}`);
+  if (prior === undefined) return map;
+  const bySignature = new Map(descriptor.methods.map((m) => [m.signature, m]));
+  for (const [name, signatures] of prior) {
+    for (let at = signatures.length - 1; at >= 0; at--) {
+      const method = bySignature.get(signatures[at]!);
+      if (method === undefined) continue;
+      map.set(name, method);
+      break;
+    }
+  }
+  return map;
+}
+
 /** THE thin resolver: (chain, protocol, contract) -> address + abi + methods for that chain, or undefined. E2.3's typed accessor tree is a walk over this, not a reimplementation of it. A deployed contract's descriptor and methods are those its deployment on the chain runs (`descriptorOn`). */
 export function describeContract(
   chain: ChainRef,
@@ -112,13 +139,13 @@ export function describeContract(
       descriptor,
       chain: resolvedChain,
       address,
-      methods: new Map(descriptor.methods.map((m) => [m.name, m])),
+      methods: methodsByName(descriptor),
     };
   }
   return {
     descriptor: full,
     chain: resolvedChain,
-    methods: new Map(full.methods.map((m) => [m.name, m])),
+    methods: methodsByName(full),
   };
 }
 

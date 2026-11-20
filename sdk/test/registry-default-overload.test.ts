@@ -18,7 +18,15 @@ import { toFunctionSelector, toFunctionSignature, type Abi, type AbiFunction } f
 
 import { requireChain } from "../src/chains/canonical.js";
 import { descriptorOn } from "../src/descriptors/derive.js";
-import { DESCRIPTORS, methodOf, selectorOf } from "../src/descriptors/index.js";
+import {
+  DESCRIPTORS,
+  describeContract,
+  getDescriptor,
+  methodOf,
+  requireContract,
+  selectorOf,
+} from "../src/descriptors/index.js";
+import type { ContractDescriptor, DescriptorMethod } from "../src/descriptors/types.js";
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const baseline = JSON.parse(
@@ -127,5 +135,93 @@ describe("a name's first overload is the one it was before the full ABIs", () =>
   ])("%s.%s.%s is %s with no argument count, as before", (protocol, contract, name, selector) => {
     const descriptor = DESCRIPTORS.find((d) => d.protocol === protocol && d.contract === contract)!;
     expect(selectorOf(descriptor, name)).toBe(selector);
+  });
+
+  /** The method the rule picks for `name` on `view` (see query.ts#methodsByName). */
+  function expectedEntry(view: ContractDescriptor, name: string): DescriptorMethod | undefined {
+    const group =
+      byName(baseline.exports[`${view.protocol}.${view.abiExport}`] ?? []).get(name) ?? [];
+    const remaining = group.filter((s) => view.methods.some((m) => m.signature === s));
+    const pick = remaining.at(-1);
+    return pick !== undefined
+      ? view.methods.find((m) => m.signature === pick)
+      : view.methods.filter((m) => m.name === name).at(-1);
+  }
+
+  it("describeContract's methods map keeps each name's last overload before the full ABIs, on every chain view", () => {
+    const wrong: string[] = [];
+    let checked = 0;
+    for (const descriptor of DESCRIPTORS) {
+      if (descriptor.kind === "address-only") continue;
+      const chains: readonly string[] =
+        descriptor.kind === "interface" ? ["ethereum"] : descriptor.chains;
+      for (const slug of chains) {
+        const view =
+          descriptor.kind === "interface"
+            ? descriptor
+            : descriptorOn(descriptor, requireChain(slug).id);
+        const resolved = describeContract(slug, descriptor.protocol, descriptor.contract)!;
+        const required = requireContract(slug, descriptor.protocol, descriptor.contract);
+        for (const name of new Set(view.methods.map((m) => m.name))) {
+          const want = expectedEntry(view, name)!;
+          for (const [how, contract] of [
+            ["describeContract", resolved],
+            ["requireContract", required],
+          ] as const) {
+            checked++;
+            const got = contract.methods.get(name);
+            if (
+              got?.signature !== want.signature ||
+              got.selector !== want.selector ||
+              got.inputs.length !== want.inputs.length ||
+              got !== want
+            ) {
+              wrong.push(
+                `${descriptor.protocol}.${descriptor.contract} on ${slug}: ${how} ${name} is ${got?.signature}, want ${want.signature}`,
+              );
+            }
+          }
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    // The names whose last overload the full ABIs moved: the baseline's last, against the twin's.
+    let changed = 0;
+    for (const { key, twin } of exportsOf) {
+      const now = byName(functionsOf(twin!));
+      for (const [name, group] of byName(baseline.exports[key]!)) {
+        if (group.at(-1) !== now.get(name)?.at(-1)) changed++;
+      }
+    }
+    expect(changed).toBe(36);
+    expect(checked).toBeGreaterThan(700);
+  });
+
+  it("pins: Base Aave supply is the four-argument overload, UniversalRouter execute the two-argument one", () => {
+    const supply = describeContract("base", "aave-v3", "Pool")!.methods.get("supply")!;
+    expect(supply.signature).toBe("supply(address,uint256,address,uint16)");
+    expect(supply.selector).toBe("0x617ba037");
+    expect(supply.inputs).toHaveLength(4);
+    expect(requireContract("base", "aave-v3", "Pool").methods.get("supply")!.selector).toBe(
+      "0x617ba037",
+    );
+    const execute = describeContract("ethereum", "uniswap-v4", "UniversalRouter")!.methods.get(
+      "execute",
+    )!;
+    expect(execute.signature).toBe("execute(bytes,bytes[])");
+    expect(execute.selector).toBe("0x24856bc3");
+    expect(execute.inputs).toHaveLength(2);
+  });
+
+  it("a name the baseline lacks keeps its last overload", () => {
+    const view = descriptorOn(getDescriptor("aave-v3", "Pool")!, requireChain("base").id);
+    expect(baseline.exports["aave-v3.PoolABI"]!.some((s) => s.startsWith("repayWithPermit("))).toBe(
+      false,
+    );
+    const overloads = view.methods.filter((m) => m.name === "repayWithPermit");
+    expect(overloads.length).toBeGreaterThanOrEqual(2);
+    expect(describeContract("base", "aave-v3", "Pool")!.methods.get("repayWithPermit")).toBe(
+      overloads.at(-1),
+    );
   });
 });

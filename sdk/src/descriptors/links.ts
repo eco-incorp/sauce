@@ -95,7 +95,20 @@ export interface ReturnedContractLink {
   readonly returns: { readonly protocol: string; readonly contract: string };
 }
 
-export { CONTRACT_LINKS, RETURNED_CONTRACTS } from "./contracts.generated.js";
+/**
+ * A name whose ABI added overloads to those the registry declared before it took its deployments'
+ * full ABIs (`test/fixtures/registry-abi/baseline-order.json`): `describeContract`'s `methods` map
+ * keeps, of `signatures` (in their order then), the last the chain's deployment runs, as it chose
+ * then. GENERATED (`PRIOR_OVERLOADS`).
+ */
+export interface PriorOverloadsLink {
+  readonly protocol: string;
+  readonly abiExport: string;
+  readonly name: string;
+  readonly signatures: readonly string[];
+}
+
+export { CONTRACT_LINKS, PRIOR_OVERLOADS, RETURNED_CONTRACTS } from "./contracts.generated.js";
 import type { CONTRACT_LINKS } from "./contracts.generated.js";
 
 export type ContractLinkEntry = (typeof CONTRACT_LINKS)[number];
