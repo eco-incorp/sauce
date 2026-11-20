@@ -188,6 +188,23 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     await assert.rejects(chain.balanceOf(chain.account(0).pot, "NOPE"), /NOPE is not a token/);
   });
 
+  it("refuses a whole-token amount past the token's decimals, and writes nothing", async () => {
+    const holder = chain.account(7).address;
+    const before = await chain.balanceOf(holder, "SOL");
+    await assert.rejects(chain.fund(holder, { SOL: "1.0000000005" }), {
+      message:
+        `cannot fund ${holder} with SOL: 1.0000000005 SOL has 10 decimal places; SOL has 9, so ` +
+        "it cannot be written exactly",
+    });
+    assert.equal(await chain.balanceOf(holder, "SOL"), before);
+    // Wrapped SOL, the one mint an empty chain has: refused before its account is created.
+    await assert.rejects(
+      chain.fund(holder, { WSOL: "0.0000000001" }),
+      /with WSOL: 0\.0000000001 WSOL has 10 decimal places; WSOL has 9, so it cannot be written exactly/,
+    );
+    assert.equal(await chain.balanceOf(holder, "WSOL"), 0n);
+  });
+
   it("funds SOL, snapshots and reverts, and moves the clock a program reads", async () => {
     const holder = chain.account(6).address;
     const before = await chain.balanceOf(holder, "SOL");

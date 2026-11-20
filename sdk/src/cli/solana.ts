@@ -42,8 +42,9 @@ import {
   type TransactionSigner,
 } from "@solana/kit";
 import type { AccountManifest } from "sauce-compiler";
-import { bytesToHex, formatUnits, hexToBytes, parseUnits, type Hex } from "viem";
+import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 
+import { exactUnits, tokenAmount, type TokenAmount } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
 import {
@@ -1721,7 +1722,7 @@ export interface SvmAssumed {
   readonly decimals?: number;
   readonly program?: Address;
   /** In whole tokens as written (`1.5`), or in base units (`1500000n`). */
-  readonly amount: { readonly units: string } | { readonly base: bigint };
+  readonly amount: TokenAmount;
 }
 
 /** `--assume-balance` on Solana: `<TOKEN|mint>:<amount>`, each mint once. */
@@ -1732,9 +1733,8 @@ export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChai
   return raws.map((raw) => {
     const at = raw.lastIndexOf(":");
     const token = raw.slice(0, at).trim();
-    const amount = raw.slice(at + 1).trim();
-    const base = /^(\d+)n$/.exec(amount);
-    if (at <= 0 || (base === null && !/^\d+(\.\d+)?$/.test(amount))) {
+    const amount = tokenAmount(raw.slice(at + 1).trim());
+    if (at <= 0 || amount === undefined) {
       throw new UsageError(
         `--assume-balance: expected <TOKEN|mint>:<amount>, as USDC:1.5 (whole tokens) or ` +
           `USDC:1500000n (base units); got '${raw}'`,
@@ -1750,13 +1750,18 @@ export function svmAssumedBalances(raws: readonly string[], chain: CanonicalChai
     }
     if (seen.has(mint)) throw new UsageError(`--assume-balance names ${token} twice: give it once`);
     seen.add(mint);
+    // A registered mint's decimals are known now: an amount that would need rounding is refused
+    // before anything is read. A mint by address is held to its own once they are read.
+    if (row !== undefined && "units" in amount) {
+      exactUnits(amount.units, row.decimals, row.symbol, `--assume-balance ${raw}`);
+    }
 
     return {
       raw,
       mint,
       label: row?.symbol ?? mint,
       ...(row === undefined ? {} : { decimals: row.decimals, program: address(row.tokenProgram) }),
-      amount: base === null ? { units: amount } : { base: BigInt(base[1]!) },
+      amount,
     };
   });
 }
@@ -2590,7 +2595,14 @@ async function stagedRehearsal(
     const program = assumed.program ?? mintAccount.owner;
     const decimals = assumed.decimals ?? mintAccount.data[44] ?? 0;
     const amount =
-      "base" in assumed.amount ? assumed.amount.base : parseUnits(assumed.amount.units, decimals);
+      "base" in assumed.amount
+        ? assumed.amount.base
+        : exactUnits(
+            assumed.amount.units,
+            decimals,
+            assumed.label,
+            `--assume-balance ${assumed.raw}`,
+          );
     const account = await svmTokenAccount({ mint: assumed.mint, tokenProgram: program }, holder);
     fork.tokenAccount(account, assumed.mint, holder, program, amount);
     notes.push(

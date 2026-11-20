@@ -335,6 +335,19 @@ describe("the policy file", () => {
     expect(policy.notes).toEqual([]);
   });
 
+  it("refuses whole tokens past the 36 places every limit is compared at, where they would round", () => {
+    const read = (perDay: string) => () =>
+      parsePolicy(JSON.stringify({ native: { perDay } }), "p.json");
+    const past = `0.${"0".repeat(36)}5`;
+    expect(read(past)).toThrow(
+      `p.json: native.perDay: "${past}" has 37 decimal places; a limit is compared at 36, so it ` +
+        "cannot be written exactly",
+    );
+    // 36 places, and zeros past them, are exact.
+    expect(read(`0.${"0".repeat(35)}1`)).not.toThrow();
+    expect(read(`1.${"0".repeat(40)}`)).not.toThrow();
+  });
+
   it("takes a Solana key in base58 or as the 32 bytes of hex the command prints, kept in base58", () => {
     const usdc = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
     const usdcHex = "0xc6fa7af3bedbad3a3d65f36aabc97431b1bbe4c2d2f6e0e47ca60203452f5d61";

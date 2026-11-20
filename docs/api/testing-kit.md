@@ -99,20 +99,20 @@ programs, wrapped SOL, and nothing else.
 
 What `fork` and `local` return on an EVM chain.
 
-| Call                                        | What it does                                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `account(i)`                                | Test account `i` (0–9): `address`, `privateKey`, and `pot`, its Pot under the default salt |
-| `fund(holder, { USDC: "100", ETH: "1" })`   | Adds whole tokens (a string) or base units (a bigint) to `holder`                          |
-| `balanceOf(holder, "USDC")`                 | A balance in base units. A token is a registry symbol, an address, or `ETH`                |
-| `run(program, { from, args, value })`       | Sends the program as a cook from test account `from`'s Pot, and waits for it to be mined   |
-| `simulate(program, { from, args, value })`  | The same cook, run and not sent                                                            |
-| `compile(program)`                          | The program compiled for the chain: `bytecode`, `params`, `returnType`                     |
-| `impersonate(address, (send) => …)`         | Sends transactions as any address, such as a token holder                                  |
-| `deployPot(account)`                        | Deploys a test account's Pot now, rather than on its first cook                            |
-| `snapshot()`, `revert()`                    | Saves the chain's state, and returns to it. They nest                                      |
-| `increaseTime(seconds)`, `mine(n)`, `now()` | Moves the clock and mines a block, mines blocks, reads the latest block's time             |
-| `executionFee()`                            | The Kitchen's fee, which every cook pays                                                   |
-| `stop()`                                    | Stops the node. A recording chain writes its state file here, so await it                  |
+| Call                                        | What it does                                                                                         |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `account(i)`                                | Test account `i` (0–9): `address`, `privateKey`, and `pot`, its Pot under the default salt           |
+| `fund(holder, { USDC: "100", ETH: "1" })`   | Adds whole tokens (a string, refused past the token's decimals) or base units (a bigint) to `holder` |
+| `balanceOf(holder, "USDC")`                 | A balance in base units. A token is a registry symbol, an address, or `ETH`                          |
+| `run(program, { from, args, value })`       | Sends the program as a cook from test account `from`'s Pot, and waits for it to be mined             |
+| `simulate(program, { from, args, value })`  | The same cook, run and not sent                                                                      |
+| `compile(program)`                          | The program compiled for the chain: `bytecode`, `params`, `returnType`                               |
+| `impersonate(address, (send) => …)`         | Sends transactions as any address, such as a token holder                                            |
+| `deployPot(account)`                        | Deploys a test account's Pot now, rather than on its first cook                                      |
+| `snapshot()`, `revert()`                    | Saves the chain's state, and returns to it. They nest                                                |
+| `increaseTime(seconds)`, `mine(n)`, `now()` | Moves the clock and mines a block, mines blocks, reads the latest block's time                       |
+| `executionFee()`                            | The Kitchen's fee, which every cook pays                                                             |
+| `stop()`                                    | Stops the node. A recording chain writes its state file here, so await it                            |
 
 | Property                      | What it is                                                        |
 | ----------------------------- | ----------------------------------------------------------------- |
@@ -203,21 +203,21 @@ error says so.
 
 What `fork` and `local` return when the chain is Solana.
 
-| Call                                          | What it does                                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `account(i)`                                  | Test account `i` (0–9): `address`, `secretKey` (as `solana-keygen` writes one), and `pot` |
-| `fund(holder, { USDC: "100", SOL: "1" })`     | Adds whole tokens (a string) or base units (a bigint) to `holder`                         |
-| `balanceOf(holder, "USDC")`                   | A balance in base units. A token is a registry symbol, a mint, or `SOL`                   |
-| `run(program, { from, args, accounts })`      | Sends the program as a cook from test account `from`'s Pot, as `sauce run` sends it       |
-| `simulate(program, { from, args, accounts })` | The same cook, and everything before it, run and undone                                   |
-| `compile(program)`                            | The program compiled for Solana: bytecode, parameters, return type, the accounts it takes |
-| `getAccount(key)`, `setAccount(key, account)` | Reads or writes any account: lamports, owner, data                                        |
-| `deployPot(account)`                          | Creates a test account's Pot now, rather than on its first cook                           |
-| `snapshot()`, `revert()`                      | Saves the chain's state, and returns to it. They nest                                     |
-| `increaseTime(seconds)`, `warp(slots)`        | Moves the clock and the slot together, 400 ms a slot                                      |
-| `now()`, `slot()`                             | The time and the slot a program reads (`ctx.timestamp()`, `ctx.blockNumber()`)            |
-| `executionFee()`                              | The Kitchen's fee, which every cook's owner pays                                          |
-| `stop()`                                      | Stops the chain. A recording chain writes its state file here, so await it                |
+| Call                                          | What it does                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `account(i)`                                  | Test account `i` (0–9): `address`, `secretKey` (as `solana-keygen` writes one), and `pot`            |
+| `fund(holder, { USDC: "100", SOL: "1" })`     | Adds whole tokens (a string, refused past the token's decimals) or base units (a bigint) to `holder` |
+| `balanceOf(holder, "USDC")`                   | A balance in base units. A token is a registry symbol, a mint, or `SOL`                              |
+| `run(program, { from, args, accounts })`      | Sends the program as a cook from test account `from`'s Pot, as `sauce run` sends it                  |
+| `simulate(program, { from, args, accounts })` | The same cook, and everything before it, run and undone                                              |
+| `compile(program)`                            | The program compiled for Solana: bytecode, parameters, return type, the accounts it takes            |
+| `getAccount(key)`, `setAccount(key, account)` | Reads or writes any account: lamports, owner, data                                                   |
+| `deployPot(account)`                          | Creates a test account's Pot now, rather than on its first cook                                      |
+| `snapshot()`, `revert()`                      | Saves the chain's state, and returns to it. They nest                                                |
+| `increaseTime(seconds)`, `warp(slots)`        | Moves the clock and the slot together, 400 ms a slot                                                 |
+| `now()`, `slot()`                             | The time and the slot a program reads (`ctx.timestamp()`, `ctx.blockNumber()`)                       |
+| `executionFee()`                              | The Kitchen's fee, which every cook's owner pays                                                     |
+| `stop()`                                      | Stops the chain. A recording chain writes its state file here, so await it                           |
 
 Each test account starts with 1,000 SOL, and account 0's Pot is created at start; another test
 account's on its first cook. On a fork the Kitchen's fee is the cluster's, which the owner pays

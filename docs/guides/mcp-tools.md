@@ -228,8 +228,9 @@ preview chain and on Solana.
 ### Token amounts
 
 A token amount is in whole tokens: `USDC:1.5` is 1.5 USDC, exact through the token's decimals, and
-`USDC:1500000` is 1.5 million USDC, which the result's `notes` point out. For base units, end it in
-`n`, as a JavaScript bigint is written: `USDC:1500000n` is 1.5 USDC.
+`USDC:1500000` is 1.5 million USDC, which the result's `notes` point out. An amount past the
+token's decimals (`USDC:1.2345678`) is refused, never rounded. For base units, end it in `n`, as a
+JavaScript bigint is written: `USDC:1500000n` is 1.5 USDC.
 
 ### The Pot's reads
 

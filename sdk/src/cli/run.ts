@@ -19,6 +19,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
+import { TokenAmountError } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import {
   addressDefines,
@@ -2002,7 +2003,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
       "amount is in whole tokens: USDC:1.5 is 1.5 USDC, and USDC:1500000 is 1.5 million (said",
-      "on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC).",
+      "on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC). An",
+      "amount past the token's decimals (USDC:1.2345678) is refused, never rounded.",
       "ETH:<amount> rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's",
       "SafeERC20 one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:",
       "  permit2    (default) you sign a Permit2 transfer of exactly this amount to this Pot, once;",
@@ -3889,7 +3891,8 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
 
     return output.exitCode ?? 0;
   } catch (error) {
-    if (error instanceof UsageError) {
+    // An amount past its token's decimals (`amounts.ts`) is the invocation's fault too.
+    if (error instanceof UsageError || error instanceof TokenAmountError) {
       io.stderr(`sauce ${label}: ${error.message}\nRun \`sauce ${label} --help\` for usage.\n`);
 
       return 2;

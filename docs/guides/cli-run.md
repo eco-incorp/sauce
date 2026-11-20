@@ -239,8 +239,9 @@ transaction as the cook:
 sauce run pay.sauce.ts --chain base --wallet me --fund USDC:1.5 --sweep --args <recipient> 1000000
 ```
 
-- `--fund USDC:1.5` pulls 1.5 USDC. Amounts are whole tokens. `USDC:1500000n`, with an `n`, is in
-  the token's smallest units. Repeat it for more tokens. `ETH:0.01` sends ETH with the cook.
+- `--fund USDC:1.5` pulls 1.5 USDC. Amounts are whole tokens, and one past the token's decimals
+  (`USDC:1.2345678`) is refused rather than rounded. `USDC:1500000n`, with an `n`, is in the
+  token's smallest units. Repeat it for more tokens. `ETH:0.01` sends ETH with the cook.
 - `--sweep` sends back to you, at the end, the Pot's whole balance of each funded token, not only
   what this run brought.
 

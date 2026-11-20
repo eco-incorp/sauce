@@ -454,10 +454,10 @@ const TOKEN_AMOUNTS = z
   .optional()
   .describe(
     "Each <TOKEN|address>:<amount>: a symbol the chain registers or a 0x token address, and " +
-      "the amount in whole tokens (USDC:1.5 is 1.5 USDC, exact through the token's decimals; " +
-      "USDC:1500000 is 1.5 million USDC, which notes point out), or in base units with a " +
-      "trailing n as a bigint is written (USDC:1500000n is 1.5 USDC); ETH:<amount> is the " +
-      "chain's native currency.",
+      "the amount in whole tokens (USDC:1.5 is 1.5 USDC, exact through the token's decimals, and " +
+      "USDC:1.2345678 refused, never rounded; USDC:1500000 is 1.5 million USDC, which notes point " +
+      "out), or in base units with a trailing n as a bigint is written (USDC:1500000n is 1.5 " +
+      "USDC); ETH:<amount> is the chain's native currency.",
   );
 
 /** How many rehearsals one `sauce_simulate` call may hold. */

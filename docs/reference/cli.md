@@ -417,7 +417,8 @@ they are approved: the run names every one it needs, and --yes, and stops.
 --fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so
 it first pulls each amount from you, then runs, then (--sweep) returns what is left. The
 amount is in whole tokens: USDC:1.5 is 1.5 USDC, and USDC:1500000 is 1.5 million (said
-on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC).
+on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC). An
+amount past the token's decimals (USDC:1.2345678) is refused, never rounded.
 ETH:<amount> rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's
 SafeERC20 one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:
   permit2    (default) you sign a Permit2 transfer of exactly this amount to this Pot, once;

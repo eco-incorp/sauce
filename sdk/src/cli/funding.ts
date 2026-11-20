@@ -33,13 +33,13 @@ import {
   maxUint256,
   parseAbi,
   parseSignature,
-  parseUnits,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
+import { exactUnits, tokenAmount, type TokenAmount } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
@@ -70,7 +70,7 @@ export interface FundRequest {
   /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
   readonly decimals?: number;
   /** The amount: in whole tokens as written (`1.5`), or in base units (`1500000n`). */
-  readonly amount: { readonly units: string } | { readonly base: bigint };
+  readonly amount: TokenAmount;
   /** The flag it was given with, for what is said about it. */
   readonly flag: string;
 }
@@ -80,9 +80,9 @@ const NATIVE = /^(eth|native)$/i;
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
  * the error). The amount is in whole tokens — `USDC:1.5` is 1.5 USDC, exact through the registry's
- * decimals (or the token's own, for an address) — or, with a trailing `n` as a JavaScript bigint
- * has, a raw integer in base units: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's
- * native currency, 18 decimals.
+ * decimals (or the token's own, for an address), and refused where it would need rounding
+ * (`exactUnits`) — or, with a trailing `n` as a JavaScript bigint has, a raw integer in base units:
+ * `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".
@@ -108,19 +108,15 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
     );
   }
 
-  return tokenRequest(raw, what, chain, flag, parsed);
-}
+  const request = tokenRequest(raw, what, chain, flag, parsed);
+  // Where the decimals are known now, a registered symbol's or the native coin's, an amount that
+  // would need rounding is refused before anything is read or sent. A token named by its address
+  // is held to its own decimals once `baseUnits` has read them.
+  if ("units" in request.amount && request.decimals !== undefined) {
+    exactUnits(request.amount.units, request.decimals, request.label, `${flag} ${raw}`);
+  }
 
-/**
- * An amount as written, in the grammar `--fund` and `sauce units` share: whole tokens (`1.5`,
- * `1000`), or base units with a trailing `n` (`1500000n`). Anything else, a separator, sign or
- * exponent included, is undefined rather than read as another number.
- */
-export function tokenAmount(amount: string): FundRequest["amount"] | undefined {
-  const base = /^(\d+)n$/.exec(amount);
-  if (base !== null) return { base: BigInt(base[1]!) };
-
-  return /^\d+(\.\d+)?$/.test(amount) ? { units: amount } : undefined;
+  return request;
 }
 
 /** The token `what` names on `chain`, with `amount` as given. */
@@ -258,7 +254,8 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
 };
 
 /**
- * A request's amount in base units, a token's decimals read from it when not registered, and a note
+ * A request's amount in base units, exact (`exactUnits` refuses one that would need rounding), a
+ * token's decimals read from it when not registered, and a note
  * when a bare integer of whole tokens reads like base units: at or above 10^decimals (`USDC:1500000`,
  * 1.5 million USDC), which a program's habit of base units makes easy to write by mistake. A note,
  * not a refusal: it may be meant, and base units have their own spelling (`1500000n`).
@@ -276,7 +273,7 @@ export async function baseUnits(
         client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
       ),
     );
-  const amount = parseUnits(units, decimals);
+  const amount = exactUnits(units, decimals, request.label, `${request.flag} ${request.raw}`);
   if (units.includes(".") || decimals === 0 || BigInt(units) < 10n ** BigInt(decimals)) {
     return { amount };
   }

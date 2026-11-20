@@ -16,7 +16,7 @@ import {
   type Address,
   type KeyPairSigner,
 } from "@solana/kit";
-import { bytesToHex, parseUnits, type Hex } from "viem";
+import { bytesToHex, type Hex } from "viem";
 
 import {
   compileProgram,
@@ -40,6 +40,7 @@ import {
   decodeExecutionFeeConfig,
   deriveExecutionFeeConfigPda,
   derivePotPda,
+  exactUnits,
   EXECUTION_FEE_CONFIG_DISCRIMINATOR,
   MAX_POT_LEN,
   svmTokenAccount,
@@ -369,15 +370,19 @@ export class SolanaTestChain {
   }
 
   /**
-   * Gives `holder` more of each token: `{ USDC: "100", SOL: "1" }` adds whole tokens, a bigint adds
-   * base units (`{ USDC: 100_000_000n }`). A token's amount is written into `holder`'s associated
+   * Gives `holder` more of each token: `{ USDC: "100", SOL: "1" }` adds whole tokens, exactly (an
+   * amount past the token's decimals is refused, never rounded), a bigint adds base units
+   * (`{ USDC: 100_000_000n }`). A token's amount is written into `holder`'s associated
    * token account, which is created first where it is missing (its rent paid by the kit, not by a
    * test account); the mint's supply is left as it was. SOL is added to the account itself.
    */
   async fund(holder: Address, amounts: Readonly<Record<string, string | bigint>>): Promise<void> {
     for (const [name, amount] of Object.entries(amounts)) {
       if (name.toUpperCase() === "SOL") {
-        const units = typeof amount === "bigint" ? amount : parseUnits(amount, 9);
+        const units =
+          typeof amount === "bigint"
+            ? amount
+            : exactUnits(amount, 9, "SOL", `cannot fund ${holder} with ${name}`);
         await this.bank.ensure([holder]);
         const held = this.bank.account(holder);
         this.bank.set(
@@ -389,7 +394,10 @@ export class SolanaTestChain {
         continue;
       }
       const token = await this.tokenOf(name);
-      const units = typeof amount === "bigint" ? amount : parseUnits(amount, token.decimals);
+      const units =
+        typeof amount === "bigint"
+          ? amount
+          : exactUnits(amount, token.decimals, token.label, `cannot fund ${holder} with ${name}`);
       const key = await svmTokenAccount({ mint: token.mint, tokenProgram: token.program }, holder);
       await this.bank.ensure([holder, key]);
       if (this.bank.account(key) === null) {
