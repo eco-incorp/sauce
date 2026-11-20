@@ -204,6 +204,12 @@ Accounts compare only with `==` and `!=`: "accounts compare for identity only �
   `entryParams` ABI, honoring `indirect` tuple parameters.
 - Parameters may be any combination of scalars, bytes, arrays and records, with at most 4 levels of nested
   arrays.
+- On **EVM** an argument that is not a value of its type reverts before the body runs, whether the
+  body reads it or not: a `bool` word other than `0` or `1`, or an `Address` or `Account` word with
+  a bit set above its low 160, at the top level and inside an array or a record parameter, the
+  fields of an `interface` the module declares included. An `Address` field of an `interface` the
+  module imports is not checked, and reaches the program as the whole word: declare the interface in
+  the module, or spell the type inline.
 - On **SVM**, `Account` parameters are not encoded arguments: they are the accounts attached to the transaction,
   in declaration order.
 
@@ -511,8 +517,14 @@ work on SVM; they are decoded separately.
     resolves against nothing — read a field by position instead (`t[0]`)".
   - Example: `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);`
 
-A `"bool"` field decodes as bool, an `"Address"` keeps the address-sized low 20 bytes,
-and `"Int256"` decodes a signed word. Other single-value fields decode as unsigned numbers.
+A `"bool"` field decodes as bool and `"Int256"` as a signed word; `"Address"` and the other
+single-value fields decode as unsigned numbers. A word that is not a value of its field reverts
+rather than being narrowed or cut to fit: a `"bool"` other than `0` or `1`, or an `"Address"` with
+a bit set above its low 160. That holds for a single field, a field of a `{…}` record at any depth
+and each element of a `"bool[]"` or `"Address[]"`, and the whole value is checked where it is
+decoded, whether or not any part of it is read. A `try` block that runs the decode catches that
+revert. A statement `.catch()` on a decode, `abi.decode(evm.call(…), […]).catch(() => { … });`,
+keeps only the call and decodes nothing.
 
 ## 10. `evm` (EVM)
 
@@ -697,14 +709,22 @@ is supported. Bind an intermediate value when it improves readability.
   - A method with one output returns that output.
   - A method with several outputs returns a record named after the ABI's outputs: read `.amountOut` or `[0]`,
     or destructure it with `const [a, b] = …`.
-- **Integer outputs keep signedness.** An ABI `intN` output becomes `Int256`; `uintN`, `address`
-  and the ABI's low-level `bool` word remain unsigned numbers. Read integer outputs are range-checked
-  recursively against their declared widths, not masked. Scalar input conversions also check widths;
-  signed/unsigned array and tuple elements must already have matching kinds.
-  Use signed values for signed ABI inputs: pass `-1` to `int256`, not the unsigned word `~0`.
-  A `Uint256[]` cannot stand in for `intN[]`, nor an `Int256[]` for `uintN[]`; tuple fields
-  follow the same rule. Use checked scalar conversions, or `.fromBits` for an intentional bit
-  reinterpretation, when constructing a container of the required kind.
+- **Outputs keep signedness, and a read output is checked, never cut to fit.** An ABI `intN`
+  output becomes `Int256`; `uintN`, `address` and `bool` outputs remain unsigned numbers. A read
+  output is checked against its declared type, recursively through tuples, structs and arrays, and
+  reverts where it does not fit: an integer must fit its width, a `bool` must be `0` or `1`, an
+  `address` must have no bit set above its low 160, and a `bytesN` (`N` below 32) or a `function`
+  must have no bit set below its top `N` bytes (24 for a `function`). A clean `bytesN` reads as the
+  number its `N` bytes make; a `bytes32` fills its word and has nothing to check. The check runs as
+  part of the call: a `try` that holds the call catches its revert, and one that only reads an
+  answer the call gave before it, or holds another call that takes the answer as an argument, does
+  not.
+- **Inputs are checked too.** Scalar input conversions check widths; signed/unsigned array and
+  tuple elements must already have matching kinds. Use signed values for signed ABI inputs: pass
+  `-1` to `int256`, not the unsigned word `~0`. A `Uint256[]` cannot stand in for `intN[]`, nor an
+  `Int256[]` for `uintN[]`; tuple fields follow the same rule. Use checked scalar conversions, or
+  `.fromBits` for an intentional bit reinterpretation, when constructing a container of the
+  required kind.
 - **Unread results skip all decoding and output checks**, even when assigned to an unused variable,
   at every optimization level. Empty, short or malformed successful replies then pass; a call to an
   address with no code can succeed. Check `ctx.isContract(address)` where code must exist.
@@ -724,6 +744,10 @@ is supported. Bind an intermediate value when it improves readability.
     output, cannot be called: "the ABI type `uint256[256]` is a fixed-size array of more than 255
     elements, which SauceScript cannot encode or decode". An ABI may still declare one; only the
     call is refused.
+  - A function whose outputs hold a `bytesN` (`N` below 32) or a `function` inside a tuple, a struct
+    or an array cannot be called, whether or not its result is read: read the value through a
+    method whose only output it is, or call the function with `evm.call` and slice the returned
+    bytes.
   - On SVM: "`Contract.at` is not available on the svm target; invoke another program with svm.call(program,
     accounts, calldata), or import a library's SVM arm (@sauce/token)".
 
@@ -757,6 +781,9 @@ Rules and errors:
 - The value form needs exactly `return <constant>;`:
   - "a captured `.catch()` requires exactly `return <constant scalar>;` in its handler";
   - "the `.catch()` fallback must be a constant scalar that fits the declared ABI result width".
+  - A `bool` call's fallback is `0` or `1` (`true` or `false`), and an `address` call's fits in
+    160 bits. The fallback stands in only for a call that failed: a call that answers a value its
+    type cannot hold reverts rather than taking it.
 - An oversized handler fails compilation with `CatchHandlerTooLarge`; keep the handler short and
   move substantial recovery work into a helper.
 - On anything other than an external EVM call, the compiler rejects it ("a `.catch()` on something other than an
@@ -780,9 +807,11 @@ function main(recipient: Address, amount: Uint256, floor: Uint256): void {
   array/record mutations and assignments together. Earlier work outside remains. Success makes its
   changes visible afterwards, including through aliases. Unlike JavaScript, assignments before a
   throw are rolled back, so the handler sees their old values.
-- A `try` containing only one external call is that call's `.catch()` form. It catches the call's
-  failure, not argument evaluation or successful-return decoding. To catch a decode or checked
-  expression, put it inside a multi-statement block.
+- A `try` whose body is one external call catches that call's failure and, where the body reads the
+  call's answer (`r = c.f();`, `return c.f();`), that answer's decode and checks. It does not catch
+  the evaluation of the call's arguments, which runs before it: in `try { a.f(b.g()); }` a revert in
+  `b.g()`, a dirty answer included, passes it. To catch a decode or checked expression, put it inside
+  a multi-statement block.
 - `catch { … }` discards the error; `catch (error)` receives at most the first 256 raw revert bytes.
   Empty data cannot distinguish a bare revert from many arithmetic guards. A handler's own failure
   propagates unless an enclosing catch handles it. There is no `finally`.

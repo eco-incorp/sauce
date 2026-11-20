@@ -291,11 +291,12 @@ The transfer and reserve check succeed together, or both are undone. If the chec
 recipient is not paid and `paid` stays `false`; the handler runs with the values from before the
 attempt. This is different from JavaScript's `try`: assignments roll back too.
 
-Keep safety requirements outside the catch when failure must stop the cook. A `try` with only a
-single external call is narrower: it catches that call's failure, not decoding a successful reply.
-An error binding contains at most 256 raw bytes, possibly empty or cut short; this example only
-logs them. The [reference](../reference/saucescript.md#13-contract-bindings-and-catch-evm) explains
-safe error decoding, nested recovery and the differences from `.catch()`. Solana has neither form.
+Keep safety requirements outside the catch when failure must stop the cook. A single-call `try`
+catches the call's failure and, when its answer is read, that answer's decoding and checks. Its
+arguments are evaluated outside that boundary. An error binding contains at most 256 raw bytes,
+possibly empty or cut short; this example only logs them. The
+[reference](../reference/saucescript.md#13-contract-bindings-and-catch-evm) explains safe error
+decoding, nested recovery and the differences from `.catch()`. Solana has neither form.
 
 ## Next
 
