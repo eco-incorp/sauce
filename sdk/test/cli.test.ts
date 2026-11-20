@@ -247,7 +247,7 @@ describe("sauce (no command)", () => {
     const run = await sauce("deploy");
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(
-      /unknown command 'deploy'\. Commands: compile, actions, simulate, run, /,
+      /unknown command 'deploy'\. Commands: compile, where, actions, simulate, run, /,
     );
     expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
   });
