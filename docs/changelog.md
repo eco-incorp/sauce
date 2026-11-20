@@ -61,30 +61,30 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
-| Deployed   | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK      | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| -------- | -------- | ------- | ----------- | ------- | ----------- |
+| 1.1.0    | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| Deployed | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18  | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17  | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16  | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9   | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4   | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3   | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2   | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1   | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0   | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 The **Deployed** row is the pairing the network defaults use: the engines compiler 2.6.2 was
 released with, which also run compiler 2.6.3's programs. The SDK's CLI labels that set with the
@@ -108,7 +108,12 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## Unreleased
+## SDK 1.1.0 — 2026-11-20
+
+Compiler 2.6.3, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
+1.0.0: compiler 2.6.3 (from 2.6.1), and v12-evm 1.4.0, kitchen-evm 1.4.0 and v12-svm 1.4.1 as
+opt-in artifacts. The network defaults keep v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and
+kitchen-svm 1.1.0.
 
 The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
 support from the compiler's main line are not included.
@@ -124,6 +129,61 @@ CREATE3 Pots. Omitting the release selection still uses CREATE2.
 `v12ReleaseSet()` with no argument still returns the release the network defaults come from, as
 before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
 `v12ReleaseSet(compiler)` with that compiler's version.
+
+### SauceScript
+
+- **Changed (EVM): `.gas(n)` caps the call it is written on.** When that call's receiver made an
+  external call of its own in the same expression (a contract call or a raw `evm.*` call), as in
+  `({ quote: C.at(a).quote(), pool: C.at(p) }).pool.swap(amount).gas(n)`, the cap went on the
+  receiver's call (`quote()` there) and the call written ran with all the gas left, whether or not
+  its result was read. The cap is now on the call written. The receiver's call runs with no cap, so
+  a cap tuned for it now bounds the call written, which can run out of it, and a receiver call that
+  must stay bounded needs its own `.gas()`:
+  `({ quote: C.at(a).quote().gas(50000), pool: C.at(p) }).pool.swap(amount).gas(n)`. A cap
+  expression that makes calls now runs after the receiver and the arguments, in source order. A
+  receiver bound to a name first, one read from another call's answer
+  (`C.at(C.at(a).pool()).swap(amount)`) and an argument that makes a call were not affected.
+- **Now refused (EVM): a `.gas()` on something that is not a call.** It used to cap a call that ran
+  before it, and now fails as a cap on something that is not a call: a cast of a field that sits
+  beside a call in its object literal (`Uint256(({ x: C.at(a).one(), v: n }).v).gas(n)`); a member
+  selected from an object literal whose other members make calls
+  (`Uint256(({ first: C.at(a).one(), later: C.at(b).one() }).first).gas(n)` capped the first call
+  and ran the next one uncapped); and a cast of a right shift whose right side is not a constant
+  (`Uint256(C.at(a).one() >> C.at(b).one()).gas(n)`, and a shift by a run-time local, by an
+  expression or by a `const` bound to an expression). Put the cap on the calls themselves. A cast
+  of a call, or of a call shifted by a literal (`Uint256(C.at(a).one()).gas(n)`), still caps that
+  call.
+- **Changed (EVM): a contract call's dirty `bool`, `address` or fixed-bytes answer reverts when it
+  is read.** A declared `bool` output that is anything but `0` or `1`, an `address` output with any
+  bit set above its low 160, and a `bytesN` (N below 32) or `function` output with any bit set below
+  its top N bytes (24 for a `function`) now revert, as Solidity's own ABI decoder does. Before, a
+  `bool` was passed on as the callee sent it (an answer of `2` made `flag + 1` 3), an `address` was
+  cut to its low 160 bits (`2^160 + 0xbeef` read as `0xbeef`, an account the callee never named; an
+  element of an `address[]` kept the whole word) and a `bytesN` dropped whatever sat below its top
+  bytes. The check covers a single output, a field of a tuple or a struct and an element of an
+  array, and reading any part of a result checks all of it. It is made where the call is decoded,
+  so a `try` that holds the call catches the revert, and one that only reads a result made outside
+  it does not. A result nothing reads is still not decoded or checked, and a `bytes32` fills its
+  slot, so it has nothing to check.
+- **Changed (both): `abi.decode` and entry parameters reject a dirty `bool` or `address` word.** A
+  decoded `"bool"` read as `1` for any nonzero word, and a `bool` entry parameter was narrowed to
+  `1` the same way; a decoded `"Address"` was masked to its low 20 bytes (`2^160 + 0xbeef` read as
+  `0xbeef`), and an `Address` entry parameter passed on whatever the caller sent. Each now reverts
+  on a `bool` word that is not `0` or `1` and an `Address` word with a bit set above its low 160.
+  On an EVM chain `abi.decode` checks a `"bool"` or `"Address"` that is a single field, a field of
+  a `{…}` tuple at any depth or an element of a `"bool[]"` or `"Address[]"`, and checks the whole
+  decoded value where it is decoded, whether or not any part is read. A statement `.catch()` on an
+  authored decode, `abi.decode(evm.call(…), […]).catch(() => { … });`, keeps only the call and
+  decodes nothing. An entry parameter is checked before the body runs, at the top level and inside
+  an array or a struct parameter, an `interface` the module declares included. A `bool` entry
+  parameter is checked on Solana too, where an `Address` is a public key and is not checked. On an
+  EVM chain an `Address` field of an `interface` the module imports is not checked either: declare
+  the interface in the module, or spell the type inline.
+- **Now refused (EVM): a `.catch(() => { return n; })` on a `bool` call whose fallback `n` is not
+  `0` or `1`.** It compiled and answered `n` when the call failed, a value a `bool` never holds. An
+  `address` call's fallback already had to fit in 160 bits, and a fixed-bytes call's its width; both
+  still do. A fallback replaces only a call that failed: a call that succeeded with a dirty answer
+  reverts rather than taking it.
 
 ### Compiler and engines
 
@@ -141,6 +201,28 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
 - Compiler 2.6.3 resolves bare package imports per importer. An ambient package uses the entry
   program's mapping, not a dependency's mapping for the same name. The SDK still refuses a
   bare `pot` if that ambient package exports `pot`.
+
+### The `sauce` command and the MCP server
+
+- **Added: `sauce units` turns an amount in whole tokens into the smallest unit a program's `main`
+  takes, and back.** `sauce units --chain base 1.5 USDC` prints `1500000`, the integer `--args`
+  takes; `1500000n USDC` goes the other way, with the trailing `n` that `--fund` uses for base
+  units. The token is a symbol in any case, an address or a Solana mint, and its decimals come from
+  the registries the compile reads, so the number is the one the program sees on that chain; a
+  token the chain has no symbol for is named by its address or mint with `--decimals`. An amount
+  with more decimal places than the token has is refused, never rounded, and a bare integer at or
+  above 10^decimals (`1500000 USDC`) is read as whole tokens, with the note `--fund` gives.
+  `--json` prints one object. The MCP server has it as `sauce_units`.
+- **Added: `sauce where <file>` lists the chains a program compiles on.** It compiles the file for
+  every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and needing no
+  key. It lists each chain the program compiles on with its size, then the chains it does not
+  compile on, grouped by the first reason, most often a token or protocol that chain has no name
+  for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the chains
+  transactions are built and sent on, `--source-dir` works as it does for `sauce compile`, and
+  `--json` prints each chain's result.
+
+**Also breaking:** `createSauceSvmClient` is imported from `@eco-incorp/sauce/svm/client`, no longer
+from `@eco-incorp/sauce/svm`; type imports from `/svm` are unchanged.
 
 ## SDK 1.0.0 — 2026-10-27
 
