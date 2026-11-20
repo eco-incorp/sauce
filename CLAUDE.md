@@ -526,6 +526,13 @@ not add a `node:*` import or `Buffer` to shipped code: `svm/engine-artifacts` (f
 local LiteSVM harness) is the one Node-only module, on its own subpath and in no barrel. CI bundles
 every export for the browser and compiles in headless Chromium, so a regression fails there.
 
+The `./svm` barrel does not load Sauce's Kitchen client implementation: `client.ts`, whose
+`createSauceSvmClient` factory calls `createSolanaRpc` and `createSolanaRpcSubscriptions`, is the
+`./svm/client` subpath and is re-exported from the barrel as types only (`export type *`).
+`barrel-no-rpc-client.test.ts` walks relative runtime imports in Sauce's own sources and fails if
+they reach a Sauce module naming either constructor. It does not traverse bare-package edges: other
+barrel modules still import `@solana/kit` and its RPC-related dependencies.
+
 **There is no cross-chain intent surface**: no Portal encoders, no intent commands, no intent tools.
 A chain export is a plain namespace object, so a program that calls one (`Base(() => …)`) fails to
 compile.

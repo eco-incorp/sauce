@@ -100,7 +100,6 @@ import {
   buildHeapFramePrepend,
   buildWriteCodeBufferInstruction,
   type CookVia,
-  createSauceSvmClient,
   decodeExecutionFeeConfig,
   deriveCodeBufferPda,
   deriveCodePda,
@@ -123,6 +122,7 @@ import {
   TRANSACTION_SIZE_LIMIT,
   associatedTokenAccountLength,
 } from "../svm/index.js";
+import { createSauceSvmClient } from "../svm/client.js";
 import { CliError, UsageError, type SaltChoice } from "./args.js";
 import {
   type Approver,

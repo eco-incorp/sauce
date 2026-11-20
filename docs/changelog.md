@@ -125,6 +125,17 @@ CREATE3 Pots. Omitting the release selection still uses CREATE2.
 before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
 `v12ReleaseSet(compiler)` with that compiler's version.
 
+### SDK
+
+- **Moved import:** `createSauceSvmClient` is now imported from `@eco-incorp/sauce/svm/client`, not
+  `@eco-incorp/sauce/svm`. Change value imports to
+  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. `/svm` still re-exports the
+  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types,
+  `StagedBuffer`, `StagedArgs`, `EnsuredLookupTable`) as types only, so type imports need no change.
+  This prevents a `/svm` import from loading Sauce's Kitchen client implementation, which constructs
+  its own RPC clients when called; other barrel modules still load `@solana/kit` and its
+  dependencies.
+
 ### Compiler and engines
 
 - Recompiled EVM settlement programs are now 426 bytes, not the historical 410 bytes shipped in
