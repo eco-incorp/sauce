@@ -1,9 +1,9 @@
 /**
- * `@eco-incorp/sauce/svm` builds, resolves and reads account data; it constructs no RPC client. `createSauceSvmClient`
- * does (`createSolanaRpc`, `createSolanaRpcSubscriptions`), so it is the `@eco-incorp/sauce/svm/client` subpath, and
- * the barrel re-exports `client.ts` as types only: a service that sends its reads through its own transport imports
- * the barrel with no RPC client in its module graph. One `export * from "./client.js"` would put it back under every
- * `./svm` import.
+ * `@eco-incorp/sauce/svm` does not load Sauce's Kitchen client implementation. That module
+ * calls `createSolanaRpc` and `createSolanaRpcSubscriptions` and is available separately as
+ * `@eco-incorp/sauce/svm/client`; the barrel re-exports its types only. This test walks relative
+ * runtime imports in Sauce's own sources, not bare-package edges such as `@solana/kit`, whose
+ * RPC-related dependencies still load. A value re-export of `./client.js` must fail the test.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -28,7 +28,7 @@ function resolveRelative(from: string, specifier: string): string | undefined {
   return undefined;
 }
 
-/** The source files the runtime import graph of `entry` reaches: type-only imports and re-exports leave no edge. */
+/** Sauce source files reached through relative runtime imports; type-only edges are erased and bare packages are not traversed. */
 function runtimeClosure(entry: string): Set<string> {
   const seen = new Set<string>();
   const queue = [entry];
@@ -90,12 +90,12 @@ function namesRpcConstructor(file: string): boolean {
 }
 
 describe("the ./svm barrel", () => {
-  it("exports createSauceSvmClient from the ./svm/client module and not from the barrel", () => {
+  it("exports the Kitchen client factory from ./svm/client and not from the barrel", () => {
     expect(typeof client.createSauceSvmClient).toBe("function");
     expect("createSauceSvmClient" in svm).toBe(false);
   });
 
-  it("reaches no module that constructs an RPC client", () => {
+  it("reaches no Sauce source naming an RPC constructor through relative runtime imports", () => {
     const reached = runtimeClosure(join(SVM_DIR, "index.ts"));
     expect(reached.size).toBeGreaterThan(10);
     expect(reached.has(join(SVM_DIR, "client.ts"))).toBe(false);
@@ -103,7 +103,7 @@ describe("the ./svm barrel", () => {
     expect(constructing).toEqual([]);
   });
 
-  it("still carries the client's types", () => {
+  it("re-exports the Kitchen client types without a runtime edge", () => {
     // `export type *` leaves no runtime edge, so the closure above stays free of client.ts; the names a consumer imports as types stay on the barrel
     const source = readFileSync(join(SVM_DIR, "index.ts"), "utf8");
     expect(source).toMatch(/^export type \* from "\.\/client\.js";$/m);

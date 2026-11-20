@@ -127,12 +127,14 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
 
 ### SDK
 
-- **Breaking:** `@eco-incorp/sauce/svm` no longer exports `createSauceSvmClient` at runtime. The function is the new
-  `@eco-incorp/sauce/svm/client` subpath, because it builds an RPC client (`createSolanaRpc`,
-  `createSolanaRpcSubscriptions`) and a runtime re-export made every `/svm` import load one. `/svm` still exports the
-  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types, `StagedBuffer`, `StagedArgs`,
-  `EnsuredLookupTable`) as types only. Migrate a value import:
-  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. Type imports from `/svm` need no change.
+- **Moved import:** `createSauceSvmClient` is now imported from `@eco-incorp/sauce/svm/client`, not
+  `@eco-incorp/sauce/svm`. Change value imports to
+  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. `/svm` still re-exports the
+  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types,
+  `StagedBuffer`, `StagedArgs`, `EnsuredLookupTable`) as types only, so type imports need no change.
+  This prevents a `/svm` import from loading Sauce's Kitchen client implementation, which constructs
+  its own RPC clients when called; other barrel modules still load `@solana/kit` and its
+  dependencies.
 
 ### Compiler and engines
 

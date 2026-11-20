@@ -88,7 +88,7 @@ same manifest for a program that declares its `Account` parameters itself.
 
 ## Create the client
 
-`createSauceSvmClient` builds, signs and sends cooks. It is the `@eco-incorp/sauce/svm/client` subpath, not part of `@eco-incorp/sauce/svm`, because it builds an RPC client of its own: `/svm` exports the client's types only, so a service that reads through its own transport imports `/svm` and loads no RPC client. Its configuration:
+`createSauceSvmClient` builds, signs and sends cooks. Import it from `@eco-incorp/sauce/svm/client`; `@eco-incorp/sauce/svm` re-exports its types without loading Sauce's Kitchen client implementation. Other barrel modules still import `@solana/kit`, so this separation does not remove kit's RPC-related dependencies from Node's module graph. Its configuration:
 
 | Field             | Required | What it is                                                                                                    |
 | ----------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
