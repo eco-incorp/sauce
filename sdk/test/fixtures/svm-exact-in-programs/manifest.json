@@ -239,7 +239,8 @@
       "name": "flint",
       "programId": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
       "file": "flint.so.gz",
-      "sha256": "f6a7393598b5e2e52abc74a6f73699a4d94e7e0c81dce8a686bee5010f7d6ff3"
+      "sha256": "ff42445b43832690a0e1ff97290357869327b0b48b698f52e9acec949a88548d",
+      "redeploySlot": 471564195
     },
     {
       "name": "deriverse",
