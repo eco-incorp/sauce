@@ -21,7 +21,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { keccak256 } from "viem";
@@ -126,7 +126,40 @@ try {
       stdio: ["ignore", "pipe", "inherit"],
     },
   );
-  const [{ filename }] = JSON.parse(output);
+  const [{ filename, files: packed }] = JSON.parse(output);
+  // The package ships no source maps. A map points into sources the package mostly does not carry,
+  // and a file whose `sourceMappingURL` names a map the package lacks sends a debugger, a bundler
+  // or an editor after a file that is not there. So no packed file is a map, and none names one
+  // the package does not carry (an inline `data:` map carries itself).
+  const packedPaths = new Set(packed.map((file) => file.path));
+  const maps = [...packedPaths].filter((path) => path.endsWith(".map"));
+  assert.deepEqual(
+    maps.slice(0, 10),
+    [],
+    `the package ships no source map: ${maps.length} packed (the first ten listed)`,
+  );
+  const dangling = [...packedPaths]
+    .filter((path) => /\.(?:[cm]?js|[cm]?ts)$/.test(path))
+    .flatMap((path) =>
+      [...readFileSync(join(root, path), "utf8").matchAll(/^\/\/[#@] sourceMappingURL=(\S+)\s*$/gm)]
+        .map((match) => match[1])
+        .filter(
+          (url) =>
+            !url.startsWith("data:") &&
+            !packedPaths.has(posix.normalize(posix.join(posix.dirname(path), url))),
+        )
+        .map((url) => `${path} -> ${url}`),
+    );
+  assert.deepEqual(
+    dangling.slice(0, 10),
+    [],
+    `no packed file names a source map the package does not ship: ${dangling.length} do (the ` +
+      "first ten listed)",
+  );
+  console.log(
+    `Packed: ${packedPaths.size} files, no source map among them, and no sourceMappingURL to one ` +
+      "the package lacks",
+  );
   writeFileSync(join(work, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(
     "npm",

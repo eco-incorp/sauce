@@ -9,8 +9,7 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "src",
-    "declaration": true,
-    "declarationMap": true
+    "declaration": true
   },
   "include": ["src/testing"]
 }

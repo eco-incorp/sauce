@@ -2134,6 +2134,13 @@ which is what proves the relative targets also ship. An absolute
 `github.com/eco-incorp/sauce/blob/…/docs/…` URL is rejected: it pins a branch and breaks in the
 tarball. New public doc links must target files shipped in the package.
 
+The package ships no source maps. The configs the build compiles with (`sdk/tsconfig.json`,
+`actions/tsconfig.json`, `mcp/tsconfig.json`, `dev-tools/tsconfig.build.json`) leave `sourceMap`
+and `declarationMap` unset: a map points into sources the package mostly does not carry. Unset,
+never `false`: ts-jest maps a test's TypeScript unless its tsconfig turns `sourceMap` off, and
+`sdk/tsconfig.test.json` extends `sdk/tsconfig.json`. `check-packed-package.mjs` fails a packed
+`.map` and any packed file whose `sourceMappingURL` names a file the package does not carry.
+
 **Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
 SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine
 releases it shipped changed. It does not record component releases on their own, nor anything
