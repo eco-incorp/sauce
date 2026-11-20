@@ -114,17 +114,21 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
     baseUnits = amount.base;
   } else {
     const { units } = amount;
-    const fraction = units.split(".")[1] ?? "";
-    if (fraction.length > token.decimals) {
+    const places = (units.split(".")[1] ?? "").replace(/0+$/, "").length;
+    if (places > token.decimals) {
       throw new UsageError(
-        `${units} ${token.symbol} has ${fraction.length} decimal places; ` +
+        `${units} ${token.symbol} has ${places} decimal places; ` +
           `${token.symbol} has ${token.decimals}, so it cannot be written exactly`,
       );
     }
     baseUnits = parseUnits(units, token.decimals);
     // The note --fund gives: a bare integer at or above 10^decimals reads like base units
     // (1500000 USDC is 1.5 million USDC), the mistake this command is most often run to catch.
-    if (fraction === "" && token.decimals > 0 && BigInt(units) >= 10n ** BigInt(token.decimals)) {
+    if (
+      !units.includes(".") &&
+      token.decimals > 0 &&
+      BigInt(units) >= 10n ** BigInt(token.decimals)
+    ) {
       note =
         `${units} ${token.symbol}: that is ${wordsOf(units)} ${token.symbol}; for base units ` +
         `write ${units}n`;

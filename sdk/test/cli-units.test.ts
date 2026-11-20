@@ -127,6 +127,27 @@ describe("sauce units", () => {
     );
   });
 
+  it("accepts an exact amount padded with fractional zeros", () => {
+    expect(unitsCommand({ chain: base, amount: "1.5000000", token: "USDC" }).json).toMatchObject({
+      baseUnits: "1500000",
+    });
+  });
+
+  it("does not take a padded decimal for a bare integer, so it draws no note", () => {
+    const out = unitsCommand({ chain: base, amount: "1.0000000", token: "USDC" });
+    expect(out.json).toMatchObject({ baseUnits: "1000000" });
+    expect(out.notes).toBeUndefined();
+    expect(out.json.note).toBeUndefined();
+  });
+
+  it("accepts 1.0 of a token with no decimals as one base unit", () => {
+    const token = "0x0000000000000000000000000000000000000001";
+    expect(unitsCommand({ chain: base, amount: "1.0", token, decimals: 0 }).json).toMatchObject({
+      decimals: 0,
+      baseUnits: "1",
+    });
+  });
+
   it("refuses what it would have to round or guess", () => {
     expect(() => unitsCommand({ chain: base, amount: "1.2345678", token: "USDC" })).toThrow(
       /7 decimal places; USDC has 6/,

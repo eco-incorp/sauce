@@ -1104,8 +1104,9 @@ Options:
 A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so
 1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile
 resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An
-amount with more decimal places than the token has is refused, never rounded. A token
-the chain has no symbol for is named by its address, with --decimals. Base units end in
+amount that would need rounding (a digit other than 0 past the token's decimals) is
+refused, never rounded: 1.5000000 USDC is exact, 1.2345678 USDC is not. A token the
+chain has no symbol for is named by its address, with --decimals. Base units end in
 n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,
 and a note on stderr says so.
 

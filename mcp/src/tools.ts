@@ -1664,7 +1664,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "bare integer at or above 10^decimals is read as whole tokens and noted. The decimals " +
         "come from the registries the compile resolves (a symbol in any case: usdc is USDC); a " +
         "token the chain has no symbol for is named by its 0x address or Solana mint, with " +
-        "`decimals`. An amount with more decimal places than the token has, or more than the " +
+        "`decimals`. An amount that would need rounding (a digit other than 0 past the " +
+        "token's decimals: 1.5000000 USDC is exact, 1.2345678 USDC is not), or more than the " +
         "chain's token amounts hold, is refused, never rounded. Reads nothing.",
       input: {
         chain: chainRef,
