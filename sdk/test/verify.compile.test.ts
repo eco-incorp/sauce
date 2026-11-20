@@ -238,3 +238,28 @@ describe("negative controls", () => {
     }
   });
 });
+
+// SDK 1.0.0 payloads remain accepted only when the caller explicitly opts into their historical pin.
+describe("compiler 2.6.0/2.6.1 settlement compatibility", () => {
+  const historicalProgram =
+    "0xa50201fad1514702000eb19000b6d002019a0120955402019a21d1d1d00120d4212295540240000120d22348020033b19000b60120d123012021d221d35147020046b19000b6d0012023d08a04ffffffff30e10120340a9220000000000000000031310100d2d146020070b10200a6b00120d4210120d223210120d5210120d3230120e1f12121d3d3d151d14642020197b1d8f1e3e4d0f1e3e4e52295549b010121020065b0d40201ba01209554f1e3e4e50201da012095540100d4970100e164990024010100000470a08231000462a301a10120970100d348020104b1d2d147020104b1901c736574746c653a2062616c616e63652062656c6f77206d696e4f7574b60100d551d146020112b1020188b0d0d6970100e164990024010100000470a08231000462a301a10120970100d14802017eb1d1d7970100d2d69900440102000004a9059cbb0004002462a2010100d1514302016fb1d0a101200100e19701014302016bb19000b602017db00100d3d997724502017db19000b6e00101f121e1e0020106b0e101208ae1d18905200000000031009000b6" as Hex;
+  const historicalPin = {
+    hash: "0x65e88f5f8772f37ed530f0469c440fa3834f4399efd8bd60a443fed53826449b" as Hex,
+    bytes: 410,
+  };
+  const payload = encodeSettleProgram(TOKENS, 1n, RECIPIENT, historicalProgram);
+
+  it("does not accept the historical program under the new default", () => {
+    expect(() => validateSettleProgram(payload)).toThrow(SettleDecodeError);
+  });
+
+  it("accepts both generations with explicit current and historical pins", () => {
+    const accepted = [
+      { hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES },
+      historicalPin,
+    ];
+    expect(validateSettleProgram(payload, accepted).programHash).toBe(historicalPin.hash);
+    const current = encodeSettleProgram(TOKENS, 1n, RECIPIENT, SETTLE_PROGRAM);
+    expect(validateSettleProgram(current, accepted).programHash).toBe(SETTLE_WIRE.PROGRAM_HASH);
+  });
+});

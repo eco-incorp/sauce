@@ -31,16 +31,20 @@ export interface V12ReleasePin {
   readonly engine?: string | null;
 }
 
-/** The EVM Kitchen's release: the Kitchen proxy and the init-code hash every Pot it mints is
- *  `CREATE2(kitchen, …, potInitCodeHash)` under — `null` until the release says. */
+/** The EVM Kitchen's release: legacy CREATE2 init-code identity or the qualified CREATE3 profile. */
 export interface V12KitchenEvmPin extends V12ReleasePin {
   readonly kitchen: string | null;
   readonly potInitCodeHash: string | null;
+  readonly potProfileHash?: string;
+  readonly potProxyInitCodeHash?: string;
+  readonly fixedRouter?: string;
 }
 
 /** One compiler version and the four releases its output pairs with. */
 export interface V12ReleaseSet {
   readonly compiler: string;
+  /** A separately qualified release set kept as the network default. */
+  readonly deployedCompiler?: string;
   readonly "v12-evm": V12ReleasePin & { readonly engine: string | null };
   readonly "kitchen-evm": V12KitchenEvmPin;
   readonly "v12-svm": V12ReleasePin & { readonly engine: string | null };
@@ -55,8 +59,8 @@ export const V12_RELEASE_SETS: readonly V12ReleaseSet[] = (
 /** The compiler version this SDK compiles with — the one its pinned engines were synced for. */
 export const sdkCompilerVersion = (): string => v12DeployedAddresses().compiler;
 
-/** The release set for `compiler` (default: this SDK's), or a throw naming the known ones. */
-export function v12ReleaseSet(compiler: string = sdkCompilerVersion()): V12ReleaseSet {
+/** The row for exactly `compiler`, or a throw naming the known ones. */
+function releaseRow(compiler: string): V12ReleaseSet {
   const set = V12_RELEASE_SETS.find((row) => row.compiler === compiler);
   if (set === undefined) {
     throw new Error(
@@ -66,6 +70,30 @@ export function v12ReleaseSet(compiler: string = sdkCompilerVersion()): V12Relea
   }
 
   return set;
+}
+
+/**
+ * The release set for `compiler`, or a throw naming the known ones. With no argument it is the
+ * release this SDK's network defaults come from ({@link v12DeployedReleaseSet}), as it was before
+ * opt-in artifacts shipped: the engine, Kitchen and Pot init-code hash it names are deployed. The
+ * installed compiler's own, possibly undeployed, row is {@link v12OptInReleaseSet} or
+ * `v12ReleaseSet(sdkCompilerVersion())`.
+ */
+export function v12ReleaseSet(compiler?: string): V12ReleaseSet {
+  return compiler === undefined ? v12DeployedReleaseSet() : releaseRow(compiler);
+}
+
+/** The installed compiler's own row: its releases may not be deployed, and no default uses them. */
+export function v12OptInReleaseSet(): V12ReleaseSet {
+  return releaseRow(sdkCompilerVersion());
+}
+
+/** The release that supplies the network defaults, with the installed compiler's provenance. */
+export function v12DeployedReleaseSet(): V12ReleaseSet {
+  const available = v12OptInReleaseSet();
+  return available.deployedCompiler === undefined
+    ? available
+    : { ...releaseRow(available.deployedCompiler), compiler: available.compiler };
 }
 
 const ENGINE: Record<"evm" | "svm", "v12-evm" | "v12-svm"> = { evm: "v12-evm", svm: "v12-svm" };
@@ -91,10 +119,15 @@ export function assertEngineRunsCompiler(
 
     return known !== null && sameEngine(target, known, engine);
   });
-  if (naming.length === 0 || naming.some((row) => row.compiler === compiler)) return;
+  if (naming.length === 0) return;
+  const compatible = V12_RELEASE_SETS.filter(
+    (row) =>
+      naming.includes(row) || naming.some((named) => named.compiler === row.deployedCompiler),
+  );
+  if (compatible.some((row) => row.compiler === compiler)) return;
 
   const { version } = naming[0]![component];
-  const runs = naming.map((row) => row.compiler).join(", ");
+  const runs = compatible.map((row) => row.compiler).join(", ");
   const own = V12_RELEASE_SETS.find((row) => row.compiler === compiler)?.[component];
   const instead =
     own === undefined

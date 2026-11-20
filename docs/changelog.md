@@ -29,6 +29,13 @@ label and still disagree, so match versions, never labels. From 0.99.7 the SDK k
 table, one row per compiler version, and refuses to build a cook for an engine that a row pairs with
 a different compiler.
 
+A major version of one of those packages is not a major version of the SDK. The SDK's own major
+version changes only when something you would notice breaks: a SauceScript program that no longer
+compiles or behaves differently, a removed or renamed export, command, flag or MCP tool, or a chain
+the command stops accepting. An engine or compiler major that the SDK absorbs, with none of that, comes
+in an SDK minor or patch, and the entry's `### Compiler and engines` section says what the component
+release changed.
+
 SDK 0.99.0 and 0.99.1 named the compiler by range, `^2.2.0` and `^2.2.1`, so an install got the
 newest 2.x compiler on npm that day: 2.2.1 from 2026-09-17, 2.3.0 from 2026-09-23, 2.4.0 from
 2026-09-30 and 2.5.0 from 2026-10-06. Such an install compiles the language of that compiler, not
@@ -54,28 +61,34 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| Deployed   | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+
+The **Deployed** row is the pairing the network defaults use: the engines compiler 2.6.2 was
+released with, which also run compiler 2.6.3's programs. The SDK's CLI labels that set with the
+SDK's own compiler, 2.6.3.
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -94,6 +107,40 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## Unreleased
+
+The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
+support from the compiler's main line are not included.
+
+The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and unchanged
+SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
+Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
+their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
+Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen)
+to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
+CREATE3 Pots. Omitting the release selection still uses CREATE2.
+
+`v12ReleaseSet()` with no argument still returns the release the network defaults come from, as
+before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
+`v12ReleaseSet(compiler)` with that compiler's version.
+
+### Compiler and engines
+
+- Recompiled EVM settlement programs are now 426 bytes, not the historical 410 bytes shipped in
+  SDK 0.99.16–1.0.0. Default verifiers do not recognize the other version. Validators fail with
+  `TOKENS_OFFSET`; observer helpers can return `null` silently. Upgrade verifiers to accept both
+  explicit `{ hash, bytes }` pins **before** moving producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
+- Recompiled programs now reject malformed runtime `bool` values outside `0`/`1`, and EVM
+  `Address`/`Account` entry words or decoded addresses with bits above 160. Declared nested entries
+  and decoded arrays/tuples are checked too; imported-interface `Address` fields remain an exception.
+  SVM addresses remain full public keys. Existing compiled programs are unchanged; recompiling adds
+  checks, bytes and gas/CU cost. The compiler's
+  [release stability notes](https://github.com/eco-incorp/v12/blob/40a75a11e94658d72ef892bb8e10568135c19eb0/compiler/STABILITY.md)
+  describe the checks and exceptions.
+- Compiler 2.6.3 resolves bare package imports per importer. An ambient package uses the entry
+  program's mapping, not a dependency's mapping for the same name. The SDK still refuses a
+  bare `pot` if that ambient package exports `pot`.
 
 ## SDK 1.0.0 — 2026-10-27
 

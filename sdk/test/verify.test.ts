@@ -113,21 +113,17 @@ describe("@eco-incorp/sauce/verify", () => {
       expect(SETTLE_REJECTIONS.filter((r) => r.engineAccepts).map((r) => r.code)).toEqual([
         "TOKENS_OFFSET",
         "ARGS_OVERLONG",
-        "DIRTY_ADDRESS_WORD",
-        "DIRTY_ADDRESS_WORD",
         "ZERO_RECIPIENT",
       ]);
     });
 
-    // The engine runs the dirty-recipient payload; a solc ERC20's own ABI check is what refuses it.
-    // So it is a trap for the decoder but not provable on chain against a standard token, which is
-    // why the e2e equivalence loop filters on `sweepsIdentically` rather than `engineAccepts`.
+    // A zero recipient is still refused by a standard token rather than by the program.
     it("separates engine acceptance from on-chain equivalence", () => {
       const engineRuns = SETTLE_REJECTIONS.filter((r) => r.engineAccepts);
       const provable = SETTLE_REJECTIONS.filter((r) => r.sweepsIdentically);
 
-      expect(engineRuns).toHaveLength(5);
-      expect(provable).toHaveLength(3);
+      expect(engineRuns).toHaveLength(3);
+      expect(provable).toHaveLength(2);
 
       // The unverified-claims ledger: engine-accepted but not provable on chain, so asserted nowhere
       // but the corpus. Pinned here so it cannot drift the way the prose naming rows did.
@@ -135,16 +131,25 @@ describe("@eco-incorp/sauce/verify", () => {
         SETTLE_REJECTIONS.filter((r) => r.engineAccepts && !r.sweepsIdentically).map(
           (r) => r.name.split(" ")[0],
         ),
-      ).toEqual(["dirtyRecipient", "zeroRecipient"]);
+      ).toEqual(["zeroRecipient"]);
       expect(provable.every((r) => r.engineAccepts)).toBe(true);
     });
 
-    it("a dirty token word decodes to the SAME address it would sweep — which is why it is refused", () => {
-      // bestEffortDecode shows what the payload MEANS; decodeSettleProgram refuses it anyway,
-      // because the engine masks those upper bytes and the two byte strings would decode alike.
+    it("marks both dirty-address cases as rejected by the 426-byte program", () => {
+      const dirty = SETTLE_REJECTIONS.filter((r) => r.code === "DIRTY_ADDRESS_WORD");
+      expect(dirty).toHaveLength(2);
+      expect(dirty.map((r) => [r.engineAccepts, r.sweepsIdentically])).toEqual([
+        [false, false],
+        [false, false],
+      ]);
+    });
+
+    it("keeps dirty token diagnostics available without accepting the malformed payload", () => {
+      // Historical 410-byte programs masked this word; the 426-byte program rejects it.
       const trap = SETTLE_REJECTIONS.find((r) => r.name.startsWith("upperBytes"))!;
       const parse = parseSettleProgram(settlePayload(trap.args));
       expect(parse.tokenWords[0]! >> 160n).not.toBe(0n);
+      expect(parse.fatal?.message).toContain("non-canonical address word");
       expect(bestEffortDecode(parse)!.tokens[0]).toBe(SETTLE_VECTORS[0]!.tokens[0]!.toLowerCase());
     });
 

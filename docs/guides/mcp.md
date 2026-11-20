@@ -21,7 +21,7 @@ You don't run the server yourself. Your coding agent starts it on your computer,
 whenever it needs it. Install the command once (Node.js 24 or newer):
 
 ```sh
-npm i -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce runtime install
 ```
 
@@ -120,7 +120,8 @@ The GitHub Copilot CLI adds it to its user configuration with `copilot mcp add s
 **If a desktop client cannot start it.** A desktop or GUI client may not see your shell's `PATH`,
 so it may not find a `sauce` installed under nvm or another version manager. Give it the absolute
 path `which sauce` prints as the command, or let it run the package with no install: command `npx`,
-args `["-y", "@eco-incorp/sauce", "mcp"]`.
+args `["--engine-strict", "-y", "@eco-incorp/sauce@latest", "mcp"]`. The client's Node must also be
+24 or newer.
 
 That is all: the server reads each chain through built-in public endpoints, so there is nothing to
 configure. Your own endpoint is optional, and faster ([Use your own endpoints](#use-your-own-endpoints)).
@@ -245,8 +246,8 @@ server runs, on every call.
 To move to it:
 
 1. `sauce update` updates the command, or says how for the way it was installed.
-2. A project's MCP entry pins its version, so `npx -y @eco-incorp/sauce@latest mcp setup --force`
-   rewrites it.
+2. A project's MCP entry pins its version, so
+   `npx --engine-strict -y @eco-incorp/sauce@latest mcp setup --force` rewrites it.
 3. Restart the server from your agent (in most agents, restart the session). The new version serves
    from then on.
 

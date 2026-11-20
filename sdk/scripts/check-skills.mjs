@@ -70,6 +70,7 @@
 //      ```sauce fence with `define=`;
 //  15. no skill file but `sauce-chains/references/deployments.json` names a Sauce release address,
 //      runners and comments included: the release is the same on every chain, written once.
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -275,11 +276,12 @@ function shellWords(text) {
   return words;
 }
 
-/** npx and its options before the command: a line is parsed as a command whether it is written
- *  `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …` (2a fails a bare `npx sauce`). */
-const NPX = String.raw`npx\s+(?:(?:--no\s+--|-y|--yes)\s+)?`;
-/** A command line: `sauce …`, `npx sauce …` or `npx -y @eco-incorp/sauce …`. */
-const INVOCATION = new RegExp(String.raw`^(?:(?:${NPX})?sauce|${NPX}@eco-incorp\/sauce)\s`);
+/** npx and its options before the command; 2a rejects a bare `npx sauce`. */
+const NPX = String.raw`npx\s+(?:(?:--no\s+--|--engine-strict|-y|--yes)\s+)*`;
+/** A command line, including the explicit package tag used by the no-install route. */
+const INVOCATION = new RegExp(
+  String.raw`^(?:(?:${NPX})?sauce|${NPX}@eco-incorp\/sauce(?:@latest)?)\s`,
+);
 
 /** Every `sauce …` invocation in `lines` (shell or comment text), continuations joined. */
 function commandLines(lines) {
@@ -731,14 +733,30 @@ for (const [dir, why] of Object.entries(COPY_FRAMING_EXEMPT)) {
 
 // ---- 2a. The command is `sauce`, and one place says how to get it ---------------------------------
 // A skill writes the command as `sauce …`. `sauce-cli` says how to get it, in one paragraph: the
-// global install, else `npx -y @eco-incorp/sauce`, and never a bare `npx sauce` outside a project
-// that depends on the package, where npx fetches and runs npm's unrelated package named `sauce`.
+// global install or the explicit latest package through npx, and never a bare `npx sauce`
+// outside a project that depends on the package, where npx runs npm's unrelated `sauce` package.
 // That paragraph is the one place a bare `npx sauce` may appear: anywhere else in the skills, a
 // command line or prose, it fails.
 const INSTALL_SKILL = "sauce-cli";
 const BARE_NPX = /\bnpx sauce\b/;
-const GLOBAL_INSTALL = /\bnpm i -g @eco-incorp\/sauce\b/;
-const ANYWHERE_NPX = /\bnpx -y @eco-incorp\/sauce\b/;
+const GLOBAL_INSTALL = /\bnpm install --global --engine-strict @eco-incorp\/sauce@latest\b/;
+const ANYWHERE_NPX = /\bnpx --engine-strict -y @eco-incorp\/sauce@latest\b/;
+function unsafeNpx(text) {
+  return [
+    ...text.matchAll(
+      /\bnpx\s+(?:(?:--engine-strict|-y|--yes)\s+)*@eco-incorp\/sauce(?:@[\w.-]+)?/g,
+    ),
+  ].some((match) => !/\s--engine-strict\s/.test(match[0]) || !match[0].endsWith("@latest"));
+}
+for (const [command, unsafe] of [
+  ["npx -y @eco-incorp/sauce --help", true],
+  ["npx -y @eco-incorp/sauce@latest --help", true],
+  ["npx --engine-strict -y @eco-incorp/sauce --help", true],
+  ["npx --engine-strict -y @eco-incorp/sauce@latest --help", false],
+  ["sauce --help", false],
+]) {
+  assert.equal(unsafeNpx(command), unsafe, command);
+}
 /** `file`'s prose paragraphs, outside fenced blocks and headings: first and last line, and the
  *  text joined into one line. */
 function proseParagraphs(file) {
@@ -773,6 +791,11 @@ for (const skill of skills) {
     read(file)
       .split("\n")
       .forEach((line, i) => {
+        if (unsafeNpx(line))
+          fail(
+            `${rel(file)}:${i + 1}`,
+            "use `npx --engine-strict -y @eco-incorp/sauce@latest` to prevent obsolete package selection",
+          );
         if (BARE_NPX.test(line) && !explained.some((p) => p.start <= i && i <= p.end))
           fail(
             `${rel(file)}:${i + 1}`,
@@ -787,7 +810,8 @@ if (howToGetIt.length !== 1)
   fail(
     `${INSTALL_SKILL}/SKILL.md`,
     `says how to get the command in ${howToGetIt.length} paragraphs, not one that names ` +
-      "`npm i -g @eco-incorp/sauce`, `npx -y @eco-incorp/sauce` and why never a bare `npx sauce`",
+      "`npm install --global --engine-strict @eco-incorp/sauce@latest`, " +
+      "`npx --engine-strict -y @eco-incorp/sauce@latest` and why never a bare `npx sauce`",
   );
 
 // ---- 2b. A protocol document with a swap template leads a Sauce program to the Router --------------

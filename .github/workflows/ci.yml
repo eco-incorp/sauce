@@ -18,10 +18,7 @@ name: CI
 on:
   pull_request:
   push:
-    # Tags too: a tag is what publishes, and `branches` does NOT match a tag push, so before this
-    # the released commit was the one commit nothing ever checked.
     branches: [main]
-    tags: ["v*"]
   # Callable, so publish.yml can gate on these exact steps instead of copying them. A copy would
   # drift, and a gate that has drifted is the thing being fixed here.
   workflow_call:
@@ -123,6 +120,11 @@ jobs:
 
       - name: Documentation — links and executable examples
         run: pnpm docs:check
+
+      # What `publish.yml` plans a release with: the version rules, the baseline tag and the notes,
+      # against scratch git repositories. No network, no secret.
+      - name: Release — version calculation
+        run: node --test .github/scripts/release-version.test.mjs
 
       # The agent skills `sauce skills install` ships: every program compiled through the `sauce`
       # bin on each chain its index names and its command line run offline, every command line's

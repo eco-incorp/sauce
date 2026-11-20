@@ -22,7 +22,7 @@ import {
   v12KitchenAddress,
   v12KitchenImplementationAddress,
   v12PotDerivation,
-  v12ReleaseSet,
+  v12DeployedReleaseSet,
   v12RouterAddress,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
@@ -84,7 +84,7 @@ describeAddresses("v12 deployed addresses", () => {
 
   it("preserves independent engine and Kitchen provenance, from the pinned release set", () => {
     const releases = v12DeployedAddresses().releases;
-    const set = v12ReleaseSet();
+    const set = v12DeployedReleaseSet();
     for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
       expect(releases[component]).toEqual({
         version: set[component].version,

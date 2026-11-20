@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07 (those upgraded since, again on 2026-10-27; Denali after its upgrade at slot 454,575,418): the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "$comment": "Mainnet program dumps for the venues in `svm-exact-in.e2e.test.ts`. `sha256` hashes each ELF before gzip, and `redeploySlot` records the deployment used to refresh a pin when known.",
   "programs": [
     {
       "name": "raydium-cp-swap",
@@ -77,7 +77,8 @@
       "name": "meteora-damm-v1",
       "programId": "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
       "file": "meteora-damm-v1.so.gz",
-      "sha256": "0856d35fa348f8d3570194ff9fe36095f34f0fa64c4286c0de5e207b1a788b22"
+      "sha256": "524353534312b332e486537f3c420b738cf09241e2f65b3eea7969ea28b8732a",
+      "redeploySlot": 468782174
     },
     {
       "name": "meteora-vault",
@@ -113,13 +114,15 @@
       "name": "stabble-stable-swap",
       "programId": "swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ",
       "file": "stabble-stable-swap.so.gz",
-      "sha256": "ee3d3ecf3d7759cef2d91123eef1c363f076e5a456ba9dcc5c8a79cf44890622"
+      "sha256": "f6277bbb38ff494944ba5fa21361ff09c8de672b3eb0633a585372cadd94ff2a",
+      "redeploySlot": 471391543
     },
     {
       "name": "stabble-weighted-swap",
       "programId": "swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW",
       "file": "stabble-weighted-swap.so.gz",
-      "sha256": "880b1ba903f20572b7002227723c282b644f39011808e78bce607e6bf3693cd0"
+      "sha256": "996d3fe82a1667412f79fe8a8764c724648c72c76795c0d34c09345dc823abac",
+      "redeploySlot": 471391464
     },
     {
       "name": "stabble-vault",
@@ -137,7 +140,8 @@
       "name": "pumpswap",
       "programId": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
       "file": "pumpswap.so.gz",
-      "sha256": "6a7ad34596d83b4c435b32f458a56e718e9f82eb4ad38e4316616d15d24d8ff7"
+      "sha256": "b66918d6b1300c8698acd1b92ad1d76ddc2832c7cd2ca3231f450f7f203ab5f1",
+      "redeploySlot": 469811067
     },
     {
       "name": "pump-fee",
@@ -203,7 +207,8 @@
       "name": "taurusfi",
       "programId": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
       "file": "taurusfi.so.gz",
-      "sha256": "cc7bff76ea223d72446cd5beb0e83132d5239f29587c4906a6d30bacf59fb334"
+      "sha256": "4a9834c811d25024eb062f8b18320474d99f80f6e92c827b5cda5fb82d52a622",
+      "redeploySlot": 470963587
     },
     {
       "name": "riptide",
@@ -240,13 +245,15 @@
       "name": "deriverse",
       "programId": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
       "file": "deriverse.so.gz",
-      "sha256": "13a87c3105475aeeb1fb7ddf3e89499d4dfbc79f3f5585703e4feceb55d84820"
+      "sha256": "246f2233393b9051bcf56e12c90a9ab434ba3663ebbdadb1cd276cbaf639979a",
+      "redeploySlot": 469803586
     },
     {
       "name": "goonfi-v2",
       "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
       "file": "goonfi-v2.so.gz",
-      "sha256": "cd78ffe66f2ca9068ef03ab7c57e61f5bc693824430a2ca897c2da2661288850"
+      "sha256": "f0cbaf8e4e0959eea523b8005ee3ecdde42125dcf0dae1c447f322849cd1eaea",
+      "redeploySlot": 468054214
     },
     {
       "name": "raydium-launchlab",
@@ -336,8 +343,8 @@
       "name": "hylo",
       "programId": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
       "file": "hylo.so.gz",
-      "sha256": "4465fc2836c9b778e0f31931325ced821c3c60e70456f415f6a915eaffc1177d",
-      "redeploySlot": 462249329
+      "sha256": "64b9abb77df359aca5705eb0c8bd4c75eb7f241cc35e88f2d42c8e5d74a7ab84",
+      "redeploySlot": 465473117
     },
     {
       "name": "hylo-stability-pool",
@@ -452,7 +459,8 @@
       "name": "perps-jlp",
       "programId": "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
       "file": "perps-jlp.so.gz",
-      "sha256": "a2891a9277f865eb96feaae67e03cd88efc128d43f6093cc70618ad63cb7d9ba"
+      "sha256": "b1d35ccd58b3e8a113612be100fbfe99cd50773ed6e098088498ae0c2f938b9d",
+      "redeploySlot": 465131236
     },
     {
       "name": "one-intro-swap",
