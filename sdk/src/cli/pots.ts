@@ -49,8 +49,8 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import {
-  sdkCompilerVersion,
   V12_RELEASE_SETS,
+  v12DeployedReleaseSet,
   v12PotDerivation,
   v12SvmKitchenProgramId,
   type V12ReleaseSet,
@@ -136,11 +136,12 @@ let preferredSets: readonly V12ReleaseSet[] | undefined;
 /** The release sets, the SDK's own first and then the newest: the one a Pot is recorded under
  *  when several share its Kitchen and hash. The table is the SDK's own, so it is ordered once. */
 const preferred = (): readonly V12ReleaseSet[] => {
-  const own = sdkCompilerVersion();
+  const deployed = v12DeployedReleaseSet();
 
-  return (preferredSets ??= [...V12_RELEASE_SETS]
-    .reverse()
-    .sort((a, b) => +(b.compiler === own) - +(a.compiler === own)));
+  return (preferredSets ??= [
+    deployed,
+    ...[...V12_RELEASE_SETS].reverse().filter((row) => row !== deployed),
+  ]);
 };
 
 let families: readonly PotFamily[] | undefined;

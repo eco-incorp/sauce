@@ -554,7 +554,7 @@ export function registerSkillTools(
         // viem as installed beside it, which a TypeScript project using the package depends on too.
         const pinned = `${packageName}@${version}`;
         const viem = installedViem();
-        const run = `npx -y ${pinned}`;
+        const run = `npx --engine-strict -y ${pinned}`;
         const dir = args.dir === undefined ? "" : ` --dir ${JSON.stringify(args.dir)}`;
         const config = args.config === undefined ? "" : ` --config ${JSON.stringify(args.config)}`;
         const reads = skillTargets([agent]).map((target) => target.path.split("\\").join("/"));
@@ -574,7 +574,7 @@ export function registerSkillTools(
           version,
           skillsFrom: reads,
           commands: {
-            add: `npm install --save-exact ${pinned}${viem === undefined ? "" : ` viem@${viem}`}`,
+            add: `npm install --engine-strict --save-exact ${pinned}${viem === undefined ? "" : ` viem@${viem}`}`,
             install: `${run} skills install --agent ${agent}${dir}`,
             update: `${run} skills update --agent ${agent}${dir}`,
             status: `${run} skills status --agent ${agent}${dir}`,
@@ -589,8 +589,11 @@ export function registerSkillTools(
             "add puts the package in an existing project, with viem, which its TypeScript API is " +
               "typed in and the skills' runners import; init scaffolds a new one pinned the same " +
               "way, with its skills installed.",
-            `The skills write the command as \`sauce <command>\`, which \`npm i -g ${packageName}\` ` +
-              "installs; these commands run this server's version with no install.",
+            "Use Node.js 24 or newer for installation and the CLI. These commands run this server's " +
+              "exact version; in the installed project, `npx sauce <command>` runs its local copy.",
+            `The skills write \`sauce <command>\`; \`npm install --global --engine-strict ${packageName}@latest\` ` +
+              "installs a separate global CLI. Keep @latest and --engine-strict to avoid obsolete " +
+              "releases on unsupported Node; upgrade Node first, then reinstall.",
             "install is the first install, and a no-op on a project already installed: update " +
               "brings installed skills to the version that runs it; status exits 1 while they " +
               "are outdated.",

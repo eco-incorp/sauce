@@ -62,18 +62,23 @@ describe("the SDK releases a refusal names", () => {
       "v12-svm": "0.8.0",
       "kitchen-svm": "0.4.0",
     });
-    // The Unreleased row is not a version, and none is given it.
+    // Unreleased and Deployed are metadata rows, not SDK versions.
     const sdks = SDK_RELEASES.map((row) => row.sdk!);
     expect(sdks.every((sdk) => /^\d+\.\d+\.\d+$/.test(sdk))).toBe(true);
     expect(new Set(sdks).size).toBe(sdks.length);
   });
 
+  it("keeps deployment and Unreleased metadata out of the SDK release history", () => {
+    const metadata = [
+      "| Unreleased | 2.6.3 | 1.4.0 | 1.4.0 | 1.4.1 | 1.1.0 |",
+      "| Deployed | 2.6.3 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |",
+    ];
+    expect(sdkReleasesOf(withTable([HEADER, ...metadata, ROW].join("\n")))).toEqual([
+      RELEASE_0_99_9,
+    ]);
+  });
+
   it("refuse a table the build cannot read, naming what is wrong", () => {
-    expect(
-      sdkReleasesOf(
-        withTable(`${HEADER}\n| Unreleased | 2.6.0 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |\n${ROW}`),
-      ),
-    ).toEqual([RELEASE_0_99_9]);
     expect(() => sdkReleasesOf("# Changelog\n\nNo table here.\n")).toThrow(
       /no "## Which versions work together" section/,
     );
@@ -87,7 +92,7 @@ describe("the SDK releases a refusal names", () => {
     ).toThrow(/0\.99\.9: its Compiler cell, "2\.5", is not a version/);
     expect(() =>
       sdkReleasesOf(withTable(`${HEADER}\n| next | 2.5.0 | 1.2.0 | 1.2.0 | 1.3.0 | 1.0.0 |`)),
-    ).toThrow(/SDK cell, "next", is neither a version nor Unreleased/);
+    ).toThrow(/SDK cell.*"next"/);
     expect(() => sdkReleasesOf(withTable(`${HEADER}\n${ROW}\n${ROW}`))).toThrow(
       /0\.99\.9 has two rows/,
     );

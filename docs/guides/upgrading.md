@@ -12,6 +12,16 @@ version is out. It needs the command installed ([Install](cli.md#install)). The
 what the compiler and engine releases it shipped changed. Read the entries from your version up to
 the one you move to first.
 
+Use Node.js 24 or newer for installation and the CLI (`node --version` checks it). If Node is older,
+upgrade it first, then reinstall the global command:
+
+```sh
+npm install --global --engine-strict @eco-incorp/sauce@latest
+```
+
+Keep both flags: `@latest` avoids npm selecting an obsolete compatible release, which may provide
+`sauce-dev-tools` instead of `sauce`; `--engine-strict` refuses unsupported runtimes.
+
 ## Check which version you run
 
 ```sh
@@ -69,12 +79,13 @@ version installs its own.
 
 ## Update a project's pinned copy
 
-A project made with `sauce init`, or one that ran `npm i -D -E @eco-incorp/sauce`, pins the package
-to one exact version, so every machine and CI job runs the same command and compiler. Update it
-like any other dependency, with the command `sauce update` prints there, for example:
+A project made with `sauce init`, or one that ran
+`npm install --engine-strict -D -E @eco-incorp/sauce@latest`, pins the package to one exact version,
+so every machine and CI job runs the same command and compiler. Update it like any other dependency,
+with the command `sauce update` prints there, for example:
 
 ```sh
-npm install -D -E @eco-incorp/sauce@<version>
+npm install --engine-strict -D -E @eco-incorp/sauce@<version>
 ```
 
 Then update the skills (next section), and simulate your programs again on the new version before
@@ -106,9 +117,9 @@ removed, except the newest of them. A newer version's folder is never touched.
 ## Update the MCP server
 
 A project's MCP entry pins one version of the package. After an upgrade, rewrite it with
-`npx -y @eco-incorp/sauce@latest mcp setup --force`, then restart the server from your agent (in
-most agents, restart the session). The server tells the agent when a newer release is out
-([A newer version](mcp.md#a-newer-version)).
+`npx --engine-strict -y @eco-incorp/sauce@latest mcp setup --force`, then restart the server from
+your agent (in most agents, restart the session). The server tells the agent when a newer release
+is out ([A newer version](mcp.md#a-newer-version)).
 
 ## Know how the compiler and the engine pair
 
@@ -133,6 +144,21 @@ The package pins one compiler and ships the engines that compiler pairs with
 - **In TypeScript**, every SDK builder that names an engine checks the pairing first and throws for
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
+
+## Moving to SDK 1.1.0
+
+The SDK pins compiler **2.6.3** from the 2.6 maintenance line. It makes EVM engine and
+Kitchen/Router **1.4.0** and SVM engine **1.4.1** available for opt-in use. SVM Kitchen
+stays at **1.1.0**. The network defaults remain EVM engine and Kitchen **1.3.0** and
+SVM engine **1.4.0**. Availability in the package does not mean any of the new contracts
+or programs have been deployed to a network.
+
+- **Keep existing Pot bindings.** Legacy EVM Pots and their addresses do not move.
+  The opt-in EVM Kitchen uses a [separate CREATE3 derivation](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
+  Do not switch addresses just because you updated the SDK. Solana Pot seeds do not change.
+- **Coordinate settlement producer and verifier upgrades.** If you still use the historical
+  410-byte program, prepare verifiers for both explicit pins before recompiling producers.
+  See [compiler upgrades and historical pins](verification.md#compiler-upgrades-and-historical-pins).
 
 ## Moving from compiler 2.5 to 2.6
 
@@ -293,9 +319,12 @@ decided to accept (`sauce verify --pin <hash:bytes>` on the command line).
 [Verifying settlement programs](verification.md#compiler-upgrades-and-historical-pins) lists the
 historical pins.
 
-Compiler 2.6 recompiles the bundled settlement program to 410 bytes with a new hash. The default
-validator accepts that new pin only. To keep accepting a 2.4/2.5 payload, add its 435-byte
-`{ hash, bytes }` record explicitly; do not weaken hash validation.
+Compiler 2.6.0 and 2.6.1 produced the historical 410-byte program. Compiler 2.6.2 produces the
+current 426-byte program with a new hash; default verifiers accept only their own version's pin.
+Upgrade verifiers to accept both explicit `{ hash, bytes }` records before upgrading producers.
+Observers can otherwise return `null` silently, while validation fails with `TOKENS_OFFSET`.
+Keep the explicit 410-byte pin for old payloads, or the 435-byte pin for 2.4/2.5 payloads, while
+those programs need recognition. Never weaken hash validation.
 
 ## Next
 

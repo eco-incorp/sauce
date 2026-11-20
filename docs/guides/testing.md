@@ -18,11 +18,11 @@ works. Give each test and hook a generous timeout, since starting a chain takes 
 
 ## Install the kit
 
-In a project with `"type": "module"`, install the package and viem, and Foundry, which provides
-`anvil`:
+With Node.js 24 or newer, in a project with `"type": "module"`, install the local development
+dependencies and Foundry, which provides `anvil`:
 
 ```sh
-npm i -D @eco-incorp/sauce viem
+npm install --engine-strict -D @eco-incorp/sauce@latest viem
 curl -L https://foundry.paradigm.xyz | bash && foundryup
 ```
 
