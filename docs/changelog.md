@@ -199,20 +199,31 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
 
 ### Compiler and engines
 
-- Recompiled EVM settlement programs are now 426 bytes, not the historical 410 bytes shipped in
-  SDK 0.99.16–1.0.0. Default verifiers do not recognize the other version. Validators fail with
-  `TOKENS_OFFSET`; observer helpers can return `null` silently. Upgrade verifiers to accept both
-  explicit `{ hash, bytes }` pins **before** moving producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
-- Recompiled programs now reject malformed runtime `bool` values outside `0`/`1`, and EVM
-  `Address`/`Account` entry words or decoded addresses with bits above 160. Declared nested entries
-  and decoded arrays/tuples are checked too; imported-interface `Address` fields remain an exception.
-  SVM addresses remain full public keys. Existing compiled programs are unchanged; recompiling adds
-  checks, bytes and gas/CU cost. The compiler's
-  [release stability notes](https://github.com/eco-incorp/v12/blob/40a75a11e94658d72ef892bb8e10568135c19eb0/compiler/STABILITY.md)
-  describe the checks and exceptions.
-- Compiler 2.6.3 resolves bare package imports per importer. An ambient package uses the entry
-  program's mapping, not a dependency's mapping for the same name. The SDK still refuses a
-  bare `pot` if that ambient package exports `pot`.
+- **Compiler 2.6.1 → 2.6.3:** The SauceScript bullets above describe the changed gas caps, ABI
+  checks, refusals and forms that now compile. Recompiling adds checks, bytes and gas/CU cost;
+  already-compiled programs are unchanged. Recompiled EVM settlement programs are now 426 bytes,
+  not the historical 410 bytes shipped in SDK 0.99.16–1.0.0. Default verifiers do not recognize the
+  other version: validators fail with `TOKENS_OFFSET`, and observer helpers can return `null`
+  silently. Upgrade verifiers to accept both explicit `{ hash, bytes }` pins **before** moving
+  producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
+  Bare package imports now resolve per importer; an ambient package uses the entry program's
+  mapping, not a dependency's mapping for the same name. The SDK still refuses a bare `pot` if
+  that ambient package exports `pot`.
+- **v12-evm 1.3.0 → 1.4.0 (opt-in):** The engine authenticates the CREATE3 Pot profile and must
+  be selected with its matching Kitchen and Router; keep the old engine for existing CREATE2
+  Pots. Signature checks now require a complete `ecrecover` reply and the exact ERC-1271 return
+  word. Newly allocated memory is cleared after reuse, so a fresh array does not expose values
+  from an earlier caught call. The network defaults do not select this engine.
+- **kitchen-evm 1.3.0 → 1.4.0 (opt-in):** New private, fixed-Router and shared Pots use CREATE3;
+  existing CREATE2 Pots keep their addresses and bindings. Before funding a prediction or
+  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen),
+  including deploying any funded but undeployed CREATE2 Pot first. The old constructor-only
+  `potParameters()` method is removed. The Router preserves a V3 or Maverick V2 leg's spend
+  receipt and an outer flash callback's authorization when the pool runs another leg. The
+  network defaults keep the prior Kitchen and Router.
+- **v12-svm 1.4.0 → 1.4.1 (opt-in):** Instruction decoding is cheaper per cook; the instruction
+  format, account order and opcode semantics are unchanged. The Solana Kitchen remains 1.1.0,
+  and network defaults keep engine 1.4.0.
 
 ### The `sauce` command and the MCP server
 
@@ -222,8 +233,9 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   units. The token is a symbol in any case, an address or a Solana mint, and its decimals come from
   the registries the compile reads, so the number is the one the program sees on that chain; a
   token the chain has no symbol for is named by its address or mint with `--decimals`. An amount
-  with more decimal places than the token has is refused, never rounded, and a bare integer at or
-  above 10^decimals (`1500000 USDC`) is read as whole tokens, with the note `--fund` gives.
+  that would need rounding (a nonzero digit past the token's decimals) is refused, never rounded,
+  and a bare integer at or above 10^decimals (`1500000 USDC`) is read as whole tokens, with the
+  note `--fund` gives.
   `--json` prints one object. The MCP server has it as `sauce_units`.
 - **Added: `sauce where <file>` lists the chains a program compiles on.** It compiles the file for
   every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and needing no
