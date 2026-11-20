@@ -237,13 +237,14 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   and a bare integer at or above 10^decimals (`1500000 USDC`) is read as whole tokens, with the
   note `--fund` gives.
   `--json` prints one object. The MCP server has it as `sauce_units`.
-- **Added: `sauce where <file>` lists the chains a program compiles on.** It compiles the file for
-  every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and needing no
-  key. It lists each chain the program compiles on with its size, then the chains it does not
-  compile on, grouped by the first reason, most often a token or protocol that chain has no name
-  for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the chains
-  transactions are built and sent on, `--source-dir` works as it does for `sauce compile`, and
-  `--json` prints each chain's result.
+- **Added: `sauce where <file>` lists the chains a SauceScript program compiles on.** It compiles
+  the file for every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and
+  needing no key; an actions document is refused, and `sauce compile <file> --chain <slug>`
+  compiles those. It lists each chain the program compiles on with its size, then the chains it
+  does not compile on, grouped by the first reason, most often a token or protocol that chain has
+  no name for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the
+  chains transactions are built and sent on, `--source-dir` works as it does for `sauce compile`,
+  and `--json` prints each chain's result.
 
 ### SDK
 
