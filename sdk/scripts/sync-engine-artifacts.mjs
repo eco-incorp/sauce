@@ -115,8 +115,9 @@ const REPORT = process.argv.includes("--report")
   ? process.argv[process.argv.indexOf("--report") + 1]
   : undefined;
 const COMPILER = REPORT ?? installedCompilerVersion();
-const SET = RELEASE_SETS.find((row) => row.compiler === COMPILER);
-if (!SET) {
+const CURRENT = RELEASE_SETS.find((row) => row.compiler === COMPILER);
+const SET = RELEASE_SETS.find((row) => row.compiler === (CURRENT?.deployedCompiler ?? COMPILER));
+if (!CURRENT || !SET) {
   console.error(
     `[sync-engine-artifacts] the installed compiler is ${COMPILER}, and releases.json pairs no ` +
       `engines with it — it has rows for ${RELEASE_SETS.map((row) => row.compiler).join(", ")}. ` +
@@ -155,6 +156,8 @@ const ASSET_FORMATS = {
     hash: (buf) => keccak256(toBytes(buf.toString("utf8").trim())),
   },
   "abis.json": { manifestKey: "abis.sha256", hash: sha256 },
+  "pot-profile.json": { manifestKey: "potProfile.sha256", hash: sha256 },
+  "addresses.json": { manifestKey: false, hash: sha256 },
 };
 // `manifestKey: null` means the manifest lists its artifacts as `[{ name, sha256 }]` and the digest
 // is found by asset name — the shape v12-svm and kitchen-svm moved to once they shipped several.
@@ -419,6 +422,7 @@ function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
       );
     }
   }
+  if (manifestKey === false) return dest;
 
   const manifest = resolve(dir, "manifest.json");
   if (!existsSync(manifest)) download(tag, "manifest.json", manifest);
@@ -704,8 +708,8 @@ const PUBLIC_REGISTRY = "https://registry.npmjs.org";
 
 /** The row's public tarball, held to its committed integrity and cached by version: a reader of
  *  the files it carries, extracted afresh on every run. */
-function publicPackage() {
-  const { version, integrity } = SET.npm ?? {};
+function publicPackage(row = SET) {
+  const { version, integrity } = row.npm ?? {};
   if (!version || !integrity) {
     throw new Error(
       `releases.json's ${COMPILER} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
@@ -772,7 +776,7 @@ function syncFromPublicPackage() {
   const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
 
   // An explicit source compiler avoids requiring an unpublished SDK for a compiler-only bump.
-  const sourceCompiler = SET.npm.compiler ?? COMPILER;
+  const sourceCompiler = SET.npm.compiler ?? SET.compiler;
   const sourceSet = RELEASE_SETS.find((row) => row.compiler === sourceCompiler);
   const bare = (row) => {
     const copy = { ...row };
@@ -900,9 +904,89 @@ function syncFromPublicPackage() {
   }
 }
 
+// New release artifacts are opt-in until a separate change qualifies deployed bindings. Keep
+// their original names and bytes so callers can verify them against the independently pinned row.
+function readAvailableReleaseSet() {
+  const read = SOURCE === "npm" ? publicPackage(CURRENT) : undefined;
+  const root = `releases/${CURRENT.compiler}`;
+  const components = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
+  const fetched = components.flatMap((component) => {
+    const { version, assets } = CURRENT[component];
+    const tag = `${component}-v${version}`;
+
+    return Object.entries(assets).map(([asset, digest]) => {
+      const path = `${root}/${tag}/${asset}`;
+      const { hash, manifestKey } = ASSET_FORMATS[asset] ?? DEFAULT_FORMAT;
+      const bytes = read
+        ? read(`sdk/dist/artifacts/${path}`)
+        : readFileSync(fetchReleaseAsset({ tag, asset, digest, hash, manifestKey }));
+      const actual = hash(bytes);
+      if (actual !== digest) throw new Error(`${tag}/${asset} digest ${actual} != ${digest}`);
+
+      return { component, asset, path, bytes };
+    });
+  });
+  const addresses = (component) =>
+    JSON.parse(
+      fetched.find((f) => f.component === component && f.asset === "addresses.json").bytes,
+    );
+  const engine = addresses("v12-evm");
+  const kitchen = addresses("kitchen-evm");
+  const pin = CURRENT["kitchen-evm"];
+  if (
+    engine.contracts.engine.address !== CURRENT["v12-evm"].engine ||
+    addresses("v12-svm").programs.engine.programId !== CURRENT["v12-svm"].engine ||
+    kitchen.contracts.kitchen.address !== pin.kitchen ||
+    kitchen.contracts.router.address !== pin.fixedRouter ||
+    kitchen.pot.scheme !== "create3" ||
+    kitchen.pot.deployer !== pin.kitchen ||
+    kitchen.pot.fixedRouter !== pin.fixedRouter ||
+    kitchen.pot.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
+    kitchen.pot.potProfileHash !== pin.potProfileHash ||
+    CURRENT["v12-evm"].assets["pot-profile.json"] !== pin.assets["pot-profile.json"]
+  ) {
+    throw new Error("released CREATE3 stack identities do not match releases.json");
+  }
+
+  if (!read) {
+    const manifest = JSON.parse(
+      readFileSync(
+        resolve(CACHE_ROOT, `v12-evm-v${CURRENT["v12-evm"].version}`, "manifest.json"),
+        "utf8",
+      ),
+    );
+    if (
+      manifest.gate?.scheme !== kitchen.pot.scheme ||
+      manifest.gate.kitchen !== pin.kitchen ||
+      manifest.gate.fixedRouter !== pin.fixedRouter ||
+      manifest.gate.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
+      manifest.gate.potProfileHash !== pin.potProfileHash
+    ) {
+      throw new Error("released engine gate does not match the Kitchen's CREATE3 profile");
+    }
+  }
+
+  console.log(
+    `[sync-engine-artifacts] verified ${fetched.length} assets for ${root} (not deployed defaults)`,
+  );
+  return fetched;
+}
+
+let available = [];
+if (CURRENT !== SET) {
+  try {
+    available = readAvailableReleaseSet();
+  } catch (e) {
+    console.error(`[sync-engine-artifacts] available release set: ${e.message}`);
+    process.exit(1);
+  }
+  if (REPORT) process.exit(0);
+}
+
 if (SOURCE === "npm") {
   try {
     syncFromPublicPackage();
+    shipAvailable();
   } catch (e) {
     console.error(`[sync-engine-artifacts] ${e.message} — refused, nothing written.`);
     process.exit(1);
@@ -1188,6 +1272,18 @@ if (process.argv.includes("--fetch-v12-engines")) {
     kitchenIdl: fetchReleaseAsset(V12_KITCHEN_IDL),
     runtimeCreation: runtimeCreationPath,
   });
+}
+
+shipAvailable();
+
+function shipAvailable() {
+  for (const { path, bytes } of available) {
+    for (const dest of DESTS) {
+      const out = resolve(dest, path);
+      mkdirSync(dirname(out), { recursive: true });
+      writeFileSync(out, bytes);
+    }
+  }
 }
 
 /** Ship the digest-verified binaries so they ride in the package (see SVM_DESTS above) — both

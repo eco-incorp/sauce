@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const table = JSON.parse(readFileSync(join(repo, "sdk/src/deployments/releases.json"), "utf8"));
 
-function fixture(scenario?: string) {
+function fixture(scenario?: string, available = false) {
   const root = mkdtempSync(join(tmpdir(), "sauce-public-source-"));
   const script = join(root, "sdk/scripts/sync-engine-artifacts.mjs");
   mkdirSync(dirname(script), { recursive: true });
@@ -45,17 +45,25 @@ function fixture(scenario?: string) {
     runtime.runtimeCreationCode = "0x00";
     writeFileSync(path, JSON.stringify(runtime));
   }
+  const candidate = "releases/2.6.3/v12-evm-v1.4.0/runtime.creation.hex";
+  if (scenario === "available asset changed") {
+    writeFileSync(join(contents, "artifacts", candidate), "0x00\n");
+  }
   const cache = join(root, "node_modules/.cache/sauce-engine-releases/npm/sauce-1.0.0");
   mkdirSync(cache, { recursive: true });
   const archive = join(cache, "package.tgz");
   execFileSync("tar", ["-czf", archive, "-C", join(root, "contents"), "package"]);
   const local = structuredClone(table);
   const target = local.releases.find((row: { compiler: string }) => row.compiler === "2.6.2");
-  target.npm = {
-    version: "1.0.0",
-    compiler: "2.6.1",
-    integrity: `sha512-${createHash("sha512").update(readFileSync(archive)).digest("base64")}`,
-  };
+  const integrity = `sha512-${createHash("sha512").update(readFileSync(archive)).digest("base64")}`;
+  if (available) {
+    const current = local.releases.find((row: { compiler: string }) => row.compiler === "2.6.3");
+    if (scenario !== "no public release pin") current.npm = { version: "1.0.0", integrity };
+  } else {
+    local.releases = local.releases.filter((row: { compiler: string }) => row.compiler !== "2.6.3");
+    target.compiler = "2.6.3";
+  }
+  target.npm = { version: "1.0.0", compiler: "2.6.1", integrity };
   const registry = join(root, "sdk/src/deployments/releases.json");
   mkdirSync(dirname(registry), { recursive: true });
   const output = join(root, "sdk/dist/artifacts/V12Deployments.json");
@@ -66,7 +74,8 @@ function fixture(scenario?: string) {
       encoding: "utf8",
     });
   };
-  return { root, local, target, output, run };
+  const availableOutput = join(root, "sdk/dist/artifacts", candidate);
+  return { root, local, target, output, availableOutput, run };
 }
 
 describe("public artifacts from an explicitly pinned earlier compiler row", () => {
@@ -76,7 +85,7 @@ describe("public artifacts from an explicitly pinned earlier compiler row", () =
       const result = f.run();
       expect(result.stderr).toBe("");
       expect(result.status).toBe(0);
-      expect(JSON.parse(readFileSync(f.output, "utf8")).compiler).toBe("2.6.2");
+      expect(JSON.parse(readFileSync(f.output, "utf8")).compiler).toBe("2.6.3");
     } finally {
       rmSync(f.root, { recursive: true, force: true });
     }
@@ -109,4 +118,36 @@ describe("public artifacts from an explicitly pinned earlier compiler row", () =
       rmSync(f.root, { recursive: true, force: true });
     }
   });
+});
+
+describe("public opt-in release artifacts", () => {
+  it("ships the verified opt-in bytes without moving the default release", () => {
+    const f = fixture(undefined, true);
+    try {
+      expect(f.run().status).toBe(0);
+      const defaults = JSON.parse(readFileSync(f.output, "utf8"));
+      expect(defaults.releases["v12-evm"].version).toBe("1.3.0");
+      const digest = (path: string) =>
+        createHash("sha256").update(readFileSync(path)).digest("hex");
+      expect(digest(f.availableOutput)).toBe(
+        digest(join(repo, "sdk/dist/artifacts/releases/2.6.3/v12-evm-v1.4.0/runtime.creation.hex")),
+      );
+    } finally {
+      rmSync(f.root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["no public release pin", "available asset changed", "derived identity changed"])(
+    "refuses %s before writing either set",
+    (scenario) => {
+      const f = fixture(scenario, true);
+      try {
+        expect(f.run().status).not.toBe(0);
+        expect(existsSync(f.output)).toBe(false);
+        expect(existsSync(f.availableOutput)).toBe(false);
+      } finally {
+        rmSync(f.root, { recursive: true, force: true });
+      }
+    },
+  );
 });

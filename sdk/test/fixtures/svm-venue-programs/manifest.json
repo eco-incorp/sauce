@@ -101,9 +101,9 @@
       "name": "manifest",
       "programId": "MNFSTqtC93rEfYHB6hF82sKdZpUDFWkViLByLd1k1Ms",
       "programData": "G92J4ZFggKZ9LbsQ2zBpajRvRto7ed7uRuJJqWsX4BhJ",
-      "lastDeploySlot": "459237697",
+      "lastDeploySlot": "468598282",
       "size": 486624,
-      "sha256": "32eb0eef868de71dd3a05e7e41d7638c2a49a75cad05dd546a33d3cde2d1efda",
+      "sha256": "ca1299a13394a7bcc4639b2a4c45333ab57181f273fedbf5831373287315bd27",
       "file": "manifest.so.gz"
     },
     {

@@ -3,6 +3,7 @@
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
   chmodSync,
@@ -23,6 +24,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { keccak256 } from "viem";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
 
@@ -155,6 +157,28 @@ try {
   const name = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).name;
   const installedRoot = join(work, "node_modules", name);
   const installedManifest = JSON.parse(readFileSync(join(installedRoot, "package.json"), "utf8"));
+  const pinned = JSON.parse(
+    readFileSync(join(installedRoot, "sdk/dist/deployments/releases.json"), "utf8"),
+  );
+  const compiler = installedManifest.dependencies["sauce-compiler"].split("@").at(-1);
+  const available = pinned.releases.find((row) => row.compiler === compiler);
+  assert.ok(available, `installed compiler ${compiler} needs a release row`);
+  if (available.deployedCompiler) {
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"]) {
+      const { version, assets } = available[component];
+      const tag = `${component}-v${version}`;
+      for (const [asset, digest] of Object.entries(assets)) {
+        const bytes = readFileSync(
+          join(installedRoot, "sdk/dist/artifacts/releases", compiler, tag, asset),
+        );
+        const actual =
+          asset === "runtime.creation.hex"
+            ? keccak256(bytes.toString("utf8").trim())
+            : createHash("sha256").update(bytes).digest("hex");
+        assert.equal(actual, digest, `${tag}/${asset} ships unchanged in the package`);
+      }
+    }
+  }
   execFileSync(
     process.execPath,
     [join(root, "docs/scripts/check-docs.mjs"), "--package-root", installedRoot],
