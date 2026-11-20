@@ -60,6 +60,26 @@ describe("sauce where", () => {
     expect(out.text).toContain('failed to import module "./not-there.js"');
   });
 
+  it("gives the construct the compiler refuses, from its diagnostics, not a count of them", () => {
+    const bad =
+      "function main(): Uint256 {\n  const f = () => 1;\n  const g = () => 2;\n  return f() + g();\n}\n";
+    const out = whereCommand({ file, text: bad, chains: [requireChain("base")] }, files);
+    const json = out.json as { chains: { compiles: boolean; reason?: string }[] };
+    expect(json.chains[0]?.compiles).toBe(false);
+    const reason = json.chains[0]?.reason ?? "";
+    expect(reason).not.toMatch(/unsupported construct/);
+    expect(reason).toMatch(/^an arrow function cannot be used as a value/);
+    // The whole first sentence: the `{ ... }` inside it does not end it.
+    expect(reason).toMatch(/and call it by name$/);
+  });
+
+  it("keeps the SDK's own reason, though the compiler's error is its cause", () => {
+    const bad = "function main(to: Address) {\n  FOOBAR.transfer(to, 1);\n}\n";
+    const out = whereCommand({ file, text: bad, chains: [requireChain("base")] }, files);
+    const json = out.json as { chains: { reason?: string }[] };
+    expect(json.chains[0]?.reason).toBe("`FOOBAR` is not a token or protocol there");
+  });
+
   it("refuses the chains a // @target header rules out, as compile does", () => {
     type Out = { chains: { chain: string; compiles: boolean; reason?: string }[] };
     const chains = [requireChain("base"), requireChain("solana")];

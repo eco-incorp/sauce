@@ -5,7 +5,8 @@
  * chain has no name for, most often. It reads no chain and needs no key.
  */
 import { canonicalChains, type CanonicalChain } from "../chains/canonical.js";
-import { parseHeader, parseTarget, UsageError } from "./args.js";
+import { compileDiagnostics } from "../wasm-compiler.js";
+import { CliError, parseHeader, parseTarget, UsageError } from "./args.js";
 import {
   compileProgram,
   type CliFiles,
@@ -32,23 +33,40 @@ interface Attempt {
   readonly reason?: string;
 }
 
-/** The first sentence of why the compile refused, the chain's own name put as "there", so the
- *  chains that refuse for one reason are listed together. */
-function reasonOf(error: unknown, file: string, chain: CanonicalChain): string {
-  const lines = String(error instanceof Error ? error.message : error)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line !== "" && !line.startsWith(`${file} does not compile`));
-  // The compiler wraps its diagnostic (`compiling the program failed │ ├─▶ … ╰─▶ <cause>`).
-  const cause = lines.find((line) => line.startsWith("╰─▶ "))?.slice("╰─▶ ".length);
-  const first = (cause ?? lines[0] ?? "does not compile")
-    .replace(/^error:\s*/i, "")
-    .replace(/^[A-Za-z]+: /, "");
-  const sentence = /^(.*?[.!?])(\s|$)/.exec(first)?.[1] ?? first;
+/**
+ * The first sentence of why the compile refused, the chain's own name put as "there", so the
+ * chains that refuse for one reason are listed together. `failure` is the compile's own error
+ * (`compileProgram`'s `cause`): the compiler's, whose first diagnostic is the reason, or the SDK's
+ * refusal, whose message is.
+ */
+function reasonOf(failure: unknown, chain: CanonicalChain): string {
+  const placed = compileDiagnostics(failure)?.[0]?.message.split("\n")[0]?.trim();
+  const first = placed || textReason(failure);
+  // A sentence ends at a stop before a space or the end of the text, never inside an ellipsis
+  // (the compiler writes `{ ... }` in its advice).
+  const sentence = /^(.*?[^.][.!?])(?:\s|$)/.exec(first)?.[1] ?? first;
 
   return sentence
     .replace(new RegExp(` on ${chain.slug}(?=\\W|$)`, "g"), " there")
     .replace(/\.$/, "");
+}
+
+/**
+ * The reason a failure the compiler placed nowhere gives in its text: the SDK's refusal
+ * (`compileSauceRoute: …`), a parse error, or the compiler's error with no diagnostic, a module that
+ * does not resolve among them, whose report wraps its cause
+ * (`compiling the program failed │ ├─▶ … ╰─▶ <cause>`).
+ */
+function textReason(failure: unknown): string {
+  const lines = String(failure instanceof Error ? failure.message : failure)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+  const cause = lines.find((line) => line.startsWith("╰─▶ "))?.slice("╰─▶ ".length);
+
+  return (cause ?? lines[0] ?? "does not compile")
+    .replace(/^error:\s*/i, "")
+    .replace(/^[A-Za-z]+: /, "");
 }
 
 export function whereCommand(input: WhereInput, files: CliFiles): CommandOutput {
@@ -81,7 +99,10 @@ export function whereCommand(input: WhereInput, files: CliFiles): CommandOutput 
     try {
       return { chain, support, bytes: compileProgram(program, files).bytecode.length };
     } catch (error) {
-      return { chain, support, reason: reasonOf(error, input.file, chain) };
+      // `compileProgram` names the file and the chain; its `cause` is the compile's own error.
+      const failure = error instanceof CliError && error.cause !== undefined ? error.cause : error;
+
+      return { chain, support, reason: reasonOf(failure, chain) };
     }
   });
   const ok = attempts.filter((each) => each.bytes !== undefined);
