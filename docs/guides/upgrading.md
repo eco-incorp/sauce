@@ -156,6 +156,12 @@ or programs have been deployed to a network.
 - **Keep existing Pot bindings.** Legacy EVM Pots and their addresses do not move.
   The opt-in EVM Kitchen uses a [separate CREATE3 derivation](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
   Do not switch addresses just because you updated the SDK. Solana Pot seeds do not change.
+- **Check the Kitchen before you fund a CREATE3 address.** Call the chain's Kitchen `predictPot`
+  (or confirm that it is the 1.4.0 release) and fund the address only if it returns the same one:
+  the deployed 1.3.0 Kitchen deploys CREATE2 Pots at other addresses, so on a chain still running
+  it a CREATE3 prediction is an address no Pot will be deployed at. A legacy CREATE2 Pot that was
+  funded but never deployed cannot be deployed once its chain's Kitchen moves to 1.4.0, so deploy
+  it first.
 - **Coordinate settlement producer and verifier upgrades.** If you still use the historical
   410-byte program, prepare verifiers for both explicit pins before recompiling producers.
   See [compiler upgrades and historical pins](verification.md#compiler-upgrades-and-historical-pins).

@@ -209,6 +209,14 @@ CREATE3 Kitchen, use its `deployPot(owner, salt, routerFixed)` or `deploySharedP
 By default the two-argument deploy helper and the CLI still target the deployed Kitchen.
 A CREATE3 prediction alone does not verify the Pot's code, profile, or Router.
 
+Before you fund a predicted CREATE3 address, check the chain: call its Kitchen's
+`predictPot(owner, salt)` (`predictPot(owner, salt, true)` for a fixed Router,
+`predictSharedPot(salt)` for a shared Pot) and fund the address only if it returns the same one, or
+confirm that its Kitchen is the 1.4.0 release. The deployed 1.3.0 Kitchen deploys CREATE2 Pots at
+other addresses, so on a chain still running it a CREATE3 prediction is an address no Pot will be
+deployed at. A legacy CREATE2 Pot that was funded but never deployed cannot be deployed once its
+chain's Kitchen moves to 1.4.0, so deploy it first.
+
 On Arc, native value is USDC at 18 decimals, drawn from the same balance as the USDC ERC-20; see
 [Arc: USDC is the native coin](../reference/chains/arc.md#notes).
 

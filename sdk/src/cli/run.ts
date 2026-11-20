@@ -107,6 +107,7 @@ import {
 } from "./sign.js";
 import { simulateCommand } from "./simulate.js";
 import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
+import { unitsCommand } from "./units.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -155,6 +156,7 @@ import {
 } from "./terminal.js";
 import { updateCheckOff, updateNotice, type UpdateCheck } from "./update-check.js";
 import { updateCommand, type Updater } from "./update.js";
+import { whereCommand } from "./where.js";
 import {
   AGENTS,
   describeStatus,
@@ -1713,6 +1715,64 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       return undefined;
     },
   },
+  where: {
+    usage: "sauce where <file | -> [--chains <slug,…>] [--supported] [--json]",
+    summary: "Compile a program for every chain and list the ones it compiles on",
+    flags: {
+      chains: {
+        type: "string",
+        value: "<slug,…>",
+        help: "Only these chains, comma-separated (default: every chain Sauce knows)",
+      },
+      supported: { type: "boolean", help: "Only the chains transactions are built and sent on" },
+      "source-dir": PROGRAM["source-dir"]!,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Compiles the file once for each chain, the same compile `sauce compile` runs, and lists",
+      "the chains it compiles on with the program's size, then the ones it does not with the",
+      "first reason: most often a token or protocol that chain has no name for. It reads no",
+      "chain and needs no key, so it answers whether a program written for Base also runs on",
+      "Ethereum or Solana before a cook is built anywhere.",
+      "",
+      "Examples:",
+      "  sauce where pay.sauce.ts",
+      "  sauce where swap.sauce.ts --supported",
+      "  sauce where pay.sauce.ts --chains base,ethereum,solana --json",
+    ].join("\n"),
+    run: (args, io) => {
+      const { file, text, stdin } = programText(io, fileOperand(args));
+      if (isActionsDocument(text)) {
+        throw new UsageError(
+          `${file} is an actions document: sauce where takes a SauceScript program; compile a ` +
+            "document with sauce compile <file> --chain <slug>",
+        );
+      }
+      const list = stringFlag(args, "chains");
+      const sourceDir = stringFlag(args, "source-dir");
+      const chains =
+        list === undefined
+          ? undefined
+          : list
+              .split(",")
+              .map((each) => each.trim())
+              .filter((each) => each !== "")
+              .map((each) => parseChain(each, "--chains"));
+
+      return whereCommand(
+        {
+          file,
+          text,
+          ...(stdin ? { stdin } : {}),
+          ...(sourceDir === undefined ? {} : { sourceDir }),
+          ...(chains === undefined ? {} : { chains }),
+          supported: args.values.supported === true,
+        },
+        io,
+      );
+    },
+  },
   actions: {
     usage: "sauce actions <file | -> [--chain <slug|id>] [--json]",
     summary: "Lower an actions document to SauceScript for a chain; print the source and bytecode",
@@ -2705,6 +2765,53 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       });
     },
   },
+  units: {
+    usage: "sauce units --chain <slug|id> <amount> <token> [--decimals <n>] [--json]",
+    summary: "Turn an amount in whole tokens into the smallest unit main takes, or back",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain whose token it is" },
+      decimals: {
+        type: "string",
+        value: "<n>",
+        help: "The token's decimals, for a token the chain has no symbol for",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so",
+      "1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile",
+      "resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An",
+      "amount that would need rounding (a digit other than 0 past the token's decimals) is",
+      "refused, never rounded: 1.5000000 USDC is exact, 1.2345678 USDC is not. A token the",
+      "chain has no symbol for is named by its address, with --decimals. Base units end in",
+      "n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,",
+      "and a note on stderr says so.",
+      "",
+      "Examples:",
+      "  sauce units --chain base 1.5 USDC",
+      "  sauce units --chain base 1500000n USDC",
+      "  sauce units --chain solana 0.25 WSOL --json",
+      "  sauce units --chain base 2 0x… --decimals 18",
+    ].join("\n"),
+    run: (args) => {
+      if (args.positionals.length !== 2) {
+        throw new UsageError("give the amount and the token: sauce units --chain base 1.5 USDC");
+      }
+      const [amount, token] = args.positionals as [string, string];
+      const decimals = stringFlag(args, "decimals");
+      if (decimals !== undefined && !/^\d{1,2}$/.test(decimals)) {
+        throw new UsageError(`--decimals: ${decimals} is not a number of decimals`);
+      }
+
+      return unitsCommand({
+        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
+        amount,
+        token,
+        ...(decimals === undefined ? {} : { decimals: Number(decimals) }),
+      });
+    },
+  },
   price: {
     usage: [
       "sauce price --chain <slug|id> <price> <quote> per <base> [--offline] [--json]",
@@ -3389,11 +3496,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: { ...MCP_FLAGS, ...HELP },
     details: [
       "The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half",
-      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,",
-      "sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim, sauce_simulate,",
-      "sauce_inspect and sauce_verify; sauce_send, which broadcasts what the caller signed; the",
-      "agent skills as tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as",
-      "resources, at sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also",
+      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_units, sauce_pools,",
+      "sauce_compile, sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim,",
+      "sauce_simulate, sauce_inspect and sauce_verify; sauce_send, which broadcasts what the",
+      "caller signed; the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>; and a prompt,",
+      "sauce_write_program. Over stdio it also",
       "has the wallet tools and the",
       "store tools (below). No tool takes a key or a password: a transaction comes back unsigned,",
       "for the user's own wallet, or is sent from one of the server's own wallets.",

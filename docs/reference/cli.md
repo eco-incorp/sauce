@@ -20,6 +20,7 @@ it with no key, `sauce run` signs and sends it, and `sauce tx` prints the unsign
 transaction for another wallet to sign.
 
 - [`sauce compile`](#sauce-compile): Compile a SauceScript program; print its bytecode
+- [`sauce where`](#sauce-where): Compile a program for every chain and list the ones it compiles on
 - [`sauce actions`](#sauce-actions): Lower an actions document to SauceScript for a chain; print the source and bytecode
 - [`sauce simulate`](#sauce-simulate): Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
 - [`sauce run`](#sauce-run): Compile, sign, send and wait for the cook on your Pot
@@ -37,6 +38,7 @@ transaction for another wallet to sign.
   - `sauce pot list`: List the Pots you deployed or imported, each with the release it was minted under
   - `sauce pot import`: Record a Pot deployed elsewhere, read from the chain with the release that minted it
 - [`sauce globals`](#sauce-globals): List the tokens, protocols and other names a program on a chain can use
+- [`sauce units`](#sauce-units): Turn an amount in whole tokens into the smallest unit main takes, or back
 - [`sauce price`](#sauce-price): Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
 - [`sauce pools`](#sauce-pools): List a pair's price-limit pools on a chain, deepest first, with their prices
 - [`sauce inspect`](#sauce-inspect): Take a cook, a Kitchen call, a program or a file apart
@@ -57,6 +59,7 @@ Usage: sauce <command> [options]
 
 Commands:
   compile   Compile a SauceScript program; print its bytecode
+  where     Compile a program for every chain and list the ones it compiles on
   actions   Lower an actions document to SauceScript for a chain; print the source and bytecode
   simulate  Simulate the cook from the Pot's owner, with no key: what it did, or why it reverts
   run       Compile, sign, send and wait for the cook on your Pot
@@ -67,6 +70,7 @@ Commands:
   reclaim   List the code buffers and lookup tables a Solana owner left open, and close them
   pot       Predict a Pot's address, deploy it, and list the Pots you deployed
   globals   List the tokens, protocols and other names a program on a chain can use
+  units     Turn an amount in whole tokens into the smallest unit main takes, or back
   price     Turn a price into a pool's sqrtPriceX96 and a swap's limits, priceLimit included
   pools     List a pair's price-limit pools on a chain, deepest first, with their prices
   inspect   Take a cook, a Kitchen call, a program or a file apart
@@ -154,6 +158,33 @@ A --define the file never reads is named on stderr: it changes nothing.
 Examples:
   sauce compile pay.sauce.ts --chain base
   sauce compile split.sauce.ts --chain base --json --args 0x… 1000000
+```
+
+## `sauce where`
+
+```text
+Compile a program for every chain and list the ones it compiles on.
+
+Usage: sauce where <file | -> [--chains <slug,…>] [--supported] [--json]
+
+Options:
+      --chains <slug,…>   Only these chains, comma-separated (default: every chain Sauce knows)
+      --supported         Only the chains transactions are built and sent on
+      --source-dir <dir>  Resolve the program's relative imports here (default: beside it; from stdin, .)
+      --json              Print one JSON object instead
+  -h, --help              Show this help
+      --no-update-check   No notice of a newer sauce, and no registry read for one
+
+Compiles the file once for each chain, the same compile `sauce compile` runs, and lists
+the chains it compiles on with the program's size, then the ones it does not with the
+first reason: most often a token or protocol that chain has no name for. It reads no
+chain and needs no key, so it answers whether a program written for Base also runs on
+Ethereum or Solana before a cook is built anywhere.
+
+Examples:
+  sauce where pay.sauce.ts
+  sauce where swap.sauce.ts --supported
+  sauce where pay.sauce.ts --chains base,ethereum,solana --json
 ```
 
 ## `sauce actions`
@@ -1085,6 +1116,36 @@ Examples:
   sauce globals --chain base --search spacex
 ```
 
+## `sauce units`
+
+```text
+Turn an amount in whole tokens into the smallest unit main takes, or back.
+
+Usage: sauce units --chain <slug|id> <amount> <token> [--decimals <n>] [--json]
+
+Options:
+      --chain <slug|id>  The chain whose token it is
+      --decimals <n>     The token's decimals, for a token the chain has no symbol for
+      --json             Print one JSON object instead
+  -h, --help             Show this help
+      --no-update-check  No notice of a newer sauce, and no registry read for one
+
+A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so
+1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile
+resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An
+amount that would need rounding (a digit other than 0 past the token's decimals) is
+refused, never rounded: 1.5000000 USDC is exact, 1.2345678 USDC is not. A token the
+chain has no symbol for is named by its address, with --decimals. Base units end in
+n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,
+and a note on stderr says so.
+
+Examples:
+  sauce units --chain base 1.5 USDC
+  sauce units --chain base 1500000n USDC
+  sauce units --chain solana 0.25 WSOL --json
+  sauce units --chain base 2 0x… --decimals 18
+```
+
 ## `sauce price`
 
 ```text
@@ -1450,11 +1511,12 @@ Options:
       --no-update-check             No notice of a newer sauce, and no registry read for one
 
 The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half
-as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,
-sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim, sauce_simulate,
-sauce_inspect and sauce_verify; sauce_send, which broadcasts what the caller signed; the
-agent skills as tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as
-resources, at sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also
+as tools: sauce_chains, sauce_globals, sauce_price, sauce_units, sauce_pools,
+sauce_compile, sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim,
+sauce_simulate, sauce_inspect and sauce_verify; sauce_send, which broadcasts what the
+caller signed; the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,
+sauce_install_skills) and as resources, at sauce://skills/<path>; and a prompt,
+sauce_write_program. Over stdio it also
 has the wallet tools and the
 store tools (below). No tool takes a key or a password: a transaction comes back unsigned,
 for the user's own wallet, or is sent from one of the server's own wallets.
