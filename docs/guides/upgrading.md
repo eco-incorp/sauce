@@ -200,7 +200,8 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
    part still decodes all declared outputs. An explicit `abi.decode` remains checked.
 4. **Choose recovery boundaries deliberately.** Multi-statement EVM `try` rolls back its whole
    block before running `catch`; assignments roll back too, unlike JavaScript. A sole-call `try`
-   or `.catch` catches only that external call's failure, not successful-return decoding.
+   catches the call's failure and, when its answer is read, decoding/check failures. A value-form
+   `.catch()` handles the call's failure, not a dirty successful reply's decoding.
    Error bytes may be empty/truncated (256-byte cap); validate before decoding them. SVM has no
    catch support.
 5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;

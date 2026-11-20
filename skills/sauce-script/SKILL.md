@@ -409,10 +409,11 @@ function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
 }
 ```
 
-A `try` containing only one external call has the same boundary as `.catch(...)`: it catches the
-call's failure, not argument evaluation or decoding a successful reply. Any read of a bound call's
-output still decodes **all** its declared outputs. An unread result, even an unused variable,
-skips decoding/checks: empty/malformed replies and a no-code target can then pass. Check
+A `try` whose body is one external call catches that call's failure and, when the body reads the
+answer, its decoding and checks. It does not catch evaluation of the call's arguments. A value-form
+`.catch()` handles only the call's failure: a dirty successful answer reverts instead. Any read of
+a bound call's output still decodes **all** its declared outputs. An unread result, even an unused
+variable, skips decoding/checks: empty/malformed replies and a no-code target can then pass. Check
 `ctx.isContract` where required; token writes should use the SDK's checked token methods.
 
 `catch (error)` and `.catch((error) => { … })` receive at most 256 raw revert bytes; check their

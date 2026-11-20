@@ -228,6 +228,23 @@ describeEvm("dirty bool, address, bytesN and function words, on the released eng
       }
     }, 60_000);
 
+    it("a bytesN beside another output is read through evm.call, slicing the returned bytes", async () => {
+      // No binding of ECHO declares this method: it would answer `(bytes4 selector, uint256 value)`,
+      // the shape a typed call refuses (§13), so the program makes the call raw and slices the two
+      // words it returns.
+      const source = `function main(t: Address, query: bytes): Uint256 {
+  const answer = evm.call(t, 0, query);
+  require(answer.length == 64, "two words");
+  require(answer.slice(32, 64).toBe() == 5, "amount");
+  return answer.slice(0, 4).toBe();
+}`;
+      const asked = concatHex([
+        toFunctionSelector("selectorPair(uint256,uint256)"),
+        words(SELECTOR_WORD, 5n),
+      ]);
+      expect(await run(source, [ECHO, asked])).toBe(0x1626ba7en);
+    }, 60_000);
+
     it("an answer nothing reads is not decoded or checked", async () => {
       const unread =
         "function main(t: Address, w: Uint256): Uint256 { Echo.at(t).flag(w); return 7; }";
