@@ -145,6 +145,21 @@ The package pins one compiler and ships the engines that compiler pairs with
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
 
+## Moving to SDK 1.1.0
+
+The SDK pins compiler **2.6.3** from the 2.6 maintenance line. It makes EVM engine and
+Kitchen/Router **1.4.0** and SVM engine **1.4.1** available for opt-in use. SVM Kitchen
+stays at **1.1.0**. The network defaults remain EVM engine and Kitchen **1.3.0** and
+SVM engine **1.4.0**. Availability in the package does not mean any of the new contracts
+or programs have been deployed to a network.
+
+- **Keep existing Pot bindings.** Legacy EVM Pots and their addresses do not move.
+  The opt-in EVM Kitchen uses a [separate CREATE3 derivation](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
+  Do not switch addresses just because you updated the SDK. Solana Pot seeds do not change.
+- **Coordinate settlement producer and verifier upgrades.** If you still use the historical
+  410-byte program, prepare verifiers for both explicit pins before recompiling producers.
+  See [compiler upgrades and historical pins](verification.md#compiler-upgrades-and-historical-pins).
+
 ## Moving from compiler 2.5 to 2.6
 
 This SDK moves the complete pair: compiler **2.6.0**, EVM engine/Kitchen **1.3.0**,

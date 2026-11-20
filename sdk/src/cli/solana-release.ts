@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { getAddressDecoder } from "@solana/kit";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
-import { v12ReleaseSet } from "../deployments/releases.js";
+import { v12DeployedReleaseSet } from "../deployments/releases.js";
 import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
 
@@ -112,7 +112,7 @@ function packaged(file: string, asset: string, pin: string | null | undefined): 
 
 /** The release's engine and Kitchen: the packaged binaries, each checked against `releases.json`. */
 export function packagedRelease(): ReleasedPrograms {
-  const set = v12ReleaseSet();
+  const set = v12DeployedReleaseSet();
 
   return {
     engine: (["devnet", "mainnet"] as const).map((cluster) =>

@@ -1382,9 +1382,8 @@ describe.each([
     }
   });
 
-  // The program imports a dependency that imports a package the compile also takes as ambient, which
-  // `resolvePackage` maps by importer. The compiler loads an entry's imports before the ambient
-  // modules and a module once, so the ambient package is the module the dependency's import loaded.
+  // Resolve the ambient package from the entry, even when a dependency imports the same
+  // specifier through its own package mapping.
   const DEPENDENT =
     'import { dep } from "./dep.js";\nfunction main(): Address { require(dep() > 0); return pot; }';
   const byImporter = (fromDependency: string, fromEntry: string | undefined): Options => ({
@@ -1402,21 +1401,25 @@ describe.each([
     }),
   });
   const BASE = "export const base = 1;";
-  const theirs = DEPENDENT.replace("return pot", `return ${holder}`);
 
-  it.each([
-    ["only the dependency's", `${BASE}\n${POT}`, BASE],
-    ["the dependency's, the program's own mapping refused", `${BASE}\n${POT}`, undefined],
-  ])("a `pot` %s package exports is found, and refused", (_, fromDependency, fromEntry) => {
-    const options = byImporter(fromDependency, fromEntry);
-    expect(build(DEPENDENT, options)).toEqual(exported(DEPENDENT));
-    // The same module read for a name the program imports is its own, as written.
-    expect(build(theirs, options)).not.toHaveProperty("refused");
+  it("uses the Pot when only the dependency's package exports `pot`", () => {
+    const options = byImporter(`${BASE}\n${POT}`, BASE);
+    expect(build(DEPENDENT, options)).toEqual(build(DEPENDENT, { ...options, ambient: [] }));
+    expect(build(DEPENDENT, options)).toHaveProperty("bytecode");
   });
 
-  it("a `pot` only the program's own mapping exports, which the compile never loads, is the Pot", () => {
+  it("propagates a missing entry ambient package rather than using the dependency's package", () => {
+    expect(build(DEPENDENT, byImporter(`${BASE}\n${POT}`, undefined))).toEqual({
+      refused: expect.stringContaining('failed to import module "holder"'),
+    });
+  });
+
+  it("refuses a free `pot` when the entry's ambient package exports it", () => {
     const options = byImporter(BASE, `${BASE}\n${POT}`);
-    expect(build(DEPENDENT, options)).toEqual(build(DEPENDENT, { ...options, ambient: [] }));
+    expect(build(DEPENDENT, options)).toEqual(exported(DEPENDENT));
+    expect(build(DEPENDENT.replace("return pot", `return ${holder}`), options)).toHaveProperty(
+      "bytecode",
+    );
   });
 
   // A compile with a closure lowers only what `main` reaches; the probe of one must not lower the

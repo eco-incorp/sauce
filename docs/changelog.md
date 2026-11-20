@@ -63,7 +63,8 @@ Each SDK release and the five releases it pins:
 
 | SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| Unreleased | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| Deployed   | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -85,6 +86,10 @@ Each SDK release and the five releases it pins:
 | 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
 | 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
+The **Deployed** row is the pairing the network defaults use: the engines compiler 2.6.2 was
+released with, which also run compiler 2.6.3's programs. The SDK's CLI labels that set with the
+SDK's own compiler, 2.6.3.
+
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
 each was built and tested with; an install could resolve a newer one, as
@@ -105,7 +110,20 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## Unreleased
 
-Compiler 2.6.2; engine and Kitchen versions are unchanged from SDK 1.0.0.
+The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
+support from the compiler's main line are not included.
+
+The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and unchanged
+SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
+Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
+their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
+Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen)
+to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
+CREATE3 Pots. Omitting the release selection still uses CREATE2.
+
+`v12ReleaseSet()` with no argument still returns the release the network defaults come from, as
+before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
+`v12ReleaseSet(compiler)` with that compiler's version.
 
 ### Compiler and engines
 
@@ -120,6 +138,9 @@ Compiler 2.6.2; engine and Kitchen versions are unchanged from SDK 1.0.0.
   checks, bytes and gas/CU cost. The compiler's
   [release stability notes](https://github.com/eco-incorp/v12/blob/40a75a11e94658d72ef892bb8e10568135c19eb0/compiler/STABILITY.md)
   describe the checks and exceptions.
+- Compiler 2.6.3 resolves bare package imports per importer. An ambient package uses the entry
+  program's mapping, not a dependency's mapping for the same name. The SDK still refuses a
+  bare `pot` if that ambient package exports `pot`.
 
 ## SDK 1.0.0 — 2026-10-27
 

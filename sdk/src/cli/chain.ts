@@ -41,7 +41,7 @@ import {
   sdkCompilerVersion,
   v12EngineAddress,
   v12KitchenAddress,
-  v12ReleaseSet,
+  v12DeployedReleaseSet,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
@@ -479,7 +479,7 @@ async function kitchenRelease(client: PublicClient, chain: CanonicalChain): Prom
     );
   }
   if (family.sets.some((set) => set.compiler === sdkCompilerVersion())) {
-    return `${it} mints Pots of ${releaseText(evmRelease(v12ReleaseSet()))}, the release this SDK pins.`;
+    return `${it} mints Pots of ${releaseText(evmRelease(v12DeployedReleaseSet()))}, the release this SDK pins.`;
   }
   const release = evmRelease(family.sets[0]!);
   const paired = pairedSdkReleases(release);
@@ -512,7 +512,7 @@ async function potRefusal(
   let listed: string | undefined;
   if (of !== undefined) {
     said.push(
-      `Under its release, ${releaseText(evmRelease(v12ReleaseSet()))}, this SDK deploys the ` +
+      `Under its release, ${releaseText(evmRelease(v12DeployedReleaseSet()))}, this SDK deploys the ` +
         `${of.kind === "shared" ? `Shared Pot of salt ${of.salt}` : `Pot of owner ${of.owner} and salt ${of.salt}`} ` +
         `at ${ownReleasePot(of.owner, of.salt, of.kind)}.`,
     );
