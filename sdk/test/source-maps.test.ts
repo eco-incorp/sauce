@@ -11,8 +11,8 @@ import { dirname, join } from "node:path";
 
 import { auditSourceMaps, directivesOf, pruneSourceMaps } from "../scripts/lib/source-maps.mjs";
 
-const map = (file: string, sources: string[]): string =>
-  JSON.stringify({ version: 3, file, sourceRoot: "", sources, names: [], mappings: "" });
+const map = (file: string, sources: string[], sourceRoot = ""): string =>
+  JSON.stringify({ version: 3, file, sourceRoot, sources, names: [], mappings: "" });
 
 /** tsc's output: each file ends in its trailer, beside its map. Only `kept.d.ts.map`'s source
  *  ships; `src/dead.ts` is not packed. */
@@ -58,6 +58,29 @@ const OTHER_REFUSED = [
   "dist/twice.d.ts names gone.d.ts.map, a map the package does not ship",
   "src/note.ts names note.js.map, a map the package does not ship",
 ];
+
+/** References a join would take for the packed file beside them, and ones that climb out of the
+ *  package and back in: the review's three first (an absolute directive beside a kept map, an
+ *  absolute source root, a relative root with an absolute source), then a scheme and a
+ *  protocol-relative URL in each place, then a backslash in each place (TypeScript reads `\` as `/`,
+ *  so `\dir/..` is rooted, while a join cancels it), then a directive and a source that climb out. */
+const OUTSIDE: Record<string, string> = {
+  "dist/rooted.d.ts":
+    "export declare const rooted = 1;\n//# sourceMappingURL=kept.d.ts.map\n//# sourceMappingURL=/kept.d.ts.map",
+  "dist/root.d.ts.map": map("root.d.ts", ["kept.d.ts"], "/"),
+  "dist/absolute.d.ts.map": map("absolute.d.ts", ["/kept.ts"], "../src/"),
+  "dist/schemed.d.ts":
+    "export declare const schemed = 1;\n//# sourceMappingURL=x:/../kept.d.ts.map\n//# sourceMappingURL=//host/kept.d.ts.map",
+  "dist/scheme-root.d.ts.map": map("scheme-root.d.ts", ["kept.d.ts"], "x:/../"),
+  "dist/scheme-source.d.ts.map": map("scheme-source.d.ts", ["x:/../../src/kept.ts"]),
+  "dist/backslash.d.ts":
+    "export declare const backslash = 1;\n//# sourceMappingURL=\\dir/../kept.d.ts.map",
+  "dist/backslash-root.d.ts.map": map("backslash-root.d.ts", ["kept.d.ts"], "\\dir/../"),
+  "dist/backslash-source.d.ts.map": map("backslash-source.d.ts", ["\\dir/../../src/kept.ts"]),
+  "dist/climb.d.ts":
+    "export declare const climb = 1;\n//# sourceMappingURL=../../package/dist/kept.d.ts.map",
+  "dist/climb.d.ts.map": map("climb.d.ts", ["../../package/src/kept.ts"]),
+};
 
 let root: string;
 /** The tree's files still on disk: what npm would pack now. */
@@ -134,5 +157,47 @@ describe("the package's source-map rule", () => {
       expect([path, read(path)]).toEqual([path, text]);
     }
     expect(auditSourceMaps(root, packed())).toEqual(OTHER_REFUSED);
+  });
+
+  it("takes a reference only as a relative path inside the package: absolute, schemed, with a backslash or climbing out, it is refused", () => {
+    for (const [path, text] of Object.entries(OUTSIDE)) writeFileSync(join(root, path), text);
+    const files = new Set([
+      "src/kept.ts",
+      "dist/kept.d.ts",
+      "dist/kept.d.ts.map",
+      ...Object.keys(OUTSIDE),
+    ]);
+    expect(auditSourceMaps(root, files)).toEqual([
+      "dist/absolute.d.ts.map names the source /kept.ts, which is not a relative path",
+      "dist/backslash-root.d.ts.map has the source root \\dir/../, which is not a relative path",
+      "dist/backslash-source.d.ts.map names the source \\dir/../../src/kept.ts, which is not a relative path",
+      "dist/climb.d.ts.map names ../package/src/kept.ts, which resolves outside the package",
+      "dist/root.d.ts.map has the source root /, which is not a relative path",
+      "dist/scheme-root.d.ts.map has the source root x:/../, which is not a relative path",
+      "dist/scheme-source.d.ts.map names the source x:/../../src/kept.ts, which is not a relative path",
+      "dist/backslash.d.ts names \\dir/../kept.d.ts.map, which is not a relative path",
+      "dist/climb.d.ts names ../../package/dist/kept.d.ts.map, which resolves outside the package",
+      "dist/rooted.d.ts names /kept.d.ts.map, which is not a relative path",
+      "dist/schemed.d.ts names x:/../kept.d.ts.map, which is not a relative path",
+      "dist/schemed.d.ts names //host/kept.d.ts.map, which is not a relative path",
+    ]);
+    // The prune deletes the refused maps and keeps the one beside them. None of these files ends in
+    // tsc's trailer, so it edits none of them.
+    expect(pruneSourceMaps(root, files)).toEqual({
+      kept: 1,
+      removed: [
+        "dist/absolute.d.ts.map",
+        "dist/backslash-root.d.ts.map",
+        "dist/backslash-source.d.ts.map",
+        "dist/climb.d.ts.map",
+        "dist/root.d.ts.map",
+        "dist/scheme-root.d.ts.map",
+        "dist/scheme-source.d.ts.map",
+      ],
+      stripped: 0,
+    });
+    for (const path of Object.keys(OUTSIDE).filter((each) => !each.endsWith(".map"))) {
+      expect([path, read(path)]).toEqual([path, OUTSIDE[path]]);
+    }
   });
 });

@@ -132,8 +132,9 @@ try {
   // shipped `.ts`. No other map ships, and no `sourceMappingURL` in a packed file names a map the
   // package does not: found as Node finds one (anywhere, after code too, `//` or `/*`, `#` or `@`),
   // every one held to the rule, the last, which Node takes, and each before it; an inline `data:`
-  // map is refused. The SDK build's prune (`prune-source-maps.mjs`) applies the same rule,
-  // `lib/source-maps.mjs`, to the same npm list.
+  // map is refused, and so is a reference (a directive's URL, a map's source root or source) that is
+  // not a relative path inside the package. The SDK build's prune (`prune-source-maps.mjs`) applies
+  // the same rule, `lib/source-maps.mjs`, to the same npm list.
   const packedPaths = new Set(packed.map((file) => file.path));
   const refused = auditSourceMaps(root, packedPaths);
   assert.deepEqual(

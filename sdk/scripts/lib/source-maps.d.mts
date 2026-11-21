@@ -10,8 +10,8 @@ export interface SourceMapDirective {
  *  line or a block comment), `@` beside `#`. The last is the one Node takes. */
 export declare function directivesOf(text: string): SourceMapDirective[];
 
-/** Why the packed map `path` (its text) may not ship, or `undefined`: a `.d.ts.map` whose every
- *  source is in `packed` may. */
+/** Why the packed map `path` (its text) may not ship, or `undefined`: a `.d.ts.map` whose source
+ *  root and sources are relative paths, every source a file in `packed`, may. */
 export declare function mapRefusal(
   path: string,
   text: string,

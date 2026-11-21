@@ -2151,6 +2151,11 @@ regular expressions and longer comments, where a cut breaks the file, so any oth
 list (`npm pack --dry-run --json`), never a reading of `files`; the prune runs in the build, not a
 `prepack` hook, because the packed check packs with `--ignore-scripts` and publish.yml publishes
 with `pnpm publish`. `check-packed-package.mjs` holds the tarball to the same rule.
+A directive's URL, a map's `sourceRoot` and each of its `sources` count only as relative paths
+inside the package: one that is absolute (`/x`), protocol-relative (`//host/x`), has a scheme
+(`x:`) or holds a backslash (which TypeScript reads as `/`) is refused before it is joined, since a
+join would make it the packed file beside the one naming it while TypeScript and Node look outside
+the package, and one resolving above the package's root is refused too.
 
 **Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
 SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine

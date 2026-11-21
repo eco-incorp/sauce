@@ -14,6 +14,14 @@
  * comment, a reader with a narrower pattern an earlier one), so every directive is held to the rule:
  * the last, which Node takes, and each before it.
  *
+ * A reference (a directive's URL, a map's `sourceRoot`, each of its `sources`) counts only as a
+ * relative path inside the package. One that is absolute (`/x`), protocol-relative (`//host/x`),
+ * has a scheme (`file:`, `webpack:`, a drive's `C:`) or holds a backslash (which TypeScript reads
+ * as `/`, so `\dir/..` is rooted) is refused before anything is joined: TypeScript and Node
+ * resolve it away from the file that names it, outside the package, while `posix.join` would make
+ * it the packed file beside that file. One that resolves above the package's root is refused too.
+ * tsc writes none of these.
+ *
  * The pattern finds text, not comments: it also matches inside a string, a regular expression
  * (`/[//# …]/`) or a longer comment. So the prune changes one form only, the trailer tsc writes
  * (`TRAILER`), in a workspace's build output, when it drops the map the trailer names. Every other
@@ -44,10 +52,16 @@ export function directivesOf(text) {
 
 /** What `url`, written in the packed file `path`, names, as a packed path. */
 const named = (path, url) => posix.normalize(posix.join(posix.dirname(path), url));
+/** A reference that is no relative path: absolute or protocol-relative (a leading `/`), with a
+ *  scheme, or holding a backslash anywhere, which TypeScript reads as `/` and a join does not. */
+const NOT_RELATIVE = /^(?:\/|[A-Za-z][A-Za-z0-9+.-]*:)|\\/;
+/** A path `named` gives that goes above the package's root, where no packed file is. */
+const ABOVE_ROOT = /^\.\.(?:\/|$)/;
 
 /**
  * Why the packed map `path` (its text, `text`) may not ship, or `undefined` when it may: a
- * `.d.ts.map` naming at least one source, each of them in `packed`.
+ * `.d.ts.map` naming at least one source, its source root and each source a relative path, each
+ * source resolving inside the package to a file in `packed`.
  */
 export function mapRefusal(path, text, packed) {
   if (!path.endsWith(".d.ts.map")) return `${path} is a source map other than a declaration map`;
@@ -60,13 +74,32 @@ export function mapRefusal(path, text, packed) {
   const sources = Array.isArray(map.sources) ? map.sources : [];
   if (sources.length === 0) return `${path} names no source`;
   const root = typeof map.sourceRoot === "string" ? map.sourceRoot : "";
-  const missing = sources
-    .map((source) => named(path, posix.join(root, String(source))))
-    .find((source) => !packed.has(source));
+  if (NOT_RELATIVE.test(root)) {
+    return `${path} has the source root ${root}, which is not a relative path`;
+  }
+  for (const source of sources.map(String)) {
+    if (NOT_RELATIVE.test(source)) {
+      return `${path} names the source ${source}, which is not a relative path`;
+    }
+    const resolved = named(path, posix.join(root, source));
+    if (ABOVE_ROOT.test(resolved)) {
+      return `${path} names ${resolved}, which resolves outside the package`;
+    }
+    if (!packed.has(resolved)) return `${path} names ${resolved}, which the package does not ship`;
+  }
 
-  return missing === undefined
-    ? undefined
-    : `${path} names ${missing}, which the package does not ship`;
+  return undefined;
+}
+
+/** Why a directive naming `url` in the packed file `path` may not ship, or `undefined` when it
+ *  names a map the package keeps (`kept`). */
+function directiveRefusal(path, url, kept) {
+  if (url.startsWith("data:")) return `${path} carries an inline source map`;
+  if (NOT_RELATIVE.test(url)) return `${path} names ${url}, which is not a relative path`;
+  const resolved = named(path, url);
+  if (ABOVE_ROOT.test(resolved)) return `${path} names ${url}, which resolves outside the package`;
+
+  return kept.has(resolved) ? undefined : `${path} names ${url}, a map the package does not ship`;
 }
 
 /**
@@ -84,11 +117,7 @@ export function auditSourceMaps(root, packed) {
     .filter((path) => SCANNED.test(path))
     .flatMap((path) =>
       directivesOf(readFileSync(join(root, path), "utf8")).map(({ url }) =>
-        url.startsWith("data:")
-          ? `${path} carries an inline source map`
-          : kept.has(named(path, url))
-            ? undefined
-            : `${path} names ${url}, a map the package does not ship`,
+        directiveRefusal(path, url, kept),
       ),
     );
 
