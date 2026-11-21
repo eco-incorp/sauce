@@ -3,17 +3,22 @@
  * command and the MCP server's tools both apply, held here independently of either front end.
  * And `sauce mcp`'s own flag rules, which the CLI checks before it loads the server at all.
  */
+import type { PublicClient } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+
 import { requireChain } from "../src/chains/canonical.js";
 import { DEFAULT_POT_SALT, potSalt } from "../src/deployments/pot.js";
 import { UsageError } from "../src/cli/args.js";
 import {
   assumedBalances,
   definesReach,
+  fundTransfers,
   fundingFor,
   potTarget,
   programChain,
   potOwner,
 } from "../src/cli/inputs.js";
+import { svmAssumedBalances } from "../src/cli/solana.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -132,6 +137,85 @@ describe("fundingFor and assumedBalances", () => {
       /--assume-balance names USDC twice/,
     );
     expect(() => assumedBalances(["USDC"], base)).toThrow(UsageError);
+  });
+
+  // What `sauce run`, `tx` and `simulate`, and the MCP tools' `fund` and `assumeBalance`, read their
+  // amounts with: refused before anything is read or sent, wherever the decimals are known by then.
+  it("refuses an amount past the token's decimals, on either kind of chain", () => {
+    const rounding =
+      "1.2345678 USDC has 7 decimal places; USDC has 6, so it cannot be written exactly";
+    expect(() => fundingFor({ ...given, fund: ["USDC:1.2345678"] })).toThrow(rounding);
+    expect(() => fundTransfers(["USDC:1.2345678"], base)).toThrow(rounding);
+    expect(() => assumedBalances(["USDC:1.2345678"], base)).toThrow(rounding);
+    const solana = requireChain("solana");
+    expect(() => svmAssumedBalances(["USDC:1.2345678"], solana)).toThrow(
+      `--assume-balance USDC:1.2345678: ${rounding}`,
+    );
+    expect(() => svmAssumedBalances(["WSOL:0.0000000001"], solana)).toThrow(
+      /10 decimal places; WSOL has 9/,
+    );
+    // Zeros past the decimals change nothing, base units are taken as given, and the grammar is
+    // the one --fund reads.
+    expect(
+      svmAssumedBalances(["USDC:1.5000000", "WSOL:2n"], solana).map((each) => each.amount),
+    ).toEqual([{ units: "1.5000000" }, { base: 2n }]);
+    expect(() => svmAssumedBalances(["USDC:1,5"], solana)).toThrow(
+      /expected <TOKEN\|mint>:<amount>/,
+    );
+  });
+
+  // `sauce run` hands the funding its client before it signs or sends anything, the Pot's
+  // deployment included: a token named by its address is read then for its decimals, and an amount
+  // past them refused, and nothing else is read until the funding is made for the Pot.
+  it("reads a token named by address for its decimals when given the client, and refuses an amount past them there", async () => {
+    const token = "0x1234567890123456789012345678901234567890";
+    const reads: string[] = [];
+    const client = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        reads.push(functionName);
+
+        return 6;
+      },
+    } as unknown as PublicClient;
+    const funds = await fundingFor({ ...given, fund: [`${token}:1.5`] })!(client, POT, OWNER);
+    expect(typeof funds).toBe("function");
+    expect(reads).toEqual(["decimals"]);
+    await expect(
+      fundingFor({ ...given, fund: [`${token}:1.2345678`] })!(client, POT, OWNER),
+    ).rejects.toThrow(
+      `--fund ${token}:1.2345678: 1.2345678 ${token} has 7 decimal places; ${token} has 6, so ` +
+        "it cannot be written exactly",
+    );
+    expect(reads).toEqual(["decimals", "decimals"]);
+  });
+
+  // With a key, as `sauce run` always has, the owner's balance of each funded token and of the
+  // native coin is held to the amount then too, in the words the funding uses, and nothing else is
+  // read. Without one (a simulation) the funding notes a shortfall instead, so nothing is refused.
+  it("refuses, with a key, a balance below what is funded when given the client, and only then", async () => {
+    const account = privateKeyToAccount(generatePrivateKey());
+    const owner = account.address;
+    const client = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        if (functionName !== "balanceOf") throw new Error(`read ${functionName}`);
+
+        return 1_000_000n;
+      },
+      getBalance: async () => 10n ** 18n,
+    } as unknown as PublicClient;
+    await expect(
+      fundingFor({ ...given, fund: ["USDC:2"], account })!(client, POT, owner),
+    ).rejects.toThrow(
+      `${owner} holds 1000000 of USDC (base units), below the 2000000 --fund USDC:2 needs`,
+    );
+    await expect(
+      fundingFor({ ...given, fund: ["ETH:2"], account })!(client, POT, owner),
+    ).rejects.toThrow(
+      `${owner} holds 1000000000000000000 wei, below the 2000000000000000000 --fund sends with ` +
+        "the cook",
+    );
+    const keyless = await fundingFor({ ...given, fund: ["USDC:2", "ETH:2"] })!(client, POT, owner);
+    expect(typeof keyless).toBe("function");
   });
 });
 

@@ -38,8 +38,9 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
   `--owner <address>` instead.
 - **Units differ by flag.** `--args` and a program take **base units** (`1000000` is 1 USDC);
   `--fund` and `--assume-balance` take **whole tokens** (`USDC:1` is 1 USDC, `USDC:1000000` a
-  million), base units there only with a trailing `n` (`USDC:1000000n` is 1 USDC). A token the
-  chain does not register is `<address>:<amount>`, in its own decimals.
+  million), base units there only with a trailing `n` (`USDC:1000000n` is 1 USDC), and an amount
+  past the token's decimals (`USDC:1.2345678`) is refused, never rounded. A token the chain does
+  not register is `<address>:<amount>`, in its own decimals.
   `sauce units --chain base 1.5 USDC` prints `1500000`, the number `--args` takes, and
   `sauce units --chain base 1500000n USDC` reads base units back as `1.5`; a token the chain has no
   symbol for is named by its address (a mint on Solana) with `--decimals <n>`, and `--json` prints

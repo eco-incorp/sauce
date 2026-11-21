@@ -223,6 +223,22 @@ describe("local()", { skip: anvilMissing() }, () => {
     await assert.rejects(chain.fund(holder, { [b20]: 1n }), /cannot fund .* is a B20 token/i);
   });
 
+  it("refuses a whole-token amount past the token's decimals, and writes nothing", async () => {
+    const holder = chain.account(2).address;
+    const before = await chain.balanceOf(holder, "ETH");
+    await assert.rejects(chain.fund(holder, { ETH: "1.0000000000000000005" }), {
+      message:
+        `cannot fund ${holder} with ETH: 1.0000000000000000005 ETH has 19 decimal places; ETH ` +
+        "has 18, so it cannot be written exactly",
+    });
+    assert.equal(await chain.balanceOf(holder, "ETH"), before);
+    // A registered token is held to its registry decimals, before anything is read.
+    await assert.rejects(
+      chain.fund(holder, { USDC: "1.2345678" }),
+      /with USDC: 1\.2345678 USDC has 7 decimal places; USDC has 6, so it cannot be written exactly/,
+    );
+  });
+
   it("impersonates an address only while its body runs, topping up one with too little", async () => {
     const stranger = "0x00000000000000000000000000000000000000f2";
     const recipient = "0x00000000000000000000000000000000000000f3";

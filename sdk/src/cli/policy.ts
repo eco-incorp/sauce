@@ -91,6 +91,7 @@ import {
   type PublicClient,
 } from "viem";
 
+import { decimalPlaces, tokenAmount, type TokenAmount } from "../amounts.js";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
 import {
@@ -137,12 +138,9 @@ type Rpc = ReturnType<typeof createSolanaRpc>;
 // The policy file
 // ---------------------------------------------------------------------------------------------
 
-/** An amount as a policy writes it: whole tokens (`"1.5"`), or base units (`"1500000n"`). */
-type Amount = { readonly units: string } | { readonly base: bigint };
-
 interface Limit {
-  readonly perTransaction?: Amount;
-  readonly perDay?: Amount;
+  readonly perTransaction?: TokenAmount;
+  readonly perDay?: TokenAmount;
 }
 
 export interface Policy {
@@ -168,8 +166,6 @@ export class PolicyRefusal extends CliError {
   }
 }
 
-const AMOUNT = /^(?:\d+(?:\.\d+)?|\d+n)$/;
-
 /**
  * The decimals a policy's token key has wherever the registry records it — a symbol or an address,
  * on any chain — when they agree; `undefined` for the native coin (18 on an EVM chain, 9 on Solana)
@@ -193,18 +189,33 @@ function keyDecimals(key: string | undefined): number | undefined {
 }
 
 /**
- * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`).
- * `notes` gets what a bare integer of whole tokens that reads like base units says: at or above
- * 10^decimals, where the registry gives the token's decimals.
+ * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`), as
+ * `tokenAmount` reads them. Whole tokens past the {@link SCALE} places every limit is compared at
+ * are refused: there they would be rounded, which can loosen the limit. `notes` gets what a bare
+ * integer of whole tokens that reads like base units says: at or above 10^decimals, where the
+ * registry gives the token's decimals.
  */
-function amountOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Amount {
-  if (typeof raw !== "string" || !AMOUNT.test(raw)) {
+function amountOf(
+  raw: unknown,
+  where: string,
+  key: string | undefined,
+  notes: string[],
+): TokenAmount {
+  const amount = typeof raw === "string" ? tokenAmount(raw) : undefined;
+  if (typeof raw !== "string" || amount === undefined) {
     throw new UsageError(
       `${where} is not an amount: a string of whole tokens ("1.5") or of base units ending in n ` +
         '("1500000n")',
     );
   }
-  if (raw.endsWith("n")) return { base: BigInt(raw.slice(0, -1)) };
+  if ("base" in amount) return amount;
+  const places = decimalPlaces(raw);
+  if (places > SCALE) {
+    throw new UsageError(
+      `${where}: "${raw}" has ${places} decimal places; a limit is compared at ${SCALE}, so it ` +
+        "cannot be written exactly",
+    );
+  }
   const decimals = keyDecimals(key);
   if (
     !raw.includes(".") &&
@@ -215,7 +226,7 @@ function amountOf(raw: unknown, where: string, key: string | undefined, notes: s
     notes.push(`${where}: "${raw}" is ${wordsOf(raw)} ${key}; for base units write "${raw}n"`);
   }
 
-  return { units: raw };
+  return amount;
 }
 
 function limitOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Limit {
@@ -345,7 +356,8 @@ const SCALE = 36;
 const scaled = (amount: bigint, decimals: number): bigint =>
   amount * 10n ** BigInt(SCALE - Math.min(decimals, SCALE));
 
-const limitScaled = (limit: Amount, decimals: number): bigint =>
+/** Exact: `amountOf` refused whole tokens past {@link SCALE} places. */
+const limitScaled = (limit: TokenAmount, decimals: number): bigint =>
   "base" in limit ? scaled(limit.base, decimals) : parseUnits(limit.units, SCALE);
 
 /** `value` at {@link SCALE}, as whole units for a person. */

@@ -5,14 +5,14 @@
  * `sauce globals` lists for the chain, or by address, with its decimals given by `--decimals`.
  */
 import { isAddress as isSolanaAddress } from "@solana/kit";
-import { formatUnits, isAddress, parseUnits } from "viem";
+import { formatUnits, isAddress } from "viem";
 
+import { exactUnits, tokenAmount } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { wordsOf } from "../evm/effects.js";
 import { sourceGlobals, type SourceToken } from "../routes/source-globals.js";
 import { UsageError } from "./args.js";
 import type { CommandOutput } from "./commands.js";
-import { tokenAmount } from "./funding.js";
 
 export interface UnitsInput {
   readonly chain: CanonicalChain;
@@ -114,14 +114,7 @@ export function unitsCommand(input: UnitsInput): CommandOutput {
     baseUnits = amount.base;
   } else {
     const { units } = amount;
-    const places = (units.split(".")[1] ?? "").replace(/0+$/, "").length;
-    if (places > token.decimals) {
-      throw new UsageError(
-        `${units} ${token.symbol} has ${places} decimal places; ` +
-          `${token.symbol} has ${token.decimals}, so it cannot be written exactly`,
-      );
-    }
-    baseUnits = parseUnits(units, token.decimals);
+    baseUnits = exactUnits(units, token.decimals, token.symbol);
     // The note --fund gives: a bare integer at or above 10^decimals reads like base units
     // (1500000 USDC is 1.5 million USDC), the mistake this command is most often run to catch.
     if (

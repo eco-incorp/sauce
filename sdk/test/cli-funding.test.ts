@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getAddress, toFunctionSelector } from "viem";
+import { getAddress, toFunctionSelector, type PublicClient } from "viem";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { UsageError } from "../src/cli/args.js";
@@ -57,6 +57,30 @@ describe("--fund <TOKEN|address>:<amount>", () => {
     expect(await at("USDC:1.5")).toEqual({ amount: 1_500_000n });
     expect(await at("ETH:0.000000000000000001")).toEqual({ amount: 1n });
     expect(await at("USDC:1500000n")).toEqual({ amount: 1_500_000n });
+  });
+
+  it("refuses an amount past the token's decimals, as sauce units does, before anything is read", () => {
+    expect(() => parseFund("USDC:1.2345678", base)).toThrow(
+      "--fund USDC:1.2345678: 1.2345678 USDC has 7 decimal places; USDC has 6, so it cannot be " +
+        "written exactly",
+    );
+    expect(() => parseFund("ETH:0.0000000000000000001", base)).toThrow(
+      /19 decimal places; ETH has 18/,
+    );
+    // Zeros past the decimals change nothing: exact, and taken.
+    expect(parseFund("USDC:1.5000000", base).amount).toEqual({ units: "1.5000000" });
+  });
+
+  it("holds a token named by address to the decimals it reads from the token", async () => {
+    const sixDecimals = { readContract: async () => 6 } as unknown as PublicClient;
+    const label = getAddress(TOKEN);
+    await expect(baseUnits(sixDecimals, parseFund(`${TOKEN}:1.2345678`, base))).rejects.toThrow(
+      `--fund ${TOKEN}:1.2345678: 1.2345678 ${label} has 7 decimal places; ${label} has 6, so it ` +
+        "cannot be written exactly",
+    );
+    expect(await baseUnits(sixDecimals, parseFund(`${TOKEN}:1.5000000`, base))).toEqual({
+      amount: 1_500_000n,
+    });
   });
 
   // A program's integers are base units, so a bare integer of whole tokens that reads like them is

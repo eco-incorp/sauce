@@ -22,6 +22,7 @@ export {
   type EntryValue,
 } from "../../../sdk/dist/routes/entry.js";
 export { decodeReturned, type Returned } from "../../../sdk/dist/routes/returned.js";
+export { exactUnits } from "../../../sdk/dist/amounts.js";
 export { buildSauceEvmCall } from "../../../sdk/dist/routes/sauce-calls.js";
 export { TOKEN_REGISTRY, svmTokenRows } from "../../../sdk/dist/routes/token-registry.js";
 export { BalanceSlotError, balanceOverride } from "../../../sdk/dist/evm/balance-slot.js";

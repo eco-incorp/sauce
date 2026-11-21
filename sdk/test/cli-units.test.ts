@@ -241,4 +241,14 @@ describe("sauce units from the command line", () => {
     expect(json).toMatchObject({ token: "USDC", baseUnits: "1500000000000", note });
     expect(run.stderr).toContain(note);
   });
+
+  it("refuses an amount it would have to round as a usage error, exit 2", async () => {
+    const run = await sauce("units", "--chain", "base", "1.2345678", "USDC");
+    expect(run.code).toBe(2);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toBe(
+      "sauce units: 1.2345678 USDC has 7 decimal places; USDC has 6, so it cannot be written " +
+        "exactly\nRun `sauce units --help` for usage.\n",
+    );
+  });
 });
