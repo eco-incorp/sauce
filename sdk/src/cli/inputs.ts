@@ -254,11 +254,13 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
           "owner's tokens on the owner's signature",
       );
     }
-    // Every amount held to its token's decimals, and with a key (`sauce run` always has one) the
-    // owner's balances held to what is funded, now, before the run signs or sends anything. The
-    // only transaction a run sends before its funding is the Pot's deployment: no caller in this
-    // tree passes `RunInput.setup`. It moves none of the owner's tokens and spends only gas, so a
-    // balance short here is short after it too; `planFunding` checks again, after that gas.
+    // Every amount is held to its token's decimals. With a key (`sauce run` always has one), the
+    // owner's balances must already cover it before any send. This is a current-balance admission
+    // rule: a balance that grows by itself, such as an Aave aToken's, is judged as it stands now,
+    // not as it might stand after deployment. No production caller passes `RunInput.setup`
+    // (tests do), so the Pot's deployment is the only production setup transaction. `planFunding`
+    // checks balances again after any deployment gas, before funding approvals, transfers and
+    // signatures.
     const resolved = await withDecimals(client, requests);
     if (account !== undefined) await requireBalances(client, owner, resolved);
 
