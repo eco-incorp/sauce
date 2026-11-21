@@ -45,6 +45,7 @@ import {
   KITCHEN_DISCRIMINATORS,
   MAX_POT_LEN,
 } from "../../src/svm/index.js";
+import { svmEnginePath } from "../../src/svm/engine-artifacts.js";
 import { jsonOf, sauce, type Run } from "../cli-anvil.js";
 import { hasLegacyArtifacts, legacyArtifactsDir } from "../release-arm.js";
 import {
@@ -263,7 +264,12 @@ describeBoth("a Solana Pot cooks on the engine that owns it", () => {
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
 
-  afterEach(() => holdEarlier(earlierElf("devnet")));
+  afterEach(() => {
+    // What a test held at an engine's id is put back: the earlier engine's devnet build, and the
+    // installed engine as the harness loaded it.
+    holdEarlier(earlierElf("devnet"));
+    harness.svm.addProgramFromFile(INSTALLED, ENGINE_SO as string);
+  });
 
   it("the Pot the earlier engine created is owned by it, and `sauce pot` says so", async () => {
     expect(harness.svm.getAccount(potA)).toMatchObject({ exists: true, programAddress: EARLIER });
@@ -501,5 +507,32 @@ describeBoth("a Solana Pot cooks on the engine that owns it", () => {
       ),
     );
     expect(inline).toMatchObject({ ok: true });
+  }, 120_000);
+
+  it("simulates in a local copy only the code its cluster runs, the installed engine's too: the release's other build is refused", async () => {
+    // The release's MAINNET build at the installed engine's id on a DEVNET cluster. The cluster's own
+    // check passes — either build is the release's — but the copy would run the devnet build, which
+    // is not what the cluster runs: refused, nothing simulated.
+    harness.svm.addProgramFromFile(INSTALLED, svmEnginePath("mainnet"));
+    const sent = shim.sent.length;
+    const out = await sauce(
+      ...["simulate", blob, "--chain", "solana", "--owner", randomAddress()],
+      ...["--salt", "other-build", "--rpc-url", RPC_URL],
+    );
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain(
+      `simulating a cook on a Pot of engine ${INSTALLED} needs that engine's own code, and solana ` +
+        "does not run that release's build: the simulation would run other code",
+    );
+    expect(shim.sent.length).toBe(sent);
+    // The devnet build, which is what a devnet cluster runs, simulates the same cook.
+    harness.svm.addProgramFromFile(INSTALLED, svmEnginePath("devnet"));
+    const ok = read<Simulated>(
+      await sauce(
+        ...["simulate", blob, "--chain", "solana", "--owner", randomAddress()],
+        ...["--salt", "other-build", "--rpc-url", RPC_URL, "--json"],
+      ),
+    );
+    expect(ok).toMatchObject({ ok: true, path: "local copy (LiteSVM)" });
   }, 120_000);
 });

@@ -149,7 +149,7 @@ import { approveAll } from "./approvals.js";
 import { decodeReturned, returnedLine } from "../routes/returned.js";
 import { guardOf, type Reservation } from "./policy.js";
 import { keepLanded, sayKept } from "./keep.js";
-import type { PotRecord } from "./pot-store.js";
+import { MAINNET_CLUSTER, type PotRecord } from "./pot-store.js";
 import {
   clusterNamed,
   clusterOf,
@@ -2581,8 +2581,16 @@ async function stagedRehearsal(
       });
   const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const cluster = clusterOf(await genesisOf(prepared.rpc, input.rpcUrl));
-  // Devnet and testnet use the same released build; an explicit endpoint decides the cluster.
-  const build = cluster === "devnet" || cluster === "testnet" ? "devnet" : "mainnet";
+  // The build the cluster's kind runs: devnet and testnet the devnet build, mainnet-beta the
+  // mainnet build, each held exactly (a cluster running the other is refused). A cluster that
+  // names none of them — a local validator or test bank — runs whichever of the release's builds
+  // it was given, and the copy runs that one: never code other than the cluster's.
+  const build =
+    cluster === "devnet" || cluster === "testnet"
+      ? "devnet"
+      : cluster === MAINNET_CLUSTER
+        ? "mainnet"
+        : undefined;
   // The copy runs the code its cluster is shown to run: the package's release for the installed
   // engine and the Kitchen, the cluster's own bytes for an earlier release's engine (held to that
   // release's digest), and nothing else: a cook is never rehearsed on another engine's code.

@@ -265,49 +265,70 @@ export async function requireSolanaRelease(
   }
 }
 
+/** The refusal of a local copy that would run other code than its cluster does: nothing ran. */
+const ownCodeRefusal = (program: string, slug: string): CliError =>
+  new CliError(
+    `simulating a cook on a Pot of engine ${program} needs that engine's own code, and ${slug} ` +
+      "does not run that release's build: the simulation would run other code. Nothing was " +
+      "simulated",
+  );
+
 /**
- * The code a local copy runs for `program`: the packaged ELF for the installed release's engine or
- * Kitchen (held to its digest), once the cluster's program is shown to be byte-identical to it;
- * for an earlier release's engine, the cluster's own bytes held to that release's committed digest.
- * Refuses — never substitutes — when the cluster's program is absent or another build.
+ * The code a local copy runs for `program`: for the installed release's engine, the packaged ELF of
+ * `build` (held to its digest) and for its Kitchen the packaged `kitchen.so`, each only once the
+ * cluster's program is shown to be byte-identical to it. The release check accepts either of the
+ * engine's builds, but a copy runs one: `build` is the one the cluster's kind runs (devnet and
+ * testnet the devnet build, mainnet-beta the mainnet build), and a cluster running the other is
+ * refused here. `build` is `undefined` for a cluster that names no public one (a local validator
+ * or test bank), which runs whichever build it was given: the copy runs that one. For an earlier
+ * release's engine, the cluster's own bytes held to that release's committed digest. Refuses —
+ * never substitutes — when the cluster's program is absent or another build.
  */
 export async function releasedProgramCode(
   read: ReadProgram,
   program: string,
-  build: EngineCluster,
+  build: EngineCluster | undefined,
   slug: string,
 ): Promise<Uint8Array> {
   const set = v12ReleaseSet();
   if (program === v12SvmKitchenProgramId()) {
+    // One build: the release check holds the cluster's program to exactly the bytes returned.
     await requireSolanaRelease(read, ["Kitchen"], slug);
 
     return packaged(svmKitchenPath(), "kitchen.so", set["kitchen-svm"].assets["kitchen.so"]);
   }
+  const builds: readonly EngineCluster[] = build === undefined ? ["devnet", "mainnet"] : [build];
   if (program === v12SvmEngineProgramId()) {
+    const held = await deployedProgram(read, program);
+    for (const one of builds) {
+      const code = packaged(
+        svmEnginePath(one),
+        `engine-${one}.so`,
+        set["v12-svm"].assets[`engine-${one}.so`],
+      );
+      if (held !== undefined && isReleasedProgram(held, code)) return code;
+    }
+    // Absent, or no build of the release at all: the release check says which. What it lets
+    // through is the release's other build, which the copy must not stand in for.
     await requireSolanaRelease(read, ["engine"], slug);
-
-    return packaged(
-      svmEnginePath(build),
-      `engine-${build}.so`,
-      set["v12-svm"].assets[`engine-${build}.so`],
-    );
+    throw ownCodeRefusal(program, slug);
   }
-  const asset = `engine-${build}.so`;
+  const assets = builds.map((one) => `engine-${one}.so`);
   const digests =
     engineRunsCompiler("svm", program) === true
-      ? V12_RELEASE_SETS.flatMap((row) => {
-          const digest = row["v12-svm"].engine === program ? row["v12-svm"].assets[asset] : null;
+      ? V12_RELEASE_SETS.flatMap((row) =>
+          row["v12-svm"].engine === program
+            ? assets.flatMap((asset) => {
+                const digest = row["v12-svm"].assets[asset];
 
-          return digest === null || digest === undefined ? [] : [digest];
-        })
+                return digest === null || digest === undefined ? [] : [digest];
+              })
+            : [],
+        )
       : [];
   const deployed = digests.length === 0 ? undefined : await deployedProgram(read, program);
   if (deployed === undefined || !isPinnedProgram(deployed, digests)) {
-    throw new CliError(
-      `simulating a cook on a Pot of engine ${program} needs that engine's own code, and ${slug} ` +
-        "does not run that release's build: the simulation would run other code. Nothing was " +
-        "simulated",
-    );
+    throw ownCodeRefusal(program, slug);
   }
 
   return deployed.subarray(0, elfLength(deployed)!);

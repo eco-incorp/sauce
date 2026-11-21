@@ -313,14 +313,61 @@ describe("the code a local copy runs", () => {
   const OLD = "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT";
   const real = packagedRelease();
 
-  it("is the packaged build of the cluster's kind for the installed engine, and the Kitchen's, once the cluster runs them", async () => {
-    const read = cluster(real.engine[0]!, real.kitchen, 64);
-    const devnet = await releasedProgramCode(read, ENGINE, "devnet", "solana");
-    const mainnet = await releasedProgramCode(read, ENGINE, "mainnet", "solana");
-    expect(Buffer.from(devnet).equals(Buffer.from(real.engine[0]!))).toBe(true);
-    expect(Buffer.from(mainnet).equals(Buffer.from(real.engine[1]!))).toBe(true);
-    const kitchen = await releasedProgramCode(read, KITCHEN, "mainnet", "solana");
+  it("is the packaged build the cluster holds for the installed engine, and the Kitchen's, once the cluster runs them", async () => {
+    // A cluster of each kind holds the build its kind runs: the copy is that build, byte for byte.
+    const kitchen = await releasedProgramCode(
+      cluster(real.engine[0]!, real.kitchen, 64),
+      KITCHEN,
+      "mainnet",
+      "solana",
+    );
     expect(Buffer.from(kitchen).equals(Buffer.from(real.kitchen))).toBe(true);
+    for (const [build, at] of [
+      ["devnet", 0],
+      ["mainnet", 1],
+    ] as const) {
+      const code = await releasedProgramCode(
+        cluster(real.engine[at]!, real.kitchen, 64),
+        ENGINE,
+        build,
+        "solana",
+      );
+      expect(Buffer.from(code).equals(Buffer.from(real.engine[at]!))).toBe(true);
+    }
+  });
+
+  it("refuses the installed engine where the cluster runs the release's other build: the copy would run other code", async () => {
+    // Either build passes the release check, but the copy runs the one for the cluster's kind.
+    const refused = `simulating a cook on a Pot of engine ${ENGINE} needs that engine's own code, and solana does not run that release's build: the simulation would run other code`;
+    for (const [build, held] of [
+      ["mainnet", 0],
+      ["devnet", 1],
+    ] as const) {
+      const read = cluster(real.engine[held]!, real.kitchen, 64);
+      await expect(requireSolanaRelease(read, ["engine"], "solana")).resolves.toBeUndefined();
+      await expect(releasedProgramCode(read, ENGINE, build, "solana")).rejects.toThrow(refused);
+    }
+  });
+
+  it("runs whichever build a cluster that names no public cluster holds, and still refuses a build that is no release's", async () => {
+    // A local validator or test bank has no kind to name a build: the copy is the build it runs.
+    for (const at of [0, 1] as const) {
+      const code = await releasedProgramCode(
+        cluster(real.engine[at]!, real.kitchen, 64),
+        ENGINE,
+        undefined,
+        "solana",
+      );
+      expect(Buffer.from(code).equals(Buffer.from(real.engine[at]!))).toBe(true);
+    }
+    await expect(
+      releasedProgramCode(
+        cluster(Uint8Array.of(0x7f, 1), real.kitchen),
+        ENGINE,
+        undefined,
+        "solana",
+      ),
+    ).rejects.toThrow(refusal("engine", ENGINE));
   });
 
   it("refuses the installed engine and Kitchen where the cluster holds another build, never substituting", async () => {
