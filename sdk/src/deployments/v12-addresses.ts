@@ -29,12 +29,32 @@ export interface V12EvmContractRef {
   note?: string;
 }
 
-/** How a Pot address is derived — `CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`. */
+/** How the current Kitchen places a Pot from its owner and salt. */
 export interface V12PotDerivation {
+  /** The Kitchen that deploys every Pot. */
   deployer: string;
+  /**
+   * keccak256 of the Pot's creation code: what the Kitchen's `potInitCodeHash()` reports. Up to
+   * kitchen-evm 1.3.0 a Pot was `CREATE2(deployer, keccak256(abi.encode(owner, salt)),
+   * initCodeHash)`. From kitchen-evm 1.4.0 (`scheme: "create3"`) it is NOT: nothing is ever
+   * deployed at that CREATE2 address, and what is sent there is lost. Derive a Pot with
+   * `v12PredictPot(owner, salt)`.
+   */
   initCodeHash: string;
   saltFormula: string;
   derivation?: string;
+  /**
+   * `"create3"` from kitchen-evm 1.4.0: a Pot is `CREATE(CREATE2(deployer, gate salt,
+   * potProxyInitCodeHash), 1)`, the gate salt `keccak256(abi.encode(owner, salt))`, with `, true`
+   * for a fixed Router or a Shared Pot.
+   */
+  scheme?: "create3";
+  /** CREATE3: the init-code hash of the proxy the Kitchen CREATE2s for each Pot. */
+  potProxyInitCodeHash?: string;
+  /** CREATE3: the hash of the Pot profile the engine authenticates. */
+  potProfileHash?: string;
+  /** CREATE3: the Router of every fixed-Router and Shared Pot. */
+  fixedRouter?: string;
 }
 
 /** One SVM program as the release records it. */
@@ -113,7 +133,10 @@ export const v12KitchenAddress = (): string => v12DeployedAddresses().evm.contra
 export const v12KitchenImplementationAddress = (): string =>
   v12DeployedAddresses().evm.contracts.kitchenImplementation.address;
 
-/** How a Pot address is derived from `(owner, salt)` under the current Kitchen. */
+/**
+ * How the current Kitchen places a Pot. Use `v12PredictPot` for an address: since kitchen-evm 1.4.0
+ * a Pot is CREATE3 (`scheme`).
+ */
 export const v12PotDerivation = (): V12PotDerivation => v12DeployedAddresses().evm.pot;
 
 /** The current SVM engine program id — pass as `programId` to `createSauceSvmClient`. */

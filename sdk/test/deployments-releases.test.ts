@@ -12,10 +12,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { address } from "@solana/kit";
-import type { Address, Hex } from "viem";
+import { getAddress, type Address, type Hex } from "viem";
 
 import {
   assertEngineRunsCompiler,
+  engineRunsCompiler,
   sdkCompilerVersion,
   v12DeployedAddresses,
   v12DeployedReleaseSet,
@@ -93,42 +94,61 @@ describe("the release table", () => {
     }
   });
 
-  it("keeps deployed defaults separate from the installed compiler's opt-in artifacts", () => {
+  it("the defaults are the installed compiler's own row", () => {
     expect(sdkCompilerVersion()).toBe(resolvedCompilerVersion());
-    const set = v12DeployedReleaseSet();
-    const { releases } = v12DeployedAddresses();
+    const own = v12ReleaseSet(sdkCompilerVersion());
+    // Every no-argument form is that row, and no row defers its defaults to another.
+    expect(v12ReleaseSet()).toEqual(own);
+    expect(v12OptInReleaseSet()).toEqual(own);
+    expect(v12DeployedReleaseSet()).toEqual(own);
+    expect(V12_RELEASE_SETS.every((row) => row.deployedCompiler === undefined)).toBe(true);
+    expect([
+      own["v12-evm"].version,
+      own["kitchen-evm"].version,
+      own["v12-svm"].version,
+      own["kitchen-svm"].version,
+    ]).toEqual(["1.4.0", "1.4.0", "1.4.1", "1.1.0"]);
+    expect(v12EngineAddress().toLowerCase()).toBe(own["v12-evm"].engine?.toLowerCase());
+    expect(v12SvmEngineProgramId()).toBe(own["v12-svm"].engine);
+    // The synced release is that row's own: versions, Kitchen and Pot identity.
+    const { releases, evm } = v12DeployedAddresses();
     for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
-      expect([component, releases[component].version]).toEqual([component, set[component].version]);
+      expect([component, releases[component].version]).toEqual([component, own[component].version]);
     }
-    expect(set["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
-    expect(set["v12-svm"].engine).toBe(v12SvmEngineProgramId());
-    // The Kitchen and Pot init-code hash the row records are the synced release's own.
-    const { pot } = v12DeployedAddresses().evm;
-    expect(set["kitchen-evm"].kitchen?.toLowerCase()).toBe(pot.deployer.toLowerCase());
-    expect(set["kitchen-evm"].potInitCodeHash?.toLowerCase()).toBe(pot.initCodeHash.toLowerCase());
-    const available = v12OptInReleaseSet();
-    // The no-argument form keeps its old meaning, the deployed release; an explicit compiler is
-    // that compiler's own row.
-    expect(v12ReleaseSet()).toEqual(set);
-    expect(v12ReleaseSet()["v12-evm"].engine?.toLowerCase()).toBe(v12EngineAddress().toLowerCase());
-    expect(v12ReleaseSet()["kitchen-evm"].potInitCodeHash).not.toBeNull();
-    expect(v12ReleaseSet(sdkCompilerVersion())).toEqual(available);
-    expect(available["v12-evm"].version).toBe("1.4.0");
-    expect(available["kitchen-evm"].version).toBe("1.4.0");
-    expect(available["v12-svm"].version).toBe("1.4.1");
-    expect(available["kitchen-svm"].version).toBe("1.1.0");
-    expect(set["v12-evm"].version).toBe("1.3.0");
-    expect(set["v12-svm"].version).toBe("1.4.0");
-    for (const [target, component] of [
-      ["evm", "v12-evm"],
-      ["svm", "v12-svm"],
-    ] as const) {
-      expect(() => assertEngineRunsCompiler(target, set[component].engine!)).not.toThrow();
-      expect(() => assertEngineRunsCompiler(target, available[component].engine!)).not.toThrow();
-      expect(() =>
-        assertEngineRunsCompiler(target, available[component].engine!, "2.6.2"),
-      ).toThrow();
-    }
+    expect(own["kitchen-evm"].kitchen?.toLowerCase()).toBe(evm.pot.deployer.toLowerCase());
+    expect(own["kitchen-evm"].potProxyInitCodeHash).toBe(evm.pot.potProxyInitCodeHash);
+    expect(own["kitchen-evm"].potProfileHash).toBe(evm.pot.potProfileHash);
+  });
+
+  it("compiler 2.6.3 output runs on v12-evm 1.3.0 and v12-svm 1.4.0, as alsoRunsOn says", () => {
+    expect(sdkCompilerVersion()).toBe("2.6.3");
+    const earlier = v12ReleaseSet("2.6.2");
+    expect(earlier["v12-evm"].version).toBe("1.3.0");
+    expect(earlier["v12-svm"].version).toBe("1.4.0");
+    // The solver's engine: eco-solver pins it and cooks through `v12Pot.encodeCook`.
+    const solver = getAddress("0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67");
+    expect(solver).toBe(getAddress(earlier["v12-evm"].engine!));
+    expect(() => v12Pot.encodeCook(solver, "0x00")).not.toThrow();
+    expect(engineRunsCompiler("evm", solver)).toBe(true);
+    expect(engineRunsCompiler("svm", earlier["v12-svm"].engine!)).toBe(true);
+    expect(() =>
+      assertEngineRunsCompiler("svm", "53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW"),
+    ).not.toThrow();
+    // v12-evm 1.2.0 (compiler 2.5.0's) runs no compiler 2.6.3 output.
+    const older = v12ReleaseSet("2.5.0");
+    expect(older["v12-evm"].version).toBe("1.2.0");
+    expect(engineRunsCompiler("evm", older["v12-evm"].engine!)).toBe(false);
+    expect(() => assertEngineRunsCompiler("evm", older["v12-evm"].engine!)).toThrow(
+      /runs compiler 2\.5\.0 output/,
+    );
+    // An engine no row names is one the SDK cannot tell.
+    expect(engineRunsCompiler("evm", "0x1111111111111111111111111111111111111111")).toBeUndefined();
+    // The other direction: compiler 2.6.2 output does not run on the 1.4.0 engine.
+    const engine = v12EngineAddress();
+    expect(engineRunsCompiler("evm", engine, "2.6.2")).toBe(false);
+    expect(() => assertEngineRunsCompiler("evm", engine, "2.6.2")).toThrow(
+      /v12-evm 1\.4\.0, which runs compiler 2\.6\.3 output/,
+    );
   });
 
   it("keeps a Kitchen release's legacy init-code hash or CREATE3 profile identity stable", () => {
@@ -175,7 +195,12 @@ describe("the release table", () => {
           ? {
               version: deployed.releases["kitchen-evm"].version,
               contracts: { kitchen: { address: deployed.evm.contracts.kitchen.address } },
-              pot: { initCodeHash: deployed.evm.pot.initCodeHash },
+              pot: {
+                initCodeHash: deployed.evm.pot.initCodeHash,
+                ...(deployed.evm.pot.potProfileHash === undefined
+                  ? {}
+                  : { potProfileHash: deployed.evm.pot.potProfileHash }),
+              },
             }
           : (JSON.parse(readFileSync(path, "utf8")) as {
               version: string;
@@ -221,7 +246,7 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
     }
   });
 
-  it("refuses other compilers unless their row or deployed default explicitly shares the engine", () => {
+  it("refuses other compilers unless their row names the engine or lists it in alsoRunsOn", () => {
     expect(crossings.length).toBeGreaterThan(0);
     for (const { own, other } of crossings) {
       for (const target of ["evm", "svm"] as const) {
@@ -229,10 +254,10 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
         const engine = own[component].engine;
         if (engine === null) continue;
         const check = () => assertEngineRunsCompiler(target, engine, other.compiler);
-        const deployed =
-          other.deployedCompiler === undefined ? undefined : v12ReleaseSet(other.deployedCompiler);
-        if (engine === other[component].engine || engine === deployed?.[component].engine)
-          expect(check).not.toThrow();
+        const runs =
+          engine === other[component].engine ||
+          other.alsoRunsOn?.[component]?.includes(own[component].version) === true;
+        if (runs) expect(check).not.toThrow();
         else
           expect(check).toThrow(`is ${component} ${own[component].version}, which runs compiler`);
       }
@@ -304,15 +329,13 @@ describe("assertEngineRunsCompiler — one table, both directions", () => {
   });
 });
 
-/** An engine the table names for a compiler that is NOT this SDK's — what every builder refuses. */
+/** An engine the table names that does not run this SDK's compiler — what every builder refuses. */
 const foreign = (component: "v12-evm" | "v12-svm"): string[] =>
-  V12_RELEASE_SETS.filter(
-    (row) =>
-      row[component].engine !== v12OptInReleaseSet()[component].engine &&
-      row[component].engine !== v12DeployedReleaseSet()[component].engine,
-  )
-    .map((row) => row[component].engine)
-    .filter((engine): engine is string => engine !== null);
+  V12_RELEASE_SETS.map((row) => row[component].engine).filter(
+    (engine): engine is string =>
+      engine !== null &&
+      engineRunsCompiler(component === "v12-evm" ? "evm" : "svm", engine) === false,
+  );
 
 describe("every builder that names an engine refuses another compiler's", () => {
   it("has an EVM engine of another compiler to refuse", () => {
