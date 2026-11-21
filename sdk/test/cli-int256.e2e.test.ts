@@ -27,6 +27,7 @@ import {
   startChain,
   type LocalChain,
 } from "./cli-anvil.js";
+import { releaseArm } from "./release-arm.js";
 
 const MIN = -(1n << 255n);
 const MAX = (1n << 255n) - 1n;
@@ -66,8 +67,12 @@ describeEvm("sauce, a program that takes and returns an Int256", () => {
     writeFileSync(settle, SETTLE);
     ethereum = await startChain("ethereum");
     usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
-    pot = await deployPot(ethereum);
-    expect(pot).toBe(v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`));
+    // The Pot OWNER's cooks land on: its earlier release's where the chain has one (the legacy arm),
+    // else the installed release's, which the Pot `sauce pot` deploys must be.
+    pot = ethereum.potOf(OWNER.address);
+    if ((await ethereum.publicClient.getCode({ address: pot })) === undefined) {
+      expect(await deployPot(ethereum)).toBe(v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`));
+    }
   }, 120_000);
 
   afterAll(async () => {
@@ -91,7 +96,13 @@ describeEvm("sauce, a program that takes and returns an Int256", () => {
 
   it("`sauce simulate --args -5` returns -6, printed as -6 and not as 2^256 - 6", async () => {
     const run = await simulate(delta, "--args", "-5");
-    expect(run.stderr).toBe("");
+    // The installed release's Pot needs no word; an earlier release's (the legacy arm) is cooked on
+    // its own engine, which the command says.
+    if (releaseArm("evm") === "legacy") {
+      expect(run.stderr).toContain(`it runs on its own engine, ${ethereum.engineOf(pot)}`);
+    } else {
+      expect(run.stderr).toBe("");
+    }
     expect(run.code).toBe(0);
     expect(run.stdout).toContain("main returns Int256: -6");
     expect(run.stdout).not.toContain(BigInt.asUintN(256, -6n).toString());

@@ -16,7 +16,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.build.json && tsx --test --test-concurrency=1 test/*.test.ts"
+    "test": "tsc -p tsconfig.build.json && tsx --test --test-concurrency=1 test/*.test.ts",
+    "test:evm-legacy": "node ../sdk/scripts/run-arm-suites.mjs evm mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.31.0",

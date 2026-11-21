@@ -15,12 +15,15 @@ import {
   createPublicClient,
   custom,
   encodeAbiParameters,
+  getAddress,
   hexToBytes,
   http,
   parseAbi,
   type Address,
 } from "viem";
 
+import { releaseArm } from "../../sdk/test/release-arm.js";
+import { v12RouterAddress } from "../../sdk/dist/deployments/index.js";
 import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
@@ -162,7 +165,10 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
           amountOutMin: "0",
           recipient: "pot",
         },
-        { router: env.router },
+        // The stack's own Router on the default arm, as always. The legacy arm's stack has an
+        // earlier release's Router, which this check does not refuse: the one it refuses is the
+        // installed release's (A2).
+        { router: releaseArm("evm") === "legacy" ? getAddress(v12RouterAddress()) : env.router },
       ),
     );
   });

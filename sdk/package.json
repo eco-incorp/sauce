@@ -79,6 +79,8 @@
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "gen-runtime-lock": "node scripts/gen-runtime-lock.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "test:evm-legacy": "node scripts/gen-embedded-sources.mjs && node scripts/run-arm-suites.mjs evm sdk",
+    "test:svm-legacy": "node scripts/gen-embedded-sources.mjs && node scripts/run-arm-suites.mjs svm sdk",
     "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {

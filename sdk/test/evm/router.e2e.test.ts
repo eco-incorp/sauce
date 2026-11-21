@@ -36,7 +36,9 @@ import {
   encodeErrorResult,
   encodeFunctionData,
   getAddress,
+  getCreate2Address,
   http,
+  keccak256,
   parseAbi,
   stringToHex,
   toFunctionSelector,
@@ -45,14 +47,14 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12DeployedAddresses, v12OptInReleaseSet } from "../../src/deployments/index.js";
+import { v12DeployedAddresses, V12_RELEASE_SETS } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
-import { deployReleaseStack, type ReleaseStackArtifacts } from "../../src/evm/release-stack.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
+import { releaseArm } from "../release-arm.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -183,7 +185,9 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       args: [owner, DEFAULT_POT_SALT],
       functionName: "predictPot",
     });
-    expect(predicted).toBe(v12PredictPot(owner));
+    // Where this stack's Kitchen places it: the installed release's Pot, or on the legacy arm the
+    // earlier release's (A1).
+    expect(predicted).toBe(sauce.predictPot(owner, DEFAULT_POT_SALT));
   });
 
   describe("potRouterUpdate", () => {
@@ -192,70 +196,75 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
     });
 
-    it("hands back the switch for a Pot the Kitchen moved past, which only its owner can sign", async () => {
-      // A new Router on the Kitchen: what a Router rollout is. The Kitchen's own switch is its
-      // owner's alone…
-      const next = await deploy(ROUTER.bytecode);
-      const kitchenSwitch = encodeFunctionData({
-        abi: v12KitchenAbi,
-        args: [next],
-        functionName: "setRouter",
-      });
-      expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch)).toBe("reverted");
-      expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch)).toBe("success");
+    // potRouterUpdate proposes a Router switch only for a Pot of the installed release (D13); the
+    // legacy arm's Pot is an earlier release's, for which it returns nothing (A3).
+    (releaseArm("evm") === "default" ? it : it.skip)(
+      "hands back the switch for a Pot the Kitchen moved past, which only its owner can sign",
+      async () => {
+        // A new Router on the Kitchen: what a Router rollout is. The Kitchen's own switch is its
+        // owner's alone…
+        const next = await deploy(ROUTER.bytecode);
+        const kitchenSwitch = encodeFunctionData({
+          abi: v12KitchenAbi,
+          args: [next],
+          functionName: "setRouter",
+        });
+        expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch)).toBe("reverted");
+        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch)).toBe("success");
 
-      // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
-      expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
+        expect(await potRouter(sauce.pot)).toBe(sauce.router);
 
-      const update = await potRouterUpdate(publicClient, sauce.pot);
-      expect(update).toEqual({
-        to: sauce.pot,
-        data: encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
-      });
+        const update = await potRouterUpdate(publicClient, sauce.pot);
+        expect(update).toEqual({
+          to: sauce.pot,
+          data: encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
+        });
 
-      // Anyone but the owner is refused with NotOwner().
-      const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
-      expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
-      expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
-      expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        // Anyone but the owner is refused with NotOwner().
+        const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
+        expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
+        expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
+        expect(await potRouter(sauce.pot)).toBe(sauce.router);
 
-      // The owner signs it; the Pot is current, and says so.
-      expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
-      expect(await potRouter(sauce.pot)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+        // The owner signs it; the Pot is current, and says so.
+        expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
+        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
 
-      // A Pot minted after the Kitchen's switch starts on the new Router.
-      const salt = `0x${"00".repeat(31)}08` as Hex;
-      expect(
-        await sendAs(
-          OWNER,
-          sauce.kitchen,
-          encodeFunctionData({
-            abi: v12KitchenAbi,
-            args: [STRANGER.address, salt],
-            functionName: "deployPot",
-          }),
-        ),
-      ).toBe("success");
-      const fresh = await publicClient.readContract({
-        abi: v12KitchenAbi,
-        address: sauce.kitchen,
-        args: [STRANGER.address, salt],
-        functionName: "predictPot",
-      });
-      expect(await potRouter(fresh)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
+        // A Pot minted after the Kitchen's switch starts on the new Router.
+        const salt = `0x${"00".repeat(31)}08` as Hex;
+        expect(
+          await sendAs(
+            OWNER,
+            sauce.kitchen,
+            encodeFunctionData({
+              abi: v12KitchenAbi,
+              args: [STRANGER.address, salt],
+              functionName: "deployPot",
+            }),
+          ),
+        ).toBe("success");
+        const fresh = await publicClient.readContract({
+          abi: v12KitchenAbi,
+          address: sauce.kitchen,
+          args: [STRANGER.address, salt],
+          functionName: "predictPot",
+        });
+        expect(await potRouter(fresh)).toBe(getAddress(next));
+        expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
 
-      // Back to the release's Router, for the swaps below — the same owner-only path.
-      expect(
-        await sendAs(
-          OWNER,
-          sauce.pot,
-          encodeFunctionData({ abi: v12PotAbi, args: [sauce.router], functionName: "setRouter" }),
-        ),
-      ).toBe("success");
-      expect(POT_SALT).not.toBe(salt);
-    });
+        // Back to the release's Router, for the swaps below — the same owner-only path.
+        expect(
+          await sendAs(
+            OWNER,
+            sauce.pot,
+            encodeFunctionData({ abi: v12PotAbi, args: [sauce.router], functionName: "setRouter" }),
+          ),
+        ).toBe("success");
+        expect(POT_SALT).not.toBe(salt);
+      },
+    );
 
     it("refuses a switch to an address with no code", async () => {
       const refusal = await revertOf(
@@ -716,10 +725,21 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
   });
 });
 
-describeEvm("the opt-in CREATE3 release", () => {
+// The installed release itself: its fixed-Router and Shared Pots. The default arm only (A3,
+// sdk/test/legacy-arm.json): on the legacy arm the Kitchen is the earlier release's.
+const describeDefaultRelease =
+  RUNTIME_HEX_PATH && releaseArm("evm") === "default" ? describe : describe.skip;
+
+describeDefaultRelease("the default release's fixed and Shared Pots", () => {
   beforeAll(async () => {
     anvil = await spawnAnvil(PORT);
-  });
+    const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
+    sauce = await startGatedEngine(
+      { publicClient, testClient, walletClient },
+      OWNER.address,
+      creationCode,
+    );
+  }, 120_000);
 
   afterAll(async () => {
     if (anvil?.exitCode === null) {
@@ -730,32 +750,6 @@ describeEvm("the opt-in CREATE3 release", () => {
   });
 
   it("creates the predicted fixed Pot and pays an ordinary V3 swap through the release Router", async () => {
-    const set = v12OptInReleaseSet();
-    const root = join(HERE, "../../src/artifacts/releases", set.compiler);
-    const evm = join(root, `v12-evm-v${set["v12-evm"].version}`);
-    const kitchenDir = join(root, `kitchen-evm-v${set["kitchen-evm"].version}`);
-    const engine = json<{
-      contracts: Pick<ReleaseStackArtifacts["deployments"]["contracts"], "engine">;
-    }>(join(evm, "addresses.json")).contracts.engine;
-    const kitchenRelease = json<ReleaseStackArtifacts["deployments"]>(
-      join(kitchenDir, "addresses.json"),
-    );
-    const { contracts } = json<{ contracts: Record<string, { abi: Abi; bytecode: Hex }> }>(
-      join(kitchenDir, "abis.json"),
-    );
-    const stack = await deployReleaseStack(
-      { publicClient, testClient, walletClient },
-      OWNER.address,
-      {
-        deployments: { ...kitchenRelease, contracts: { ...kitchenRelease.contracts, engine } },
-        runtimeCreationCode: readFileSync(join(evm, "runtime.creation.hex"), "utf8").trim() as Hex,
-        routerBytecode: contracts.Router!.bytecode,
-        kitchen: contracts.Kitchen!,
-        kitchenProxyBytecode: contracts.KitchenProxy!.bytecode,
-      },
-    ).catch((error: Error) => {
-      throw new Error(`opt-in EVM stack deployment failed on local anvil (${error.name})`);
-    });
     const args = [OWNER.address, POT_SALT, true] as const;
     const potAbi = parseAbi([
       "function predictPot(address,bytes32,bool) view returns (address)",
@@ -764,36 +758,43 @@ describeEvm("the opt-in CREATE3 release", () => {
     ]);
     for (const routerFixed of [false, true]) {
       const onchain = await publicClient.readContract({
-        address: stack.kitchen,
+        address: sauce.kitchen,
         abi: potAbi,
         functionName: "predictPot",
         args: [OWNER.address, POT_SALT, routerFixed],
       });
-      expect(v12PredictPot(OWNER.address, POT_SALT, { compiler: set.compiler, routerFixed })).toBe(
-        onchain,
-      );
+      expect(v12PredictPot(OWNER.address, POT_SALT, { routerFixed })).toBe(onchain);
     }
     const shared = await publicClient.readContract({
-      address: stack.kitchen,
+      address: sauce.kitchen,
       abi: potAbi,
       functionName: "predictSharedPot",
       args: [POT_SALT],
     });
-    expect(v12PredictPot(zeroAddress, POT_SALT, { compiler: set.compiler })).toBe(shared);
-    expect(() =>
-      v12PredictPot(zeroAddress, POT_SALT, { compiler: set.compiler, routerFixed: false }),
-    ).toThrow("shared Pots always have a fixed Router");
-    expect(() => v12PredictPot(OWNER.address, POT_SALT, { compiler: "2.6.2" })).toThrow(
-      "has no pinned CREATE3 Kitchen",
+    expect(v12PredictPot(zeroAddress, POT_SALT)).toBe(shared);
+    expect(() => v12PredictPot(zeroAddress, POT_SALT, { routerFixed: false })).toThrow(
+      "shared Pots always have a fixed Router",
     );
-    const pot = v12PredictPot(OWNER.address, POT_SALT, {
-      compiler: set.compiler,
-      routerFixed: true,
-    });
+    // An earlier row predicts its own Pot: CREATE2 under that row's Kitchen and init-code hash,
+    // which a viem computation of the Kitchen's salt gives independently of the SDK's.
+    const earlier = V12_RELEASE_SETS.find((row) => row.compiler === "2.6.2")!["kitchen-evm"];
+    expect(v12PredictPot(OWNER.address, POT_SALT, { compiler: "2.6.2" })).toBe(
+      getCreate2Address({
+        bytecodeHash: earlier.potInitCodeHash as Hex,
+        from: earlier.kitchen as Address,
+        salt: keccak256(
+          encodeAbiParameters(
+            [{ type: "address" }, { type: "bytes32" }],
+            [OWNER.address, POT_SALT],
+          ),
+        ),
+      }),
+    );
+    const pot = v12PredictPot(OWNER.address, POT_SALT, { routerFixed: true });
     expect(
       await sendAs(
         OWNER,
-        stack.kitchen,
+        sauce.kitchen,
         encodeFunctionData({
           abi: potAbi,
           functionName: "deployPot",
@@ -801,7 +802,7 @@ describeEvm("the opt-in CREATE3 release", () => {
         }),
       ),
     ).toBe("success");
-    expect(await potRouter(pot)).toBe(stack.router);
+    expect(await potRouter(pot)).toBe(sauce.router);
 
     const [a, b] = [await deploy(MOCK_ERC20.creationCode), await deploy(MOCK_ERC20.creationCode)];
     const [tokenIn, tokenOut] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
@@ -829,7 +830,7 @@ describeEvm("the opt-in CREATE3 release", () => {
     }
     const source = `import { uniswapV3 } from "@sauce/router";
 function main() { uniswapV3(${BigInt(pool)}n, ${BigInt(tokenIn)}n, ${BigInt(tokenOut)}n, 1000n, 0n, 0n, ctx.self()); }`;
-    const { calls } = compileSauceRoute("base", source, { engine: stack.engine, pot });
+    const { calls } = compileSauceRoute("base", source, { engine: sauce.engine, pot });
     expect(await sendAs(OWNER, pot, calls[0]!.data)).toBe("success");
     expect(await balance(tokenIn, pool)).toBe(1000n);
     expect(await balance(tokenOut, pot)).toBe(2000n);

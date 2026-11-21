@@ -26,6 +26,7 @@ import {
 } from "../../sdk/test/cli-anvil.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
+import { releaseArm } from "../../sdk/test/release-arm.js";
 import { connect, endpointsFor, erred, failed, ok, type Connected } from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -443,21 +444,31 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     );
   });
 
-  it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(unsigned.deployed, false);
-    // Signed and sent here, outside the server, with a key it never saw.
-    await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
-    const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(after.deployed, true);
-    assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
-    const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
-    assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
-    // Named by its address alone, the Pot's owner is read from the chain: who signs.
-    const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
-    assert.equal(byPot.to, after.pot);
-    assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
-  });
+  it(
+    "builds a deployment the owner's own wallet signs, then sees the Pot deployed",
+    {
+      // The installed release's first Pot for a fixed account, deployed and then seen (A3,
+      // sdk/test/legacy-arm.json): the legacy arm's chain already holds the owner's earlier Pot.
+      skip:
+        releaseArm("evm") === "legacy" &&
+        "the chain already holds the owner's Pot of an earlier release",
+    },
+    async () => {
+      const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
+      assert.equal(unsigned.deployed, false);
+      // Signed and sent here, outside the server, with a key it never saw.
+      await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
+      const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
+      assert.equal(after.deployed, true);
+      assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
+      const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
+      assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
+      // Named by its address alone, the Pot's owner is read from the chain: who signs.
+      const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
+      assert.equal(byPot.to, after.pot);
+      assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
+    },
+  );
 
   it("fetches a transaction by hash and takes it apart", async () => {
     const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: RECIPIENT }));

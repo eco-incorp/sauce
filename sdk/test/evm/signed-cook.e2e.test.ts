@@ -745,10 +745,16 @@ describeEvm("signed cooks on the released Pot", () => {
       expect((await submit(SUBMITTER, call)).status).toBe("reverted");
     });
 
-    it("is refused by checkSignedCookPot as minted before signed cooks", async () => {
+    it("is refused by checkSignedCookPot: the Kitchen it names is no release's", async () => {
+      // The fixture's deployer is no release's Kitchen, so the check cannot tell which release
+      // minted this Pot and refuses it as unknown. The refusal by release version (kitchen-evm
+      // 1.2.0, before signed cooks) is held for a Pot under the release Kitchen's own address by
+      // signed-cook-pot.test.ts.
       const check = await checkSignedCookPot(publicClient, oldPot);
       expect(check.ok).toBe(false);
-      expect(!check.ok && check.reason).toMatch(/minted before signed cooks/);
+      expect(!check.ok && check.reason).toMatch(
+        /is not a Pot of any Kitchen release this SDK knows/,
+      );
     });
   });
 

@@ -59,6 +59,7 @@ import {
   type LocalChain,
   type Run,
 } from "./cli-anvil.js";
+import { releaseArm } from "./release-arm.js";
 
 const PERMIT2_FIXTURE = JSON.parse(readFileSync(join(CLI_FIXTURES, "Permit2.json"), "utf8")) as {
   address: Address;
@@ -74,11 +75,28 @@ const tokenCreation = (name: string, symbol: string, dir?: string): Hex =>
 const permit2Abi = parseAbi(["function nonceBitmap(address, uint256) view returns (uint256)"]);
 const nonces = parseAbi(["function nonces(address) view returns (uint256)"]);
 
+/**
+ * What the command adds when it cooks a Pot of an earlier release on that release's own engine (what
+ * the legacy arm's fixed accounts have, A2): one note for an owner's Pot, one for a Pot named by its
+ * address. The installed release's Pot gets neither, so the default arm filters nothing: a note
+ * there is a finding, and the empty-note assertions below keep their strength.
+ */
+const EARLIER_POT_NOTES =
+  releaseArm("evm") === "legacy"
+    ? [
+        /^Pot 0x[0-9a-fA-F]{40} is 0x[0-9a-fA-F]{40}'s [^\n]* needs another salt \(--salt <label>\)\.\n/m,
+        /^Pot 0x[0-9a-fA-F]{40} is a [^\n]* Pot: the cook names its own engine, 0x[0-9a-fA-F]{40}\.\n/m,
+      ]
+    : [];
+
 /** What a run printed to stderr besides the warning every `--private-key` signer gets. */
 const notes = (run: Run): string =>
-  run.stderr.replace(
-    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
-    "",
+  EARLIER_POT_NOTES.reduce(
+    (text, note) => text.replace(note, ""),
+    run.stderr.replace(
+      "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
+      "",
+    ),
   );
 
 /** Every word the suite's runs printed, to look for key material in. */
@@ -179,7 +197,12 @@ describeEvm(
       tether = getAddress(await local.plant(tokenCreation("NoReturnERC20", "TETHER")));
       for (const token of [usdc, usdt, pusdt, falsePull, tether])
         await local.mint(token, OWNER.address, MINTED);
-      pot = await deployPot(local);
+      // The Pot OWNER's runs cook on: its earlier release's where the chain has one (the legacy
+      // arm), else the installed release's, deployed here.
+      pot = local.potOf(OWNER.address);
+      if ((await local.publicClient.getCode({ address: pot })) === undefined) {
+        expect(await deployPot(local)).toBe(pot);
+      }
     }, 120_000);
 
     afterAll(async () => {

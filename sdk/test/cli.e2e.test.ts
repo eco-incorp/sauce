@@ -57,11 +57,19 @@ import {
 } from "./cli-anvil.js";
 import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
+import { releaseArm } from "./release-arm.js";
 
 const HAS_CAST = spawnSync("cast", ["--version"], { stdio: "ignore" }).status === 0;
 if (!HAS_CAST && process.env.CI) {
   throw new Error("`cast` is not on PATH in CI: Foundry is installed there, so this is a failure.");
 }
+
+/**
+ * A test whose subject is the installed release's own first Pot for a fixed account (predicting it,
+ * the plan that deploys it, deploying it): the default arm only (A3, sdk/test/legacy-arm.json). On
+ * the legacy arm the chain already holds each fixed account's earlier-release Pot.
+ */
+const itDefaultRelease = releaseArm("evm") === "default" ? it : it.skip;
 
 /** The suites' programs (the `sauce-cli` skill's own are executed by `cli-examples.e2e.test.ts`). */
 const PAY = join(CLI_FIXTURES, "pay.sauce.ts");
@@ -91,6 +99,9 @@ describeEvm("sauce, sent to a chain", () => {
     // as USDC, and a USDT-shaped one whose writes return nothing as USDT.
     usdc = await ethereum.plant(fixture("MockERC20"), registered(ethereum.chain, "USDC"));
     usdt = await ethereum.plant(USDT_CREATION, registered(ethereum.chain, "USDT"));
+    // The Pot OWNER's cooks land on: the installed release's (deployed by the second test), or on
+    // the legacy arm the owner's earlier one, which the chain already has.
+    pot = ethereum.potOf(OWNER.address);
   }, 120_000);
 
   afterAll(async () => {
@@ -108,39 +119,48 @@ describeEvm("sauce, sent to a chain", () => {
   ];
 
   describe("the unsigned transactions, sent by a wallet", () => {
-    it("`sauce tx` plans the Pot's deploy first when the Pot is not deployed yet", async () => {
-      const run = await sauce(
-        "tx",
-        PAY,
-        "--owner",
-        OWNER.address,
-        ...defines(RECIPIENT),
-        "--rpc-url",
-        ethereum.rpcUrl,
-      );
-      expect(run.code).toBe(0);
-      const plan = jsonOf(run) as { pot: Address; transactions: Array<Record<string, string>> };
-      const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
-      expect(plan.pot).toBe(predicted);
-      expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
-        [predicted, "0x0"],
-        [null, `0x${FEE.toString(16)}`],
-      ]);
-      expect(run.stderr).toContain(
-        `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
-      );
-      expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
-    }, 60_000);
+    itDefaultRelease(
+      "`sauce tx` plans the Pot's deploy first when the Pot is not deployed yet",
+      async () => {
+        const run = await sauce(
+          "tx",
+          PAY,
+          "--owner",
+          OWNER.address,
+          ...defines(RECIPIENT),
+          "--rpc-url",
+          ethereum.rpcUrl,
+        );
+        expect(run.code).toBe(0);
+        const plan = jsonOf(run) as { pot: Address; transactions: Array<Record<string, string>> };
+        const predicted = v12PredictPot(OWNER.address, `0x${"00".repeat(32)}`) as Address;
+        expect(plan.pot).toBe(predicted);
+        expect(plan.transactions.map((tx) => [tx.deploysPot ?? null, tx.value])).toEqual([
+          [predicted, "0x0"],
+          [null, `0x${FEE.toString(16)}`],
+        ]);
+        expect(run.stderr).toContain(
+          `Your Pot ${predicted} on ethereum isn't deployed yet: the first transaction deploys it`,
+        );
+        expect(run.stdout + run.stderr).not.toContain(ethereum.rpcUrl);
+      },
+      60_000,
+    );
 
-    it("`sauce pot` prints the deploy transaction, and it lands the Pot it predicted", async () => {
-      const predicted = jsonOf(await sauce("pot", "--owner", OWNER.address, "--chain", "ethereum"))
-        .pot as Address;
-      expect(await ethereum.publicClient.getCode({ address: predicted })).toBeUndefined();
-      pot = await deployPot(ethereum);
-      expect(pot).toBe(predicted);
-      expect(await ethereum.publicClient.getCode({ address: pot })).toMatch(/^0x[0-9a-f]{2,}/);
-      expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
-    }, 60_000);
+    itDefaultRelease(
+      "`sauce pot` prints the deploy transaction, and it lands the Pot it predicted",
+      async () => {
+        const predicted = jsonOf(
+          await sauce("pot", "--owner", OWNER.address, "--chain", "ethereum"),
+        ).pot as Address;
+        expect(await ethereum.publicClient.getCode({ address: predicted })).toBeUndefined();
+        pot = await deployPot(ethereum);
+        expect(pot).toBe(predicted);
+        expect(await ethereum.publicClient.getCode({ address: pot })).toMatch(/^0x[0-9a-f]{2,}/);
+        expect(await potOwner(ethereum, pot)).toBe(OWNER.address);
+      },
+      60_000,
+    );
 
     it("`sauce tx`, sent as printed, pays the recipient in USDC and USDT from the Pot", async () => {
       for (const token of [usdc, usdt]) await ethereum.mint(token, pot, FUNDED);
@@ -222,6 +242,9 @@ describeEvm("sauce, sent to a chain", () => {
           String(FEE),
           "--format",
           "cast",
+          // Offline the command cannot tell an earlier release's Pot from the installed release's
+          // and names the installed engine (D2); given the chain, it names the Pot's own (A2).
+          ...(releaseArm("evm") === "legacy" ? ["--rpc-url", ethereum.rpcUrl] : []),
         );
         const line = run.stdout.trim();
         expect(line).toMatch(/^cast send .* --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>$/);
@@ -708,7 +731,12 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
       const local = chains[slug]!;
       const usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
       const token = await local.plant(fixture("MockERC20"));
-      const pot = await deployPot(local);
+      // The Pot OWNER's cook lands on: its earlier release's where the chain has one (the legacy
+      // arm), else the installed release's, deployed here with the transaction `sauce pot` prints.
+      const pot = local.potOf(OWNER.address);
+      if ((await local.publicClient.getCode({ address: pot })) === undefined) {
+        expect(await deployPot(local)).toBe(pot);
+      }
       for (const funded of [usdc, token]) await local.mint(funded, pot, FUNDED);
 
       const out = jsonOf(
@@ -754,7 +782,7 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
         to: pot,
         value: FEE.toString(),
         call: "Pot.cook",
-        engine: { address: getAddress(v12EngineAddress()), released: true },
+        engine: { address: local.engineOf(pot), released: true },
         program: {
           source: {
             file: SPLIT,
@@ -792,14 +820,14 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
   it("`sauce verify` reads a settle cook back off the chain, and rejects a cook that is not one", async () => {
     const local = chains.base!;
     const usdc = await local.plant(fixture("MockERC20"), registered(local.chain, "USDC"));
-    const pot = v12PredictPot(OWNER.address) as Address;
+    const pot = local.potOf(OWNER.address);
     if ((await local.publicClient.getCode({ address: pot })) === undefined) await deployPot(local);
     await local.mint(usdc, pot, FUNDED);
     // The conformance corpus's single-token settle: sweep the Pot's USDC, no floor.
     const vector = SETTLE_VECTORS[0]!;
     const before = await local.balanceOf(usdc, getAddress(vector.recipient));
     const swept = await local.balanceOf(usdc, pot);
-    const engine = getAddress(v12EngineAddress());
+    const engine = local.engineOf(pot);
     const hash = await local.send(
       local.owner,
       pot,
@@ -830,12 +858,15 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
         "--owner",
         OWNER.address,
         "--value",
-        "0",
+        // Online (the legacy arm, below) the command checks the value against the Kitchen's fee.
+        releaseArm("evm") === "legacy" ? String(FEE) : "0",
         "--args",
         usdc,
         "[]",
         "1",
         "false",
+        // As above: on the legacy arm the cook must name the engine of the Pot it is sent to (A2).
+        ...(releaseArm("evm") === "legacy" ? ["--rpc-url", local.rpcUrl] : []),
       ),
     );
     const notSettle = await local.send(local.owner, pot, split.data as Hex, FEE);
