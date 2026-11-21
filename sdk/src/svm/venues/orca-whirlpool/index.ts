@@ -66,6 +66,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import { readUintLE } from "../math.js";
 import { accountDataLoader } from "../../loader.js";
 import type { AccountLoader, OwnedAccountLoader, PoolConfig } from "../types.js";
@@ -76,7 +77,8 @@ import { MAX_TICK_INDEX, MIN_TICK_INDEX, whirlpoolSqrtPriceAtTick } from "./tick
 
 const SLUG = "orca-whirlpool";
 
-export const ORCA_WHIRLPOOL_PROGRAM_ID = address("whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc");
+/** Orca's whirlpool program on Solana's mainnet, which this adapter quotes. */
+export const ORCA_WHIRLPOOL_PROGRAM_ID = svmMainnetProgram("orca-whirlpool");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 export const WHIRLPOOL_ACCOUNT_SIZE = 653;
@@ -186,8 +188,12 @@ function getAddressEncoded(value: Address): Uint8Array {
   return new Uint8Array(getAddressCodec().encode(value));
 }
 
-async function deriveTickArrayPda(pool: Address, startTick: number): Promise<Address> {
-  return memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
+async function deriveTickArrayPda(
+  program: Address,
+  pool: Address,
+  startTick: number,
+): Promise<Address> {
+  return memoizedGetProgramDerivedAddress(program, [
     new TextEncoder().encode("tick_array"),
     getAddressEncoded(pool),
     new TextEncoder().encode(String(startTick)),
@@ -225,6 +231,7 @@ export function windowStartTicks(
  * readable window (see WhirlpoolWindow.edge).
  */
 async function resolveWindow(
+  program: Address,
   load: AccountLoader,
   pool: Address,
   tickCurrentIndex: number,
@@ -233,7 +240,7 @@ async function resolveWindow(
 ): Promise<WhirlpoolWindow> {
   const startTicks = windowStartTicks(tickCurrentIndex, tickSpacing, aToB);
   const tickArrays = (await Promise.all(
-    startTicks.map((start) => deriveTickArrayPda(pool, start)),
+    startTicks.map((start) => deriveTickArrayPda(program, pool, start)),
   )) as [Address, Address, Address];
 
   // allSettled (not all) keeps the break-on-first-invalid contract exact: a
@@ -302,11 +309,14 @@ async function resolveWindow(
 
 /**
  * Fetch + gate one whirlpool (see the header for the gate list) and freeze
- * both directions' boundary windows. Read-only against the loader.
+ * both directions' boundary windows. Read-only against the loader. Its tick
+ * arrays and oracle are derived under `program`, the cluster's whirlpool
+ * program: Orca's on Solana's mainnet unless one is given.
  */
 export async function fetchOrcaWhirlpoolConfig(
   owned: OwnedAccountLoader,
   pool: Address,
+  program: Address = ORCA_WHIRLPOOL_PROGRAM_ID,
 ): Promise<OrcaWhirlpoolPoolConfig> {
   const load = accountDataLoader(owned);
   const data = await load(pool);
@@ -361,9 +371,9 @@ export async function fetchOrcaWhirlpoolConfig(
 
   const tickCurrentIndex = readI32(data, OFF_TICK_CURRENT);
   const [aToB, bToA, oracle] = await Promise.all([
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, true),
-    resolveWindow(load, pool, tickCurrentIndex, tickSpacing, false),
-    memoizedGetProgramDerivedAddress(ORCA_WHIRLPOOL_PROGRAM_ID, [
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, true),
+    resolveWindow(program, load, pool, tickCurrentIndex, tickSpacing, false),
+    memoizedGetProgramDerivedAddress(program, [
       new TextEncoder().encode("oracle"),
       getAddressEncoded(pool),
     ]),

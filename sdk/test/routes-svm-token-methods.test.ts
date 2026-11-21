@@ -19,7 +19,7 @@ const compile = (source: string, defines?: Record<string, bigint>) =>
   compileSauceProgram("solana", source, defines === undefined ? {} : { defines });
 
 const lower = (source: string) =>
-  rewriteSvmTokenSyntax(source, resolveTokenMap(SOLANA), svmTokenRows(SOLANA));
+  rewriteSvmTokenSyntax(source, resolveTokenMap(SOLANA), svmTokenRows(SOLANA), "mainnet-beta");
 
 describe("the token methods on Solana", () => {
   it("USDC.transfer(to, amount): the legacy transfer, its accounts added to main, the recipient checked", () => {

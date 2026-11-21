@@ -58,8 +58,18 @@ import {
 } from "@solana/kit";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { svmTokenRows, type SvmTokenRow } from "../routes/token-registry.js";
-import { svmPoolCandidates, svmPoolKeyProblem, SVM_KEYED_VENUES } from "./pool-keys.js";
+import {
+  svmClusterOf,
+  svmTokenRows,
+  type SvmTokenCluster,
+  type SvmTokenRow,
+} from "../routes/token-registry.js";
+import {
+  svmKeyedVenue,
+  svmPoolCandidates,
+  svmPoolKeyProblem,
+  SVM_KEYED_NAMESPACES,
+} from "./pool-keys.js";
 import { svmPoolSlot, SVM_SLOT_PARTS, type SvmSlot, type SvmSlotPart } from "./pool-slot.js";
 import { svmTokenAccount } from "./token-accounts.js";
 import type { OwnedAccountLoader } from "./venues/types.js";
@@ -222,7 +232,7 @@ function parseToken(text: string): Token | undefined {
 /** `<Venue>(<token>,<token>,<key>[,<tick spacing or fee tier>])`, a venue's pool by key. */
 function parseKeyedPool(text: string): KeyedPool | undefined {
   const parts = /^([A-Za-z]+\.[A-Za-z]+)\(([^,()]+),([^,()]+),(\d+)(?:,(\d+))?\)$/.exec(text);
-  if (parts === null || SVM_KEYED_VENUES[parts[1]!] === undefined) return undefined;
+  if (parts === null || SVM_KEYED_NAMESPACES[parts[1]!] === undefined) return undefined;
   const tokenA = parseToken(parts[2]!);
   const tokenB = parseToken(parts[3]!);
   if (tokenA === undefined || tokenB === undefined) return undefined;
@@ -712,7 +722,7 @@ async function resolveSlot(
   const key = `${pool}:${mint}`;
   let slot = ctx.slots?.get(key);
   if (slot === undefined) {
-    slot = svmPoolSlot(load, pool, mint);
+    slot = svmPoolSlot(load, pool, mint, clusterOf(ctx));
     ctx.slots?.set(key, slot);
   }
   let resolved: SvmSlot;
@@ -748,7 +758,8 @@ async function keyedPool(
   ctx: SvmAccountNameContext,
   rows: readonly SvmTokenRow[],
 ): Promise<Address> {
-  const problem = svmPoolKeyProblem(keyed.venue, keyed.key, keyed.refinement);
+  const cluster = clusterOf(ctx);
+  const problem = svmPoolKeyProblem(cluster, keyed.venue, keyed.key, keyed.refinement);
   if (problem !== undefined) throw new SvmAccountNameError(problem);
   const [a, b] = keyed.tokens.map((token) => mintOf(token, "slot", ctx, rows).mint) as [
     Address,
@@ -761,8 +772,8 @@ async function keyedPool(
       `${keyed.text} is read from the cluster, which this resolution has no way to do`,
     );
   }
-  const program = SVM_KEYED_VENUES[keyed.venue]!.program;
-  const candidates = svmPoolCandidates(keyed.venue, a, b, keyed.key, keyed.refinement);
+  const program = svmKeyedVenue(keyed.venue, cluster)!.program;
+  const candidates = svmPoolCandidates(cluster, keyed.venue, a, b, keyed.key, keyed.refinement);
   const accounts = await Promise.all(candidates.map((one) => load(one.pool)));
   const there = candidates.filter((_, i) => accounts[i]?.owner === program);
   if (there.length > 1) {
@@ -787,6 +798,14 @@ async function keyedPool(
   ctx.found?.set(keyed.text, pool);
 
   return pool ?? address(SYSTEM_PROGRAM);
+}
+
+/** The Solana cluster the resolution's chain is, whose venues a slot's pool is one of. */
+function clusterOf(ctx: SvmAccountNameContext): SvmTokenCluster {
+  const cluster = svmClusterOf(ctx.chain);
+  if (cluster === undefined)
+    throw new SvmAccountNameError(`${ctx.chain.slug} is not a Solana chain`);
+  return cluster;
 }
 
 /** main's integer argument `param`. */

@@ -109,6 +109,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
       "function main(data: bytes): Uint256 {\n  svm.call(pot.signer(), [pot.writable()], data);\n  return pot.address;\n}\n",
       tokens,
       svmTokenRows(SOLANA),
+      "mainnet-beta",
     );
     expect(lowered.source).toBe(
       "function main(data: bytes, pot: Account<Writable, Signer>): Uint256 {\n  svm.call(pot, [pot], data);\n  return pot.address;\n}\n",
@@ -214,7 +215,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
 
   it("a name a pattern or a catch clause binds is no read of pot or self", () => {
     const lower = (source: string) =>
-      rewriteSvmTokenSyntax(source, resolveTokenMap(SOLANA), svmTokenRows(SOLANA));
+      rewriteSvmTokenSyntax(source, resolveTokenMap(SOLANA), svmTokenRows(SOLANA), "mainnet-beta");
     for (const name of ["pot", "self"]) {
       for (const body of [
         `const [${name}, bump] = crypto.findPDA(program, [hex\`01\`]);\n  return bump;`,
@@ -240,6 +241,7 @@ describe("pot on Solana: the Pot's key, and its account", () => {
         source,
         resolveTokenMap(SOLANA),
         svmTokenRows(SOLANA),
+        "mainnet-beta",
         undefined,
         undefined,
         undefined,

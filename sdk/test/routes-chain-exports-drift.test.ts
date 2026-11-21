@@ -74,7 +74,7 @@ describe("chain-accessor exports drift guard", () => {
     for (const c of canonicalChains) {
       const name = pascalOfSlug(c.slug);
       // Solana's mainnet ALSO carries `& SvmVenueAccessors` -- see the dedicated assertion below,
-      // which pins that suffix to exactly that chain: devnet has none of the venues' pools.
+      // which pins that suffix to exactly that chain: its adapters quote mainnet's programs.
       const svm = svmClusterOf(c) === "mainnet-beta" ? " & SvmVenueAccessors" : "";
       // ...and a chain with registry tokens `& Tokens<"USDC" | ...>`, pinned below: an EVM
       // chain's tokens, a Solana chain's registered mints.

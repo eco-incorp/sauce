@@ -23,8 +23,10 @@ cluster is a chain of its own: `--chain solana-devnet` and `--chain solana-testn
 chain id and token symbols to that cluster's. An endpoint does not change `solana`'s
 compile-time chain identity or mainnet token symbols; `ctx.chainId()` reads the running
 cluster's chain id. Devnet and testnet report 1399811150, with zero execution fees. Local
-simulation selects the released engine build from the endpoint's cluster. The SDK's venues are
-mainnet-only; the engine and Kitchen being on a test cluster does not deploy venues.
+simulation selects the released engine build from the endpoint's cluster. A venue name is
+resolved for the chain the program is compiled for: this chain's venues are mainnet's, and
+`--chain solana-devnet` has seven, each at its devnet program. The engine and Kitchen being
+on a test cluster does not deploy venues, and the SDK records none for testnet.
 
 ## In a program
 

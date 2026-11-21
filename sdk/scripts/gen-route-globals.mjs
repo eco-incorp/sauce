@@ -95,8 +95,8 @@ function render(chains, tokensByChain) {
     seen.set(name, c.slug);
     // svm chains additionally carry the svm venue accessor tree
     // (`Solana.RaydiumCpSwap`, ...) -- see routes/composed.ts's matching
-    // runtime `svmVenuesOn` branch: Solana's mainnet only, where the venues'
-    // pools are, by the chain's cluster rather than a hardcoded slug.
+    // runtime cluster branch: Solana's mainnet only, whose programs its adapters
+    // quote, by the chain's cluster rather than a hardcoded slug.
     const svm = svmClusterOf(c) === "mainnet-beta" ? " & SvmVenueAccessors" : "";
     const symbols = tokensByChain.get(c.id) ?? [];
     const tokens =
