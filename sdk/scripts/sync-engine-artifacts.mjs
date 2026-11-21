@@ -34,7 +34,12 @@
 // SDK still cooks, each on its own engine. Their artifacts do not ship: the suites that cook such a
 // Pot read them from `src/artifacts/legacy/<compiler>/`, taken from the public package of the
 // newest row pinning that engine (integrity-pinned in `releases.json`, no credential) and held to
-// that row's digests (`writeLegacyArtifacts`, below).
+// that row's digests (`readLegacyArtifacts`, below).
+//
+// A run reads and checks everything before it writes anything: the raw assets, what the default
+// artifacts are made of and the earlier releases' artifacts. It then writes them all together
+// (`flush`): the derived artifacts, the SVM binaries, the raw assets, the earlier releases'. A
+// refusal, whichever check makes it, leaves sdk/{src,dist}/artifacts as it was.
 //
 // Run: `pnpm --filter './sdk' sync-engine-artifacts` (after `pnpm install`).
 // `--fetch-v12-engines` additionally downloads the SVM engine binary and prints every cached path as
@@ -702,7 +707,24 @@ const IUNISWAP_V3_POOL = resolve(
 // Committed + shipped location first; the gitignored src copy is kept coherent for local dev (the
 // drift tests read it).
 const DESTS = [resolve(SDK_DIR, "dist", "artifacts"), resolve(SDK_DIR, "src", "artifacts")];
-for (const d of DESTS) mkdirSync(d, { recursive: true });
+
+// NOTHING IS WRITTEN UNTIL EVERYTHING IS CHECKED. Every artifact write of a run waits here while the
+// run reads and checks its inputs, and `flush` then makes them all, in the order they were queued.
+const pending = [];
+const later = (action) => pending.push(action);
+/** Write `bytes` at `path`, making its folder. */
+const put = (path, bytes) => {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, bytes);
+};
+function flush() {
+  try {
+    for (const action of pending.splice(0)) action();
+  } catch (e) {
+    console.error(`[sync-engine-artifacts] writing the artifacts failed: ${e.message}`);
+    process.exit(1);
+  }
+}
 
 // The SVM engine binaries the SDK SHIPS. Unlike the JSON above (rewritten every build), the `.so`
 // are large release binaries and land here only under `--fetch-v12-engines` (see the tail): the
@@ -716,14 +738,16 @@ const SVM_DESTS = DESTS.map((d) => resolve(d, "svm"));
 // Copy one fetched binary into every shipped SVM dir under `name`.
 const shipSvmBinary = (srcPath, name) => {
   for (const d of SVM_DESTS) {
-    mkdirSync(d, { recursive: true });
-    copyFileSync(srcPath, resolve(d, name));
+    later(() => {
+      mkdirSync(d, { recursive: true });
+      copyFileSync(srcPath, resolve(d, name));
+    });
   }
 };
 
 const write = (name, artifact) => {
   const json = JSON.stringify(artifact);
-  for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, `${name}.json`), json));
 };
 
 // ---------------------------------------------------------------------------
@@ -942,13 +966,15 @@ function syncFromPublicPackage() {
     );
   }
   for (const [name, bytes] of Object.entries(derived)) {
-    for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), bytes);
+    for (const dest of DESTS) later(() => put(resolve(dest, `${name}.json`), bytes));
   }
   writeLocalAbis();
-  console.log(
-    `[sync-engine-artifacts] wrote ${names.length} release artifacts from ${where} ` +
-      `(SAUCE_ARTIFACT_SOURCE=npm), each held to releases.json's ${COMPILER} row, plus IERC20 ` +
-      "(declared) and IUniswapV3Pool (@uniswap/v3-core)",
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote ${names.length} release artifacts from ${where} ` +
+        `(SAUCE_ARTIFACT_SOURCE=npm), each held to releases.json's ${COMPILER} row, plus IERC20 ` +
+        "(declared) and IUniswapV3Pool (@uniswap/v3-core)",
+    ),
   );
 
   if (process.argv.includes("--fetch-v12-engines")) {
@@ -1008,6 +1034,18 @@ try {
 }
 if (REPORT) process.exit(0);
 
+// The earlier releases' artifacts are read and held to their rows now, before anything is written:
+// a refusal here leaves sdk/{src,dist}/artifacts as it was. Their files are written last.
+let legacy = [];
+try {
+  legacy = readLegacyArtifacts();
+} catch (e) {
+  console.error(
+    `[sync-engine-artifacts] the legacy artifacts: ${e.message} — refused, nothing written.`,
+  );
+  process.exit(1);
+}
+
 if (SOURCE === "npm") {
   try {
     syncFromPublicPackage();
@@ -1016,12 +1054,8 @@ if (SOURCE === "npm") {
     console.error(`[sync-engine-artifacts] ${e.message} — refused, nothing written.`);
     process.exit(1);
   }
-  try {
-    writeLegacyArtifacts();
-  } catch (e) {
-    console.error(`[sync-engine-artifacts] the legacy artifacts: ${e.message}`);
-    process.exit(1);
-  }
+  writeLegacyArtifacts(legacy);
+  flush();
   process.exit(0);
 }
 
@@ -1101,7 +1135,7 @@ try {
   runtimeCreationPath = fetchReleaseAsset(V12_EVM);
   const creationCode = readFileSync(runtimeCreationPath, "utf8").trim();
   const json = `${JSON.stringify({ runtimeCreationCode: creationCode }, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, RUNTIME_DEST), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, RUNTIME_DEST), json));
 } catch (e) {
   stop("V12RuntimeBytecode", e);
 }
@@ -1142,7 +1176,7 @@ try {
     throw new Error(`incomplete gate anchors: ${JSON.stringify(gate)}`);
   }
   const json = `${JSON.stringify(gate, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, GATE_DEST), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, GATE_DEST), json));
 } catch (e) {
   stop("V12EngineGate", e);
 }
@@ -1351,17 +1385,21 @@ try {
     }
   }
   const json = `${JSON.stringify(deployments, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, DEPLOYMENTS_DEST), json);
-  console.log(
-    `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
+  for (const dest of DESTS) later(() => put(resolve(dest, DEPLOYMENTS_DEST), json));
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
+    ),
   );
 } catch (e) {
   stop("V12Deployments", e);
 }
 
-console.log(
-  `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
-    `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
+later(() =>
+  console.log(
+    `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
+      `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
+  ),
 );
 
 // `--fetch-v12-engines`: also place the SVM engine binary in the cache, and print every cached path
@@ -1381,11 +1419,8 @@ if (process.argv.includes("--fetch-v12-engines")) {
 }
 
 shipAvailable();
-try {
-  writeLegacyArtifacts();
-} catch (e) {
-  stop("the legacy artifacts", e);
-}
+writeLegacyArtifacts(legacy);
+flush();
 
 // The release's raw assets, digest-pinned, ship under `dist/artifacts/releases/<compiler>/`: SDK
 // 1.1.0 shipped them there as opt-in artifacts, and they stay for whoever reads them by path. They
@@ -1393,18 +1428,17 @@ try {
 // reads them from `src`.
 function shipAvailable() {
   const dist = resolve(SDK_DIR, "dist", "artifacts");
-  for (const { path, bytes } of available) {
-    const out = resolve(dist, path);
-    mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, bytes);
-  }
+  for (const { path, bytes } of available) later(() => put(resolve(dist, path), bytes));
 }
 
 // The engines the installed compiler's output also runs on mint Pots the SDK still cooks, each on
 // its own engine. Their artifacts do not ship: the suites that cook such a Pot read them from
 // src/artifacts/legacy/<compiler>/, taken from the public package of the newest row pinning that
 // engine (integrity-pinned in releases.json; no credential), and held to that row's digests.
-function writeLegacyArtifacts() {
+//
+// Read and checked before the run writes anything (every file is read here, so a package that lacks
+// one refuses here too), then written with everything else.
+function readLegacyArtifacts() {
   const wanted = new Map();
   for (const [component, versions] of Object.entries(CURRENT.alsoRunsOn ?? {})) {
     for (const version of versions) {
@@ -1415,7 +1449,8 @@ function writeLegacyArtifacts() {
       wanted.set(row.compiler, row);
     }
   }
-  for (const row of wanted.values()) {
+
+  return [...wanted.values()].map((row) => {
     const read = publicPackage(row);
     const at = (path) => read(`sdk/dist/artifacts/${path}`);
     const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
@@ -1459,9 +1494,7 @@ function writeLegacyArtifacts() {
           `on: ${wrong.join(", ")}`,
       );
     }
-    const dir = resolve(SDK_DIR, "src", "artifacts", "legacy", row.compiler);
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dir, { recursive: true });
+    const files = new Map();
     for (const name of [
       "V12Deployments",
       "V12EngineGate",
@@ -1472,17 +1505,29 @@ function writeLegacyArtifacts() {
       "Router",
       "ISauceRouter",
     ]) {
-      writeFileSync(resolve(dir, `${name}.json`), at(`${name}.json`));
+      files.set(`${name}.json`, at(`${name}.json`));
     }
-    mkdirSync(resolve(dir, "svm"), { recursive: true });
     for (const so of ["engine-devnet.so", "engine-mainnet.so", "kitchen.so"]) {
-      writeFileSync(resolve(dir, "svm", so), at(`svm/${so}`));
+      files.set(`svm/${so}`, at(`svm/${so}`));
     }
-    console.log(
-      `[sync-engine-artifacts] wrote the compiler ${row.compiler} release's artifacts to ` +
-        `src/artifacts/legacy/${row.compiler} (suites only; not shipped), from ` +
-        `${PUBLIC_PACKAGE}@${row.npm.version}`,
-    );
+
+    return { row, files };
+  });
+}
+
+/** Queue each earlier release's folder, replaced whole, behind everything else the run writes. */
+function writeLegacyArtifacts(prepared) {
+  for (const { row, files } of prepared) {
+    const dir = resolve(SDK_DIR, "src", "artifacts", "legacy", row.compiler);
+    later(() => {
+      rmSync(dir, { recursive: true, force: true });
+      for (const [path, bytes] of files) put(resolve(dir, path), bytes);
+      console.log(
+        `[sync-engine-artifacts] wrote the compiler ${row.compiler} release's artifacts to ` +
+          `src/artifacts/legacy/${row.compiler} (suites only; not shipped), from ` +
+          `${PUBLIC_PACKAGE}@${row.npm.version}`,
+      );
+    });
   }
 }
 
@@ -1504,13 +1549,15 @@ function shipEngines({
   shipSvmBinary(wire, "engine-wire-devnet.json");
   shipSvmBinary(wireMainnet, "engine-wire-mainnet.json");
   shipSvmBinary(kitchenIdl, "kitchen-idl.json");
-  console.log(`[sync-engine-artifacts] shipped SVM engine binaries into ${SVM_DESTS[0]}`);
+  later(() => {
+    console.log(`[sync-engine-artifacts] shipped SVM engine binaries into ${SVM_DESTS[0]}`);
 
-  console.log(`SAUCE_RUST_ENGINE_SO=${engine}`);
-  console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnet}`);
-  console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnet}`);
-  console.log(`SAUCE_KITCHEN_SO=${kitchen}`);
-  console.log(`SAUCE_ENGINE_WIRE_JSON=${wire}`);
-  console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdl}`);
-  console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreation}`);
+    console.log(`SAUCE_RUST_ENGINE_SO=${engine}`);
+    console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnet}`);
+    console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnet}`);
+    console.log(`SAUCE_KITCHEN_SO=${kitchen}`);
+    console.log(`SAUCE_ENGINE_WIRE_JSON=${wire}`);
+    console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdl}`);
+    console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreation}`);
+  });
 }

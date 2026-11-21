@@ -31,7 +31,7 @@ export function releaseArm(target: "evm" | "svm"): ReleaseArm {
 
 /**
  * The row the legacy arm of `target` runs: the newest row with a public package that pins the first
- * engine the installed row's `alsoRunsOn` lists for it (as `writeLegacyArtifacts` picks).
+ * engine the installed row's `alsoRunsOn` lists for it (as `readLegacyArtifacts` picks).
  */
 export function legacyRow(target: "evm" | "svm"): V12ReleaseSet {
   const component = COMPONENT[target];
