@@ -10,6 +10,7 @@
  * RequestHeapFrame prepend.
  */
 import { createHash } from "node:crypto";
+import { resolve } from "node:path";
 import { existsSync, readFileSync } from "fs";
 import { address, getAddressCodec, generateKeyPairSigner, lamports } from "@solana/kit";
 import type {
@@ -55,6 +56,7 @@ import {
 } from "../../src/svm/engine-artifacts.js";
 import { fixtureAccounts } from "./fixtures.js";
 import type { AccountFixture } from "./fixtures.js";
+import { legacyArtifactsDir, releaseArm } from "../release-arm.js";
 
 /** The path CI exports (its verified cache), else the packaged binary, else undefined so the suite
  *  skips. The SDK reads no environment: this harness reads CI's and passes the path in. */
@@ -79,9 +81,25 @@ const resolveArtifact = (fn: () => string): string | undefined => {
 // passes to the resolvers explicitly (engine-artifacts.ts reads no environment), and a bare
 // `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` (or an installed package)
 // supplies them from `artifacts/svm` too — so a local run executes instead of skipping.
-export const ENGINE_SO = resolveArtifact(() =>
-  svmEnginePath("devnet", process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO),
-);
+//
+// On the legacy arm (`SAUCE_TEST_SVM_ARM=legacy`, `../release-arm.ts`) it is the earlier release's
+// `engine-devnet.so` instead — the engine the installed row's `alsoRunsOn` names (v12-svm 1.4.0),
+// from the artifacts the sync wrote to `src/artifacts/legacy` — so every suite that loads the
+// engine here runs the installed compiler's programs on it. `SAUCE_ENGINE_SO` and
+// `SAUCE_RUST_ENGINE_SO` are not read there. A missing file is `undefined`: the suites skip
+// locally, and the check below fails them under CI.
+const legacyEngineSo = (): string | undefined => {
+  const path = resolve(legacyArtifactsDir("svm"), "svm/engine-devnet.so");
+
+  return existsSync(path) ? path : undefined;
+};
+
+export const ENGINE_SO =
+  releaseArm("svm") === "legacy"
+    ? legacyEngineSo()
+    : resolveArtifact(() =>
+        svmEnginePath("devnet", process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO),
+      );
 
 /** The kitchen the engine is gated to. A released engine refuses any invocation that did not arrive
  *  through a kitchen cook, so these are no longer optional for a suite that executes bytecode. */

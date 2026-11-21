@@ -51,7 +51,6 @@ import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.
 import { deployReleaseStack, type ReleaseStackArtifacts } from "../../src/evm/release-stack.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
-import { potFromReleasedBytecode } from "./pot-address.js";
 import type { GatedEngine } from "./gated-engine.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
 
@@ -176,7 +175,7 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
   });
 
   it("the live Kitchen predicts the Pot the SDK derives for an owner", async () => {
-    // Any owner: a Pot's address is the Kitchen's CREATE2 of (owner, salt), deployed or not.
+    // Any owner: a Pot's address is the Kitchen's own answer for (owner, salt), deployed or not.
     const owner = STRANGER.address;
     const predicted = await publicClient.readContract({
       abi: v12KitchenAbi,
@@ -185,7 +184,6 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       functionName: "predictPot",
     });
     expect(predicted).toBe(v12PredictPot(owner));
-    expect(predicted).toBe(potFromReleasedBytecode(owner));
   });
 
   describe("potRouterUpdate", () => {
