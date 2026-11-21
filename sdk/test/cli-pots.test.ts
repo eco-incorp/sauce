@@ -45,12 +45,11 @@ import {
 
 import { requireChain } from "../src/chains/canonical.js";
 import { potListCommand } from "../src/cli/pot-commands.js";
-import { PotStore } from "../src/cli/pot-store.js";
+import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
 import type { Sent } from "../src/cli/chain.js";
 import { keeping, keepLanded } from "../src/cli/keep.js";
 import {
   evmKitchenRelease,
-  evmPotRelease,
   evmPotsDeployed,
   importSvmPot,
   keepPots,
@@ -59,10 +58,12 @@ import {
 } from "../src/cli/pots.js";
 import {
   V12_RELEASE_SETS,
-  v12DeployedReleaseSet,
+  v12PotDerivation,
+  v12ReleaseSet,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../src/deployments/index.js";
+import { v12DefaultPotFamily, v12PotRelease, v12PredictPot } from "../src/deployments/pot.js";
 import { buildCreatePotInstruction, derivePotPda } from "../src/svm/kitchen.js";
 
 const OWNER = getAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
@@ -111,9 +112,12 @@ const clientOf = (chainId: number, reads: { hash?: Hex; gate?: Hex } = {}) =>
     },
   }) as unknown as PublicClient;
 
-const own = v12DeployedReleaseSet();
+const own = v12ReleaseSet();
 const create2Sets = V12_RELEASE_SETS.filter((set) => set["kitchen-evm"].potInitCodeHash !== null);
 const KITCHEN = getAddress(own["kitchen-evm"].kitchen!);
+/** The installed release's Pot of OWNER at SALT: CREATE3 under its proxy's hash, where its Kitchen
+ *  places it. */
+const OWN_POT = getAddress(v12PredictPot(OWNER, SALT));
 
 describe("which release minted an EVM Pot", () => {
   it("tells every recorded CREATE2 release and each legacy Pot kind from the address alone", () => {
@@ -126,9 +130,9 @@ describe("which release minted an EVM Pot", () => {
       ] as const;
       for (const { owner, fixed, kind } of cases) {
         const pot = potOf(kitchen!, potInitCodeHash!, owner, SALT, fixed);
-        const found = evmPotRelease({ kitchen: getAddress(kitchen!), owner, salt: SALT, pot });
+        const found = v12PotRelease({ kitchen: getAddress(kitchen!), owner, salt: SALT, pot });
         expect([set.compiler, kind, found?.kind]).toEqual([set.compiler, kind, kind]);
-        expect(found?.family.potInitCodeHash).toBe(potInitCodeHash);
+        expect(found?.family.hash).toBe(potInitCodeHash);
         expect(found?.family.sets.map((one) => one["kitchen-evm"].version)).toContain(
           set["kitchen-evm"].version,
         );
@@ -136,13 +140,28 @@ describe("which release minted an EVM Pot", () => {
     }
   });
 
+  it("tells the installed release's CREATE3 Pots, each kind, from the address alone", () => {
+    const cases = [
+      { owner: OWNER, fixed: false, kind: "private" },
+      { owner: OWNER, fixed: true, kind: "private-fixed-router" },
+      { owner: zeroAddress, fixed: true, kind: "shared" },
+    ] as const;
+    for (const { owner, fixed, kind } of cases) {
+      const pot = getAddress(v12PredictPot(owner, SALT, { routerFixed: fixed }));
+      const found = v12PotRelease({ kitchen: KITCHEN, owner, salt: SALT, pot });
+      expect([kind, found?.kind]).toEqual([kind, kind]);
+      expect(found?.family).toBe(v12DefaultPotFamily());
+      expect(found?.family.scheme).toBe("create3");
+    }
+  });
+
   it("knows no Pot of another Kitchen, another owner or another salt", () => {
-    const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
-    expect(evmPotRelease({ kitchen: KITCHEN, owner: SENDER, salt: SALT, pot })).toBeUndefined();
+    const pot = OWN_POT;
+    expect(v12PotRelease({ kitchen: KITCHEN, owner: SENDER, salt: SALT, pot })).toBeUndefined();
     expect(
-      evmPotRelease({ kitchen: KITCHEN, owner: OWNER, salt: `0x${"00".repeat(32)}`, pot }),
+      v12PotRelease({ kitchen: KITCHEN, owner: OWNER, salt: `0x${"00".repeat(32)}`, pot }),
     ).toBeUndefined();
-    expect(evmPotRelease({ kitchen: SENDER, owner: OWNER, salt: SALT, pot })).toBeUndefined();
+    expect(v12PotRelease({ kitchen: SENDER, owner: OWNER, salt: SALT, pot })).toBeUndefined();
   });
 });
 
@@ -156,7 +175,9 @@ describe("the release a Kitchen mints, and the SDK releases that pair with it", 
       );
       expect(family?.sets.map((one) => one.compiler)).toContain(set.compiler);
     }
-    const hash = own["kitchen-evm"].potInitCodeHash!;
+    // The installed release is CREATE3: its Kitchen reports keccak256 of the Pot's creation code.
+    const hash = v12PotDerivation().initCodeHash;
+    expect(evmKitchenRelease(KITCHEN, hash)).toBe(v12DefaultPotFamily());
     expect(evmKitchenRelease(KITCHEN, keccak256("0x01"))).toBeUndefined();
     expect(evmKitchenRelease(SENDER, hash)).toBeUndefined();
   });
@@ -184,7 +205,7 @@ describe("the release a Kitchen mints, and the SDK releases that pair with it", 
 });
 
 describe("the Pots a landed EVM transaction deployed", () => {
-  const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
+  const pot = OWN_POT;
   const landed = (
     logs: ReturnType<typeof potDeployed>[],
     status: "success" | "reverted" = "success",
@@ -212,7 +233,8 @@ describe("the Pots a landed EVM transaction deployed", () => {
       salt: SALT,
       kind: "private",
       kitchen: KITCHEN,
-      potInitCodeHash: own["kitchen-evm"].potInitCodeHash,
+      potProxyInitCodeHash: own["kitchen-evm"].potProxyInitCodeHash,
+      potProfileHash: own["kitchen-evm"].potProfileHash,
       engine: getAddress(own["v12-evm"].engine!),
       release: {
         compiler: own.compiler,
@@ -269,6 +291,44 @@ describe("the Pots a landed EVM transaction deployed", () => {
     );
     expect(unread).toMatchObject({ pot: newer, kind: "private-fixed-router" });
     expect(unread!.potInitCodeHash).toBeUndefined();
+  });
+});
+
+describe("a record written before its release was known", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-pots-unknown-release-"));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it("a record SDK 1.1.0 wrote for a CREATE3 Pot is identified when read", () => {
+    // SDK 1.1.0 recorded a CREATE3 Pot with the hash its Kitchen reports and with no release or
+    // engine: it knew no release that placed Pots that way.
+    const written: PotRecord = {
+      schema: "sauce.pot/1",
+      chain: "base",
+      chainId: BASE.id,
+      origin: "deployed",
+      pot: OWN_POT,
+      owner: OWNER,
+      salt: SALT,
+      kind: "private",
+      kitchen: KITCHEN,
+      potInitCodeHash: v12PotDerivation().initCodeHash,
+      sdk: "1.1.0",
+      deployment: { tx: TX, block: "12", from: SENDER },
+      recordedAt: "2026-11-20T21:00:00.000Z",
+    };
+    const store = new PotStore(join(dir, "pots"));
+    expect(store.save(written)).toBe("created");
+    const listed = potListCommand(store, { chain: BASE });
+    // Shown as it was written, its release told again from its address.
+    expect(listed.json.pots).toEqual([written]);
+    expect(listed.text).toContain(
+      `compiler ${own.compiler} (v12-evm ${own["v12-evm"].version}, ` +
+        `kitchen-evm ${own["kitchen-evm"].version})`,
+    );
+    expect(listed.text).not.toContain("release unknown");
   });
 });
 
@@ -548,7 +608,7 @@ describe("the scope a command keeps its stores in", () => {
     const other = new PotStore(join(dir, "other"));
     const said: string[] = [];
     const heard: string[] = [];
-    const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
+    const pot = OWN_POT;
     const receipt = {
       hash: TX,
       status: "success" as const,
@@ -595,7 +655,7 @@ describe("the scope a command keeps its stores in", () => {
 
   it("keeps another deployment of a Pot beside the first, and says so, never silently", async () => {
     const store = new PotStore(join(dir, "twice"));
-    const pot = potOf(KITCHEN, own["kitchen-evm"].potInitCodeHash!, OWNER, SALT, false);
+    const pot = OWN_POT;
     const landedBy = async (hash: Hex) => {
       const receipt = {
         hash,

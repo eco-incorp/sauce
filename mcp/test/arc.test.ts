@@ -11,7 +11,7 @@ import { after, before, describe, it } from "node:test";
 import { encodeAbiParameters, toFunctionSelector } from "viem";
 
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
-import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
+import { DEFAULT_POT_SALT, v12PredictPot } from "../../sdk/dist/deployments/pot.js";
 import { connect, ok, type Connected } from "./harness.js";
 
 const OWNER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
@@ -20,6 +20,9 @@ const EXECUTION_FEE = toFunctionSelector("function executionFee()");
 const word = (value: bigint): string => encodeAbiParameters([{ type: "uint256" }], [value]);
 const PREDICT_POT = toFunctionSelector("function predictPot(address,bytes32)");
 const POT = v12PredictPot(OWNER) as `0x${string}`;
+/** The Pot the owner would have under kitchen-evm 1.3.0, which the SDK still cooks on: the command
+ *  looks for it before taking the current release's, and it is not deployed either. */
+const EARLIER_POT = v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: "2.6.2" }) as `0x${string}`;
 
 describe("sauce_pot on Arc", () => {
   let server: Server;
@@ -43,9 +46,12 @@ describe("sauce_pot on Arc", () => {
           const result = {
             eth_chainId: "0x13b2",
             eth_blockNumber: "0x1",
-            // Every address has code but the Pot, not deployed yet: the released contracts.
-            eth_getCode:
-              String(call.params?.[0]).toLowerCase() === POT.toLowerCase() ? "0x" : "0x00",
+            // Every address has code but the owner's Pots, not deployed yet: the released contracts.
+            eth_getCode: [POT, EARLIER_POT].some(
+              (pot) => String(call.params?.[0]).toLowerCase() === pot.toLowerCase(),
+            )
+              ? "0x"
+              : "0x00",
             // 2 USDC, as the native coin: 18 decimals.
             eth_getBalance: `0x${(2n * 10n ** 18n).toString(16)}`,
             // The Kitchen's fee, 0.01 USDC; the Pot where the SDK predicts it, as the released

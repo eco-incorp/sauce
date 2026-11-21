@@ -662,9 +662,11 @@ export interface PotRouterUpdate {
  * never a deployed Pot's, so a Router rollout reaches an existing Pot only when its owner signs this.
  *
  * Returns `undefined` for a Pot of an earlier Kitchen release: it keeps the Router it has, and the
- * SDK pins no Router of an earlier release to propose. Throws for an address that is no Pot of a
- * release the SDK knows: a Pot is a release's when its address derives from its owner and salt under
- * that release's Pot identity, which is read, not assumed.
+ * SDK pins no Router of an earlier release to propose. Returns `undefined` too for a Pot whose
+ * Router cannot change — a fixed-Router Pot or a Shared Pot, of any release — where `setRouter`
+ * would revert `RouterFixed()`. Throws for an address that is no Pot of a release the SDK knows: a
+ * Pot is a release's when its address derives from its owner and salt under that release's Pot
+ * identity, which is read, not assumed.
  */
 export async function potRouterUpdate(
   client: PotRouterClient,
@@ -682,7 +684,7 @@ export async function potRouterUpdate(
         "does not derive from its owner and salt under any release's Pot identity.",
     );
   }
-  if (found.family !== v12DefaultPotFamily()) return undefined;
+  if (found.family !== v12DefaultPotFamily() || found.kind !== "private") return undefined;
   const [current, target] = await Promise.all([
     client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
     client.readContract({ address: kitchen, abi: v12KitchenAbi, functionName: "router" }),

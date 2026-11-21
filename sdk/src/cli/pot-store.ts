@@ -28,13 +28,10 @@ import { linkSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSy
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { PotKind } from "../deployments/pot.js";
+
 /** The record schema this store reads and writes. */
 export const POT_SCHEMA = "sauce.pot/1" as const;
-
-/** How the Kitchen minted the Pot: a Private Pot its owner cooks (`deployPot(owner, salt)`), one
- *  whose Router is fixed at mint (`deployPot(owner, salt, true)`), or a Shared Pot anyone cooks
- *  (`deploySharedPot(salt)`, no owner). A Solana Pot is always its owner's. */
-export type PotKind = "private" | "private-fixed-router" | "shared";
 
 /** One Pot, as the store keeps it. Addresses as the chain spells them (EIP-55, or base58). */
 export interface PotRecord {
@@ -52,8 +49,12 @@ export interface PotRecord {
   readonly cluster?: string;
   /** The Kitchen that minted it: the proxy on an EVM chain, the program on Solana. */
   readonly kitchen: string;
-  /** EVM: the init-code hash its address is CREATE2 under, which the engine that cooks it gates on. */
+  /** EVM, up to kitchen-evm 1.3.0: the init-code hash its address is CREATE2 under. */
   readonly potInitCodeHash?: string;
+  /** EVM, from kitchen-evm 1.4.0: the hash its proxy is CREATE2 under (the Pot is CREATE3). */
+  readonly potProxyInitCodeHash?: string;
+  /** EVM, from kitchen-evm 1.4.0: the Pot profile its engine authenticates. */
+  readonly potProfileHash?: string;
   /** The engine its cooks run on: its release's (EVM), or the program its creation named (Solana). */
   readonly engine?: string;
   /**

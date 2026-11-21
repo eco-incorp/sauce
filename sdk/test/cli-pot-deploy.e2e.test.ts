@@ -18,16 +18,16 @@ import {
   encodeFunctionData,
   getAddress,
   http,
+  keccak256,
   parseEther,
   type Address,
   type Hex,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-import potArtifact from "../src/artifacts/V12Pot.json" with { type: "json" };
 import kitchenArtifact from "../src/artifacts/V12Kitchen.json" with { type: "json" };
 import { gasEstimate, type Approver, type SetupStep } from "../src/cli/approvals.js";
-import { cookOf, runCommand, txCommand, type RunInput } from "../src/cli/commands.js";
+import { cookOn, cookProgram, runCommand, txCommand, type RunInput } from "../src/cli/commands.js";
 import { simulateCommand } from "../src/cli/simulate.js";
 import { rehearse } from "../src/cli/rehearse.js";
 import type { CliIo } from "../src/cli/run.js";
@@ -163,13 +163,14 @@ describeEvm("a command deploys the Pot it needs", () => {
       target: { owner: fresh.address, salt: fresh.salt },
       args: { from: "--args" as const, values: ["41"] },
     };
-    const cook = cookOf(input, nodeIo());
+    const { payload } = cookProgram(input, nodeIo());
+    const data = cookOn({ pot: fresh.pot, engine: getAddress(v12EngineAddress()) }, payload);
     const result = await rehearse(local.publicClient, {
       owner: fresh.address,
       kitchen,
       pot: wrong.pot,
       deploy: { salt: fresh.salt },
-      cook: { to: wrong.pot, data: cook.data, value: 1234n },
+      cook: { to: wrong.pot, data, value: 1234n },
       overrides: [],
     });
     expect(result).toMatchObject({ ok: false, stage: "deploy" });
@@ -209,17 +210,19 @@ describeEvm("a command deploys the Pot it needs", () => {
     );
     const fresh = await owner("new-after-factory-change");
     const implementation = getAddress(v12KitchenImplementationAddress());
-    // Change the embedded Pot creation code's metadata before deploying another real Kitchen.
-    // Its constructor computes the matching immutable hash; patching deployed runtime alone
-    // would leave the original hash baked into the getter and prediction.
-    const metadataBytes = Number.parseInt(potArtifact.bytecode.slice(-4), 16) + 2;
-    const metadata = potArtifact.bytecode.slice(-metadataBytes * 2);
-    const changed =
-      metadata.slice(0, -6) +
-      (Number.parseInt(metadata.slice(-6, -4), 16) ^ 1).toString(16).padStart(2, "0") +
-      metadata.slice(-4);
-    if (!kitchenArtifact.bytecode.includes(metadata)) {
-      throw new Error("the Kitchen fixture does not embed the Pot");
+    // Replace the CREATE3 proxy the Kitchen CREATE2s for each Pot, so it places Pots elsewhere: from
+    // kitchen-evm 1.4.0 a Pot's address follows from that proxy and not from the Pot's code. The
+    // other proxy is the same one with PUSH0 for RETURNDATASIZE, which pushes the same zero. The
+    // Kitchen holds the proxy's init code, and its hash as constants, for CREATE2 and for its
+    // predictions, and the Pot it embeds names the proxy too: patching the creation code keeps all
+    // of them consistent, so the Kitchen reports another Pot init-code hash and deploys what it
+    // predicts. (Patching deployed runtime alone would leave the original hashes baked in.)
+    const proxy = "67363d3d37363d34f03d5260086018f3";
+    const otherProxy = "67363d3d37363d34f05f5260086018f3";
+    const proxyHash = keccak256(`0x${proxy}`).slice(2);
+    const otherProxyHash = keccak256(`0x${otherProxy}`).slice(2);
+    if (![proxy, proxyHash].every((part) => kitchenArtifact.bytecode.includes(part))) {
+      throw new Error("the Kitchen fixture does not embed its Pot proxy");
     }
     const beforeHash = await local.publicClient.readContract({
       address: kitchen,
@@ -227,7 +230,9 @@ describeEvm("a command deploys the Pot it needs", () => {
       functionName: "potInitCodeHash",
     });
     const replacement = await local.plant(
-      kitchenArtifact.bytecode.replaceAll(metadata, changed) as Hex,
+      kitchenArtifact.bytecode
+        .replaceAll(proxy, otherProxy)
+        .replaceAll(proxyHash, otherProxyHash) as Hex,
     );
     await local.send(
       local.deployer,

@@ -136,11 +136,31 @@ export interface LocalChain {
   mint(token: Address, to: Address, amount: bigint): Promise<void>;
   balanceOf(token: Address, holder: Address): Promise<bigint>;
   stop(): Promise<void>;
+  /**
+   * With `upgraded`: the earlier release as the chain ran it before the upgrade — its engine and
+   * Router, the DEPLOYER's Pot at `POT_SALT`, and the Pot of each of `legacyOwners` at that salt,
+   * all minted by that release's Kitchen (`evm/gated-engine.ts#startUpgradedChain`).
+   */
+  readonly legacy?: {
+    readonly engine: Address;
+    readonly router: Address;
+    readonly pot: Address;
+    readonly pots: Readonly<Record<Address, Address>>;
+  };
+}
+
+/** What `startChain` can stand up besides the release this SDK pins. */
+export interface ChainOptions {
+  /** The chain as the live ones are after kitchen-evm 1.4.0's rollout: the earlier release's stack
+   *  with Pots minted on it, upgraded to the release this SDK pins (`startUpgradedChain`). */
+  readonly upgraded?: boolean;
+  /** With `upgraded`: owners whose earlier-release Pot is minted too, at `POT_SALT`. */
+  readonly legacyOwners?: readonly Address[];
 }
 
 /** Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a
  *  suite never names one, so no two suites can share one. */
-export async function startChain(slug: string): Promise<LocalChain> {
+export async function startChain(slug: string, options: ChainOptions = {}): Promise<LocalChain> {
   const chain = requireChain(slug);
   const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
@@ -185,14 +205,21 @@ export async function startChain(slug: string): Promise<LocalChain> {
     anvil.kill();
     await exited;
   };
+  let legacy: LocalChain["legacy"];
   // A chain that cannot be set up is stopped, not left running for the rest of the worker's life.
   try {
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-    const stack = await gated.startGatedEngine(
-      { publicClient, walletClient: deployer, testClient },
-      DEPLOYER.address,
-      creationCode,
-    );
+    const clients = { publicClient, walletClient: deployer, testClient };
+    let stack: gated.GatedEngine;
+    if (options.upgraded) {
+      const upgraded = await gated.startUpgradedChain(clients, DEPLOYER.address, creationCode, {
+        ...(options.legacyOwners === undefined ? {} : { legacyOwners: options.legacyOwners }),
+      });
+      legacy = upgraded.legacy;
+      stack = upgraded;
+    } else {
+      stack = await gated.startGatedEngine(clients, DEPLOYER.address, creationCode);
+    }
     // The CLI names the engine the SDK records. A harness that deploys it at that release address
     // needs nothing more; one that deploys it elsewhere moves it there.
     const released = getAddress(v12EngineAddress());
@@ -240,6 +267,7 @@ export async function startChain(slug: string): Promise<LocalChain> {
         args: [holder],
       }),
     stop,
+    ...(legacy === undefined ? {} : { legacy }),
   };
 }
 

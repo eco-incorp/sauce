@@ -23,11 +23,13 @@ import {
 import { privateKeyToAccount } from "viem/accounts";
 
 import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
+import { authenticatePot } from "../src/cli/pots.js";
 import {
+  sdkCompilerVersion,
   v12EngineAddress,
   v12KitchenAddress,
   v12PotDerivation,
-  v12DeployedReleaseSet,
+  v12ReleaseSet,
 } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
 import { v12KitchenAbi } from "../src/evm/engine.js";
@@ -50,16 +52,19 @@ const RUNNING = privateKeyToAccount(RUNNING_KEY);
 const SENDING = privateKeyToAccount(SENDING_KEY);
 const IMPORTED = privateKeyToAccount(IMPORTED_KEY);
 
-/** What every record of a Pot the pinned release minted on Base says of it. */
+/** What every record of a Pot the pinned release minted on Base says of it: kitchen-evm 1.4.0's
+ *  Pots are CREATE3, identified by their proxy's hash and the profile their engine authenticates. */
 const released = () => {
-  const set = v12DeployedReleaseSet();
+  const set = v12ReleaseSet();
+  const derivation = v12PotDerivation();
 
   return {
     schema: "sauce.pot/1",
     chain: "base",
     chainId: 8453,
     kitchen: getAddress(v12KitchenAddress()),
-    potInitCodeHash: v12PotDerivation().initCodeHash.toLowerCase(),
+    potProxyInitCodeHash: derivation.potProxyInitCodeHash!.toLowerCase(),
+    potProfileHash: derivation.potProfileHash!.toLowerCase(),
     engine: getAddress(v12EngineAddress()),
     release: {
       compiler: set.compiler,
@@ -342,4 +347,70 @@ describeEvm("the Pots the sauce command deploys, recorded", () => {
       );
     }, 60_000);
   });
+
+  it("a 1.4.0 Pot is recorded, listed and imported with its release and engine", async () => {
+    const store = join(work, "release-1-4-0");
+    const salt = potSalt("release");
+    const pot = getAddress(v12PredictPot(DEPLOYING.address, salt));
+    const derivation = v12PotDerivation();
+    // kitchen-evm 1.4.0's engine: the identity this suite pins besides the one the SDK derives it by.
+    const engine = getAddress("0x983C102aa6321187877530723dDF6921AB4861a6");
+    expect(getAddress(v12EngineAddress())).toBe(engine);
+
+    const deployed = await sauceWith(
+      { potsDir: store },
+      ...["pot", "--deploy", "--chain", "base", "--salt", "release"],
+      ...["--rpc-url", base.rpcUrl, "--private-key", DEPLOYING_KEY],
+    );
+    expect(deployed.code).toBe(0);
+    const [record] = new PotStore(store).list().pots;
+    // The CREATE3 identity, never the CREATE2 hash a kitchen-evm 1.3.0 Pot carries.
+    expect(record).toMatchObject({
+      pot,
+      owner: DEPLOYING.address,
+      salt,
+      kind: "private",
+      origin: "deployed",
+      kitchen: getAddress(v12KitchenAddress()),
+      potProxyInitCodeHash: derivation.potProxyInitCodeHash,
+      potProfileHash: derivation.potProfileHash,
+      engine,
+      release: { compiler: sdkCompilerVersion(), "v12-evm": "1.4.0", "kitchen-evm": "1.4.0" },
+    });
+    expect(record).not.toHaveProperty("potInitCodeHash");
+
+    // `sauce pot list` says which release and engine.
+    const listed = await sauceWith({ potsDir: store }, "pot", "list");
+    expect(listed.stdout).toContain(
+      `compiler ${sdkCompilerVersion()} (v12-evm 1.4.0, kitchen-evm 1.4.0), engine ${engine}`,
+    );
+
+    // Imported from the chain into another store, by address and by owner and salt.
+    for (const [label, flags] of [
+      ["address", ["--pot", pot]],
+      ["owner", ["--owner", DEPLOYING.address, "--salt", "release"]],
+    ] as const) {
+      const imported = await sauceWith(
+        { potsDir: join(work, `imported-1-4-0-${label}`) },
+        ...["pot", "import", "--chain", "base", ...flags],
+        ...["--rpc-url", base.rpcUrl, "--json"],
+      );
+      expect([label, jsonOf(imported).pots]).toEqual([
+        label,
+        [
+          expect.objectContaining({
+            ...released(),
+            pot,
+            owner: DEPLOYING.address,
+            salt,
+            kind: "private",
+            origin: "imported",
+          }),
+        ],
+      ]);
+    }
+
+    // The wallet's claim to it is shown by the chain: its owner, its address its Kitchen's own.
+    expect(await authenticatePot(base.publicClient, DEPLOYING.address, pot)).toBe("own");
+  }, 120_000);
 });

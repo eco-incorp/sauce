@@ -884,7 +884,8 @@ describeEvm("what is deployed: the released contracts and a Pot", () => {
     expect(before.out.deployment).toEqual({
       engine: { address: getAddress(v12EngineAddress()), deployed: true },
       kitchen: { address: getAddress(v12KitchenAddress()), deployed: true, executionFee: `${FEE}` },
-      pot: { address: pot, deployed: false },
+      // The engine the Pot's cooks run on (`cook-pot.ts`): this release's, for its own Pot.
+      pot: { address: pot, deployed: false, engine: getAddress(v12EngineAddress()) },
     });
     expect(before.stderr).toContain(`the Pot ${pot} is NOT deployed`);
     await base.send(base.deployer, before.out.to as Address, before.out.data as Hex);

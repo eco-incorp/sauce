@@ -11,7 +11,14 @@ import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
 import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
-import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn, releaseText } from "./pots.js";
+import {
+  importEvmOwnerPots,
+  importEvmPot,
+  importSvmPot,
+  recordOn,
+  recordRelease,
+  releaseText,
+} from "./pots.js";
 import { genesisOf } from "./solana.js";
 
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
@@ -24,7 +31,7 @@ const onChain = (record: PotRecord): string =>
 const potLines = (record: PotRecord): string[] => [
   `${onChain(record)}  ${record.pot}  ${record.kind}`,
   `  owner ${record.owner}, salt ${record.salt}`,
-  `  ${releaseText(record.release)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
+  `  ${releaseText(recordRelease(record))}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
   record.deployment === undefined
     ? `  ${record.origin} ${record.recordedAt}`
     : `  ${record.origin} in ${record.deployment.tx} (${record.chain === "solana" ? "slot" : "block"} ` +

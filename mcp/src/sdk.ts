@@ -44,6 +44,7 @@ export {
   type CookInput,
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";
+export { cookPotOf } from "../../sdk/dist/cli/cook-pot.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,

@@ -2,7 +2,7 @@
  * `potRouterUpdate` against a stub client — the decisions it makes from what it reads, with no
  * chain. `router.e2e.test.ts` runs it against a real Kitchen and Pot on anvil.
  */
-import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from "viem";
 
 import { v12KitchenAddress } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
@@ -77,6 +77,29 @@ describe("potRouterUpdate", () => {
     const earlier = v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: "2.6.2" }) as Address;
     const client = stub({ pot: earlier, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
     expect(await potRouterUpdate(client, earlier)).toBeUndefined();
+    expect(client.reads).not.toContain(`${getAddress(v12KitchenAddress())}.router`);
+  });
+
+  it("returns nothing for a fixed-Router Pot, whose Router cannot change", async () => {
+    // `setRouter` on a Pot minted with its Router fixed reverts RouterFixed(): no call to propose,
+    // and the Kitchen's Router is never asked for. The Router the Pot has differs from it here, so
+    // only the kind keeps this from being a proposal.
+    const fixed = v12PredictPot(OWNER, DEFAULT_POT_SALT, { routerFixed: true }) as Address;
+    const client = stub({ pot: fixed, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
+    expect(await potRouterUpdate(client, fixed)).toBeUndefined();
+    expect(client.reads).not.toContain(`${getAddress(v12KitchenAddress())}.router`);
+  });
+
+  it("returns nothing for a Shared Pot, whose Router cannot change", async () => {
+    // A Shared Pot (the zero owner) always has its Router fixed, in every release.
+    const shared = v12PredictPot(zeroAddress, DEFAULT_POT_SALT) as Address;
+    const client = stub({
+      pot: shared,
+      potRouter: OLD_ROUTER,
+      kitchenRouter: NEW_ROUTER,
+      owner: zeroAddress,
+    });
+    expect(await potRouterUpdate(client, shared)).toBeUndefined();
     expect(client.reads).not.toContain(`${getAddress(v12KitchenAddress())}.router`);
   });
 

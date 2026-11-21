@@ -72,6 +72,7 @@ import {
   txCommand,
   unapproved,
 } from "./commands.js";
+import { cookPotOf } from "./cook-pot.js";
 import type { FundRequest } from "./funding.js";
 import type { Ask } from "./prompt.js";
 import { potImportCommand, potListCommand } from "./pot-commands.js";
@@ -2587,7 +2588,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...HELP,
     },
     details: [
-      "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
+      "A Pot's address is the released Kitchen's for (owner, salt), so it is known",
       "before it exists. You need not deploy it yourself: sauce run deploys it when it first",
       "needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by",
       "hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with",
@@ -2689,7 +2690,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         };
 
         if (rpcUrl !== undefined) return potStatusCommand({ ...target, rpcUrl });
-        const predicted = potCommand(target);
+        // Offline, the Pot store is all that can say the owner's Pot is an earlier release's.
+        const at = await cookPotOf(chain, target);
+        const predicted = potCommand(target, at);
 
         // A preview chain's prediction carries no deployment, so nothing is taken on trust.
         return predicted.cast === undefined

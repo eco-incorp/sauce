@@ -76,6 +76,7 @@ import {
   parseWei,
   plannedTransactions,
   poolsCommand,
+  cookPotOf,
   potCommand,
   potState,
   POT_UNCHECKED,
@@ -2219,7 +2220,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       description:
         "A Pot is the owner's on-chain account that runs their programs and holds their " +
         "tokens. Its address is known before it exists: the released Kitchen derives it from " +
-        "(owner, salt). Returns `pot` and the unsigned deployment — on an EVM chain " +
+        "(owner, salt) — the current release's Pot, or an earlier release's Pot the owner already " +
+        "has there, which cooks keep using. Returns `pot` and the unsigned deployment — on an EVM chain " +
         "Kitchen.deployPot as { to, data, value }, which any account may send (the Pot is the " +
         "owner's either way); on Solana the Kitchen's create_pot `instruction`, which the owner " +
         "signs. With an endpoint it also says `deployed` (null without one) — when true, do not " +
@@ -2277,14 +2279,20 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         };
       }
       const owner = parseAddress("owner", args.owner);
-      const output = potCommand({ chain, owner, ...salt });
-      const pot = output.json.pot as Address;
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
-      const state = client === undefined ? undefined : await potState(client, pot);
+      const at = await cookPotOf(chain, { owner, ...salt }, client);
+      const output = potCommand({ chain, owner, ...salt }, at);
+      const pot = at.pot;
+      const state =
+        at.deployed === undefined
+          ? undefined
+          : { deployed: at.deployed, ...(at.owner === undefined ? {} : { owner: at.owner }) };
       const deployed = state === undefined ? null : state.deployed;
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
-      // The deployment returned is refused where the Kitchen would put the Pot elsewhere.
-      if (client !== undefined && state !== undefined) {
+      // The deployment returned is refused where the Kitchen would put the Pot elsewhere. An earlier
+      // release's Pot (its output names its `release`) has none, and `cookPotOf` has told it from
+      // the chain already.
+      if (client !== undefined && state !== undefined && output.json.release === undefined) {
         await requirePot(client, chain, { owner, ...salt, pot, deployed: state.deployed });
       }
       const held =
