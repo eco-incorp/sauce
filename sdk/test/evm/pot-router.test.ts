@@ -71,14 +71,22 @@ describe("potRouterUpdate", () => {
     expect(client.reads).toContain(`${getAddress(v12KitchenAddress())}.router`);
   });
 
-  it("refuses a Pot whose address does not derive under the pinned Pot init-code hash", async () => {
-    // What a Pot minted before the Router moved into Pot storage looks like from here: it answers
-    // the same reads (same Kitchen, owner and salt) but sits at an address another Pot bytecode
-    // derives, and has no setRouter to call.
+  it("returns nothing for a Pot of an earlier release", async () => {
+    // A kitchen-evm 1.3.0 Pot keeps the Router it has, and the SDK pins no Router of an earlier
+    // release to propose: it answers nothing, and never asks the Kitchen for its Router.
+    const earlier = v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: "2.6.2" }) as Address;
+    const client = stub({ pot: earlier, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
+    expect(await potRouterUpdate(client, earlier)).toBeUndefined();
+    expect(client.reads).not.toContain(`${getAddress(v12KitchenAddress())}.router`);
+  });
+
+  it("refuses an address no release's Pot identity derives", async () => {
+    // What a contract that answers the same reads (same Kitchen, owner and salt) but is no Pot of
+    // any release looks like from here: its address derives under no release's Pot identity.
     const foreign = "0x00000000000000000000000000000000DeaDBeef" as Address;
     const client = stub({ pot: foreign, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
     await expect(potRouterUpdate(client, foreign)).rejects.toThrow(
-      /not a Pot of the pinned Kitchen release/,
+      /not a Pot of a Kitchen release this SDK knows/,
     );
   });
 });
