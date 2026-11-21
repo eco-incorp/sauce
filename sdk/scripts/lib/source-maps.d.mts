@@ -11,7 +11,9 @@ export interface SourceMapDirective {
 export declare function directivesOf(text: string): SourceMapDirective[];
 
 /** Why the packed map `path` (its text) may not ship, or `undefined`: a `.d.ts.map` whose source
- *  root and sources are relative paths, every source a file in `packed`, may. */
+ *  root is empty or a literal relative path, and whose sources are literal relative paths ending in
+ *  a file name and naming the same file as a path under the root and as a string prefix, each a
+ *  file in `packed`, may. */
 export declare function mapRefusal(
   path: string,
   text: string,

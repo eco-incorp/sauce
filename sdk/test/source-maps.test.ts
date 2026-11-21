@@ -53,8 +53,8 @@ const OTHER_REFUSED = [
   "dist/indented.js names code.js.map, a map the package does not ship",
   "dist/inline.js carries an inline source map",
   "dist/missing.js names missing.js.map, a map the package does not ship",
-  "dist/regex.js names x]/;, a map the package does not ship",
-  'dist/text.js names nowhere.map";, a map the package does not ship',
+  'dist/regex.js names "x]/;", which is not a literal relative path',
+  'dist/text.js names "nowhere.map\\";", which is not a literal relative path',
   "dist/twice.d.ts names gone.d.ts.map, a map the package does not ship",
   "src/note.ts names note.js.map, a map the package does not ship",
 ];
@@ -80,6 +80,46 @@ const OUTSIDE: Record<string, string> = {
   "dist/climb.d.ts":
     "export declare const climb = 1;\n//# sourceMappingURL=../../package/dist/kept.d.ts.map",
   "dist/climb.d.ts.map": map("climb.d.ts", ["../../package/src/kept.ts"]),
+};
+
+/** References a path join resolves to a packed file while Node resolves them elsewhere, each in a
+ *  form the rule refuses: an encoded parent (`%2e%2e`, which a URL reads as `..`) in each field, a
+ *  query or a fragment (Node opens what comes before it) in a directive and a source, an empty
+ *  segment (a URL resolves `x//..` to `x/`, a join to `.`) in each field, a leading space or control
+ *  character (a URL drops it, leaving a rooted path) in a source root and a source, and a source root
+ *  with no trailing `/` (Node reads a source as `sourceRoot + source`). Last, a source root ending in
+ *  `/`, which both read alike: kept. */
+const NOT_LITERAL: Record<string, string> = {
+  "dist/encoded.d.ts":
+    "export declare const encoded = 1;\n//# sourceMappingURL=%2e%2e/../kept.d.ts.map",
+  "dist/encoded-root.d.ts.map": map("encoded-root.d.ts", ["kept.d.ts"], "%2e%2e/../"),
+  "dist/encoded-source.d.ts.map": map("encoded-source.d.ts", ["%2E%2E/../../src/kept.ts"]),
+  "dist/query.d.ts":
+    "export declare const query = 1;\n//# sourceMappingURL=missing?x/../kept.d.ts.map",
+  "dist/fragment.d.ts":
+    "export declare const fragment = 1;\n//# sourceMappingURL=missing#x/../kept.d.ts.map",
+  "dist/query-source.d.ts.map": map("query-source.d.ts", ["../src/missing?x/../kept.ts"]),
+  "dist/fragment-source.d.ts.map": map("fragment-source.d.ts", ["../src/missing#x/../kept.ts"]),
+  "dist/empty.d.ts": "export declare const empty = 1;\n//# sourceMappingURL=x//../kept.d.ts.map",
+  "dist/empty-root.d.ts.map": map("empty-root.d.ts", ["kept.ts"], "../x//../src/"),
+  "dist/empty-source.d.ts.map": map("empty-source.d.ts", ["../src/x//../kept.ts"]),
+  "dist/control-root.d.ts.map": map("control-root.d.ts", ["kept.ts"], " \n/../../src/"),
+  "dist/control-source.d.ts.map": map("control-source.d.ts", ["\t/../../src/kept.ts"]),
+  "dist/bare-root.d.ts.map": map("bare-root.d.ts", ["kept.ts"], "../src"),
+  "dist/slash-root.d.ts.map": map("slash-root.d.ts", ["kept.ts"], "../src/"),
+};
+
+/** References ending in no file name, which a path join lands on a kept map or a packed file while
+ *  a URL keeps them as a directory: a final `.` or `..` in a directive and a source, and a trailing
+ *  `/` in a directive. Last, a leading `./` and a middle `./`, which both read alike: kept. */
+const NO_FILE: Record<string, string> = {
+  "dist/dot.d.ts": "export declare const dot = 1;\n//# sourceMappingURL=kept.d.ts.map/.",
+  "dist/dotdot.d.ts": "export declare const dotdot = 1;\n//# sourceMappingURL=kept.d.ts.map/x/..",
+  "dist/slash.d.ts": "export declare const slash = 1;\n//# sourceMappingURL=kept.d.ts.map/",
+  "dist/dot-source.d.ts.map": map("dot-source.d.ts", ["../src/kept.ts/."]),
+  "dist/dotdot-source.d.ts.map": map("dotdot-source.d.ts", ["../src/kept.ts/x/.."]),
+  "dist/dot-ok.d.ts": "export declare const ok = 1;\n//# sourceMappingURL=./kept.d.ts.map",
+  "dist/dot-ok.d.ts.map": map("dot-ok.d.ts", ["../src/./kept.ts"]),
 };
 
 let root: string;
@@ -168,18 +208,18 @@ describe("the package's source-map rule", () => {
       ...Object.keys(OUTSIDE),
     ]);
     expect(auditSourceMaps(root, files)).toEqual([
-      "dist/absolute.d.ts.map names the source /kept.ts, which is not a relative path",
-      "dist/backslash-root.d.ts.map has the source root \\dir/../, which is not a relative path",
-      "dist/backslash-source.d.ts.map names the source \\dir/../../src/kept.ts, which is not a relative path",
+      'dist/absolute.d.ts.map names the source "/kept.ts", which is not a literal relative path',
+      'dist/backslash-root.d.ts.map has the source root "\\\\dir/../", which is not a literal relative path',
+      'dist/backslash-source.d.ts.map names the source "\\\\dir/../../src/kept.ts", which is not a literal relative path',
       "dist/climb.d.ts.map names ../package/src/kept.ts, which resolves outside the package",
-      "dist/root.d.ts.map has the source root /, which is not a relative path",
-      "dist/scheme-root.d.ts.map has the source root x:/../, which is not a relative path",
-      "dist/scheme-source.d.ts.map names the source x:/../../src/kept.ts, which is not a relative path",
-      "dist/backslash.d.ts names \\dir/../kept.d.ts.map, which is not a relative path",
+      'dist/root.d.ts.map has the source root "/", which is not a literal relative path',
+      'dist/scheme-root.d.ts.map has the source root "x:/../", which is not a literal relative path',
+      'dist/scheme-source.d.ts.map names the source "x:/../../src/kept.ts", which is not a literal relative path',
+      'dist/backslash.d.ts names "\\\\dir/../kept.d.ts.map", which is not a literal relative path',
       "dist/climb.d.ts names ../../package/dist/kept.d.ts.map, which resolves outside the package",
-      "dist/rooted.d.ts names /kept.d.ts.map, which is not a relative path",
-      "dist/schemed.d.ts names x:/../kept.d.ts.map, which is not a relative path",
-      "dist/schemed.d.ts names //host/kept.d.ts.map, which is not a relative path",
+      'dist/rooted.d.ts names "/kept.d.ts.map", which is not a literal relative path',
+      'dist/schemed.d.ts names "x:/../kept.d.ts.map", which is not a literal relative path',
+      'dist/schemed.d.ts names "//host/kept.d.ts.map", which is not a literal relative path',
     ]);
     // The prune deletes the refused maps and keeps the one beside them. None of these files ends in
     // tsc's trailer, so it edits none of them.
@@ -198,6 +238,78 @@ describe("the package's source-map rule", () => {
     });
     for (const path of Object.keys(OUTSIDE).filter((each) => !each.endsWith(".map"))) {
       expect([path, read(path)]).toEqual([path, OUTSIDE[path]]);
+    }
+  });
+
+  it("takes a reference only as a literal path both readers read alike: encoded, a query or fragment, an empty segment, a control character or a bare source root is refused", () => {
+    for (const [path, text] of Object.entries(NOT_LITERAL)) writeFileSync(join(root, path), text);
+    const files = new Set([
+      "src/kept.ts",
+      "dist/kept.d.ts",
+      "dist/kept.d.ts.map",
+      ...Object.keys(NOT_LITERAL),
+    ]);
+    expect(auditSourceMaps(root, files)).toEqual([
+      "dist/bare-root.d.ts.map names src/kept.ts under the source root ../src, which Node reads as srckept.ts",
+      'dist/control-root.d.ts.map has the source root " \\n/../../src/", which is not a literal relative path',
+      'dist/control-source.d.ts.map names the source "\\t/../../src/kept.ts", which is not a literal relative path',
+      'dist/empty-root.d.ts.map has the source root "../x//../src/", which is not a literal relative path',
+      'dist/empty-source.d.ts.map names the source "../src/x//../kept.ts", which is not a literal relative path',
+      'dist/encoded-root.d.ts.map has the source root "%2e%2e/../", which is not a literal relative path',
+      'dist/encoded-source.d.ts.map names the source "%2E%2E/../../src/kept.ts", which is not a literal relative path',
+      'dist/fragment-source.d.ts.map names the source "../src/missing#x/../kept.ts", which is not a literal relative path',
+      'dist/query-source.d.ts.map names the source "../src/missing?x/../kept.ts", which is not a literal relative path',
+      'dist/empty.d.ts names "x//../kept.d.ts.map", which is not a literal relative path',
+      'dist/encoded.d.ts names "%2e%2e/../kept.d.ts.map", which is not a literal relative path',
+      'dist/fragment.d.ts names "missing#x/../kept.d.ts.map", which is not a literal relative path',
+      'dist/query.d.ts names "missing?x/../kept.d.ts.map", which is not a literal relative path',
+    ]);
+    // The prune deletes the refused maps and keeps `kept.d.ts.map` and `slash-root.d.ts.map`. None
+    // of these files ends in tsc's trailer, so it edits none of them.
+    expect(pruneSourceMaps(root, files)).toEqual({
+      kept: 2,
+      removed: [
+        "dist/bare-root.d.ts.map",
+        "dist/control-root.d.ts.map",
+        "dist/control-source.d.ts.map",
+        "dist/empty-root.d.ts.map",
+        "dist/empty-source.d.ts.map",
+        "dist/encoded-root.d.ts.map",
+        "dist/encoded-source.d.ts.map",
+        "dist/fragment-source.d.ts.map",
+        "dist/query-source.d.ts.map",
+      ],
+      stripped: 0,
+    });
+    for (const path of Object.keys(NOT_LITERAL).filter((each) => !each.endsWith(".map"))) {
+      expect([path, read(path)]).toEqual([path, NOT_LITERAL[path]]);
+    }
+  });
+
+  it("takes a directive's URL or a source only when it ends in a file name: a final . or .., or a trailing /, is refused", () => {
+    for (const [path, text] of Object.entries(NO_FILE)) writeFileSync(join(root, path), text);
+    const files = new Set([
+      "src/kept.ts",
+      "dist/kept.d.ts",
+      "dist/kept.d.ts.map",
+      ...Object.keys(NO_FILE),
+    ]);
+    expect(auditSourceMaps(root, files)).toEqual([
+      'dist/dot-source.d.ts.map names the source "../src/kept.ts/.", which does not end in a file name',
+      'dist/dotdot-source.d.ts.map names the source "../src/kept.ts/x/..", which does not end in a file name',
+      'dist/dot.d.ts names "kept.d.ts.map/.", which does not end in a file name',
+      'dist/dotdot.d.ts names "kept.d.ts.map/x/..", which does not end in a file name',
+      'dist/slash.d.ts names "kept.d.ts.map/", which does not end in a file name',
+    ]);
+    // The prune deletes the two refused maps and keeps `kept.d.ts.map` and `dot-ok.d.ts.map`. None
+    // of these files ends in tsc's trailer, so it edits none of them.
+    expect(pruneSourceMaps(root, files)).toEqual({
+      kept: 2,
+      removed: ["dist/dot-source.d.ts.map", "dist/dotdot-source.d.ts.map"],
+      stripped: 0,
+    });
+    for (const path of Object.keys(NO_FILE).filter((each) => !each.endsWith(".map"))) {
+      expect([path, read(path)]).toEqual([path, NO_FILE[path]]);
     }
   });
 });

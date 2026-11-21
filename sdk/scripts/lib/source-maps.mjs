@@ -15,12 +15,17 @@
  * the last, which Node takes, and each before it.
  *
  * A reference (a directive's URL, a map's `sourceRoot`, each of its `sources`) counts only as a
- * relative path inside the package. One that is absolute (`/x`), protocol-relative (`//host/x`),
- * has a scheme (`file:`, `webpack:`, a drive's `C:`) or holds a backslash (which TypeScript reads
- * as `/`, so `\dir/..` is rooted) is refused before anything is joined: TypeScript and Node
- * resolve it away from the file that names it, outside the package, while `posix.join` would make
- * it the packed file beside that file. One that resolves above the package's root is refused too.
- * tsc writes none of these.
+ * literal relative path (`LITERAL`): letters, digits, `.`, `_`, `-` and `/`, not starting with `/`,
+ * with no empty segment. Anything else is refused as written, before it is joined, because a path
+ * join reads it as the packed file beside the one naming it while TypeScript or Node reads it
+ * elsewhere: a leading `/` or `//host`, a scheme, a backslash (TypeScript's `/`), `%2e%2e` (a URL's
+ * `..`), a query or a fragment (Node opens what comes before it), a space or a control character
+ * (a URL drops them), `x//..` (a URL's `x/`). A directive's URL and each source must also end in a
+ * file name: a URL keeps the trailing `/` of a final `.` or `..` segment, naming a directory, where
+ * a path join drops it and lands on a file. Node reads a source as `sourceRoot + source` and
+ * TypeScript as a path under the root, so each source must name the same file both ways; and one
+ * that resolves above the package's root is refused too. tsc writes none of these. A refused value is
+ * shown as a JSON string, so each refusal stays on one line and shows what is there.
  *
  * The pattern finds text, not comments: it also matches inside a string, a regular expression
  * (`/[//# …]/`) or a longer comment. So the prune changes one form only, the trailer tsc writes
@@ -52,16 +57,24 @@ export function directivesOf(text) {
 
 /** What `url`, written in the packed file `path`, names, as a packed path. */
 const named = (path, url) => posix.normalize(posix.join(posix.dirname(path), url));
-/** A reference that is no relative path: absolute or protocol-relative (a leading `/`), with a
- *  scheme, or holding a backslash anywhere, which TypeScript reads as `/` and a join does not. */
-const NOT_RELATIVE = /^(?:\/|[A-Za-z][A-Za-z0-9+.-]*:)|\\/;
+/**
+ * A literal relative path, which is all a reference may be as written: path characters only, not
+ * starting with `/`, no empty segment. A path join, TypeScript and Node's URL resolution then all
+ * read it as `named` does: nothing in it is decoded, cut off as a query or fragment, or read as a
+ * root, a scheme or a separator, and `..` meets no empty segment.
+ */
+const LITERAL = /^(?!\/)(?!.*\/\/)[A-Za-z0-9._/-]+$/;
 /** A path `named` gives that goes above the package's root, where no packed file is. */
 const ABOVE_ROOT = /^\.\.(?:\/|$)/;
+/** A file reference ending in no file name: a trailing `/`, or a final `.` or `..` segment, which a
+ *  URL resolves to a directory (`x/.` is `x/`) while a path join drops it (`x/.` is `x`). */
+const NO_FILE_NAME = /(?:^|\/)\.{0,2}$/;
 
 /**
  * Why the packed map `path` (its text, `text`) may not ship, or `undefined` when it may: a
- * `.d.ts.map` naming at least one source, its source root and each source a relative path, each
- * source resolving inside the package to a file in `packed`.
+ * `.d.ts.map` naming at least one source, its source root empty or a literal relative path, each
+ * source a literal relative path ending in a file name and naming the same file under the root as a
+ * path (TypeScript) and as a string prefix (Node), inside the package, a file in `packed`.
  */
 export function mapRefusal(path, text, packed) {
   if (!path.endsWith(".d.ts.map")) return `${path} is a source map other than a declaration map`;
@@ -73,15 +86,23 @@ export function mapRefusal(path, text, packed) {
   }
   const sources = Array.isArray(map.sources) ? map.sources : [];
   if (sources.length === 0) return `${path} names no source`;
-  const root = typeof map.sourceRoot === "string" ? map.sourceRoot : "";
-  if (NOT_RELATIVE.test(root)) {
-    return `${path} has the source root ${root}, which is not a relative path`;
+  const root = map.sourceRoot ?? "";
+  if (root !== "" && !(typeof root === "string" && LITERAL.test(root))) {
+    return `${path} has the source root ${JSON.stringify(root)}, which is not a literal relative path`;
   }
-  for (const source of sources.map(String)) {
-    if (NOT_RELATIVE.test(source)) {
-      return `${path} names the source ${source}, which is not a relative path`;
+  for (const source of sources) {
+    if (typeof source !== "string" || !LITERAL.test(source)) {
+      return `${path} names the source ${JSON.stringify(source)}, which is not a literal relative path`;
     }
+    if (NO_FILE_NAME.test(source)) {
+      return `${path} names the source ${JSON.stringify(source)}, which does not end in a file name`;
+    }
+    // TypeScript reads the source as a path under the root, Node as `sourceRoot + source`.
     const resolved = named(path, posix.join(root, source));
+    const concatenated = named(path, `${root}${source}`);
+    if (concatenated !== resolved) {
+      return `${path} names ${resolved} under the source root ${root}, which Node reads as ${concatenated}`;
+    }
     if (ABOVE_ROOT.test(resolved)) {
       return `${path} names ${resolved}, which resolves outside the package`;
     }
@@ -95,7 +116,12 @@ export function mapRefusal(path, text, packed) {
  *  names a map the package keeps (`kept`). */
 function directiveRefusal(path, url, kept) {
   if (url.startsWith("data:")) return `${path} carries an inline source map`;
-  if (NOT_RELATIVE.test(url)) return `${path} names ${url}, which is not a relative path`;
+  if (!LITERAL.test(url)) {
+    return `${path} names ${JSON.stringify(url)}, which is not a literal relative path`;
+  }
+  if (NO_FILE_NAME.test(url)) {
+    return `${path} names ${JSON.stringify(url)}, which does not end in a file name`;
+  }
   const resolved = named(path, url);
   if (ABOVE_ROOT.test(resolved)) return `${path} names ${url}, which resolves outside the package`;
 
