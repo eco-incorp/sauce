@@ -18,6 +18,7 @@
  * LiteSVM is an optional peer dependency of the package: a project that tests on Solana installs
  * it, at the version the package pins, as one that tests on an EVM chain installs Foundry.
  */
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
@@ -37,9 +38,22 @@ import {
 } from "@solana/kit";
 import type { LiteSVM } from "litesvm";
 
-import { RUNTIME_MANIFEST, svmEnginePath, svmKitchenPath } from "./sdk.js";
+import {
+  elfLength,
+  isPinnedProgram,
+  RUNTIME_MANIFEST,
+  svmEngineReleases,
+  svmEnginePath,
+  svmKitchenPath,
+  v12ReleaseSet,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "./sdk.js";
 
 type LiteSvmModule = typeof import("litesvm");
+
+/** Lowercase hex, as `releases.json` pins a digest. */
+const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111" as Address;
 const CLOCK = "SysvarC1ock11111111111111111111111111111111" as Address;
@@ -107,7 +121,7 @@ export interface BankAccount {
 }
 
 /** An account read from a cluster or a recording, with a program's code where it is one. */
-interface ReadAccount extends BankAccount {
+export interface ReadAccount extends BankAccount {
   /** A program's code: from its program data under the upgradeable loader. */
   readonly code?: Uint8Array;
 }
@@ -643,11 +657,16 @@ export class Bank {
     readonly header: ClusterHeader,
     /** Replay: the keys the recording did not hold, read as missing. */
     readonly unrecorded: ReadonlySet<Address>,
+    /** The installed release's engine: the one the bank's own copy is at. */
+    private readonly engine: Address,
   ) {}
 
   /**
    * Opens a bank at `header`'s clock (the cluster's rent and epoch schedule, where it has them), the
    * engine and the Kitchen at `engine` and `kitchen`, reading what it does not hold from `source`.
+   * The two programs are this package's release, held to the digests the installed row pins; where
+   * a cluster serves them (a fork), each must be one of the package's builds, and the copy runs
+   * exactly the build the cluster runs: a fork never runs code other than its cluster's.
    */
   static async open(options: {
     readonly mode: BankMode;
@@ -671,8 +690,73 @@ export class Bank {
       .withBlockhashCheck(false);
     // An empty chain has the native mints a cluster is born with; a fork reads the cluster's.
     if (options.mode === "local") svm = svm.withNativeMints();
-    svm.addProgramFromFile(options.engine, svmEnginePath("mainnet"));
-    svm.addProgramFromFile(options.kitchen, svmKitchenPath());
+    const release = v12ReleaseSet();
+    const engineBuilds = {
+      mainnet: new Uint8Array(readFileSync(svmEnginePath("mainnet"))),
+      devnet: new Uint8Array(readFileSync(svmEnginePath("devnet"))),
+    } as const;
+    const kitchenSo = new Uint8Array(readFileSync(svmKitchenPath()));
+    for (const [bytes, pin, name] of [
+      [engineBuilds.mainnet, release["v12-svm"].assets["engine-mainnet.so"], "engine-mainnet.so"],
+      [engineBuilds.devnet, release["v12-svm"].assets["engine-devnet.so"], "engine-devnet.so"],
+      [kitchenSo, release["kitchen-svm"].assets["kitchen.so"], "kitchen.so"],
+    ] as const) {
+      if (sha256(bytes) !== pin) {
+        throw new Error(
+          `the kit runs this package's release: the packaged ${name} is not the one it pins ` +
+            `(sha256 ${sha256(bytes)}): reinstall the package`,
+        );
+      }
+    }
+    if (
+      options.engine !== v12SvmEngineProgramId() ||
+      options.kitchen !== v12SvmKitchenProgramId()
+    ) {
+      throw new Error(
+        `the kit runs this package's release: its engine is ${v12SvmEngineProgramId()} and its ` +
+          `Kitchen ${v12SvmKitchenProgramId()}, not ${options.engine} and ${options.kitchen}`,
+      );
+    }
+    const anotherBuild = (id: Address, component: string, version: string): Error =>
+      new Error(
+        `the cluster runs another build at ${id} than this package's ${component} ${version}: a ` +
+          "cook here would run other code, so the fork refuses",
+      );
+    // Where the cluster has no such program, the package's (the engine's mainnet build, as ever); a
+    // cluster that serves one must serve one of the package's builds, which is the one loaded.
+    let engineCode = engineBuilds.mainnet;
+    if (options.mode === "record" || options.mode === "live") {
+      const [engineHeld, kitchenHeld] = (await options.source?.read([
+        options.engine,
+        options.kitchen,
+      ])) ?? [null, null];
+      // Neither read is recorded: the release's programs are the package's, not the recording's.
+      if (engineHeld !== null && engineHeld !== undefined) {
+        const build = (["mainnet", "devnet"] as const).find(
+          (kind) =>
+            engineHeld.executable &&
+            engineHeld.code !== undefined &&
+            isPinnedProgram(engineHeld.code, [sha256(engineBuilds[kind])]),
+        );
+        if (build === undefined) {
+          throw anotherBuild(options.engine, "v12-svm", release["v12-svm"].version);
+        }
+        engineCode = engineBuilds[build];
+      }
+      if (
+        kitchenHeld !== null &&
+        kitchenHeld !== undefined &&
+        !(
+          kitchenHeld.executable &&
+          kitchenHeld.code !== undefined &&
+          isPinnedProgram(kitchenHeld.code, [sha256(kitchenSo)])
+        )
+      ) {
+        throw anotherBuild(options.kitchen, "kitchen-svm", release["kitchen-svm"].version);
+      }
+    }
+    svm.addProgram(options.engine, engineCode);
+    svm.addProgram(options.kitchen, kitchenSo);
     const { rent, epochSchedule } = options.header;
     if (rent !== undefined) {
       svm.setRent(
@@ -697,6 +781,7 @@ export class Bank {
       options.source,
       options.header,
       options.unrecorded ?? new Set(),
+      options.engine,
     );
     bank.setClock(options.header.clock);
 
@@ -782,7 +867,21 @@ export class Bank {
       if (this.mode === "record") this.read.set(key, account);
       if (account?.executable === true && account.code !== undefined) {
         // A program: its code, at its id. Programs never change in a test, so it is the bank's own.
-        this.svm.addProgram(key, account.code);
+        // An engine of an earlier release than the installed one is held to that release's digests
+        // first (its account's code is its program data, possibly zero-padded) and loaded as its
+        // release built it: never code other than the release's.
+        const earlier = key === this.engine ? undefined : svmEngineReleases().get(key);
+        if (earlier !== undefined) {
+          if (!isPinnedProgram(account.code, earlier.digests)) {
+            throw new Error(
+              `the source holds ${key}, engine v12-svm ${earlier.version}, as another build: a ` +
+                "cook on it would run other code",
+            );
+          }
+          this.svm.addProgram(key, account.code.subarray(0, elfLength(account.code)));
+        } else {
+          this.svm.addProgram(key, account.code);
+        }
         this.own.add(key);
         return;
       }

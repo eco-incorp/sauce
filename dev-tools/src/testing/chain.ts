@@ -8,13 +8,10 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
-  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getCreate2Address,
   http,
   isAddress,
-  keccak256,
   parseAbi,
   toHex,
   type Address,
@@ -43,6 +40,7 @@ import {
   effectsOf,
   exactUnits,
   TOKEN_REGISTRY,
+  v12PredictPot,
   type CanonicalChain,
   type Effects,
   type EntryValue,
@@ -162,16 +160,7 @@ export class TestChain {
         index,
         address,
         privateKey: toHex(hd.getHdKey().privateKey!),
-        pot: getCreate2Address({
-          bytecodeHash: stack.potInitCodeHash,
-          from: stack.kitchen,
-          salt: keccak256(
-            encodeAbiParameters(
-              [{ type: "address" }, { type: "bytes32" }],
-              [address, DEFAULT_POT_SALT],
-            ),
-          ),
-        }),
+        pot: getAddress(v12PredictPot(address, DEFAULT_POT_SALT)),
       };
     });
   }

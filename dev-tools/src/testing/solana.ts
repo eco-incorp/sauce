@@ -126,6 +126,8 @@ export interface SolanaCookResult {
   readonly staged: boolean;
   /** The staged cook's accounts went through a lookup table. */
   readonly lookupTable: boolean;
+  /** The engine the cook named: the program that owns the Pot, so a test sees which engine ran. */
+  readonly engine: Address;
   /** How much `holder`'s balance of `token` (`SOL`, a symbol, or a mint) changed. */
   delta(holder: Address, token: string): bigint;
 }
@@ -488,7 +490,11 @@ export class SolanaTestChain {
   private result(program: CompiledProgram, cooked: Cooked, kept: boolean): SolanaCookResult {
     const { sent } = cooked;
     if (!sent.ok) {
-      const { reason, data } = failureOf(sent, this.cookChain, cooked.labels);
+      const { reason, data } = failureOf(
+        sent,
+        { ...this.cookChain, engine: cooked.engine },
+        cooked.labels,
+      );
       const unrecorded = sent.accounts.filter((key) => this.bank.unrecorded.has(key));
       throw new CookReverted(reason, data, {
         logs: sent.logs,
@@ -513,6 +519,7 @@ export class SolanaTestChain {
       changes,
       staged: cooked.staged,
       lookupTable: cooked.lookupTable,
+      engine: cooked.engine,
       delta: (holder, token) => {
         const mint = this.mintOf(token);
         return (

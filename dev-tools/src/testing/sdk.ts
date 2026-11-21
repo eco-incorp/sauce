@@ -27,6 +27,7 @@ export { buildSauceEvmCall } from "../../../sdk/dist/routes/sauce-calls.js";
 export { TOKEN_REGISTRY, svmTokenRows } from "../../../sdk/dist/routes/token-registry.js";
 export { BalanceSlotError, balanceOverride } from "../../../sdk/dist/evm/balance-slot.js";
 export { deployReleaseStack } from "../../../sdk/dist/evm/release-stack.js";
+export { DEFAULT_POT_SALT, v12PredictPot } from "../../../sdk/dist/deployments/pot.js";
 export {
   addressLabels,
   effectsOf,
@@ -38,6 +39,9 @@ export {
 // Solana: the release's program ids, the Kitchen's and the engine's instructions, the account names
 // `sauce` takes (`svm/account-names.ts`), and the packaged engine and Kitchen binaries.
 export {
+  engineRunsCompiler,
+  sdkCompilerVersion,
+  v12ReleaseSet,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
 } from "../../../sdk/dist/deployments/index.js";
@@ -82,6 +86,11 @@ export {
   svmKitchenIdlPath,
   svmKitchenPath,
 } from "../../../sdk/dist/svm/engine-artifacts.js";
+export {
+  elfLength,
+  isPinnedProgram,
+  svmEngineReleases,
+} from "../../../sdk/dist/svm/engine-release.js";
 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
