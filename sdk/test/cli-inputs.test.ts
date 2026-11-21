@@ -3,6 +3,8 @@
  * command and the MCP server's tools both apply, held here independently of either front end.
  * And `sauce mcp`'s own flag rules, which the CLI checks before it loads the server at all.
  */
+import type { PublicClient } from "viem";
+
 import { requireChain } from "../src/chains/canonical.js";
 import { DEFAULT_POT_SALT, potSalt } from "../src/deployments/pot.js";
 import { UsageError } from "../src/cli/args.js";
@@ -159,6 +161,29 @@ describe("fundingFor and assumedBalances", () => {
     expect(() => svmAssumedBalances(["USDC:1,5"], solana)).toThrow(
       /expected <TOKEN\|mint>:<amount>/,
     );
+  });
+
+  // `sauce run` hands the funding its client before it signs or sends anything, the Pot's
+  // deployment included: a token named by its address is read then for its decimals, and an amount
+  // past them refused, and nothing else is read until the funding is made for the Pot.
+  it("reads a token named by address for its decimals when given the client, and refuses an amount past them there", async () => {
+    const token = "0x1234567890123456789012345678901234567890";
+    const reads: string[] = [];
+    const client = {
+      readContract: async ({ functionName }: { functionName: string }) => {
+        reads.push(functionName);
+
+        return 6;
+      },
+    } as unknown as PublicClient;
+    const funds = await fundingFor({ ...given, fund: [`${token}:1.5`] })!(client);
+    expect(typeof funds).toBe("function");
+    expect(reads).toEqual(["decimals"]);
+    await expect(fundingFor({ ...given, fund: [`${token}:1.2345678`] })!(client)).rejects.toThrow(
+      `--fund ${token}:1.2345678: 1.2345678 ${token} has 7 decimal places; ${token} has 6, so ` +
+        "it cannot be written exactly",
+    );
+    expect(reads).toEqual(["decimals", "decimals"]);
   });
 });
 

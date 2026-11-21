@@ -284,7 +284,7 @@ describeEvm(
             rpcUrl: local.rpcUrl,
             account: OWNER,
             approver: asking(unasked),
-            fund: ((client, at, owner) =>
+            fund: (async (client) => (at, owner) =>
               planFunding({
                 chain: local.chain,
                 client,
@@ -968,6 +968,48 @@ describeEvm(
         });
       }
     }, 120_000);
+
+    // `sauce run` reads the decimals of a token named by its address, and holds the amount to them,
+    // before it signs or sends anything: an amount the token cannot hold is refused with the Pot
+    // still undeployed, whether --yes approved its deployment or a person would have.
+    it.each(["--yes", "a person at the terminal"])(
+      "refuses a --fund amount its token cannot hold before deploying the Pot (%s): nothing is asked or sent",
+      async (how) => {
+        // A signer of its own, with gas and no Pot. TETHER has 6 decimals and is named by address.
+        const key = generatePrivateKey();
+        const signer = privateKeyToAccount(key).address;
+        await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
+        const questions: string[] = [];
+        const refused = await sauceWith(
+          how === "--yes"
+            ? {}
+            : {
+                canAsk: () => true,
+                confirm: async (question) => {
+                  questions.push(question);
+
+                  return true;
+                },
+              },
+          ...["run", program, "--rpc-url", local.rpcUrl, "--private-key", key, "--salt", "exact"],
+          ...["--fund", `${tether}:1.2345678`, ...(how === "--yes" ? ["--yes"] : [])],
+          ...["--args", tether, RECIPIENT, "1000000"],
+        ).then(record);
+        expect(refused.code).toBe(2);
+        expect(refused.stderr).toContain(
+          `--fund ${tether}:1.2345678: 1.2345678 ${tether} has 7 decimal places; ${tether} has ` +
+            "6, so it cannot be written exactly",
+        );
+        expect(questions).toEqual([]);
+        expect(await local.publicClient.getTransactionCount({ address: signer })).toBe(0);
+        expect(
+          await local.publicClient.getCode({
+            address: v12PredictPot(signer, potSalt("exact")) as Address,
+          }),
+        ).toBeUndefined();
+      },
+      60_000,
+    );
 
     it("signs with a keystore: deploys its Pot, approves Permit2 and funds the cook with --auto-approve", async () => {
       const signer = privateKeyToAccount(KEYSTORE_KEY).address;

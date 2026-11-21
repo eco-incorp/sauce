@@ -262,10 +262,9 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   const deploy = state.deployed ? undefined : { salt: (target as { readonly salt: Hex }).salt };
   const kitchen = kitchenAddress();
 
+  const fund = input.fund === undefined ? undefined : await input.fund(client);
   const funding =
-    input.fund === undefined
-      ? undefined
-      : await input.fund(client, cook.pot, owner, { deploySalt: deploy?.salt });
+    fund === undefined ? undefined : await fund(cook.pot, owner, { deploySalt: deploy?.salt });
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);

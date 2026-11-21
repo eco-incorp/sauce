@@ -67,7 +67,8 @@ export interface FundRequest {
   readonly token?: Address;
   /** What to call it in messages: the symbol given, or the address. */
   readonly label: string;
-  /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
+  /** Its decimals: the registry's for a symbol, 18 for the native currency; for a token named by
+   *  its address, `undefined` until `withDecimals` reads them from the token. */
   readonly decimals?: number;
   /** The amount: in whole tokens as written (`1.5`), or in base units (`1500000n`). */
   readonly amount: TokenAmount;
@@ -111,7 +112,8 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
   const request = tokenRequest(raw, what, chain, flag, parsed);
   // Where the decimals are known now, a registered symbol's or the native coin's, an amount that
   // would need rounding is refused before anything is read or sent. A token named by its address
-  // is held to its own decimals once `baseUnits` has read them.
+  // is held to its own decimals once `withDecimals` has read them, before `sauce run` signs or
+  // sends anything.
   if ("units" in request.amount && request.decimals !== undefined) {
     exactUnits(request.amount.units, request.decimals, request.label, `${flag} ${raw}`);
   }
@@ -253,6 +255,41 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
+/** A request's token's decimals: as parsed (a registered symbol, the native currency), else read
+ *  from the token. */
+const decimalsOf = async (client: PublicClient, request: FundRequest): Promise<number> =>
+  request.decimals ??
+  Number(
+    await read(`${request.label}'s decimals()`, () =>
+      client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
+    ),
+  );
+
+/**
+ * `requests`, each amount in whole tokens of a token named by its address given that token's
+ * decimals, read from it, and held to them (`exactUnits`): what `sauce run` does with its client
+ * before it signs or sends anything, its Pot's deployment included, so an amount the token cannot
+ * hold is refused with nothing sent. A registered symbol and the native currency were held to
+ * theirs when parsed; base units need none, and nothing is read for them.
+ */
+export async function withDecimals(
+  client: PublicClient,
+  requests: readonly FundRequest[],
+): Promise<FundRequest[]> {
+  const resolved: FundRequest[] = [];
+  for (const request of requests) {
+    if (request.decimals !== undefined || !("units" in request.amount)) {
+      resolved.push(request);
+      continue;
+    }
+    const decimals = await decimalsOf(client, request);
+    exactUnits(request.amount.units, decimals, request.label, `${request.flag} ${request.raw}`);
+    resolved.push({ ...request, decimals });
+  }
+
+  return resolved;
+}
+
 /**
  * A request's amount in base units, exact (`exactUnits` refuses one that would need rounding), a
  * token's decimals read from it when not registered, and a note
@@ -266,13 +303,7 @@ export async function baseUnits(
 ): Promise<{ readonly amount: bigint; readonly note?: string }> {
   if ("base" in request.amount) return { amount: request.amount.base };
   const units = request.amount.units;
-  const decimals =
-    request.decimals ??
-    Number(
-      await read(`${request.label}'s decimals()`, () =>
-        client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
-      ),
-    );
+  const decimals = await decimalsOf(client, request);
   const amount = exactUnits(units, decimals, request.label, `${request.flag} ${request.raw}`);
   if (units.includes(".") || decimals === 0 || BigInt(units) < 10n ** BigInt(decimals)) {
     return { amount };

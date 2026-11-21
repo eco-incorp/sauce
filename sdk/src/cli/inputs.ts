@@ -30,6 +30,7 @@ import {
   parseTokenAmount,
   permit2On,
   planFunding,
+  withDecimals,
   type FundMode,
   type FundRequest,
 } from "./funding.js";
@@ -200,9 +201,11 @@ export interface FundingGiven {
 }
 
 /**
- * The funding a cook carries, as the callback `runCommand`/`simulateCommand` call once the Pot is
- * there; `undefined` with nothing to fund. Everything about the requests is checked here, before
- * anything is sent.
+ * The funding a cook carries, as `CookInput.fund` takes it; `undefined` with nothing to fund.
+ * Everything about the requests that needs no chain is checked here, before anything is read. Given
+ * the command's client, before anything is signed or sent, it reads the decimals of each token named
+ * by its address and holds the amount to them (`withDecimals`), then makes the funding once the Pot
+ * is there.
  */
 export function fundingFor(given: FundingGiven): CookInput["fund"] {
   const { chain, mode, sweep } = given;
@@ -242,29 +245,34 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
   }
   const account = given.account;
 
-  return async (client, pot, owner, { plan = false, deploySalt, beforeSend } = {}) => {
-    if (account !== undefined && account.address !== owner) {
-      throw new UsageError(
-        `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
-          "owner's tokens on the owner's signature",
-      );
-    }
+  return async (client) => {
+    // Every amount held to its token's decimals now, before the run signs or sends anything.
+    const resolved = await withDecimals(client, requests);
 
-    return planFunding({
-      chain,
-      client,
-      rpcUrl: given.rpcUrl,
-      owner,
-      pot,
-      mode: (mode ?? "permit2") as FundMode,
-      requests,
-      sweep,
-      ...(account === undefined ? {} : { account }),
-      ...(deploySalt === undefined ? {} : { deploySalt }),
-      ...(beforeSend === undefined ? {} : { beforeSend }),
-      send: given.send && !plan,
-      approver: given.approver,
-    });
+    return async (pot, owner, { plan = false, deploySalt, beforeSend } = {}) => {
+      if (account !== undefined && account.address !== owner) {
+        throw new UsageError(
+          `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls ` +
+            "the owner's tokens on the owner's signature",
+        );
+      }
+
+      return planFunding({
+        chain,
+        client,
+        rpcUrl: given.rpcUrl,
+        owner,
+        pot,
+        mode: (mode ?? "permit2") as FundMode,
+        requests: resolved,
+        sweep,
+        ...(account === undefined ? {} : { account }),
+        ...(deploySalt === undefined ? {} : { deploySalt }),
+        ...(beforeSend === undefined ? {} : { beforeSend }),
+        send: given.send && !plan,
+        approver: given.approver,
+      });
+    };
   };
 }
 
