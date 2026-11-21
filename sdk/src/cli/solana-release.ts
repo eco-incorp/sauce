@@ -14,9 +14,16 @@ import { readFileSync } from "node:fs";
 import { getAddressDecoder } from "@solana/kit";
 
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
-import { v12DeployedReleaseSet } from "../deployments/releases.js";
-import { svmEnginePath, svmKitchenPath } from "../svm/engine-artifacts.js";
+import {
+  engineRunsCompiler,
+  sdkCompilerVersion,
+  V12_RELEASE_SETS,
+  v12ReleaseSet,
+} from "../deployments/releases.js";
+import { svmEnginePath, svmKitchenPath, type EngineCluster } from "../svm/engine-artifacts.js";
+import { elfLength, isPinnedProgram, svmEngineReleases } from "../svm/engine-release.js";
 import { CliError } from "./args.js";
+import { pairedSdkReleases, pairWith, svmRelease } from "./pots.js";
 
 /** A program account as the cluster holds it: its loader, whether it is executable, and its data. */
 export interface ProgramAccount {
@@ -112,7 +119,7 @@ function packaged(file: string, asset: string, pin: string | null | undefined): 
 
 /** The release's engine and Kitchen: the packaged binaries, each checked against `releases.json`. */
 export function packagedRelease(): ReleasedPrograms {
-  const set = v12DeployedReleaseSet();
+  const set = v12ReleaseSet();
 
   return {
     engine: (["devnet", "mainnet"] as const).map((cluster) =>
@@ -143,40 +150,165 @@ export function instructionAddresses(
   ]);
 }
 
-/** Which of the release's programs appear among `programs` — a transaction's programs and accounts. */
-export function releasedProgramsCalled(programs: Iterable<string>): ProgramName[] {
+/**
+ * The release's programs among `programs` — a transaction's programs and accounts: whether the
+ * Kitchen is, and every release engine (`svmEngineReleases`): a Pot is cooked by the engine that
+ * owns it, which may be an earlier release's.
+ */
+export function programsCalled(programs: Iterable<string>): {
+  readonly needs: ProgramName[];
+  readonly engines: string[];
+} {
   const called = new Set(programs);
+  const engines = [...svmEngineReleases().keys()].filter((id) => called.has(id));
 
-  return [
-    ...(called.has(v12SvmEngineProgramId()) ? (["engine"] as const) : []),
-    ...(called.has(v12SvmKitchenProgramId()) ? (["Kitchen"] as const) : []),
-  ];
+  return {
+    needs: [
+      ...(engines.length > 0 ? (["engine"] as const) : []),
+      ...(called.has(v12SvmKitchenProgramId()) ? (["Kitchen"] as const) : []),
+    ],
+    engines,
+  };
+}
+
+/**
+ * Which release engine `program` is and why this SDK's programs do not run on it: the part of a
+ * refusal that follows "the engine" / "the Pot P is owned by engine", ending before its last words.
+ */
+export function engineMismatch(program: string): string {
+  const version = svmEngineReleases().get(program)?.version ?? "?";
+  const named = V12_RELEASE_SETS.filter((row) => row["v12-svm"].engine === program);
+  const runs = V12_RELEASE_SETS.filter(
+    (row) =>
+      row["v12-svm"].engine === program || row.alsoRunsOn?.["v12-svm"]?.includes(version) === true,
+  )
+    .map((row) => row.compiler)
+    .join(", ");
+  const newest = named.at(-1);
+  const paired = newest === undefined ? undefined : pairedSdkReleases(svmRelease(newest));
+
+  return (
+    `${program} (v12-svm ${version}), which runs compiler ${runs} output: this SDK compiles with ` +
+    `compiler ${sdkCompilerVersion()}${paired === undefined ? "" : `, and ${pairWith(paired)} that engine`}`
+  );
+}
+
+/**
+ * Refuses unless `program`, an engine of an earlier release than the installed one, is a release
+ * engine whose programs run this SDK's, deployed on the cluster as that release's build
+ * ({@link isPinnedProgram}: the cluster's program account is the committed ELF, then zero padding).
+ */
+async function requireEarlierEngine(
+  read: ReadProgram,
+  program: string,
+  slug: string,
+): Promise<void> {
+  const release = svmEngineReleases().get(program);
+  if (release === undefined) {
+    throw new CliError(
+      `${program} is not an engine release this SDK knows, so a cook on it is not run. ` +
+        "Nothing was simulated, built or sent",
+    );
+  }
+  if (engineRunsCompiler("svm", program) !== true) {
+    throw new CliError(
+      `the engine ${engineMismatch(program)}. Nothing was simulated, built or sent`,
+    );
+  }
+  const deployed = await deployedProgram(read, program);
+  if (deployed !== undefined && isPinnedProgram(deployed, release.digests)) return;
+  throw new CliError(
+    `the engine ${program} (v12-svm ${release.version}) is not deployed on ${slug} as that ` +
+      `release's build: ${
+        deployed === undefined
+          ? "the cluster has no such program"
+          : "the program there is not that release's engine"
+      }. Nothing was simulated, built or sent`,
+  );
 }
 
 /**
  * Refuses unless each of `needs` is on the cluster as the release's program: the engine first, as
  * the EVM path does. Run before anything is simulated, built or sent. `slug` is the chain the
- * cluster was named as, which the refusal names.
+ * cluster was named as, which the refusal names. The engine is each of `engines`: the installed
+ * release's by its packaged bytes, an earlier release's (the engine that owns a Pot made under it)
+ * by its committed digest.
  */
 export async function requireSolanaRelease(
   read: ReadProgram,
   needs: readonly ProgramName[],
   slug: string,
   released: ReleasedPrograms = packagedRelease(),
+  engines: readonly string[] = [v12SvmEngineProgramId()],
 ): Promise<void> {
   for (const name of ["engine", "Kitchen"] as const) {
     if (!needs.includes(name)) continue;
-    const program = name === "engine" ? v12SvmEngineProgramId() : v12SvmKitchenProgramId();
-    const wanted = name === "engine" ? released.engine : [released.kitchen];
-    const deployed = await deployedProgram(read, program);
-    if (deployed !== undefined && wanted.some((one) => isReleasedProgram(deployed, one))) continue;
-    throw new CliError(
-      `the released ${name} ${program} is not deployed on ${slug}: this SDK's cook cannot run ` +
-        `there (${
-          deployed === undefined
-            ? "the cluster has no such program"
-            : `the program there is not this release's ${name === "engine" ? "engine" : "kitchen.so"}`
-        }). Nothing was simulated, built or sent`,
+    for (const program of name === "engine" ? engines : [v12SvmKitchenProgramId()]) {
+      if (name === "engine" && program !== v12SvmEngineProgramId()) {
+        await requireEarlierEngine(read, program, slug);
+        continue;
+      }
+      const wanted = name === "engine" ? released.engine : [released.kitchen];
+      const deployed = await deployedProgram(read, program);
+      if (deployed !== undefined && wanted.some((one) => isReleasedProgram(deployed, one))) {
+        continue;
+      }
+      throw new CliError(
+        `the released ${name} ${program} is not deployed on ${slug}: this SDK's cook cannot run ` +
+          `there (${
+            deployed === undefined
+              ? "the cluster has no such program"
+              : `the program there is not this release's ${name === "engine" ? "engine" : "kitchen.so"}`
+          }). Nothing was simulated, built or sent`,
+      );
+    }
+  }
+}
+
+/**
+ * The code a local copy runs for `program`: the packaged ELF for the installed release's engine or
+ * Kitchen (held to its digest), once the cluster's program is shown to be byte-identical to it;
+ * for an earlier release's engine, the cluster's own bytes held to that release's committed digest.
+ * Refuses — never substitutes — when the cluster's program is absent or another build.
+ */
+export async function releasedProgramCode(
+  read: ReadProgram,
+  program: string,
+  build: EngineCluster,
+  slug: string,
+): Promise<Uint8Array> {
+  const set = v12ReleaseSet();
+  if (program === v12SvmKitchenProgramId()) {
+    await requireSolanaRelease(read, ["Kitchen"], slug);
+
+    return packaged(svmKitchenPath(), "kitchen.so", set["kitchen-svm"].assets["kitchen.so"]);
+  }
+  if (program === v12SvmEngineProgramId()) {
+    await requireSolanaRelease(read, ["engine"], slug);
+
+    return packaged(
+      svmEnginePath(build),
+      `engine-${build}.so`,
+      set["v12-svm"].assets[`engine-${build}.so`],
     );
   }
+  const asset = `engine-${build}.so`;
+  const digests =
+    engineRunsCompiler("svm", program) === true
+      ? V12_RELEASE_SETS.flatMap((row) => {
+          const digest = row["v12-svm"].engine === program ? row["v12-svm"].assets[asset] : null;
+
+          return digest === null || digest === undefined ? [] : [digest];
+        })
+      : [];
+  const deployed = digests.length === 0 ? undefined : await deployedProgram(read, program);
+  if (deployed === undefined || !isPinnedProgram(deployed, digests)) {
+    throw new CliError(
+      `simulating a cook on a Pot of engine ${program} needs that engine's own code, and ${slug} ` +
+        "does not run that release's build: the simulation would run other code. Nothing was " +
+        "simulated",
+    );
+  }
+
+  return deployed.subarray(0, elfLength(deployed)!);
 }

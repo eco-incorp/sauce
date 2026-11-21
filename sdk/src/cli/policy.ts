@@ -96,11 +96,7 @@ import {
 import { decimalPlaces, tokenAmount, type TokenAmount } from "../amounts.js";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import {
-  v12KitchenAddress,
-  v12SvmEngineProgramId,
-  v12SvmKitchenProgramId,
-} from "../deployments/index.js";
+import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
@@ -111,6 +107,7 @@ import {
   svmPublicKey,
   type SimulatedAccount,
 } from "../svm/index.js";
+import { svmEngineReleases } from "../svm/engine-release.js";
 import { CliError, UsageError } from "./args.js";
 import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
@@ -1356,7 +1353,8 @@ export async function measureSvm(
   // Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot, still
   // in the set.)
   const keys = [...ours];
-  const engine = v12SvmEngineProgramId();
+  // A Pot is an account any release's engine owns: the one that cooks it (`svm/engine-release.ts`).
+  const engines = svmEngineReleases();
   const held = (
     account: SvmAddress,
     state: SimulatedAccount | null,
@@ -1369,7 +1367,7 @@ export async function measureSvm(
       return commanded &&
         (program === undefined ||
           state.owner === program ||
-          (account !== wallet && state.owner === engine))
+          (account !== wallet && engines.has(state.owner)))
         ? state.lamports
         : 0n;
     }

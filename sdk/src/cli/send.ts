@@ -78,7 +78,7 @@ import {
   svmReader,
   type SvmSent,
 } from "./solana.js";
-import { releasedProgramsCalled } from "./solana-release.js";
+import { programsCalled } from "./solana-release.js";
 import { requireSupported } from "./support.js";
 import {
   decodeCursor,
@@ -86,6 +86,7 @@ import {
   isCook,
   isPlanCook,
   nextStep,
+  planEngine,
   planPrograms,
   readPlanTx,
   signableStep,
@@ -303,6 +304,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     ctx.url,
     ctx.chain,
     planPrograms(input.close === true ? { ...plan, closing: true } : plan),
+    [planEngine(plan)],
   );
   const step = await nextStep(plan, ctx, { close: input.close === true });
   if (step.name === "done") {
@@ -812,12 +814,8 @@ async function sendSvm(
   // What goes to the engine or the Kitchen goes only to a cluster running the release's: checked
   // before any of it is sent.
   for (const tx of signed) {
-    await requireReleased(
-      rpc,
-      input.rpcUrl,
-      input.chain,
-      releasedProgramsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction)),
-    );
+    const called = programsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction));
+    await requireReleased(rpc, input.rpcUrl, input.chain, called.needs, called.engines);
   }
   const read = svmReader(input.rpcUrl);
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(

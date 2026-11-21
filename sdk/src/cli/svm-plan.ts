@@ -97,14 +97,11 @@ import {
   recommendedComputeUnitLimit,
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
+import { svmEngineReleases } from "../svm/engine-release.js";
 import { CliError, UsageError } from "./args.js";
 import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
-import {
-  instructionAddresses,
-  releasedProgramsCalled,
-  type ProgramName,
-} from "./solana-release.js";
+import { instructionAddresses, programsCalled, type ProgramName } from "./solana-release.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -138,6 +135,11 @@ export interface SvmPlan {
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
+  /**
+   * The engine the plan's cook names: the Pot's owner program, or the installed release's for a Pot
+   * the plan creates. A cursor carries it only where it is not the installed release's.
+   */
+  readonly engine?: Address;
   /** The most the cook may pay in execution fee (`--max-execution-fee`). */
   readonly maxExecutionFee?: bigint;
   readonly tail: readonly PlanAccount[];
@@ -193,6 +195,9 @@ export function planPrograms(plan: SvmPlan): ProgramName[] {
       : []),
   ];
 }
+
+/** The engine the plan's cook names (`SvmPlan.engine`): the installed release's unless it says. */
+export const planEngine = (plan: SvmPlan): Address => plan.engine ?? engine();
 
 /** A cook handed out to a signer, as the plan remembers it. */
 export interface CookHandedOut {
@@ -311,6 +316,8 @@ export function encodeCursor(plan: SvmPlan): string {
     owner: plan.owner,
     salt: plan.salt,
     via: plan.via,
+    // The installed release's engine is the cursor's own: a Pot of an earlier release names its.
+    ...(plan.engine === undefined || plan.engine === engine() ? {} : { engine: plan.engine }),
     // Solana's is the cursor's own: every cursor made before another SVM chain names none.
     ...(plan.chain.id === requireChain("solana").id ? {} : { chain: plan.chain.slug }),
     ...(plan.maxExecutionFee === undefined ? {} : { maxExecutionFee: `${plan.maxExecutionFee}` }),
@@ -498,6 +505,7 @@ export function decodeCursor(text: string): SvmPlan {
     owner: key(raw.owner, "owner"),
     salt: raw.salt as Hex,
     via,
+    ...(raw.engine === undefined ? {} : { engine: key(raw.engine, "engine") }),
     ...(raw.maxExecutionFee === undefined
       ? {}
       : { maxExecutionFee: integer(raw.maxExecutionFee, "maxExecutionFee") }),
@@ -565,7 +573,8 @@ export async function isPlanCook(
   return plan.via === "engine" || read.pot === undefined || read.pot === (await potOf(plan));
 }
 
-/** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. */
+/** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. A Pot the plan creates
+ *  is new, so it is the installed release's: always `engine()`, never the plan's engine. */
 async function createPotInstruction(plan: SvmPlan): Promise<Instruction> {
   return buildCreatePotInstruction({
     kitchen: kitchen(),
@@ -606,7 +615,7 @@ async function cookInstruction(
   if (buffer !== undefined) {
     return plan.via === "engine"
       ? buildCookAndPayFromAccountPinnedInstruction({
-          engineProgram: engine(),
+          engineProgram: planEngine(plan),
           code: buffer.code,
           expectedSha256: plan.staged!.sha256,
           feeConfig,
@@ -619,7 +628,7 @@ async function cookInstruction(
           owner: plan.owner,
           codeBuffer: buffer.codeBuffer,
           code: buffer.code,
-          engineProgram: engine(),
+          engineProgram: planEngine(plan),
           potSalt: hexToBytes(plan.salt),
           pot: await potOf(plan),
           feeConfig,
@@ -631,7 +640,7 @@ async function cookInstruction(
 
   return plan.via === "engine"
     ? buildCookAndPayInstruction({
-        engineProgram: engine(),
+        engineProgram: planEngine(plan),
         feeConfig,
         feePayer: plan.owner,
         maxExecutionFee: fee,
@@ -641,7 +650,7 @@ async function cookInstruction(
     : buildCookInstruction({
         kitchen: kitchen(),
         owner: plan.owner,
-        engineProgram: engine(),
+        engineProgram: planEngine(plan),
         potSalt: hexToBytes(plan.salt),
         pot: await potOf(plan),
         feeConfig,
@@ -690,6 +699,8 @@ export interface NewPlanInput {
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
+  /** The engine the cook names: the Pot's owner program, or the installed release's for a Pot to create. */
+  readonly engine: Address;
   readonly maxExecutionFee?: bigint;
   /** The program with its arguments appended: what the cook runs. */
   readonly payload: Uint8Array;
@@ -715,6 +726,7 @@ export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
     owner: input.owner,
     salt: input.salt,
     via: input.via,
+    ...(input.engine === engine() ? {} : { engine: input.engine }),
     ...(input.maxExecutionFee === undefined ? {} : { maxExecutionFee: input.maxExecutionFee }),
     tail: input.tail,
     lookupTables: Object.keys(input.lookupTables) as Address[],
@@ -842,6 +854,29 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
   return value !== null;
 }
 
+/**
+ * Whether the plan's Pot is still to be created. A Pot there that a Kitchen cook is to be built on
+ * must be owned by the engine the plan was made for (`planEngine`): the cook names that engine, and
+ * a Pot is cooked by the engine that owns it. Any other owner refuses the step. A plan with no cook
+ * left to build (its cook landed, or it is given up: `cooking` false) is not held to it: what is
+ * left of it is the code buffer's close, which no Pot's owner changes.
+ */
+async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<boolean> {
+  const pot = await potOf(plan);
+  const { value } = await ask(ctx.url, "the Pot", () =>
+    ctx.rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
+  );
+  if (value === null) return true;
+  if (cooking && plan.via === "kitchen" && value.owner !== planEngine(plan)) {
+    throw new CliError(
+      `the Pot ${pot} is owned by ${value.owner}, and this plan was made for engine ` +
+        `${planEngine(plan)}: make the plan again (sauce tx)`,
+    );
+  }
+
+  return false;
+}
+
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */
 const CHUNK = 900;
 /** Grow instructions in one transaction, well inside its size. */
@@ -936,6 +971,7 @@ export async function nextStep(
         "closed it (sauce reclaim?). Make a new plan",
     );
   }
+  if (current.via === "kitchen" && current.pot !== "setup") await potIsMissing(current, ctx);
   const setup = await setupTransactions(current, ctx, state, finalized);
   if (setup.transactions.length > 0) {
     return {
@@ -956,6 +992,9 @@ export async function nextStep(
  * alone, for what they cost to be counted before any is sent (a wallet's policy).
  */
 export async function transactionsAhead(plan: SvmPlan, ctx: StepContext): Promise<PlanTx[]> {
+  if (plan.cooked === undefined && plan.closing !== true && plan.via === "kitchen") {
+    if (plan.pot !== "setup") await potIsMissing(plan, ctx);
+  }
   const buffer = await planBuffer(plan);
   const state = buffer === undefined ? undefined : await bufferState(ctx, plan);
   const finalized =
@@ -1009,7 +1048,7 @@ async function setupTransactions(
   // does not hold, found and made as `sauce run` makes them (`svmTokenAccountsToCreate`).
   const [potMissing, made] = await Promise.all([
     plan.pot === "setup"
-      ? potOf(plan).then(async (pot) => !(await exists(ctx, pot, "the Pot")))
+      ? potIsMissing(plan, ctx, plan.cooked === undefined && plan.closing !== true)
       : false,
     svmTokenAccountsToCreate(
       ctx.rpc,
@@ -1613,7 +1652,8 @@ function readInstructions(
         read.push({ what: KITCHEN_STEPS[name](data), cook: false });
       }
     } else if (
-      program === engine() &&
+      program !== undefined &&
+      svmEngineReleases().has(program) &&
       (starts(data, COOK_AND_PAY_DISCRIMINATOR) ||
         starts(data, COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR))
     ) {
@@ -1731,12 +1771,8 @@ export async function signableTransactions(
   if (txs.length === 0) return { transactions: [] };
   // The cluster they are built against, checked now: a cursor made against one endpoint, or before
   // an upgrade, can be carried on against another.
-  await requireReleased(
-    ctx.rpc,
-    ctx.url,
-    ctx.chain,
-    releasedProgramsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions))),
-  );
+  const called = programsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions)));
+  await requireReleased(ctx.rpc, ctx.url, ctx.chain, called.needs, called.engines);
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );

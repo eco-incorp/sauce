@@ -46,7 +46,11 @@ import { bytesToHex, formatUnits, hexToBytes, type Hex } from "viem";
 
 import { exactUnits, tokenAmount, type TokenAmount } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import {
+  engineRunsCompiler,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
 import {
   entryReturnType,
   parseEntryType,
@@ -56,9 +60,12 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
+import { svmEngineReleases } from "../svm/engine-release.js";
 import {
+  engineMismatch,
   instructionAddresses,
-  releasedProgramsCalled,
+  programsCalled,
+  releasedProgramCode,
   requireSolanaRelease,
   type ProgramName,
   type ReadProgram,
@@ -175,6 +182,7 @@ import {
   newSvmPlan,
   nextStep,
   planBuffer,
+  planEngine,
   planPrograms,
   signableStep,
   unsignedSigner,
@@ -207,28 +215,41 @@ const programReader =
         };
   };
 
-/** The programs each connection has shown to be the release's, so a command that checks before
- *  each thing it builds reads each program off the cluster once. A connection is one command's or
- *  one tool call's: the next reads again. */
-const shownReleased = new WeakMap<object, Set<ProgramName>>();
+/** What each connection has shown to be the release's — the Kitchen, and each engine by its id — so
+ *  a command that checks before each thing it builds reads each program off the cluster once. A
+ *  connection is one command's or one tool call's: the next reads again. */
+const shownReleased = new WeakMap<object, Set<string>>();
 
 /**
  * Refuses a cook or a Pot on a cluster without the released programs `needs` names, or on an
- * endpoint of another cluster than the one `chain` names ({@link requireCluster}). The refusal
- * names `chain`, as the user named the cluster.
+ * endpoint of another cluster than the one `chain` names ({@link requireCluster}). The engine is
+ * each of `engines` (the installed release's by default): the one that owns the Pot a cook names,
+ * which may be an earlier release's. The refusal names `chain`, as the user named the cluster.
  */
 export async function requireReleased(
   rpc: Rpc,
   url: string,
   chain: CanonicalChain,
   needs: readonly ProgramName[],
+  engines: readonly string[] = [v12SvmEngineProgramId()],
 ): Promise<void> {
   await requireCluster(rpc, url, chain);
-  const shown = shownReleased.get(rpc) ?? new Set<ProgramName>();
-  const unread = needs.filter((name) => !shown.has(name));
-  if (unread.length === 0) return;
-  await requireSolanaRelease(programReader(rpc, url), unread, chain.slug);
-  for (const name of unread) shown.add(name);
+  const shown = shownReleased.get(rpc) ?? new Set<string>();
+  const unreadEngines = needs.includes("engine") ? engines.filter((id) => !shown.has(id)) : [];
+  const unreadKitchen = needs.includes("Kitchen") && !shown.has("Kitchen");
+  if (unreadEngines.length === 0 && !unreadKitchen) return;
+  await requireSolanaRelease(
+    programReader(rpc, url),
+    [
+      ...(unreadEngines.length > 0 ? (["engine"] as const) : []),
+      ...(unreadKitchen ? (["Kitchen"] as const) : []),
+    ],
+    chain.slug,
+    undefined,
+    unreadEngines,
+  );
+  for (const id of unreadEngines) shown.add(id);
+  if (unreadKitchen) shown.add("Kitchen");
   shownReleased.set(rpc, shown);
 }
 
@@ -454,12 +475,13 @@ function failedProgram(logs: readonly string[]): string | undefined {
   return undefined;
 }
 
-/** The return data the engine logged (`Program return: <engine> <base64>`), the last it set. */
+/** The return data an engine logged (`Program return: <engine> <base64>`), the last it set: any
+ *  release's engine, for a Pot cooks on the engine that owns it. */
 function engineReturn(logs: readonly string[]): Uint8Array | undefined {
   let found: Uint8Array | undefined;
   for (const line of logs) {
     const match = /^Program return: (\w+) ([A-Za-z0-9+/=]*)$/.exec(line);
-    if (match !== null && match[1] === engine()) {
+    if (match !== null && svmEngineReleases().has(match[1]!)) {
       found = new Uint8Array(getBase64Encoder().encode(match[2]!));
     }
   }
@@ -523,7 +545,8 @@ export function failureReason(
   const program = failedProgram(logs);
   if (custom !== undefined) {
     const code = Number(custom);
-    if (program === engine() && code === 0) {
+    const ofEngine = program !== undefined && svmEngineReleases().has(program);
+    if (ofEngine && code === 0) {
       // A revert's payload is the engine's return data, which the node may leave out of a failed
       // simulation's answer; its log line carries it too.
       const payload = returnData?.length ? returnData : engineReturn(logs);
@@ -543,7 +566,7 @@ export function failureReason(
     if (said !== undefined) {
       return `${tokenProgram} refused: ${said} (custom program error ${code})`;
     }
-    const fault = program === engine() ? engineFaultName(code) : undefined;
+    const fault = ofEngine ? engineFaultName(code) : undefined;
     if (fault !== undefined) {
       const hint = ENGINE_FAULT_HINTS[fault];
 
@@ -753,8 +776,13 @@ export async function svmLanded(
       : new Uint8Array(getBase64Encoder().encode(meta.returnData.data[0]));
   const err = statusErr ?? meta?.err ?? null;
   const logs = meta?.logMessages ?? [];
-  // The engine's own: the node's return data where the engine set it last, else its log line.
-  const returned = meta?.returnData?.programId === engine() ? returnData : engineReturn(logs);
+  // An engine's own (any release's): the node's return data where the engine set it last, else its
+  // log line.
+  const returnedBy = meta?.returnData?.programId;
+  const returned =
+    returnedBy !== undefined && svmEngineReleases().has(returnedBy)
+      ? returnData
+      : engineReturn(logs);
   const loaded =
     meta?.loadedAddresses === undefined || meta.loadedAddresses === null
       ? undefined
@@ -839,12 +867,8 @@ export async function sendPlannedSvm(
   }
   const rpc = createSolanaRpc(url);
   // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another.
-  await requireReleased(
-    rpc,
-    url,
-    chain,
-    releasedProgramsCalled(await transactionAddresses(rpc, url, decoded)),
-  );
+  const called = programsCalled(await transactionAddresses(rpc, url, decoded));
+  await requireReleased(rpc, url, chain, called.needs, called.engines);
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, chain, decoded, () => signTransaction([signer.keyPair], decoded));
@@ -1358,6 +1382,29 @@ export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<b
   return exists(rpc, rpcUrl, await potOf(target), "the Pot");
 }
 
+/**
+ * The engine a cook on `pot` names: the program that owns the Pot's account, where it is a
+ * release's engine that runs this SDK's programs; the installed release's for a Pot not created
+ * yet. Refuses a Pot owned by any other program, naming it.
+ */
+export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise<Address> {
+  const { value } = await ask(url, `the Pot ${pot}`, () =>
+    rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
+  );
+  if (value === null) return engine();
+  if (svmEngineReleases().has(value.owner)) {
+    if (engineRunsCompiler("svm", value.owner) === true) return address(value.owner);
+    throw new CliError(
+      `the Pot ${pot} is owned by engine ${engineMismatch(value.owner)}. Nothing was ` +
+        "simulated, built or sent",
+    );
+  }
+  throw new CliError(
+    `the account at ${pot}, the Pot's address, is owned by ${value.owner}, not by an engine: it ` +
+      "is no Pot",
+  );
+}
+
 /** The Pot's associated token account for one registered mint, and what it holds. */
 export interface SvmPotTokenAccount {
   readonly symbol: string;
@@ -1770,6 +1817,12 @@ interface Prepared {
   readonly rpc: Rpc;
   readonly via: CookVia;
   readonly pot: Address;
+  /**
+   * The engine every cook of this Pot names: the program that owns its account (an earlier
+   * release's for a Pot made under it), the installed release's for a Pot not created yet and
+   * for a cook straight to the engine.
+   */
+  readonly engine: Address;
   readonly fee: bigint;
   readonly program: CompiledSauceProgram;
   readonly bytecode: Uint8Array;
@@ -1843,6 +1896,7 @@ async function prepare(
   // The endpoint serves the cluster the chain names, before anything is read from it.
   await requireCluster(rpc, input.rpcUrl, input.chain);
   const pot = await potOf(input);
+  const potEngine = via === "engine" ? engine() : await svmPotEngine(rpc, input.rpcUrl, pot);
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
     Object.keys(plain.derivedAccounts ?? {}).filter((name) => !Object.hasOwn(input.accounts, name)),
@@ -1908,7 +1962,7 @@ async function prepare(
   const needs: ProgramName[] = via === "engine" ? ["engine"] : ["engine", "Kitchen"];
   // A cluster with no fee config is asked for the release first: one without it is refused by name.
   const fee = await kitchenFee(rpc, input.rpcUrl, () =>
-    requireReleased(rpc, input.rpcUrl, input.chain, needs),
+    requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]),
   );
   if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
     throw new CliError(
@@ -1919,11 +1973,11 @@ async function prepare(
   // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
   // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
   // plan (or its staged rehearsal) says, and checks.
-  await requireReleased(rpc, input.rpcUrl, input.chain, needs);
+  await requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]);
   // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
   const client = await createSauceSvmClient({
     rpcUrl: input.rpcUrl,
-    programId: engine(),
+    programId: potEngine,
     kitchen: kitchen(),
     payer: signer,
     potSalt: saltBytes(input.salt),
@@ -1941,6 +1995,7 @@ async function prepare(
     rpc,
     via,
     pot,
+    engine: potEngine,
     fee,
     program,
     bytecode,
@@ -2066,6 +2121,8 @@ export interface SvmCookSize {
  * `manifest`, with each account `--account` gives where it is given — `pot` and `owner` are the
  * cook's own — and a distinct account for every other slot, so a size is the most those slots can
  * make it. The blockhash and signature are fixed widths, so a placeholder of each measures the same.
+ * It names the installed release's engine: the account count and the data length do not depend on
+ * which engine a Pot's cook names (an engine is one 32-byte key either way).
  */
 export async function svmCookSize(
   chain: CanonicalChain,
@@ -2502,7 +2559,7 @@ async function stagedRehearsal(
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(kitchen());
   const cook = direct
     ? buildCookAndPayFromAccountPinnedInstruction({
-        engineProgram: engine(),
+        engineProgram: prepared.engine,
         code,
         expectedSha256: sha256,
         feeConfig,
@@ -2515,7 +2572,7 @@ async function stagedRehearsal(
         owner,
         codeBuffer,
         code,
-        engineProgram: engine(),
+        engineProgram: prepared.engine,
         potSalt: saltBytes(input.salt),
         pot: prepared.pot,
         feeConfig,
@@ -2524,6 +2581,22 @@ async function stagedRehearsal(
       });
   const created = direct || (await exists(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot"));
   const cluster = clusterOf(await genesisOf(prepared.rpc, input.rpcUrl));
+  // Devnet and testnet use the same released build; an explicit endpoint decides the cluster.
+  const build = cluster === "devnet" || cluster === "testnet" ? "devnet" : "mainnet";
+  // The copy runs the code its cluster is shown to run: the package's release for the installed
+  // engine and the Kitchen, the cluster's own bytes for an earlier release's engine (held to that
+  // release's digest), and nothing else: a cook is never rehearsed on another engine's code.
+  const read = programReader(prepared.rpc, input.rpcUrl);
+  const programs = {
+    engine: {
+      id: prepared.engine,
+      code: await releasedProgramCode(read, prepared.engine, build, input.chain.slug),
+    },
+    kitchen: {
+      id: kitchen(),
+      code: await releasedProgramCode(read, kitchen(), build, input.chain.slug),
+    },
+  };
   const fork = await openFork(
     prepared.rpc,
     (what, request) => ask(input.rpcUrl, what, request),
@@ -2533,10 +2606,7 @@ async function stagedRehearsal(
       ...(input.assume ?? []).map((assumed) => assumed.mint),
       ...(cook.accounts ?? []).map((meta) => meta.address),
     ],
-    engine(),
-    kitchen(),
-    // Devnet and testnet use the same released build; an explicit endpoint decides the cluster.
-    cluster === "devnet" || cluster === "testnet" ? "devnet" : "mainnet",
+    programs,
     input.snapshot,
   );
   // The owner signs and pays every transaction of the rehearsal: an account a program owns, or one
@@ -2842,6 +2912,7 @@ async function planOf(prepared: Prepared, input: SvmCookInput): Promise<SvmPlan>
     owner: input.owner,
     salt: input.salt,
     via: prepared.via,
+    engine: prepared.engine,
     ...(input.maxExecutionFee === undefined ? {} : { maxExecutionFee: input.maxExecutionFee }),
     payload: prepared.bytecode,
     tail: resolveAccounts(prepared.manifest, prepared.accounts, input.owner).map((meta) => ({
@@ -2868,7 +2939,9 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
   const prepared = await prepare(input, files, signer);
   const direct = prepared.via === "engine";
   const plan = await planOf(prepared, input);
-  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan));
+  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan), [
+    planEngine(plan),
+  ]);
   const ctx: StepContext = {
     rpc: prepared.rpc,
     url: input.rpcUrl,
@@ -2998,12 +3071,8 @@ export async function sendPlanTx(
   tx: PlanTx,
   sending?: (lifetime: CookHandedOut) => void,
 ): Promise<SvmSent> {
-  await requireReleased(
-    ctx.rpc,
-    ctx.url,
-    ctx.chain,
-    releasedProgramsCalled(instructionAddresses(tx.instructions)),
-  );
+  const called = programsCalled(instructionAddresses(tx.instructions));
+  await requireReleased(ctx.rpc, ctx.url, ctx.chain, called.needs, called.engines);
   const { value: latestBlockhash, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );
@@ -3193,7 +3262,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     fee: prepared.fee,
   };
   let plan = await planOf(prepared, input);
-  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan));
+  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan), [
+    planEngine(plan),
+  ]);
   const buffer = await planBuffer(plan);
   let created: SvmSent | undefined;
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
@@ -3469,9 +3540,14 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
     ...(loaded?.writable ?? []),
     ...(loaded?.readonly ?? []),
   ];
+  // The invocation of any release engine that runs this SDK's programs: a Pot is cooked by the
+  // engine that owns it, which may be an earlier release's.
+  const engines = [...svmEngineReleases().keys()].filter(
+    (id) => engineRunsCompiler("svm", id) === true,
+  );
   const invocation = (response.meta?.innerInstructions ?? [])
     .flatMap((group) => group.instructions)
-    .find((inner) => keys[inner.programIdIndex] === engine());
+    .find((inner) => engines.includes(keys[inner.programIdIndex]!));
   const rejected = (code: string, message: string): CommandOutput => ({
     text: `rejected (${code}): ${message}`,
     json: { signature: input.signature, chain: input.chain.slug, valid: false, code, message },
@@ -3488,7 +3564,7 @@ export async function svmVerifyCommand(input: SvmVerifyInput): Promise<CommandOu
   if (invocation === undefined) {
     return rejected(
       "NO_SETTLE",
-      `the transaction does not invoke the released engine (${engine()})`,
+      `the transaction does not invoke an engine that runs this SDK's programs (${engines.join(", ")})`,
     );
   }
   let verified: SvmSettleExecutionVerification;
@@ -3594,11 +3670,17 @@ async function deployment(
 
     return value !== null && value.executable;
   };
-  const [engineThere, kitchenThere, potThere] = await Promise.all([
+  const [engineThere, kitchenThere, potAccount] = await Promise.all([
     program(engine(), "the engine program"),
     program(kitchen(), "the Kitchen program"),
-    exists(rpc, url, pot, "the Pot"),
+    ask(url, "the Pot", () => rpc.getAccountInfo(pot, { encoding: "base64" }).send()),
   ]);
+  const potThere = potAccount.value !== null;
+  // The engine that owns the Pot, where it is a release's: the one its cooks run on.
+  const potOwner =
+    potAccount.value !== null && svmEngineReleases().has(potAccount.value.owner)
+      ? potAccount.value.owner
+      : undefined;
   const fee = kitchenThere ? await kitchenFee(rpc, url).catch(() => undefined) : undefined;
   const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
 
@@ -3610,7 +3692,11 @@ async function deployment(
         deployed: kitchenThere,
         ...(fee === undefined ? {} : { executionFee: fee.toString() }),
       },
-      pot: { address: pot, deployed: potThere },
+      pot: {
+        address: pot,
+        deployed: potThere,
+        ...(potOwner === undefined ? {} : { engine: potOwner }),
+      },
     },
     notes: [
       `On the cluster: the engine ${engine()} is ${there(engineThere)}; the Kitchen ${kitchen()} ` +
@@ -3620,6 +3706,13 @@ async function deployment(
       ...(kitchenThere && fee === undefined
         ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
         : []),
+      ...(potOwner === undefined || potOwner === engine()
+        ? []
+        : [
+            `The Pot ${pot} is owned by engine ${potOwner} (v12-svm ${svmEngineReleases().get(potOwner)!.version}): ` +
+              `cooks on it run there; a new Pot runs on ${engine()} ` +
+              `(v12-svm ${svmEngineReleases().get(engine())!.version}).`,
+          ]),
     ],
   };
 }

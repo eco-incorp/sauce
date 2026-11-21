@@ -58,6 +58,7 @@ import {
   encodeCursor,
   isCook,
   nextStep,
+  planEngine,
   planPrograms,
   transactionsAhead,
   type SvmPlan,
@@ -652,7 +653,7 @@ export async function sendSvmPlan(input: {
   };
   // The cluster the plan carries on against, checked before anything of it is signed: the plan
   // may have been made against another endpoint, or before an upgrade.
-  await requireReleased(ctx.rpc, ctx.url, chain, planPrograms(plan));
+  await requireReleased(ctx.rpc, ctx.url, chain, planPrograms(plan), [planEngine(plan)]);
   // The whole plan held to the wallet's policy before any of it is sent, as far as it can be
   // measured now; each transaction is measured again, and reserved in the ledger, as it is sent.
   if (guard.policy !== undefined) {

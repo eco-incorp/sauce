@@ -28,7 +28,7 @@ import {
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
 import { UsageError } from "../src/cli/args.js";
 import {
   decodeCursor,
@@ -36,6 +36,7 @@ import {
   newSvmPlan,
   nextStep,
   signableStep,
+  transactionsAhead,
   unsignedSigner,
   type StepContext,
   type SvmPlan,
@@ -101,8 +102,10 @@ const context = (rpc: StepContext["rpc"]): StepContext => ({
   fee: 5_000n,
 });
 
-/** What a cook step reads once nothing stands in its way: a blockhash, and a rehearsal. */
+/** What a cook step reads once nothing stands in its way: the Pot (not created yet), a blockhash,
+ *  and a rehearsal. */
 const COOK_READS = {
+  getAccountInfo: () => ({ context: { slot: 2_000n }, value: null }),
   getLatestBlockhash: () => ({
     context: { slot: 2_000n },
     value: { blockhash: OTHER_BLOCKHASH, lastValidBlockHeight: 3_000n },
@@ -167,6 +170,21 @@ describe("a plan's cursor", () => {
     expect(decodeCursor(devnetCursor)).toEqual(plan({ chain: devnet }));
   });
 
+  it("names the engine only where it is not the installed release's", () => {
+    const content = (cursor: string): Record<string, unknown> =>
+      JSON.parse(
+        inflateRawSync(Buffer.from(cursor.slice("sauce-plan-1.".length), "base64")).toString(),
+      ) as Record<string, unknown>;
+    const earlier = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+    expect(content(encodeCursor(plan()))).not.toHaveProperty("engine");
+    expect(
+      content(encodeCursor(plan({ engine: address(v12SvmEngineProgramId()) }))),
+    ).not.toHaveProperty("engine");
+    expect(content(encodeCursor(plan({ engine: earlier })))).toMatchObject({ engine: earlier });
+    expect(decodeCursor(encodeCursor(plan({ engine: earlier }))).engine).toBe(earlier);
+    expect(decodeCursor(cursorOf(raw())).engine).toBeUndefined();
+  });
+
   const LONG = Array.from({ length: 257 }, () => MINT);
   it.each<[string, () => string, RegExp]>([
     ["another string", () => "a cursor", /not a plan's cursor/],
@@ -189,6 +207,11 @@ describe("a plan's cursor", () => {
     ],
     ["another via", () => cursorOf(raw({ via: "relay" })), /via is neither kitchen nor engine/],
     ["a short salt", () => cursorOf(raw({ salt: "0x11" })), /salt is not 32 bytes/],
+    [
+      "an engine that is no address",
+      () => cursorOf(raw({ engine: "me" })),
+      /engine is not an address/,
+    ],
     [
       "an owner that is no address",
       () => cursorOf(raw({ owner: "me" })),
@@ -357,6 +380,7 @@ describe("a plan's cursor", () => {
       owner: OWNER,
       salt: `0x${"11".repeat(32)}`,
       via: "kitchen",
+      engine: address(v12SvmEngineProgramId()),
       payload: new Uint8Array([1, 2, 3]),
       tail: [],
       lookupTables: {},
@@ -664,9 +688,13 @@ describe("a cook through a lookup table extended a moment ago", () => {
   });
   const through = plan({ lookupTables: [TABLE], tail: [{ address: MINT, role: 0 }] });
 
+  /** The table at its address, and no account anywhere else (the Pot is not created yet). */
+  const tableOnly = (lastExtendedSlot: bigint) => (at: never) =>
+    String(at) === TABLE ? tableAccount(lastExtendedSlot) : { context: { slot: 1n }, value: null };
+
   it("is not ready until the slot after its extension, and says so at once", async () => {
     const calls: string[] = [];
-    const rpc = endpoint({ getAccountInfo: () => tableAccount(500n), getSlot: () => 500n }, calls);
+    const rpc = endpoint({ getAccountInfo: tableOnly(500n), getSlot: () => 500n }, calls);
     const step = await nextStep(through, context(rpc));
     expect(step.name).toBe("cook");
     expect(step.transactions).toEqual([]);
@@ -682,7 +710,7 @@ describe("a cook through a lookup table extended a moment ago", () => {
   it("is built once the cluster is past that slot", async () => {
     const rpc = endpoint({
       ...COOK_READS,
-      getAccountInfo: () => tableAccount(500n),
+      getAccountInfo: tableOnly(500n),
       getSlot: () => 501n,
     });
     const step = await nextStep(through, context(rpc));
@@ -751,5 +779,58 @@ describe("a cook its simulation says would fail", () => {
     const built = await signableStep(step, context(rpc));
     expect(built.transactions).toEqual([]);
     expect(built.plan.cook).toBeUndefined();
+  });
+});
+
+describe("a cook on the engine that owns the Pot", () => {
+  /** v12-svm 1.4.0's engine: an earlier release's, whose programs run this SDK's. */
+  const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+  const INSTALLED = address(v12SvmEngineProgramId());
+  /** The Pot as the cluster holds it, owned by `owner`. */
+  const potOwnedBy = (owner: string) => () => ({
+    context: { slot: 2_000n },
+    value: { data: ["", "base64"], executable: false, lamports: 1n, owner, space: 0n },
+  });
+
+  it("names the engine the plan was made for, where the Pot is that engine's", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(EARLIER) });
+    const step = await nextStep(plan({ engine: EARLIER }), context(rpc));
+    expect(step.name).toBe("cook");
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(EARLIER);
+    expect(named).not.toContain(INSTALLED);
+  });
+
+  it("refuses a Pot another engine owns than the plan was made for, in either direction", async () => {
+    const earlier = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(EARLIER) });
+    await expect(nextStep(plan(), context(earlier))).rejects.toThrow(
+      `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+    );
+    const installed = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(INSTALLED) });
+    await expect(nextStep(plan({ engine: EARLIER }), context(installed))).rejects.toThrow(
+      `is owned by ${INSTALLED}, and this plan was made for engine ${EARLIER}: make the plan again`,
+    );
+  });
+
+  it("does not hold a plan with no cook left to build to the Pot's owner: its buffer still closes", async () => {
+    // The plan made the Pot in its setup, and another release's engine owns the Pot there now. A
+    // cook it would build is refused (above); one that landed, or that is given up, has only the
+    // code buffer's close left, and the wallet's policy preflight counts its transactions.
+    const rpc = endpoint({
+      ...COOK_READS,
+      getAccountInfo: potOwnedBy(EARLIER),
+      getMultipleAccounts: () => ({ context: { slot: 1n }, value: [] }),
+    });
+    const cooked = plan({ pot: "setup", cooked: { ok: true, signature: signature(1) } });
+    const closing = plan({ pot: "setup", closing: true });
+    await expect(transactionsAhead(cooked, context(rpc))).resolves.toBeDefined();
+    await expect(transactionsAhead(closing, context(rpc))).resolves.toBeDefined();
+    expect((await nextStep(closing, context(rpc), { close: true })).name).toBe("done");
+    // The same plan with its cook still to build is refused.
+    await expect(transactionsAhead(plan({ pot: "setup" }), context(rpc))).rejects.toThrow(
+      `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+    );
   });
 });

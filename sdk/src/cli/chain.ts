@@ -64,6 +64,7 @@ import {
   ownerPotsText,
   ownReleasePot,
   pairedSdkReleases,
+  pairWith,
   releaseText,
 } from "./pots.js";
 
@@ -451,10 +452,6 @@ const NO_OWNER =
 export function requirePotOwner(owner: Address): void {
   if (getAddress(owner) === zeroAddress) throw new UsageError(`${NO_OWNER} ${NOTHING_SENT}`);
 }
-
-/** `paired` SDK releases (`pots.ts#pairedSdkReleases`) pair with a release: one, or several. */
-const pairWith = (paired: string): string =>
-  `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
 
 /**
  * Which release the deployed Kitchen mints, as a refusal says it: the release whose Kitchen and Pot

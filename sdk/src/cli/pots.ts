@@ -112,6 +112,10 @@ export function pairedSdkReleases(release: Readonly<Record<string, string>>): st
     : runs.map((one) => (one.length === 1 ? one[0] : `${one[0]} to ${one.at(-1)}`)).join(", ");
 }
 
+/** `paired` SDK releases (`pairedSdkReleases`) pair with a release: one, or several. */
+export const pairWith = (paired: string): string =>
+  `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
+
 /** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
 export const releaseText = (release: PotRecord["release"]): string => {
   if (release === undefined) return "release unknown";
@@ -215,7 +219,7 @@ export const releaseEngines = (): readonly Address[] => [
 ];
 
 /** The Solana part of a release set, as a record names it. */
-const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
+export const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
   compiler: set.compiler,
   "v12-svm": set["v12-svm"].version,
   "kitchen-svm": set["kitchen-svm"].version,
