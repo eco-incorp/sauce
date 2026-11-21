@@ -27,6 +27,7 @@ import { promisify } from "node:util";
 import { keccak256 } from "viem";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
+import { auditSourceMaps } from "./lib/source-maps.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // Taken from the SDK's own devDependency rather than written out here, so this consumer typechecks
@@ -126,7 +127,27 @@ try {
       stdio: ["ignore", "pipe", "inherit"],
     },
   );
-  const [{ filename }] = JSON.parse(output);
+  const [{ filename, files: packed }] = JSON.parse(output);
+  // A map ships only as a `.d.ts.map` whose every source ships too, so Go to Definition lands in a
+  // shipped `.ts`. No other map ships, and no `sourceMappingURL` in a packed file names a map the
+  // package does not: found as Node finds one (anywhere, after code too, `//` or `/*`, `#` or `@`),
+  // every one held to the rule, the last, which Node takes, and each before it; an inline `data:`
+  // map is refused, and so is a reference (a directive's URL, a map's source root or source) that is
+  // not a literal relative path inside the package. The SDK build's prune (`prune-source-maps.mjs`)
+  // applies the same rule, `lib/source-maps.mjs`, to the same npm list.
+  const packedPaths = new Set(packed.map((file) => file.path));
+  const refused = auditSourceMaps(root, packedPaths);
+  assert.deepEqual(
+    refused.slice(0, 10),
+    [],
+    "the package ships a source map only as a .d.ts.map whose sources it ships, and no " +
+      `sourceMappingURL naming another: ${refused.length} refused (the first ten listed)`,
+  );
+  const declarationMaps = [...packedPaths].filter((path) => path.endsWith(".d.ts.map")).length;
+  console.log(
+    `Packed: ${packedPaths.size} files; ${declarationMaps} declaration maps, each naming only ` +
+      "sources the package ships, and no other map or sourceMappingURL",
+  );
   writeFileSync(join(work, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(
     "npm",
