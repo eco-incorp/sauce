@@ -319,19 +319,73 @@ export async function baseUnits(
 
 /** Every request's amount in base units, and what is said of them. */
 async function amounts(
-  input: FundingInput,
+  client: PublicClient,
+  requests: readonly FundRequest[],
 ): Promise<{ tokens: Funded[]; native: bigint; notes: string[] }> {
   const tokens: Funded[] = [];
   const notes: string[] = [];
   let native = 0n;
-  for (const request of input.requests) {
-    const { amount, note } = await baseUnits(input.client, request);
+  for (const request of requests) {
+    const { amount, note } = await baseUnits(client, request);
     if (note !== undefined) notes.push(note);
     if (request.token === undefined) native += amount;
     else tokens.push({ request, token: request.token, amount });
   }
 
   return { tokens, native, notes };
+}
+
+/**
+ * Holds `owner`'s balances to what is funded, each token's `balanceOf` in order and then the native
+ * coin's, calling `short` with what it lacks: the one wording of a shortfall, for the check `sauce
+ * run` makes before it sends anything (`requireBalances`) and the one `planFunding` makes again.
+ */
+async function checkBalances(
+  client: PublicClient,
+  owner: Address,
+  tokens: readonly Funded[],
+  native: bigint,
+  short: (message: string) => void,
+): Promise<void> {
+  for (const funded of tokens) {
+    const balance = await read(`${funded.request.label}'s balanceOf`, () =>
+      client.readContract({
+        address: funded.token,
+        abi: ERC20,
+        functionName: "balanceOf",
+        args: [owner],
+      }),
+    );
+    if (balance < funded.amount) {
+      short(
+        `${owner} holds ${balance} of ${funded.request.label} (base units), below the ` +
+          `${funded.amount} --fund ${funded.request.raw} needs`,
+      );
+    }
+  }
+  if (native > 0n) {
+    const balance = await client.getBalance({ address: owner });
+    if (balance < native) {
+      short(`${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`);
+    }
+  }
+}
+
+/**
+ * Refuses, as `planFunding` does with a key, funding `owner` cannot pay: a token's balance, or the
+ * native coin's, below what `requests` fund (their decimals already read, `withDecimals`). `sauce
+ * run` calls it before it signs or sends anything; `planFunding` checks again before the funding's
+ * own transactions, after the gas the Pot's deployment spent.
+ */
+export async function requireBalances(
+  client: PublicClient,
+  owner: Address,
+  requests: readonly FundRequest[],
+): Promise<void> {
+  const { tokens, native } = await amounts(client, requests);
+  await checkBalances(client, owner, tokens, native, (message) => {
+    throw new CliError(message);
+  });
 }
 
 /**
@@ -623,7 +677,7 @@ async function requireOwnPot(input: FundingInput, signer: Address): Promise<void
  */
 export async function planFunding(input: FundingInput): Promise<Funding> {
   if (input.account !== undefined) await requireOwnPot(input, getAddress(input.account.address));
-  const { tokens, native, notes } = await amounts(input);
+  const { tokens, native, notes } = await amounts(input.client, input.requests);
   const needs: string[] = [];
   const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
@@ -638,28 +692,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     if (!keyless) throw new CliError(message);
     notes.push(`${message}: sauce run would refuse it`);
   };
-  for (const funded of tokens) {
-    const balance = await read(`${funded.request.label}'s balanceOf`, () =>
-      input.client.readContract({
-        address: funded.token,
-        abi: ERC20,
-        functionName: "balanceOf",
-        args: [owner],
-      }),
-    );
-    if (balance < funded.amount) {
-      short(
-        `${owner} holds ${balance} of ${funded.request.label} (base units), below the ` +
-          `${funded.amount} --fund ${funded.request.raw} needs`,
-      );
-    }
-  }
-  if (native > 0n) {
-    const balance = await input.client.getBalance({ address: owner });
-    if (balance < native) {
-      short(`${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`);
-    }
-  }
+  await checkBalances(input.client, owner, tokens, native, short);
   if (keyless && tokens.length > 0) {
     // A simulation with no key cannot sign the pulls. It credits the Pot with what they would
     // bring instead (state overrides, `simulateCommand`), and keeps the sweep.

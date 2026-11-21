@@ -30,6 +30,7 @@ import {
   parseTokenAmount,
   permit2On,
   planFunding,
+  requireBalances,
   withDecimals,
   type FundMode,
   type FundRequest,
@@ -203,9 +204,10 @@ export interface FundingGiven {
 /**
  * The funding a cook carries, as `CookInput.fund` takes it; `undefined` with nothing to fund.
  * Everything about the requests that needs no chain is checked here, before anything is read. Given
- * the command's client, before anything is signed or sent, it reads the decimals of each token named
- * by its address and holds the amount to them (`withDecimals`), then makes the funding once the Pot
- * is there.
+ * the command's client, the Pot and its owner, before anything is signed or sent, it reads the
+ * decimals of each token named by its address and holds the amount to them (`withDecimals`), and
+ * with a key holds the owner's balances to what is funded (`requireBalances`); then it makes the
+ * funding once the Pot is there.
  */
 export function fundingFor(given: FundingGiven): CookInput["fund"] {
   const { chain, mode, sweep } = given;
@@ -245,19 +247,23 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
   }
   const account = given.account;
 
-  return async (client) => {
-    // Every amount held to its token's decimals now, before the run signs or sends anything.
+  return async (client, pot, owner) => {
+    if (account !== undefined && account.address !== owner) {
+      throw new UsageError(
+        `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls the ` +
+          "owner's tokens on the owner's signature",
+      );
+    }
+    // Every amount held to its token's decimals, and with a key (`sauce run` always has one) the
+    // owner's balances held to what is funded, now, before the run signs or sends anything. The
+    // only transaction a run sends before its funding is the Pot's deployment: no caller in this
+    // tree passes `RunInput.setup`. It moves none of the owner's tokens and spends only gas, so a
+    // balance short here is short after it too; `planFunding` checks again, after that gas.
     const resolved = await withDecimals(client, requests);
+    if (account !== undefined) await requireBalances(client, owner, resolved);
 
-    return async (pot, owner, { plan = false, deploySalt, beforeSend } = {}) => {
-      if (account !== undefined && account.address !== owner) {
-        throw new UsageError(
-          `the signer ${account.address} is not the owner of Pot ${pot}, ${owner}: --fund pulls ` +
-            "the owner's tokens on the owner's signature",
-        );
-      }
-
-      return planFunding({
+    return async ({ plan = false, deploySalt, beforeSend } = {}) =>
+      planFunding({
         chain,
         client,
         rpcUrl: given.rpcUrl,
@@ -272,7 +278,6 @@ export function fundingFor(given: FundingGiven): CookInput["fund"] {
         send: given.send && !plan,
         approver: given.approver,
       });
-    };
   };
 }
 

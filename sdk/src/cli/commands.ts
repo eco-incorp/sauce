@@ -528,23 +528,19 @@ export function payloadOf(
 export type PotInput = { readonly pot: Address } | ({ readonly owner: Address } & SaltChoice);
 
 /**
- * `--fund`'s funding of `pot`, made with its `owner`, every amount already held to its token's
- * decimals: what it needs approved and sent first, the signatures its pulls carry, and how to wrap
- * the program (`funding.ts#planFunding`).
+ * `--fund`'s funding of the Pot `CookInput.fund` was given, every amount already held to its
+ * token's decimals: what it needs approved and sent first, the signatures its pulls carry, and how
+ * to wrap the program (`funding.ts#planFunding`).
  */
-export type FundPot = (
-  pot: Address,
-  owner: Address,
-  options?: {
-    /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
-    readonly plan?: boolean;
-    /** The salt the run deploys the Pot at first, or the rehearsal does, when it has no code. */
-    readonly deploySalt?: Hex;
-    /** Called before each transaction the funding sends first (`run`): what holds the rest of
-     *  the run to the guard again, so none is sent once the cook would be refused. */
-    readonly beforeSend?: () => Promise<void>;
-  },
-) => Promise<Funding>;
+export type FundPot = (options?: {
+  /** Only plan: say what it would need approved (`Funding.needs`), and send nothing. */
+  readonly plan?: boolean;
+  /** The salt the run deploys the Pot at first, or the rehearsal does, when it has no code. */
+  readonly deploySalt?: Hex;
+  /** Called before each transaction the funding sends first (`run`): what holds the rest of the
+   *  run to the guard again, so none is sent once the cook would be refused. */
+  readonly beforeSend?: () => Promise<void>;
+}) => Promise<Funding>;
 
 export interface CookInput extends ProgramInput {
   readonly target: PotInput;
@@ -553,12 +549,12 @@ export interface CookInput extends ProgramInput {
   /** The cook's value; the Kitchen's fee is read when it is absent and an endpoint is given. */
   readonly value?: bigint;
   /**
-   * `--fund`: given the command's client before anything is signed or sent, it reads the decimals
-   * of every token named by its address and holds each amount to them (`funding.ts#withDecimals`),
-   * refusing one the token cannot hold; then it gives what makes the funding once the Pot is known
-   * to be there.
+   * `--fund`: given the command's client, the Pot and its owner before anything is signed or sent,
+   * it reads the decimals of every token named by its address and holds each amount to them
+   * (`funding.ts#withDecimals`), and with a key holds the owner's balances to what is funded
+   * (`funding.ts#requireBalances`); then it gives what makes the funding once the Pot is there.
    */
-  readonly fund?: (client: PublicClient) => Promise<FundPot>;
+  readonly fund?: (client: PublicClient, pot: Address, owner: Address) => Promise<FundPot>;
 }
 
 export interface Cook {
@@ -1102,9 +1098,10 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
     );
   }
   // Every --fund amount held to its token's decimals, read from the token where it was named by
-  // address, before anything is signed or sent: an amount the token cannot hold is refused with the
-  // Pot not yet deployed. The approvals, transfers and signatures the funding makes come after it.
-  const fund = input.fund === undefined ? undefined : await input.fund(client);
+  // address, and the signer's balances held to what is funded, before anything is signed or sent:
+  // either is refused with the Pot not yet deployed. The approvals, transfers and signatures the
+  // funding makes come after it, where the balances are checked again.
+  const fund = input.fund === undefined ? undefined : await input.fund(client, cook.pot, signer);
   // The Pot this run deploys first, which funding takes as the signer's own by its address.
   const deploySalt = !state.deployed && "owner" in target ? target.salt : undefined;
   const setup = [
@@ -1132,9 +1129,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   if (!input.approver.auto && !input.approver.canAsk) {
     const needs = [
       ...setup.map((step) => step.action),
-      ...(fund === undefined
-        ? []
-        : ((await fund(cook.pot, signer, { plan: true, deploySalt })).needs ?? [])),
+      ...(fund === undefined ? [] : ((await fund({ plan: true, deploySalt })).needs ?? [])),
     ];
     if (needs.length > 0) throw unapproved(needs, input.approver.why);
   }
@@ -1167,10 +1162,7 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   const deployed = sentFirst.find(([step]) => step.planned.deploysPot === cook.pot)?.[1];
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
-  const funding =
-    fund === undefined
-      ? undefined
-      : await fund(cook.pot, signer, { deploySalt, beforeSend: holdPlan });
+  const funding = fund === undefined ? undefined : await fund({ deploySalt, beforeSend: holdPlan });
   const funded =
     funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
