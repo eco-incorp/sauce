@@ -13,7 +13,8 @@
 // chain id to URL (sdk/rpc.config.json is one) that holds the seven chains the gate reads: 1
 // (Ethereum), 8453 (Base), 5042 (Arc), 5042002 (Arc Testnet), 84532 (Base Sepolia), 11155111
 // (Sepolia) and 1399811149 (Solana mainnet-beta); other entries are ignored. A URL is never printed:
-// every message is scrubbed of the configured endpoints, and an error prints one line.
+// every message is scrubbed of the configured endpoints, an error prints one line, and a
+// configuration the gate cannot read is named by its path alone.
 //
 // A MISSING KEY IS A FAILURE, never a skip. The gate checks all seven keys first, prints
 // `FAIL <chain>: no endpoint in --rpc-config` for each one missing, runs every step on every chain it
@@ -113,14 +114,30 @@ const reasonOf = (error) =>
     .split("\n")[0]
     .slice(0, 400);
 
+/**
+ * Refuses a configuration the gate cannot use, exit 2. The message holds what is wrong and the file's
+ * path, never a word of what the file holds, nor what the parser quotes of it (`Unexpected token 'h',
+ * "https://ex"... is not valid JSON`): its values are endpoints, which carry keys.
+ */
+function refuseConfig(what) {
+  console.error(`--rpc-config ${what}`);
+  process.exit(2);
+}
+
 const configured = {};
 {
+  const given = values["rpc-config"];
+  // An endpoint pasted where the path goes is not repeated either.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(given)) refuseConfig("takes the path of a file, not a URL");
+  const file = resolve(given);
   let config;
   try {
-    config = JSON.parse(readFileSync(resolve(values["rpc-config"]), "utf8"));
-  } catch (error) {
-    console.error(`--rpc-config: ${error instanceof Error ? error.message.split("\n")[0] : error}`);
-    process.exit(2);
+    config = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    refuseConfig(`${file} cannot be read as JSON`);
+  }
+  if (config === null || typeof config !== "object" || Array.isArray(config)) {
+    refuseConfig(`${file} is not a JSON object of chain id to URL`);
   }
   for (const { id } of CHAINS) {
     const url = config[String(id)];
