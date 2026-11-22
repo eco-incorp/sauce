@@ -255,6 +255,37 @@ jobs:
       - name: Actions — mainnet-state suites
         run: pnpm --filter './actions' test:mainnet
 
+  # The engine-executing suites again, on the earlier releases the installed compiler's row lists in
+  # alsoRunsOn (src/artifacts/legacy/, written by the sync): the evidence for a claim the SDK makes
+  # for every program it compiles. sdk/test/legacy-arm.test.ts holds these jobs to that row.
+  legacy-evm:
+    name: Engine e2e on the earlier EVM release (alsoRunsOn)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
+      - name: SDK — EVM execution suites on the legacy arm
+        run: pnpm --filter './sdk' test:evm-legacy
+
+      - name: Actions — exec and mainnet-state suites on the legacy arm
+        run: pnpm --filter './actions' test:evm-legacy
+
+      - name: MCP — chain suites on the legacy arm
+        run: pnpm --filter './mcp' test:evm-legacy
+
+  legacy-svm:
+    name: Engine e2e on the earlier Solana release (alsoRunsOn)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
+      - name: SDK — Solana execution suites on the legacy arm
+        run: pnpm --filter './sdk' test:svm-legacy
+
   # Every MCP tool in process, the bin over stdio and Streamable HTTP, and the tools against a
   # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
   # without SAUCE_V12_RUNTIME_CREATION_HEX rather than skip). No live RPC.
@@ -296,7 +327,7 @@ jobs:
   ci:
     name: Build & Test
     if: always()
-    needs: [checks, sdk-e2e, sdk-unit, actions-mainnet, mcp-and-dev-tools, packed]
+    needs: [checks, sdk-e2e, sdk-unit, actions-mainnet, mcp-and-dev-tools, packed, legacy-evm, legacy-svm]
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed
