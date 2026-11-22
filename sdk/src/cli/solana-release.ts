@@ -195,13 +195,16 @@ export function engineMismatch(program: string): string {
 
 /**
  * Refuses unless `program`, an engine of an earlier release than the installed one, is a release
- * engine whose programs run this SDK's, deployed on the cluster as that release's build
- * ({@link isPinnedProgram}: the cluster's program account is the committed ELF, then zero padding).
+ * engine deployed on the cluster as that release's build ({@link isPinnedProgram}: the cluster's
+ * program account is the committed ELF, then zero padding). `paired`: its programs must run this
+ * SDK's too, which a cook this SDK compiled needs; a transaction someone else compiled (a wallet's,
+ * another tool's, `sauce send`) is held to the engine's digest and no more.
  */
 async function requireEarlierEngine(
   read: ReadProgram,
   program: string,
   slug: string,
+  paired: boolean,
 ): Promise<void> {
   const release = svmEngineReleases().get(program);
   if (release === undefined) {
@@ -210,7 +213,7 @@ async function requireEarlierEngine(
         "Nothing was simulated, built or sent",
     );
   }
-  if (engineRunsCompiler("svm", program) !== true) {
+  if (paired && engineRunsCompiler("svm", program) !== true) {
     throw new CliError(
       `the engine ${engineMismatch(program)}. Nothing was simulated, built or sent`,
     );
@@ -232,7 +235,9 @@ async function requireEarlierEngine(
  * the EVM path does. Run before anything is simulated, built or sent. `slug` is the chain the
  * cluster was named as, which the refusal names. The engine is each of `engines`: the installed
  * release's by its packaged bytes, an earlier release's (the engine that owns a Pot made under it)
- * by its committed digest.
+ * by its committed digest. `paired` (default) also holds each earlier engine to run this SDK's
+ * programs, as a cook this SDK builds needs; `{ paired: false }` is for a transaction this SDK did
+ * not compile, which names the engine its builder chose and is held to that release's digest.
  */
 export async function requireSolanaRelease(
   read: ReadProgram,
@@ -240,12 +245,13 @@ export async function requireSolanaRelease(
   slug: string,
   released: ReleasedPrograms = packagedRelease(),
   engines: readonly string[] = [v12SvmEngineProgramId()],
+  options: { readonly paired?: boolean } = {},
 ): Promise<void> {
   for (const name of ["engine", "Kitchen"] as const) {
     if (!needs.includes(name)) continue;
     for (const program of name === "engine" ? engines : [v12SvmKitchenProgramId()]) {
       if (name === "engine" && program !== v12SvmEngineProgramId()) {
-        await requireEarlierEngine(read, program, slug);
+        await requireEarlierEngine(read, program, slug, options.paired !== false);
         continue;
       }
       const wanted = name === "engine" ? released.engine : [released.kitchen];

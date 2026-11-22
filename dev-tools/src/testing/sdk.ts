@@ -90,6 +90,7 @@ export {
   elfLength,
   isPinnedProgram,
   potAccountState,
+  potCookEngine,
   svmEngineReleases,
 } from "../../../sdk/dist/svm/engine-release.js";
 

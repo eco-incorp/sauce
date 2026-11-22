@@ -171,6 +171,24 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     assert.ok(made!.lamports >= 1_000_000n);
   });
 
+  it("cooks a Pot of an engine this package's programs do not run on through the installed engine, as sauce does", async () => {
+    const account = chain.account(1);
+    // v12-svm 1.3.0's engine, which none of this compiler's output runs on: its Pot (10,240 bytes,
+    // as `create_pot` leaves one) is cooked on the installed engine, as earlier SDKs cooked every
+    // Pot. The program itself need not be on the chain.
+    const old = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+    await chain.setAccount(account.pot, {
+      lamports: 72_161_280n,
+      owner: old,
+      data: new Uint8Array(10_240),
+      executable: false,
+    });
+    const result = await chain.run(program("multiply"), { from: 1, args: [3n, 5n, 100n] });
+    assert.equal(result.returned, 15n);
+    assert.equal(result.engine, chain.engine);
+    assert.equal((await chain.getAccount(account.pot))?.owner, old);
+  });
+
   it("asks for the accounts nothing derives, and refuses one the program does not take", async () => {
     const source =
       "function main(destination: Account<Writable>, amount: Uint256): Uint256 {\n" +

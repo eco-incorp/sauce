@@ -812,10 +812,13 @@ async function sendSvm(
   // The endpoint serves the cluster the chain names, before anything is read from it.
   await requireCluster(rpc, input.rpcUrl, input.chain);
   // What goes to the engine or the Kitchen goes only to a cluster running the release's: checked
-  // before any of it is sent.
+  // before any of it is sent. A signed transaction was built elsewhere, so the engines it names are
+  // held to their release's digest and not to this SDK's compiler, which did not compile it.
   for (const tx of signed) {
     const called = programsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction));
-    await requireReleased(rpc, input.rpcUrl, input.chain, called.needs, called.engines);
+    await requireReleased(rpc, input.rpcUrl, input.chain, called.needs, called.engines, {
+      paired: false,
+    });
   }
   const read = svmReader(input.rpcUrl);
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(

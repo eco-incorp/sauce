@@ -295,6 +295,49 @@ describe("the engines a transaction calls", () => {
     );
   });
 
+  it("holds a transaction this SDK did not compile to the digest of the engine it names, and not to its compiler's pairing", async () => {
+    // The engine of v12-svm 1.3.0 runs none of this SDK's output, and a transaction a wallet or
+    // another tool built (sauce send, sauce_wallet_send) was never compiled by it: what it names
+    // is held to that release's engine, as the cluster serves it, and nothing more.
+    const unpaired = { paired: false };
+    const absent = await requireSolanaRelease(
+      reader({}),
+      ["engine"],
+      "solana",
+      RELEASE,
+      [OLD],
+      unpaired,
+    ).then(
+      () => "",
+      (error: Error) => error.message,
+    );
+    expect(absent).toContain(
+      `the engine ${OLD} (v12-svm 1.3.0) is not deployed on solana as that release's build: ` +
+        "the cluster has no such program. Nothing was simulated, built or sent",
+    );
+    expect(absent).not.toContain("which runs compiler");
+    const [program, programData] = upgradeable(RELEASE.engine[0]!, ENGINE_DATA);
+    await expect(
+      requireSolanaRelease(
+        reader({ [OLD]: program, [ENGINE_DATA]: programData }),
+        ["engine"],
+        "solana",
+        RELEASE,
+        [OLD],
+        unpaired,
+      ),
+    ).rejects.toThrow("the program there is not that release's engine");
+    // An engine this SDK's programs do run on passes or fails by its digest the same way.
+    await expect(
+      requireSolanaRelease(reader({}), ["engine"], "solana", RELEASE, [EARLIER], unpaired),
+    ).rejects.toThrow(`the engine ${EARLIER} (v12-svm 1.4.0) is not deployed on solana`);
+    // A program no release names is refused whether or not it was compiled here.
+    const nobody = "11111111111111111111111111111112";
+    await expect(
+      requireSolanaRelease(reader({}), ["engine"], "solana", RELEASE, [nobody], unpaired),
+    ).rejects.toThrow(`${nobody} is not an engine release this SDK knows`);
+  });
+
   it("refuses a program no release names as an engine, and checks each engine given", async () => {
     const nobody = "11111111111111111111111111111112";
     await expect(

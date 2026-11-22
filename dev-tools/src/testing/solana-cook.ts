@@ -47,10 +47,10 @@ import {
   GROWTH_STEP,
   LOOKUP_TABLE_MAX_ADDRESSES,
   potAccountState,
+  potCookEngine,
   resolveAccounts,
   resolveSvmAccountName,
   resolveTokenProgramByOwner,
-  sdkCompilerVersion,
   SvmAccountNameError,
   svmKitchenIdlPath,
   svmProgramStops,
@@ -321,11 +321,13 @@ function tableAddresses(transaction: Transaction): Address[] {
 }
 
 /**
- * The engine a cook on `pot` names: the program that owns the Pot's account, where it is a release
- * engine that runs this package's programs (an earlier release's Pot cooks on its own engine),
- * else — no Pot there yet, or an address that holds only lamports, which the Kitchen cooks as it
- * is — `chain.engine`. Refuses an engine that does not run them, an account no engine owns, and an
- * engine whose code this chain does not hold: never another engine's code in its place.
+ * The engine a cook on `pot` names (`potCookEngine`, as `sauce` takes it): the program that owns
+ * the Pot's account, where it is a release engine that runs this package's programs (an earlier
+ * release's Pot cooks on its own engine); `chain.engine` where no Pot is there yet, where the
+ * address holds only lamports (the Kitchen cooks it as it is), and for a Pot of an engine that does
+ * not run them (v12-svm 1.3.0's), as earlier SDKs cooked every Pot. Refuses an account no engine
+ * owns, and an engine whose code this chain does not hold: never another engine's code in its
+ * place.
  */
 export async function potEngine(chain: CookChain, pot: Address): Promise<Address> {
   await chain.bank.ensure([pot]);
@@ -333,27 +335,22 @@ export async function potEngine(chain: CookChain, pot: Address): Promise<Address
   const state = potAccountState(
     held === null ? null : { owner: held.owner, dataLength: held.data.length },
   );
-  if (state.kind === "unallocated") return chain.engine;
   if (state.kind === "other") {
     throw new Error(
       `the account at ${pot}, a Pot's address, is owned by ${state.owner}, not by an engine`,
     );
   }
-  if (held!.owner === chain.engine) return chain.engine;
-  if (!state.runsCompiler) {
-    throw new Error(
-      `the Pot ${pot} is owned by engine ${state.engine} (v12-svm ${state.version}), which does ` +
-        `not run this package's programs (compiler ${sdkCompilerVersion()})`,
-    );
-  }
-  // The bank holds an earlier release's engine to that release's digest where it reads it from its
-  // source (`Bank.ensure`).
+  const cooks = potCookEngine(state, chain.engine);
+  if (cooks === chain.engine) return chain.engine;
+  // An earlier release's engine, which runs this package's programs: its own code, which the bank
+  // holds to that release's digest where it reads it from its source (`Bank.ensure`).
   await chain.bank.ensure([held!.owner]);
   if (chain.bank.account(held!.owner)?.executable !== true) {
     throw new Error(
-      `the Pot ${pot} is owned by engine ${state.engine} (v12-svm ${state.version}), whose code ` +
-        "this chain does not hold: a local chain and a replay hold only this package's engine; " +
-        "fork a cluster that runs it",
+      `the Pot ${pot} is owned by engine ${held!.owner}` +
+        (state.kind === "engine" ? ` (v12-svm ${state.version})` : "") +
+        ", whose code this chain does not hold: a local chain and a replay hold only this " +
+        "package's engine; fork a cluster that runs it",
     );
   }
 

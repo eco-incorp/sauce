@@ -833,6 +833,27 @@ describe("a cook on the engine that owns the Pot", () => {
       `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}: make the plan again`,
     );
   });
+
+  /** v12-svm 1.3.0's engine: no release of this SDK's compiler runs on it. */
+  const OLD = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+
+  it("cooks a Pot of an engine that does not run this SDK's programs on the installed engine, as earlier SDKs did", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(OLD) });
+    const step = await nextStep(plan(), context(rpc));
+    expect(step.name).toBe("cook");
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(INSTALLED);
+    expect(named).not.toContain(OLD);
+  });
+
+  it("still refuses such a Pot for a plan made for another engine than the installed one", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(OLD) });
+    await expect(nextStep(plan({ engine: EARLIER }), context(rpc))).rejects.toThrow(
+      `is owned by ${OLD}, and this plan was made for engine ${EARLIER}: make the plan again`,
+    );
+  });
 });
 
 describe("a Pot address that holds only lamports", () => {

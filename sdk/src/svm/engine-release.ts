@@ -89,8 +89,9 @@ const SYSTEM_PROGRAM = "11111111111111111111111111111111";
  * - `unallocated`: no account, or the System Program's with no data. Cooked as it is, on the
  *   installed engine, with no `create_pot`: a program that pays SOL out of the Pot through the
  *   System Program needs exactly this, since that transfer takes no `from` that carries data.
- * - `engine`: a release's engine owns it, and it is the program that cooks the Pot. `runsCompiler`
- *   says whether that release's programs run this SDK's.
+ * - `engine`: a release's engine owns it. `runsCompiler` says whether that release's programs run
+ *   this SDK's: a Pot of an engine that does not (v12-svm 1.2.0 and 1.3.0) is cooked on the
+ *   installed engine, as earlier SDKs cooked every Pot, and stays its older engine's.
  * - `other`: any other program owns the account: it is no Pot.
  */
 export type PotAccountState =
@@ -121,4 +122,22 @@ export function potAccountState(
     version: release.version,
     runsCompiler: engineRunsCompiler("svm", account.owner) === true,
   };
+}
+
+/**
+ * The engine a cook on a Pot in `state` names (`installed`: the installed release's engine), or
+ * `undefined` for an account that is no Pot. A Pot cooks on the engine that owns it where that
+ * engine runs this SDK's programs (v12-svm 1.4.0's Pots run on 1.4.0, through `alsoRunsOn`); a Pot
+ * no engine owns yet, and a Pot of an engine that does not run them, cook on the installed engine.
+ * The one function the command's cook, its plan and the testing kit take it from.
+ */
+export function potCookEngine(state: PotAccountState, installed: string): string | undefined {
+  switch (state.kind) {
+    case "unallocated":
+      return installed;
+    case "engine":
+      return state.runsCompiler ? state.engine : installed;
+    case "other":
+      return undefined;
+  }
 }

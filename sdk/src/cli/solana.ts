@@ -62,7 +62,6 @@ import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
 import { potAccountState, svmEngineReleases, type PotAccountState } from "../svm/engine-release.js";
 import {
-  engineMismatch,
   instructionAddresses,
   programsCalled,
   releasedProgramCode,
@@ -215,16 +214,21 @@ const programReader =
         };
   };
 
-/** What each connection has shown to be the release's — the Kitchen, and each engine by its id — so
- *  a command that checks before each thing it builds reads each program off the cluster once. A
- *  connection is one command's or one tool call's: the next reads again. */
+/** What each connection has shown to be the release's — the Kitchen, and each engine by its id, or
+ *  `<id>:digest` for an engine shown to be the release's build alone, with no word of its pairing
+ *  with this SDK's compiler — so a command that checks before each thing it builds reads each
+ *  program off the cluster once. A connection is one command's or one tool call's: the next reads
+ *  again. */
 const shownReleased = new WeakMap<object, Set<string>>();
 
 /**
  * Refuses a cook or a Pot on a cluster without the released programs `needs` names, or on an
  * endpoint of another cluster than the one `chain` names ({@link requireCluster}). The engine is
- * each of `engines` (the installed release's by default): the one that owns the Pot a cook names,
- * which may be an earlier release's. The refusal names `chain`, as the user named the cluster.
+ * each of `engines` (the installed release's by default): the one that cooks what this SDK built,
+ * which may be an earlier release's, and so must run this SDK's programs. `paired: false` is for a
+ * transaction this SDK did not build (`sauce send`, a wallet's planned transaction): the engines it
+ * names are held to their release's digest, and not to this SDK's compiler. The refusal names
+ * `chain`, as the user named the cluster.
  */
 export async function requireReleased(
   rpc: Rpc,
@@ -232,10 +236,14 @@ export async function requireReleased(
   chain: CanonicalChain,
   needs: readonly ProgramName[],
   engines: readonly string[] = [v12SvmEngineProgramId()],
+  options: { readonly paired?: boolean } = {},
 ): Promise<void> {
+  const paired = options.paired !== false;
   await requireCluster(rpc, url, chain);
   const shown = shownReleased.get(rpc) ?? new Set<string>();
-  const unreadEngines = needs.includes("engine") ? engines.filter((id) => !shown.has(id)) : [];
+  // An engine shown to run this SDK's programs is shown to be its release's build: not the reverse.
+  const seen = (id: string): boolean => shown.has(id) || (!paired && shown.has(`${id}:digest`));
+  const unreadEngines = needs.includes("engine") ? engines.filter((id) => !seen(id)) : [];
   const unreadKitchen = needs.includes("Kitchen") && !shown.has("Kitchen");
   if (unreadEngines.length === 0 && !unreadKitchen) return;
   await requireSolanaRelease(
@@ -247,8 +255,9 @@ export async function requireReleased(
     chain.slug,
     undefined,
     unreadEngines,
+    { paired },
   );
-  for (const id of unreadEngines) shown.add(id);
+  for (const id of unreadEngines) shown.add(paired ? id : `${id}:digest`);
   if (unreadKitchen) shown.add("Kitchen");
   shownReleased.set(rpc, shown);
 }
@@ -866,9 +875,11 @@ export async function sendPlannedSvm(
     }
   }
   const rpc = createSolanaRpc(url);
-  // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another.
+  // The cluster it goes to, checked now: a plan made against one endpoint can be sent to another. A
+  // planned transaction may come from another tool: its engines are held to their release's digest,
+  // and not to this SDK's compiler.
   const called = programsCalled(await transactionAddresses(rpc, url, decoded));
-  await requireReleased(rpc, url, chain, called.needs, called.engines);
+  await requireReleased(rpc, url, chain, called.needs, called.engines, { paired: false });
   await rehearsed(rpc, url, decoded, tx.what, false);
 
   return sendAndConfirm(rpc, url, chain, decoded, () => signTransaction([signer.keyPair], decoded));
@@ -1411,6 +1422,28 @@ export const svmLamportsOnlyNote = (pot: string, lamports: bigint): string =>
   "bytes of storage, after which a program can no longer pay SOL out of it through the System " +
   "Program.";
 
+/**
+ * What a Pot of an engine this SDK's programs do not run on (v12-svm 1.2.0, 1.3.0) is told, said
+ * where its state is reported and, with `cook`, with each cook of it. Such a Pot is cooked on the
+ * installed engine, as SDKs before this one cooked every Pot: the Kitchen binds no engine to a Pot
+ * and a program that writes no Pot storage runs the same there. But `ctx.self()` in the program
+ * is the engine that runs it, so a check that the Pot's owner is `ctx.self()` fails, and so does
+ * a write to the Pot's storage, which its older owner alone may make.
+ */
+export const svmOlderPotNote = (
+  pot: string,
+  owned: { readonly engine: string; readonly version: string },
+  cook: boolean,
+): string =>
+  `the Pot ${pot} is owned by v12-svm ${owned.version} (${owned.engine}); it is cooked on ` +
+  `v12-svm ${svmEngineReleases().get(engine())!.version}, as earlier SDKs did. Inside the program ` +
+  "ctx.self() is the installed engine, so a check that the Pot's owner is ctx.self() fails and " +
+  "the Pot's storage cannot be written" +
+  (cook
+    ? "; the cook is not sent if it fails; for a staged program, setup transactions (the code " +
+      "buffer, token accounts) may already have landed and can be closed."
+    : ".");
+
 /** What the cluster says of `target`'s Pot, for a tool that tells whether to deploy it. */
 export interface SvmPotState {
   /** The Kitchen has made it: an account an engine (or any program) owns is at its address. */
@@ -1440,10 +1473,11 @@ export interface SvmPotCooking {
 }
 
 /**
- * The engine a cook on `pot` names: the program that owns the Pot's account, where it is a
- * release's engine that runs this SDK's programs; the installed release's for a Pot not created
- * yet, and for an address that holds only lamports, which is cooked as it is. Refuses a Pot owned
- * by any other program, naming it.
+ * The engine a cook on `pot` names (`svm/engine-release.ts#potCookEngine`): the program that owns
+ * the Pot's account, where it is a release's engine that runs this SDK's programs; the installed
+ * release's for a Pot not created yet, for an address that holds only lamports (cooked as it is),
+ * and for a Pot of an engine that does not run them, which the owner is told of. Refuses a Pot
+ * owned by any other program, naming it.
  */
 export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise<SvmPotCooking> {
   const { state, lamports } = await readPot(rpc, url, pot);
@@ -1466,10 +1500,12 @@ export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise
       if (state.runsCompiler) {
         return { engine: address(state.engine), lamportsOnly: false, notes: [] };
       }
-      throw new CliError(
-        `the Pot ${pot} is owned by engine ${engineMismatch(state.engine)}. Nothing was ` +
-          "simulated, built or sent",
-      );
+
+      return {
+        engine: engine(),
+        lamportsOnly: false,
+        notes: [svmOlderPotNote(pot, state, true)],
+      };
     case "other":
       throw new CliError(
         `the account at ${pot}, the Pot's address, is owned by ${state.owner}, not by an engine: ` +
@@ -3815,13 +3851,15 @@ async function deployment(
         ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
         : []),
       ...(lamportsOnly === undefined ? [] : [svmLamportsOnlyNote(pot, lamportsOnly)]),
-      ...(potOwner === undefined || potOwner === engine()
+      ...(potState.kind !== "engine" || potState.engine === engine()
         ? []
-        : [
-            `The Pot ${pot} is owned by engine ${potOwner} (v12-svm ${svmEngineReleases().get(potOwner)!.version}): ` +
-              `cooks on it run there; a new Pot runs on ${engine()} ` +
-              `(v12-svm ${svmEngineReleases().get(engine())!.version}).`,
-          ]),
+        : potState.runsCompiler
+          ? [
+              `The Pot ${pot} is owned by engine ${potState.engine} (v12-svm ${potState.version}): ` +
+                `cooks on it run there; a new Pot runs on ${engine()} ` +
+                `(v12-svm ${svmEngineReleases().get(engine())!.version}).`,
+            ]
+          : [svmOlderPotNote(pot, potState, false)]),
     ],
   };
 }

@@ -160,9 +160,15 @@ release deploys to.
   `sauce pot` and `sauce tx` give the address the Kitchen places a new Pot at
   ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
   The compiler is the same, so nothing needs recompiling between 1.1.0 and 1.2.0.
-- **Pots you already have keep their address and cook on their own engine.** A kitchen-evm 1.3.0
-  Pot cooks on engine 1.3.0, which runs compiler 2.6.3's programs, and a Solana Pot on the engine
-  that owns it. Do not move funds just because you updated the SDK.
+- **Pots you already have keep their address and keep working.** A kitchen-evm 1.3.0 Pot cooks on
+  engine 1.3.0, which runs compiler 2.6.3's programs. A Solana Pot of v12-svm 1.4.0 cooks on 1.4.0,
+  a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 cooks on the installed engine, as earlier
+  SDKs did: inside the program `ctx.self()` is that engine, so a check that the Pot's owner is
+  `ctx.self()` fails, and so does a write to the Pot's storage, which only its owner's engine may
+  make. `sauce simulate` and `sauce tx` send nothing; `sauce run` does not send a cook that fails
+  its simulation, but for a staged program the setup transactions (the code buffer, token
+  accounts) may already have landed and can be closed. Do not move funds just because you updated
+  the SDK.
 - **Which Pot `--owner` and `--wallet` mean.** Online, an owner who already has a deployed Pot at
   that salt from an earlier release whose engine runs this SDK's programs (kitchen-evm 1.3.0's)
   cooks on that Pot, through its own engine. The command says it is an earlier release's Pot, and

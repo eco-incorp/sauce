@@ -22,23 +22,37 @@ import { fileURLToPath } from "node:url";
 import {
   address,
   createKeyPairSignerFromBytes,
+  getBase64EncodedWireTransaction,
+  getCompiledTransactionMessageDecoder,
   lamports,
   type Address,
   type KeyPairSigner,
+  type Transaction,
 } from "@solana/kit";
 import { findAssociatedTokenPda, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 import { hexToBytes } from "viem";
 
 import { requireChain } from "../../src/chains/canonical.js";
+import { decodeCursor } from "../../src/cli/svm-plan.js";
 import { potSalt } from "../../src/deployments/pot.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../src/deployments/index.js";
+import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { svmTokenRows } from "../../src/routes/token-registry.js";
-import { derivePotPda, MAX_POT_LEN } from "../../src/svm/index.js";
+import { svmEngineReleases } from "../../src/svm/engine-release.js";
+import {
+  buildCookInstruction,
+  buildCreatePotInstruction,
+  buildExecuteTransaction,
+  derivePotPda,
+  KITCHEN_DISCRIMINATORS,
+  MAX_POT_LEN,
+} from "../../src/svm/index.js";
 import { jsonOf, sauce, type Run } from "../cli-anvil.js";
 import {
   describeSvm,
   ENGINE_SO,
   randomAddress,
+  sendSigned,
   setMint,
   setTokenAccount,
   startEngine,
@@ -51,6 +65,9 @@ const RPC_URL = "http://127.0.0.1:65530/";
 const SYSTEM = address("11111111111111111111111111111111");
 const INSTALLED = address(v12SvmEngineProgramId());
 const KITCHEN = address(v12SvmKitchenProgramId());
+/** v12-svm 1.3.0's engine: no release of this SDK's compiler runs on it, and the only created Pots
+ *  on mainnet-beta are its. The program itself need not be on the bank for a Pot it owns. */
+const OLD = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
 
 /** The docs' payout: `pay.sauce.ts <recipient> <amount>`, USDC from the Pot; past one transaction. */
 const PAY = fileURLToPath(new URL("../../../docs/examples/pay.sauce.ts", import.meta.url));
@@ -78,6 +95,65 @@ const SOL_PAYOUT = [
   "}",
   "",
 ].join("\n");
+/** A program that requires the Pot's owner to be the engine that runs it. */
+const OWNER_CHECK = [
+  "// @chain solana",
+  "function main(pot: Account<Signer>): Uint256 {",
+  '  require(pot.owner == ctx.self(), "the engine does not own the Pot");',
+  "  return 7;",
+  "}",
+  "",
+].join("\n");
+/** The same, in a program past one transaction: staged first, then cooked from its code buffer. */
+const ownerCheckStaged = (bytes: number): string =>
+  [
+    "// @chain solana",
+    "function main(pot: Account<Signer>): Uint256 {",
+    `  const blob = hex\`${"ab".repeat(bytes)}\`;`,
+    `  const at = ctx.timestamp() % ${bytes};`,
+    "  const value = blob.slice(at, at + 1).toBe();",
+    "  require(value == 171);",
+    '  require(pot.owner == ctx.self(), "the engine does not own the Pot");',
+    "  return value;",
+    "}",
+    "",
+  ].join("\n");
+
+/** The part of a compiled message these tests read: its accounts and instructions. */
+interface Compiled {
+  readonly staticAccounts: readonly string[];
+  readonly instructions: readonly {
+    readonly programAddressIndex: number;
+    readonly accountIndices?: readonly number[];
+    readonly data?: Uint8Array;
+  }[];
+}
+/** Where the engine is among a Kitchen cook's accounts: `cook`'s second, `cook_from_account`'s fourth. */
+const ENGINE_AT = [
+  [KITCHEN_DISCRIMINATORS.cook, 1],
+  [KITCHEN_DISCRIMINATORS.cookFromAccount, 3],
+] as const;
+/** The engine the Kitchen cook in `transaction` names; `undefined` for a transaction with none. */
+function cookEngine(transaction: Transaction): string | undefined {
+  const message = getCompiledTransactionMessageDecoder().decode(
+    transaction.messageBytes,
+  ) as unknown as Compiled;
+  for (const instruction of message.instructions) {
+    if (message.staticAccounts[instruction.programAddressIndex] !== KITCHEN) continue;
+    const found = ENGINE_AT.find(([head]) =>
+      head.every((byte, at) => instruction.data?.[at] === byte),
+    );
+    const index = found === undefined ? undefined : instruction.accountIndices?.[found[1]];
+    if (index !== undefined) return message.staticAccounts[index];
+  }
+
+  return undefined;
+}
+/** The engines whose `invoke` a log names: the cook's own, not the Kitchen's. */
+const enginesInvoked = (logs: readonly string[]): string[] =>
+  [INSTALLED, OLD].filter((engine) =>
+    logs.some((line) => line.startsWith(`Program ${engine} invoke`)),
+  );
 
 /** What `sauce simulate --json` returns, as these tests read it. */
 interface Simulated {
@@ -112,7 +188,7 @@ interface PotStatus {
 }
 const read = <T>(run: Run): T => jsonOf(run) as unknown as T;
 
-describeSvm("a Solana Pot address that holds only lamports", () => {
+describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
   let harness: EngineHarness;
   let shim: SolanaShim;
   let work: string;
@@ -170,143 +246,448 @@ describeSvm("a Solana Pot address that holds only lamports", () => {
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
   });
 
-  it("simulates, plans and runs a cook on it, as it is, on the installed engine, and leaves it the System Program's", async () => {
-    const owner = await keypair("prefunded");
-    const pot = await potOf(owner.signer.address, "prefunded");
-    harness.svm.airdrop(pot, lamports(5_000_000n));
-    expect(account(pot)).toMatchObject({ exists: true, programAddress: SYSTEM });
-    const flags = named(owner.signer.address, "prefunded");
+  describe("an address that holds only lamports", () => {
+    it("simulates, plans and runs a cook on it, as it is, on the installed engine, and leaves it the System Program's", async () => {
+      const owner = await keypair("prefunded");
+      const pot = await potOf(owner.signer.address, "prefunded");
+      harness.svm.airdrop(pot, lamports(5_000_000n));
+      expect(account(pot)).toMatchObject({ exists: true, programAddress: SYSTEM });
+      const flags = named(owner.signer.address, "prefunded");
 
-    // On the cluster, a program that fits one transaction: simulated with no create_pot ahead of it.
-    const simulated = await sauce("simulate", seven, ...flags, "--json");
-    const inline = read<Simulated>(simulated);
-    expect(inline).toMatchObject({ ok: true, pot, path: "simulateTransaction", createPot: null });
-    expect(inline.logs.some((line) => line.startsWith(`Program ${INSTALLED} invoke`))).toBe(true);
-    expect(simulated.stderr).toContain(
-      `Pot ${pot} holds 5000000 lamports and no engine owns it yet`,
-    );
+      // On the cluster, a program that fits one transaction: simulated with no create_pot ahead of it.
+      const simulated = await sauce("simulate", seven, ...flags, "--json");
+      const inline = read<Simulated>(simulated);
+      expect(inline).toMatchObject({ ok: true, pot, path: "simulateTransaction", createPot: null });
+      expect(inline.logs.some((line) => line.startsWith(`Program ${INSTALLED} invoke`))).toBe(true);
+      expect(simulated.stderr).toContain(
+        `Pot ${pot} holds 5000000 lamports and no engine owns it yet`,
+      );
 
-    // The plan: the cook alone, creating nothing.
-    const planned = await sauce("tx", seven, ...flags);
-    expect(read<Planned>(planned)).toMatchObject({ createsPot: false });
-    expect(planned.stderr).toContain(`Pot ${pot} holds 5000000 lamports and no engine owns it yet`);
+      // The plan: the cook alone, creating nothing.
+      const planned = await sauce("tx", seven, ...flags);
+      expect(read<Planned>(planned)).toMatchObject({ createsPot: false });
+      expect(planned.stderr).toContain(
+        `Pot ${pot} holds 5000000 lamports and no engine owns it yet`,
+      );
 
-    // Sent: it succeeds, creates no Pot, and the address is still the System Program's, with what
-    // it held.
-    const ran = await sauce("run", seven, ...signedAs(owner.path, "prefunded"), "--yes", "--json");
-    expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
-    expect(read<Ran>(ran).createPot).toBeUndefined();
-    expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 5_000_000n });
-    expect(dataLength(pot)).toBe(0);
-  }, 180_000);
+      // Sent: it succeeds, creates no Pot, and the address is still the System Program's, with what
+      // it held.
+      const ran = await sauce(
+        "run",
+        seven,
+        ...signedAs(owner.path, "prefunded"),
+        "--yes",
+        "--json",
+      );
+      expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+      expect(read<Ran>(ran).createPot).toBeUndefined();
+      expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 5_000_000n });
+      expect(dataLength(pot)).toBe(0);
+    }, 180_000);
 
-  it("pays SOL out of it through the System Program, which a Pot carrying data could not", async () => {
-    const owner = await keypair("sol-payout");
-    const pot = await potOf(owner.signer.address, "sol-payout");
-    const to = randomAddress();
-    harness.svm.airdrop(pot, lamports(5_000_000n));
-    const ran = await sauce(
-      ...["run", payout, ...signedAs(owner.path, "sol-payout")],
-      ...["--account", "system=system", "--account", "pot=pot", "--account", `to=${to}`],
-      ...["--yes", "--json"],
-    );
-    expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
-    expect(account(to)).toMatchObject({ exists: true, lamports: 1_000_000n });
-    expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 4_000_000n });
-  }, 180_000);
+    it("pays SOL out of it through the System Program, which a Pot carrying data could not", async () => {
+      const owner = await keypair("sol-payout");
+      const pot = await potOf(owner.signer.address, "sol-payout");
+      const to = randomAddress();
+      harness.svm.airdrop(pot, lamports(5_000_000n));
+      const ran = await sauce(
+        ...["run", payout, ...signedAs(owner.path, "sol-payout")],
+        ...["--account", "system=system", "--account", "pot=pot", "--account", `to=${to}`],
+        ...["--yes", "--json"],
+      );
+      expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+      expect(account(to)).toMatchObject({ exists: true, lamports: 1_000_000n });
+      expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 4_000_000n });
+    }, 180_000);
 
-  it("moves the Pot's tokens in a staged cook: simulated in the local copy, then sent", async () => {
-    const owner = await keypair("staged");
-    const pot = await potOf(owner.signer.address, "staged");
-    harness.svm.airdrop(pot, lamports(5_000_000n));
-    const usdc = address(
-      svmTokenRows(requireChain("solana")).find((row) => row.symbol === "USDC")!.mint,
-    );
-    setMint(harness, usdc, 6);
-    const potUsdc = await ataOf(pot, usdc);
-    setTokenAccount(harness, potUsdc, usdc, pot, 3_000_000n);
-    const toUsdc = await ataOf(recipient, usdc);
-    setTokenAccount(harness, toUsdc, usdc, recipient, 0n);
-    const args = ["--args", recipient, "1000000"];
+    it("moves the Pot's tokens in a staged cook: simulated in the local copy, then sent", async () => {
+      const owner = await keypair("staged");
+      const pot = await potOf(owner.signer.address, "staged");
+      harness.svm.airdrop(pot, lamports(5_000_000n));
+      const usdc = address(
+        svmTokenRows(requireChain("solana")).find((row) => row.symbol === "USDC")!.mint,
+      );
+      setMint(harness, usdc, 6);
+      const potUsdc = await ataOf(pot, usdc);
+      setTokenAccount(harness, potUsdc, usdc, pot, 3_000_000n);
+      const toUsdc = await ataOf(recipient, usdc);
+      setTokenAccount(harness, toUsdc, usdc, recipient, 0n);
+      const args = ["--args", recipient, "1000000"];
 
-    // Past one transaction, so the local copy simulates it: the Pot's signature through the engine's
-    // CPI into the token program, from an address the System Program owns.
-    const simulated = read<Simulated>(
-      await sauce("simulate", PAY, ...named(owner.signer.address, "staged"), ...args, "--json"),
-    );
-    expect(simulated).toMatchObject({ ok: true, path: "local copy (LiteSVM)", pot });
-    expect(simulated.tokenChanges).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ delta: "-1000000" }),
-        expect.objectContaining({ delta: "1000000" }),
-      ]),
-    );
-    expect(tokenAmount(harness, toUsdc)).toBe(0n);
+      // Past one transaction, so the local copy simulates it: the Pot's signature through the engine's
+      // CPI into the token program, from an address the System Program owns.
+      const simulated = read<Simulated>(
+        await sauce("simulate", PAY, ...named(owner.signer.address, "staged"), ...args, "--json"),
+      );
+      expect(simulated).toMatchObject({ ok: true, path: "local copy (LiteSVM)", pot });
+      expect(simulated.tokenChanges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ delta: "-1000000" }),
+          expect.objectContaining({ delta: "1000000" }),
+        ]),
+      );
+      expect(tokenAmount(harness, toUsdc)).toBe(0n);
 
-    const ran = await sauce(
-      "run",
-      PAY,
-      ...signedAs(owner.path, "staged"),
-      ...args,
-      "--yes",
-      "--json",
-    );
-    expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
-    expect(tokenAmount(harness, toUsdc)).toBe(1_000_000n);
-    expect(tokenAmount(harness, potUsdc)).toBe(2_000_000n);
-    expect(account(pot)).toMatchObject({ programAddress: SYSTEM });
-  }, 180_000);
+      const ran = await sauce(
+        "run",
+        PAY,
+        ...signedAs(owner.path, "staged"),
+        ...args,
+        "--yes",
+        "--json",
+      );
+      expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+      expect(tokenAmount(harness, toUsdc)).toBe(1_000_000n);
+      expect(tokenAmount(harness, potUsdc)).toBe(2_000_000n);
+      expect(account(pot)).toMatchObject({ programAddress: SYSTEM });
+    }, 180_000);
 
-  it("carries on a plan whose Pot was funded after its cursor was made: no create_pot, no refusal", async () => {
-    const owner = await keypair("planned");
-    const pot = await potOf(owner.signer.address, "planned");
-    const flags = named(owner.signer.address, "planned");
-    // The Pot is missing, so the plan's setup creates it, first.
-    const first = read<Planned>(await sauce("tx", blob, ...flags));
-    expect(first.step).toBe("setup");
-    expect(first.transactions!.map((tx) => tx.what)[0]).toBe("creating the Pot");
-    // Lamports reach the address before the owner signs a thing.
-    harness.svm.airdrop(pot, lamports(1_000_000n));
-    const resumed = read<Sent>(
-      await sauce("send", "--cursor", first.cursor, "--rpc-url", RPC_URL, "--json"),
-    );
-    expect(resumed.ok).toBe(true);
-    expect(resumed.next.step).toBe("setup");
-    const whats = resumed.next.transactions!.map((tx) => tx.what);
-    expect(whats).not.toContain("creating the Pot");
-    expect(whats[0]).toBe("creating the code buffer");
-    expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
-  }, 180_000);
+    it("carries on a plan whose Pot was funded after its cursor was made: no create_pot, no refusal", async () => {
+      const owner = await keypair("planned");
+      const pot = await potOf(owner.signer.address, "planned");
+      const flags = named(owner.signer.address, "planned");
+      // The Pot is missing, so the plan's setup creates it, first.
+      const first = read<Planned>(await sauce("tx", blob, ...flags));
+      expect(first.step).toBe("setup");
+      expect(first.transactions!.map((tx) => tx.what)[0]).toBe("creating the Pot");
+      // Lamports reach the address before the owner signs a thing.
+      harness.svm.airdrop(pot, lamports(1_000_000n));
+      const resumed = read<Sent>(
+        await sauce("send", "--cursor", first.cursor, "--rpc-url", RPC_URL, "--json"),
+      );
+      expect(resumed.ok).toBe(true);
+      expect(resumed.next.step).toBe("setup");
+      const whats = resumed.next.transactions!.map((tx) => tx.what);
+      expect(whats).not.toContain("creating the Pot");
+      expect(whats[0]).toBe("creating the code buffer");
+      expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+    }, 180_000);
 
-  it("is not created: `sauce pot` says so and that cooks run on it, and --deploy creates it, keeping its lamports", async () => {
-    const owner = await keypair("deployed");
-    const pot = await potOf(owner.signer.address, "deployed");
-    harness.svm.airdrop(pot, lamports(3_000_000n));
-    const status = await sauce("pot", ...named(owner.signer.address, "deployed"));
-    expect(read<PotStatus>(status).deployment.pot).toEqual({ address: pot, deployed: false });
-    expect(status.stderr).toContain(
-      `The Pot ${pot} holds 3000000 lamports and no engine owns it, so it is not created: cooks run on it as it is`,
-    );
-    expect(status.stderr).not.toContain("is already created");
+    it("is not created: `sauce pot` says so and that cooks run on it, and --deploy creates it, keeping its lamports", async () => {
+      const owner = await keypair("deployed");
+      const pot = await potOf(owner.signer.address, "deployed");
+      harness.svm.airdrop(pot, lamports(3_000_000n));
+      const status = await sauce("pot", ...named(owner.signer.address, "deployed"));
+      expect(read<PotStatus>(status).deployment.pot).toEqual({ address: pot, deployed: false });
+      expect(status.stderr).toContain(
+        `The Pot ${pot} holds 3000000 lamports and no engine owns it, so it is not created: cooks run on it as it is`,
+      );
+      expect(status.stderr).not.toContain("is already created");
 
-    // --deploy: the Kitchen's create_pot succeeds on a prefunded address (it tops up the rent, then
-    // allocates and assigns), so it is created, for the installed engine, with what it held kept.
-    const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
-    expect(deployed.code).toBe(0);
-    expect(deployed.stderr).not.toContain("is already created");
-    expect(deployed.stderr).toContain(`held 3000000 lamports and no engine owned it`);
-    expect(read<{ deployed: boolean }>(deployed).deployed).toBe(true);
-    expect(account(pot)).toMatchObject({ programAddress: INSTALLED });
-    expect(dataLength(pot)).toBe(MAX_POT_LEN);
+      // --deploy: the Kitchen's create_pot succeeds on a prefunded address (it tops up the rent, then
+      // allocates and assigns), so it is created, for the installed engine, with what it held kept.
+      const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
+      expect(deployed.code).toBe(0);
+      expect(deployed.stderr).not.toContain("is already created");
+      expect(deployed.stderr).toContain(`held 3000000 lamports and no engine owned it`);
+      expect(read<{ deployed: boolean }>(deployed).deployed).toBe(true);
+      expect(account(pot)).toMatchObject({ programAddress: INSTALLED });
+      expect(dataLength(pot)).toBe(MAX_POT_LEN);
 
-    // Created now: reported so, on the engine that owns it, and a second --deploy changes nothing.
-    const after = await sauce("pot", ...named(owner.signer.address, "deployed"));
-    expect(read<PotStatus>(after).deployment.pot).toEqual({
-      address: pot,
-      deployed: true,
-      engine: INSTALLED,
+      // Created now: reported so, on the engine that owns it, and a second --deploy changes nothing.
+      const after = await sauce("pot", ...named(owner.signer.address, "deployed"));
+      expect(read<PotStatus>(after).deployment.pot).toEqual({
+        address: pot,
+        deployed: true,
+        engine: INSTALLED,
+      });
+      const again = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
+      expect(again.stderr).toContain(`Pot ${pot} is already created on solana.`);
+    }, 180_000);
+  });
+
+  describe("a Pot of v12-svm 1.3.0, which no release of this compiler's output runs on", () => {
+    const installedVersion = svmEngineReleases().get(INSTALLED)!.version;
+    /** What the owner is told of the Pot's engine: the first part everywhere, the rest of a cook's. */
+    const told = (pot: Address): string =>
+      `the Pot ${pot} is owned by v12-svm 1.3.0 (${OLD}); it is cooked on v12-svm ${installedVersion}, ` +
+      "as earlier SDKs did. Inside the program ctx.self() is the installed engine, so a check that " +
+      "the Pot's owner is ctx.self() fails and the Pot's storage cannot be written";
+    const cookTold = (pot: Address): string =>
+      `${told(pot)}; the cook is not sent if it fails; for a staged program, setup transactions (the ` +
+      "code buffer, token accounts) may already have landed and can be closed.";
+    let ownerCheck: string;
+    let ownerCheckBlob: string;
+    beforeAll(() => {
+      ownerCheck = join(work, "owner-check.sauce.ts");
+      ownerCheckBlob = join(work, "owner-check-blob.sauce.ts");
+      writeFileSync(ownerCheck, OWNER_CHECK);
+      writeFileSync(ownerCheckBlob, ownerCheckStaged(1500));
     });
-    const again = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
-    expect(again.stderr).toContain(`Pot ${pot} is already created on solana.`);
-  }, 180_000);
+
+    /** The Pot as that release's create_pot left it: 10,240 bytes, the engine its owner program. */
+    const plantOld = async (owner: Address, salt: string): Promise<Address> => {
+      const pot = await potOf(owner, salt);
+      harness.svm.setAccount({
+        address: pot,
+        data: new Uint8Array(MAX_POT_LEN),
+        executable: false,
+        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(MAX_POT_LEN))),
+        programAddress: OLD,
+        space: BigInt(MAX_POT_LEN),
+      });
+
+      return pot;
+    };
+    /** The Pot's USDC account holding 3, and an empty one for a fresh recipient: what pay moves. */
+    const fundUsdc = async (pot: Address) => {
+      const usdc = address(
+        svmTokenRows(requireChain("solana")).find((row) => row.symbol === "USDC")!.mint,
+      );
+      setMint(harness, usdc, 6);
+      const to = randomAddress();
+      const potUsdc = await ataOf(pot, usdc);
+      setTokenAccount(harness, potUsdc, usdc, pot, 3_000_000n);
+      const toUsdc = await ataOf(to, usdc);
+      setTokenAccount(harness, toUsdc, usdc, to, 0n);
+
+      return { to, potUsdc, toUsdc };
+    };
+    /** A Pot `create_pot` made under `engine`, as a cluster holds it. */
+    const createUnder = async (
+      owner: KeyPairSigner,
+      salt: string,
+      engine: Address,
+    ): Promise<Address> => {
+      const pot = await potOf(owner.address, salt);
+      harness.svm.expireBlockhash();
+      const created = sendSigned(
+        harness,
+        await buildExecuteTransaction({
+          payer: owner,
+          instructions: [
+            buildCreatePotInstruction({
+              kitchen: KITCHEN,
+              owner: owner.address,
+              engineProgram: engine,
+              pot,
+              salt: hexToBytes(potSalt(salt)),
+              space: MAX_POT_LEN,
+            }),
+          ],
+          latestBlockhash: {
+            blockhash: harness.svm.latestBlockhash(),
+            lastValidBlockHeight: 1_000_000n,
+          },
+        }),
+      );
+      if (!created.ok) throw new Error(`create_pot failed: ${created.err}`);
+
+      return pot;
+    };
+    const cooksOf = (from: number): (string | undefined)[] =>
+      shim.sent
+        .slice(from)
+        .map(cookEngine)
+        .filter((engine) => engine !== undefined);
+
+    it("simulates, plans and runs an SPL transfer the Pot signs through the installed engine, and the Pot stays 1.3.0's", async () => {
+      const owner = await keypair("old-pay");
+      const pot = await plantOld(owner.signer.address, "old-pay");
+      const { to, potUsdc, toUsdc } = await fundUsdc(pot);
+      const args = ["--args", to, "1000000"];
+      const flags = named(owner.signer.address, "old-pay");
+      const sent = shim.sent.length;
+
+      // sauce simulate: past one transaction, so in the local copy, which runs the installed
+      // engine's own code: the cook names it, and the Pot's signature goes through its CPI.
+      const simulated = await sauce("simulate", PAY, ...flags, ...args, "--json");
+      const out = read<Simulated>(simulated);
+      expect(out).toMatchObject({ ok: true, path: "local copy (LiteSVM)", pot });
+      expect(enginesInvoked(out.logs)).toEqual([INSTALLED]);
+      expect(out.tokenChanges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ delta: "-1000000" }),
+          expect.objectContaining({ delta: "1000000" }),
+        ]),
+      );
+      expect(simulated.stderr).toContain(cookTold(pot));
+
+      // sauce tx: the plan's first step and its cursor, which names no engine (the installed
+      // engine is the cursor's own).
+      const planned = await sauce("tx", PAY, ...flags, ...args);
+      expect(read<Planned>(planned).step).toBe("setup");
+      expect(decodeCursor(read<Planned>(planned).cursor).engine).toBeUndefined();
+      expect(planned.stderr).toContain(cookTold(pot));
+
+      // These two send nothing, and move nothing.
+      expect(shim.sent.length).toBe(sent);
+      expect(tokenAmount(harness, toUsdc)).toBe(0n);
+
+      // sauce run: sent, through the installed engine, and the tokens move.
+      const ran = await sauce(
+        "run",
+        PAY,
+        ...signedAs(owner.path, "old-pay"),
+        ...args,
+        "--yes",
+        "--json",
+      );
+      expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+      expect(tokenAmount(harness, toUsdc)).toBe(1_000_000n);
+      expect(tokenAmount(harness, potUsdc)).toBe(2_000_000n);
+      expect(account(pot)).toMatchObject({ programAddress: OLD });
+      expect(cooksOf(sent)).toEqual([INSTALLED]);
+    }, 180_000);
+
+    it("cooks a program that fits one transaction there too: simulated on the cluster, planned, sent", async () => {
+      const owner = await keypair("old-seven");
+      const pot = await plantOld(owner.signer.address, "old-seven");
+      const flags = named(owner.signer.address, "old-seven");
+      const sent = shim.sent.length;
+
+      const simulated = await sauce("simulate", seven, ...flags, "--json");
+      const out = read<Simulated>(simulated);
+      expect(out).toMatchObject({ ok: true, pot, path: "simulateTransaction", createPot: null });
+      expect(enginesInvoked(out.logs)).toEqual([INSTALLED]);
+      expect(simulated.stderr).toContain(cookTold(pot));
+      const planned = await sauce("tx", seven, ...flags);
+      expect(read<Planned>(planned)).toMatchObject({ createsPot: false });
+      expect(shim.sent.length).toBe(sent);
+
+      const ran = await sauce(
+        "run",
+        seven,
+        ...signedAs(owner.path, "old-seven"),
+        "--yes",
+        "--json",
+      );
+      expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+      expect(cooksOf(sent)).toEqual([INSTALLED]);
+      expect(account(pot)).toMatchObject({ programAddress: OLD });
+    }, 180_000);
+
+    it("fails a program that requires the Pot's owner to be ctx.self() at the simulation, and sends nothing; the installed engine's own Pot passes it", async () => {
+      const owner = await keypair("old-check");
+      await plantOld(owner.signer.address, "old-check");
+      const accounts = ["--account", "pot=pot"];
+      const sent = shim.sent.length;
+
+      const simulated = await sauce(
+        ...["simulate", ownerCheck, ...named(owner.signer.address, "old-check")],
+        ...[...accounts, "--json"],
+      );
+      expect(simulated.code).toBe(1);
+      expect(JSON.parse(simulated.stdout)).toMatchObject({
+        ok: false,
+        reason: 'the program threw "the engine does not own the Pot"',
+      });
+      // The plan is not built for a cook that fails, and the run does not send one.
+      const planned = await sauce(
+        ...["tx", ownerCheck, ...named(owner.signer.address, "old-check"), ...accounts],
+      );
+      expect(planned.code).toBe(1);
+      expect(planned.stderr).toContain("the engine does not own the Pot");
+      const ran = await sauce(
+        ...["run", ownerCheck, ...signedAs(owner.path, "old-check"), ...accounts, "--yes"],
+      );
+      expect(ran.code).toBe(1);
+      expect(ran.stderr).toContain("the cook would fail, so it was not sent");
+      expect(shim.sent.length).toBe(sent);
+
+      // The same program on a Pot the installed engine created: its owner is ctx.self().
+      const fresh = await keypair("new-check");
+      const created = await createUnder(fresh.signer, "new-check", INSTALLED);
+      const control = await sauce(
+        ...["simulate", ownerCheck, ...named(fresh.signer.address, "new-check")],
+        ...[...accounts, "--json"],
+      );
+      expect(read<Simulated>(control)).toMatchObject({ ok: true, pot: created });
+    }, 180_000);
+
+    it("stops a staged program that fails the owner check before its cook: the setup landed, no cook did, and the buffer is closed", async () => {
+      const owner = await keypair("old-staged");
+      const pot = await plantOld(owner.signer.address, "old-staged");
+      const accounts = ["--account", "pot=pot"];
+      // The plan's setup, as asking for it lists it: nothing is sent by asking.
+      const planned = read<Planned>(
+        await sauce(
+          ...["tx", ownerCheckBlob, ...named(owner.signer.address, "old-staged"), ...accounts],
+        ),
+      );
+      expect(planned.step).toBe("setup");
+      const setup = planned.transactions!.map((tx) => tx.what);
+      expect(setup).not.toContain("creating the Pot");
+      expect(setup[0]).toBe("creating the code buffer");
+      const sent = shim.sent.length;
+
+      const ran = await sauce(
+        ...["run", ownerCheckBlob, ...signedAs(owner.path, "old-staged"), ...accounts, "--yes"],
+      );
+      expect(ran.code).toBe(1);
+      expect(ran.stderr).toContain("the cook would fail, so it was not sent");
+      expect(ran.stderr).toContain("the engine does not own the Pot");
+      // What landed: every setup transaction (the code buffer made, written and finalized), no cook,
+      // and then the buffer's close.
+      const landed = shim.sent.slice(sent);
+      expect(cooksOf(sent)).toEqual([]);
+      expect(landed).toHaveLength(setup.length + 1);
+      // Closed again by the run itself, its rent back: nothing of the failed cook is left open.
+      const closed = /The code buffer (\w+) was closed again/.exec(ran.stderr);
+      expect(closed).not.toBeNull();
+      expect(account(closed![1] as Address).exists).toBe(false);
+      expect(account(pot)).toMatchObject({ programAddress: OLD });
+    }, 180_000);
+
+    it("sends a transaction someone else built that names that engine no further than its digest: not refused for the compiler's pairing", async () => {
+      const owner = await keypair("old-send");
+      const pot = await plantOld(owner.signer.address, "old-send");
+      harness.svm.expireBlockhash();
+      // The SDK's builder refuses an engine its compiler does not pair with, so the cook is built
+      // for the installed engine and its engine account swapped, as another tool would write it:
+      // the engine is the cook's second account.
+      const cook = buildCookInstruction({
+        kitchen: KITCHEN,
+        owner: owner.signer.address,
+        engineProgram: INSTALLED,
+        potSalt: hexToBytes(potSalt("old-send")),
+        pot,
+        feeConfig: harness.feeConfig,
+        bytecode: compileSauceProgram("solana", "function main(): Uint256 {\n  return 7;\n}\n")
+          .bytecode,
+        maxExecutionFee: 0n,
+        tail: [],
+      });
+      const wire = getBase64EncodedWireTransaction(
+        await buildExecuteTransaction({
+          payer: owner.signer,
+          instructions: [
+            {
+              ...cook,
+              accounts: (cook.accounts ?? []).map((meta, at) =>
+                at === 1 ? { ...meta, address: OLD } : meta,
+              ),
+            },
+          ],
+          latestBlockhash: {
+            blockhash: harness.svm.latestBlockhash(),
+            lastValidBlockHeight: 1_000_000n,
+          },
+        }),
+      );
+      const sent = shim.sent.length;
+      const run = await sauce("send", wire, "--rpc-url", RPC_URL);
+      // The bank holds no program at that engine's id, so what is refused is the cluster, by that
+      // release's digest, as for any engine: not this SDK's compiler, which did not build the cook.
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(
+        `the engine ${OLD} (v12-svm 1.3.0) is not deployed on solana as that release's build`,
+      );
+      expect(run.stderr).not.toContain("which runs compiler");
+      expect(shim.sent.length).toBe(sent);
+    }, 180_000);
+
+    it("is created, on its own engine, and `sauce pot` says it is cooked on the installed one", async () => {
+      const owner = await keypair("old-status");
+      const pot = await plantOld(owner.signer.address, "old-status");
+      const status = await sauce("pot", ...named(owner.signer.address, "old-status"));
+      expect(read<PotStatus>(status).deployment.pot).toEqual({
+        address: pot,
+        deployed: true,
+        engine: OLD,
+      });
+      expect(status.stderr).toContain(`${told(pot)}.`);
+      expect(status.stderr).not.toContain("cooks on it run there");
+    });
+  });
 });

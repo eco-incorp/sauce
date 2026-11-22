@@ -132,9 +132,12 @@ EVM chain with the Kitchen switched to kitchen-evm 1.4.0, which places new Pots 
 
 1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: kitchen-evm
 1.4.0 and engine 1.4.0 on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
-keeps working, cooked on its own engine: a kitchen-evm 1.3.0 Pot on engine 1.3.0, a Solana Pot on
-the engine that owns it. If you funded an address that 1.0.0 or 1.1.0 predicted and no Pot was
-ever deployed there, see [Upgrading](guides/upgrading.md#moving-to-sdk-120).
+keeps working: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0; a Solana Pot of v12-svm 1.4.0 cooks
+on 1.4.0, a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 (the only created Pots on
+mainnet-beta are 1.3.0's) cooks on the installed engine, as earlier SDKs cooked every Pot: inside
+the program `ctx.self()` is that engine, so a check that the Pot's owner is `ctx.self()` fails, and
+so does a write to the Pot's storage. If you funded an address that 1.0.0 or 1.1.0 predicted and no
+Pot was ever deployed there, see [Upgrading](guides/upgrading.md#moving-to-sdk-120).
 
 ### SauceScript
 
@@ -152,9 +155,11 @@ No language change.
   `releases.json` records as `alsoRunsOn`: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0 with no
   recompile.
 - **v12-svm 1.4.1 (now the default):** The engine a Solana Pot that does not exist yet is created
-  under and cooked on. A Solana Pot's address does not depend on the engine: the engine that cooks
-  a Pot is the program that owns its account. Compiler 2.6.3's output also runs on v12-svm 1.4.0
-  (`alsoRunsOn`), so a Pot made under 1.4.0 keeps cooking on 1.4.0.
+  under and cooked on. A Solana Pot's address does not depend on the engine, and the Kitchen binds
+  no engine to a Pot: the SDK chooses the engine from the Pot's owner program, where that engine
+  runs this compiler's output. Compiler 2.6.3's output also runs on v12-svm 1.4.0 (`alsoRunsOn`),
+  so a Pot made under 1.4.0 keeps cooking on 1.4.0. Pots of v12-svm 1.2.0 and 1.3.0 do not run it:
+  they cook on 1.4.1, and the command says so with each cook.
 
 ### The `sauce` command and the MCP server
 
