@@ -60,7 +60,11 @@ import {
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
 import { chainBySlug, requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import {
+  engineRunsCompiler,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
 import {
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
@@ -106,7 +110,12 @@ import {
   svmTokenAccountsToCreate,
 } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
-import { instructionAddresses, programsCalled, type ProgramName } from "./solana-release.js";
+import {
+  engineMismatch,
+  instructionAddresses,
+  programsCalled,
+  type ProgramName,
+} from "./solana-release.js";
 
 type Rpc = ReturnType<typeof createSolanaRpc>;
 
@@ -390,6 +399,19 @@ export function decodeCursor(text: string): SvmPlan {
 
     return value;
   };
+  // The engine a cook names signs for the Pot into whatever program it is, and a cursor carries it in
+  // from outside: only an engine the release table names whose programs this SDK's run passes (the
+  // installed release's, and an earlier one the installed row's `alsoRunsOn` lists). Whether that
+  // engine is the Pot's to cook on is held where the plan is used (`potIsMissing`), against the Pot.
+  const engineKey = (value: unknown): Address => {
+    const program = key(value, "engine");
+    if (!svmEngineReleases().has(program)) {
+      throw bad(`engine ${program} is not an engine release this SDK knows`);
+    }
+    if (engineRunsCompiler("svm", program) !== true) throw bad(`engine ${engineMismatch(program)}`);
+
+    return program;
+  };
   const integer = (value: unknown, what: string): bigint => {
     if (typeof value !== "string" || !/^\d{1,20}$/.test(value) || BigInt(value) > U64_MAX) {
       throw bad(`${what} is not an integer`);
@@ -510,7 +532,7 @@ export function decodeCursor(text: string): SvmPlan {
     owner: key(raw.owner, "owner"),
     salt: raw.salt as Hex,
     via,
-    ...(raw.engine === undefined ? {} : { engine: key(raw.engine, "engine") }),
+    ...(raw.engine === undefined ? {} : { engine: engineKey(raw.engine) }),
     ...(raw.maxExecutionFee === undefined
       ? {}
       : { maxExecutionFee: integer(raw.maxExecutionFee, "maxExecutionFee") }),
@@ -869,24 +891,28 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
  * the installed engine for a Pot of one that does not (`potCookEngine`). Any other engine refuses
  * the step. A plan with no cook left to build (its cook landed, or it is given up: `cooking`
  * false) is not held to it: what is left of it is the code buffer's close, which no Pot's owner
- * changes.
+ * changes. A Pot no engine owns yet (no account, or only lamports) is held to it too: it is created
+ * under and cooked on the installed engine, so a plan made for another engine, the earlier one
+ * included, is refused there as it is for a Pot another engine owns.
  */
 async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<boolean> {
   const pot = await potOf(plan);
   const { value } = await ask(ctx.url, "the Pot", () =>
     ctx.rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
   );
-  if (value === null) return true;
   const state = potAccountState(potAccountOf(value));
-  if (state.kind === "unallocated") return false;
   if (cooking && plan.via === "kitchen" && potCookEngine(state, engine()) !== planEngine(plan)) {
     throw new CliError(
-      `the Pot ${pot} is owned by ${value.owner}, and this plan was made for engine ` +
-        `${planEngine(plan)}: make the plan again (sauce tx)`,
+      state.kind === "unallocated"
+        ? `the Pot ${pot} is owned by no engine yet, and this plan was made for engine ` +
+            `${planEngine(plan)}: a Pot no engine owns is created under and cooked on ${engine()}, ` +
+            "so make the plan again (sauce tx)"
+        : `the Pot ${pot} is owned by ${value?.owner}, and this plan was made for engine ` +
+            `${planEngine(plan)}: make the plan again (sauce tx)`,
     );
   }
 
-  return false;
+  return value === null;
 }
 
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */

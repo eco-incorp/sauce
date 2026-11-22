@@ -1405,7 +1405,16 @@ anyone can put an address in that state by sending it lamports, so refusing it w
 stranger stop an owner's first cook. `sauce pot` and `sauce_pot` report it as not created, and
 `--deploy` creates it (the Kitchen's `create_pot` tops up the rent, allocates and assigns: checked
 in LiteSVM with the address funded below, at and above the Pot's rent); an account any other
-program owns is no Pot. A Pot's store key is its chain id AND, on Solana, its
+program owns is no Pot. **On Solana nothing may name an engine that the release table
+(`svm/engine-release.ts`) and the pairing rules (`engineRunsCompiler`) do not hold**, because the
+Kitchen pins no engine to a Pot and signs for it into whatever program a cook names: a Pot of
+either release engine cooks through the other and the chain refuses neither (probe S2, pinned in
+`svm/engine-binding.e2e.test.ts`), unlike EVM, where an engine refuses another release's Pots. So
+a cook's engine comes from the Pot's own owner program (`potCookEngine`); a plan's cursor carries
+one only if `decodeCursor` finds it in the table and running this compiler; `potIsMissing` holds
+it against the Pot at every step, a Pot no engine owns yet included (the installed engine's); and
+a path that let outside data choose it would hand that program the Pot's authority over every
+account in the transaction. A Pot's store key is its chain id AND, on Solana, its
 cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
 the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
 Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside

@@ -353,6 +353,28 @@ describe("a plan's cursor", () => {
       () => cursorOf(raw({ chain: 1399811150 })),
       /chain is not a Solana chain/,
     ],
+    // The engine a cook names signs for the Pot into whatever program it is: a cursor carries it from
+    // outside, so only an engine the release table names, and whose programs this SDK's run, passes.
+    [
+      "an engine no release names",
+      () => cursorOf(raw({ engine: MINT })),
+      /engine \w+ is not an engine release this SDK knows/,
+    ],
+    [
+      "the Kitchen's id as the engine",
+      () => cursorOf(raw({ engine: v12SvmKitchenProgramId() })),
+      /engine \w+ is not an engine release this SDK knows/,
+    ],
+    [
+      "the engine of a release whose programs this SDK's do not run",
+      () => cursorOf(raw({ engine: "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT" })),
+      /engine 2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT \(v12-svm 1\.3\.0\), which runs compiler .* this SDK compiles with compiler/,
+    ],
+    [
+      "the earliest engine a release names",
+      () => cursorOf(raw({ engine: "HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK" })),
+      /engine HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK \(v12-svm 1\.2\.0\)/,
+    ],
   ])("refuses %s", (_, cursor, why) => {
     const read = () => decodeCursor(cursor());
     expect(read).toThrow(UsageError);
@@ -853,6 +875,28 @@ describe("a cook on the engine that owns the Pot", () => {
     await expect(nextStep(plan({ engine: EARLIER }), context(rpc))).rejects.toThrow(
       `is owned by ${OLD}, and this plan was made for engine ${EARLIER}: make the plan again`,
     );
+  });
+
+  it("refuses the paired earlier engine where no engine owns the Pot yet: a missing Pot, or one that holds only lamports", async () => {
+    // A Pot no engine owns is created under, and cooked on, the installed engine: a plan that names
+    // the earlier engine, which this SDK's programs run on, names one that will never own it.
+    const SYSTEM = "11111111111111111111111111111111";
+    for (const rpc of [
+      endpoint({
+        ...COOK_READS,
+        getAccountInfo: () => ({ context: { slot: 2_000n }, value: null }),
+      }),
+      endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(SYSTEM) }),
+    ]) {
+      for (const pot of ["there", "setup"] as const) {
+        await expect(nextStep(plan({ engine: EARLIER, pot }), context(rpc))).rejects.toThrow(
+          `is owned by no engine yet, and this plan was made for engine ${EARLIER}: a Pot no ` +
+            `engine owns is created under and cooked on ${INSTALLED}, so make the plan again`,
+        );
+      }
+      // The plan made for the installed engine is the one such a Pot takes.
+      expect((await nextStep(plan(), context(rpc))).name).toBe("cook");
+    }
   });
 });
 

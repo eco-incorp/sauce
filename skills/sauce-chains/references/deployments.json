@@ -35,8 +35,15 @@
     "engine": {
       "programId": "8ukALvkKyJcyf5aEAUwTbLwSr9iMYktnRZL5if8vYBhg",
       "key": "0x7584d01e59afbe682c8faba4c2ff0695f16b2e8cdce42c07504e2e7e152ce127",
-      "about": "The engine program, which owns every Pot: ctx.self() in a program on Solana. key is the 32-byte value a program holds."
+      "about": "The engine program new Pots are created under and cooked on. ctx.self() in a program on Solana is the engine running the cook: this one, or an older engine from earlierEngines for a Pot that engine created. key is the 32-byte value a program holds."
     },
+    "earlierEngines": [
+      {
+        "programId": "53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW",
+        "key": "0x3c1c3c1e1b25a58a15a88145bcc823446ec88fec133af645d0621bacfcdb0303",
+        "about": "An older engine whose programs this SDK's also run on. A Pot it created is cooked on it, and ctx.self() in that program is this engine. A Pot owned by an engine that does not run them is cooked on the engine above. key is the 32-byte value a program holds."
+      }
+    ],
     "kitchen": {
       "programId": "SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot",
       "key": "0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b",

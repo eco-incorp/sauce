@@ -1540,8 +1540,16 @@ function renderDeploymentsJson(data) {
         programId: svm.engine,
         key: svmKey(svm.engine),
         about:
-          "The engine program, which owns every Pot: ctx.self() in a program on Solana. key is the 32-byte value a program holds.",
+          "The engine program new Pots are created under and cooked on. ctx.self() in a program on Solana is the engine running the cook: this one, or an older engine from earlierEngines for a Pot that engine created. key is the 32-byte value a program holds.",
       },
+      earlierEngines: data.deployments.earlier
+        .filter((one) => one.component === "v12-svm")
+        .map((one) => ({
+          programId: one.engine,
+          key: svmKey(one.engine),
+          about:
+            "An older engine whose programs this SDK's also run on. A Pot it created is cooked on it, and ctx.self() in that program is this engine. A Pot owned by an engine that does not run them is cooked on the engine above. key is the 32-byte value a program holds.",
+        })),
       kitchen: {
         programId: svm.kitchen,
         key: svmKey(svm.kitchen),
@@ -1651,8 +1659,12 @@ function renderDeploymentsPage(data) {
     `| Engine | \`${svm.engine}\` | \`${svmKey(svm.engine)}\` | \`v12SvmEngineProgramId()\` |`,
     `| Kitchen | \`${svm.kitchen}\` | \`${svmKey(svm.kitchen)}\` | \`v12SvmKitchenProgramId()\` |`,
     "",
-    "The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the",
-    'Kitchen\'s program address for the seeds `"pot"`, the owner and the 32-byte salt.',
+    "A Pot is owned by the engine that created it. The SDK creates new Pots under the engine above and",
+    "cooks a Pot on the engine that owns it where that engine runs this SDK's programs (the Solana",
+    "engine listed under the earlier releases); a Pot of an engine that does not run them is cooked on",
+    "the engine above. The Kitchen binds no engine to a Pot, so that choice is the SDK's, and a program on",
+    "Solana reads the engine running the cook as `ctx.self()`. A Pot's address does not depend on the",
+    'engine: it is the Kitchen\'s program address for the seeds `"pot"`, the owner and the 32-byte salt.',
     "",
   ];
 

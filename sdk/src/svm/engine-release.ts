@@ -4,9 +4,15 @@
  * lives outside `cli/`; browser-safe (viem's `sha256`, no `node:*`) and in no barrel and no
  * `exports` entry.
  *
- * A Solana Pot's address does not depend on the engine: the engine that cooks a Pot is the program
- * that owns the Pot's account. Each release's engine is an upgradeable program at its own address,
- * so the address says nothing of the bytes — a program is held to a release by its ELF's digest.
+ * A Solana Pot's address does not depend on the engine, and the Kitchen pins no engine to a Pot: it
+ * signs for the Pot into whatever program a cook names (a Pot of either release engine cooks through
+ * the other, and the chain refuses neither). The engine a cook names is therefore this SDK's choice,
+ * and INVARIANT: on Solana nothing may name an engine that this table and the pairing rules
+ * (`engineRunsCompiler`) do not hold, a plan's cursor included (`decodeCursor`, `potIsMissing`),
+ * because the Kitchen will sign for the Pot into it. The engine that cooks a Pot is the program that
+ * owns the Pot's account, where that program runs this SDK's programs. Each release's engine is an
+ * upgradeable program at its own address, so the address says nothing of the bytes — a program is
+ * held to a release by its ELF's digest.
  */
 import { sha256 as sha256Viem } from "viem";
 

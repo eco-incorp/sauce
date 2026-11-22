@@ -82,8 +82,12 @@ kitchen-evm 1.3.0 Pot on its own engine:
 | Engine | `8ukALvkKyJcyf5aEAUwTbLwSr9iMYktnRZL5if8vYBhg` | `0x7584d01e59afbe682c8faba4c2ff0695f16b2e8cdce42c07504e2e7e152ce127` | `v12SvmEngineProgramId()` |
 | Kitchen | `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` | `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b` | `v12SvmKitchenProgramId()` |
 
-The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the
-Kitchen's program address for the seeds `"pot"`, the owner and the 32-byte salt.
+A Pot is owned by the engine that created it. The SDK creates new Pots under the engine above and
+cooks a Pot on the engine that owns it where that engine runs this SDK's programs (the Solana
+engine listed under the earlier releases); a Pot of an engine that does not run them is cooked on
+the engine above. The Kitchen binds no engine to a Pot, so that choice is the SDK's, and a program on
+Solana reads the engine running the cook as `ctx.self()`. A Pot's address does not depend on the
+engine: it is the Kitchen's program address for the seeds `"pot"`, the owner and the 32-byte salt.
 
 ## Next
 

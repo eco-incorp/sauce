@@ -113,13 +113,14 @@ describe("a server whose password does not open its wallet, given a Solana plan"
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** A plan's cursor, its owner `owner`. */
-  const cursorFor = (owner: string) =>
+  /** A plan's cursor, its owner `owner`, naming `engine` when given. */
+  const cursorFor = (owner: string, engine?: string) =>
     encodeCursor({
       chain: requireChain("solana"),
       owner: owner as never,
       salt: `0x${"11".repeat(32)}`,
       via: "kitchen",
+      ...(engine === undefined ? {} : { engine: engine as never }),
       tail: [],
       lookupTables: [],
       pot: "there",
@@ -155,6 +156,25 @@ describe("a server whose password does not open its wallet, given a Solana plan"
       ),
       /the plan is/,
     );
+  });
+
+  it("refuses a plan naming an engine no release runs before it unlocks the wallet or reads a chain", async () => {
+    // An engine no release names, and the engine of a release whose programs this SDK's do not run.
+    for (const [engine, why] of [
+      ["4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi", /is not an engine release this SDK knows/],
+      ["2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT", /\(v12-svm 1\.3\.0\), which runs compiler/],
+    ] as const) {
+      const message = failed(
+        await mcp.call("sauce_wallet_send", {
+          wallet: "sol",
+          transaction: { cursor: cursorFor(wallet, engine) },
+          rpcUrl: "http://127.0.0.1:9/",
+        }),
+      );
+      assert.match(message, new RegExp(`engine ${engine}`));
+      assert.match(message, why);
+      assert.doesNotMatch(message, /password/i);
+    }
   });
 });
 

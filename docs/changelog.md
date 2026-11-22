@@ -156,10 +156,13 @@ No language change.
   recompile.
 - **v12-svm 1.4.1 (now the default):** The engine a Solana Pot that does not exist yet is created
   under and cooked on. A Solana Pot's address does not depend on the engine, and the Kitchen binds
-  no engine to a Pot: the SDK chooses the engine from the Pot's owner program, where that engine
-  runs this compiler's output. Compiler 2.6.3's output also runs on v12-svm 1.4.0 (`alsoRunsOn`),
-  so a Pot made under 1.4.0 keeps cooking on 1.4.0. Pots of v12-svm 1.2.0 and 1.3.0 do not run it:
-  they cook on 1.4.1, and the command says so with each cook.
+  no engine to a Pot: a cook that names another release's engine runs, and the chain refuses
+  neither, unlike on EVM, where an engine refuses another release's Pots. So the SDK chooses the
+  engine from the Pot's owner program, where that engine runs this compiler's output, and takes
+  none from anywhere its release table does not hold, a plan's cursor included. Compiler 2.6.3's
+  output also runs on v12-svm 1.4.0 (`alsoRunsOn`), so a Pot made under 1.4.0 keeps cooking on
+  1.4.0. Pots of v12-svm 1.2.0 and 1.3.0 do not run it: they cook on 1.4.1, and the command says
+  so with each cook.
 
 ### The `sauce` command and the MCP server
 

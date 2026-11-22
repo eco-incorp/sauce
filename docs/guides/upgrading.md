@@ -185,8 +185,9 @@ release deploys to.
   decides. `sauce pot --offline` and `sauce_pot` show both Pots and build nothing. With `--pot`,
   the engine comes from the store's record of that Pot when the record is its own (its chain and
   Pot are the ones named, and it is filed under its Pot's name), else it is engine 1.4.0, with a
-  note: a cook built for a 1.3.0 Pot on engine 1.4.0 reverts whole and strands no funds, so pass
-  an RPC endpoint, or import the Pot first.
+  note: on an EVM chain a cook built for a 1.3.0 Pot on engine 1.4.0 reverts whole and strands no
+  funds (a Solana Kitchen pins no engine to a Pot, so there the SDK picks the engine from the Pot's
+  owner program), so pass an RPC endpoint, or import the Pot first.
 - **An address 1.0.0 or 1.1.0 predicted that you funded and never deployed.** No Pot can be
   deployed there now: a kitchen-evm 1.4.0 Kitchen places a Pot elsewhere. What was sent to that
   address cannot be recovered with a Pot. Check the address against the Kitchen's `predictPot`
