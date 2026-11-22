@@ -24,6 +24,7 @@ import { requireChain } from "../../sdk/dist/chains/canonical.js";
 import { resolveSvmAccountName } from "../../sdk/dist/svm/account-names.js";
 import { v12SvmEngineProgramId } from "../../sdk/dist/deployments/index.js";
 import { svmEnginePath, svmKitchenPath } from "../../sdk/dist/svm/engine-artifacts.js";
+import { derivePotPda } from "../../sdk/dist/svm/kitchen.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 import { signableBy } from "./wallet-mcp/phantom.js";
 
@@ -68,6 +69,9 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
 
   before(async () => {
     assert.equal(CONFIG.readBigUInt64LE(8), FEE);
+    // The owner's Pot under the default salt: the account a Kitchen cook reads first, for the engine
+    // that owns it (a Pot that does not exist yet is created under the installed release's).
+    const POT = (await derivePotPda(address(KITCHEN), address(OWNER), new Uint8Array(32))).address;
     server = createServer((request, response) => {
       let body = "";
       request.on("data", (chunk: Buffer) => (body += chunk.toString()));
@@ -94,6 +98,19 @@ describe("the Solana cook tools, through the Kitchen or direct", () => {
                   space: program.length,
                 },
               },
+            }),
+          );
+          return;
+        }
+        // The Pot does not exist yet. It is answered apart and not counted: the fee config stays the
+        // first other account asked for, as the fee's read has always been for this endpoint.
+        if (call.method === "getAccountInfo" && call.params[0] === POT) {
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: call.id,
+              result: { context: { slot: 1 }, value: null },
             }),
           );
           return;
