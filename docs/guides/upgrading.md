@@ -161,7 +161,12 @@ release deploys to.
   ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
   The compiler is the same, so nothing needs recompiling between 1.1.0 and 1.2.0.
 - **Pots you already have keep their address and keep working.** A kitchen-evm 1.3.0 Pot cooks on
-  engine 1.3.0, which runs compiler 2.6.3's programs. A Solana Pot of v12-svm 1.4.0 cooks on 1.4.0,
+  engine 1.3.0, which runs compiler 2.6.3's programs, with engine 1.3.0's behaviour. Engine 1.4.0
+  hardened two things: signature checks require a complete `ecrecover` reply and the exact ERC-1271
+  return word, and newly allocated memory is cleared after reuse, so a fresh array does not expose
+  values from an earlier caught call. A program that relies on either should run on a Pot of the
+  current release, which needs another salt (`--salt <label>`). A Solana Pot of v12-svm 1.4.0
+  cooks on 1.4.0,
   a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 cooks on the installed engine, as earlier
   SDKs did: inside the program `ctx.self()` is that engine, so a check that the Pot's owner is
   `ctx.self()` fails, and so does a write to the Pot's storage, which only its owner's engine may

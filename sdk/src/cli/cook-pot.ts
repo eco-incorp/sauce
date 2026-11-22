@@ -195,11 +195,17 @@ export async function cookPotOf(
     .sort(
       (a, b) => V12_RELEASE_SETS.indexOf(a.sets.at(-1)!) - V12_RELEASE_SETS.indexOf(b.sets.at(-1)!),
     );
+  // What a Pot of engine 1.3.0 lacks of engine 1.4.0, said with the advice to take another salt: an
+  // owner whose programs check signatures or build arrays after a caught call has a reason to move.
+  const hardening = (family: PotFamily): string =>
+    familyRelease(family)["v12-evm"] === "1.3.0"
+      ? ", whose engine checks signatures and clears reused memory more strictly"
+      : "";
   const olderNote = (pot: Address, family: PotFamily, salt: Hex, owner: Address): string =>
     `Pot ${pot} is ${owner}'s ${releaseText(familyRelease(family))} Pot at salt ${salt}, deployed ` +
     `before this SDK's release: it runs on its own engine, ${potFamilyEngine(family)}, and this ` +
-    `cook does too. A Pot of the current release (${releaseText(familyRelease(fresh))}) for this ` +
-    "owner needs another salt (--salt <label>).";
+    `cook does too. A Pot of the current release (${releaseText(familyRelease(fresh))}` +
+    `${hardening(family)}) for this owner needs another salt (--salt <label>).`;
   const familyNote = (pot: Address, family: PotFamily): string =>
     `Pot ${pot} is a ${releaseText(familyRelease(family))} Pot: the cook names its own engine, ` +
     `${potFamilyEngine(family)}.`;

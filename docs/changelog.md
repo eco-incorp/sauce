@@ -153,7 +153,11 @@ No language change.
   kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0 Pot, so the SDK names the engine of the
   Pot it cooks on. Compiler 2.6.3's output also runs on v12-evm 1.3.0, which the compiler's row in
   `releases.json` records as `alsoRunsOn`: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0 with no
-  recompile.
+  recompile. That Pot keeps engine 1.3.0's behaviour, which is not engine 1.4.0's: signature checks
+  now require a complete `ecrecover` reply and the exact ERC-1271 return word, and newly allocated
+  memory is cleared after reuse, so a fresh array does not expose values from an earlier caught
+  call. A program that relies on either should run on a Pot of the current release, which needs
+  another salt (`--salt <label>`).
 - **v12-svm 1.4.1 (now the default):** The engine a Solana Pot that does not exist yet is created
   under and cooked on. A Solana Pot's address does not depend on the engine, and the Kitchen binds
   no engine to a Pot: a cook that names another release's engine runs, and the chain refuses

@@ -179,6 +179,11 @@ describeUpgraded("each Pot cooks on its own engine", () => {
       expect(engineOf(earlier.data)).toBe(getAddress(local.legacy!.engine));
       expect(first.stderr).toContain("kitchen-evm 1.3.0");
       expect(first.stderr).toContain("needs another salt");
+      // …and says why to move: the newer engine checks signatures and clears reused memory more
+      // strictly, which a 1.3.0 Pot's engine does not.
+      expect(first.stderr).toContain(
+        "whose engine checks signatures and clears reused memory more strictly",
+      );
 
       // The 1.4.0 Pot of the same owner and salt, deployed by anyone: the oldest Pot still wins, as
       // a funded Pot must never be displaced by one another account deployed.
