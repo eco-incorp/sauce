@@ -768,10 +768,13 @@ const write = (name, artifact) => {
 //   - every release asset it carries matches this row's digest, exactly as the private path checks
 //     it: both SVM engines, both wire files, the Kitchen and its IDL, the EVM creation code;
 //   - what it carries DERIVED rather than as the release asset — the ABIs out of the two abis.json
-//     and the addresses assembled from each addresses.json, neither of which the private path pins
-//     by digest either — is held by the integrity pin, and corroborated as the private path
-//     corroborates it: the compiler, each component's version, both engine identities, the Kitchen
-//     and the Pot init-code hash against the row and the gate, the generation-3 quote Router.
+//     and the addresses assembled from each addresses.json — is rebuilt from the raw abis.json and
+//     addresses.json the same tarball carries under releases/<compiler>/ (each held to the row's
+//     digest by `readReleaseAssets`) and must be the files it carries; it is also corroborated as
+//     the private path corroborates it: the compiler, each component's version, both engine
+//     identities, the Kitchen, the Pot init-code hash and, for a CREATE3 row, the Router, the scheme
+//     and the deployer, against the row and the gate, and the generation-3 quote Router (whose
+//     addresses.json the tarball carries no raw copy of, so that entry stands as corroborated).
 // What it cannot repeat is the cross-check against each release's manifest, which the tarball does
 // not carry; the private path calls that corroboration, never the guarantee. Any mismatch stops
 // here with nothing written.
@@ -784,7 +787,7 @@ function publicPackage(row = SET) {
   const { version, integrity } = row.npm ?? {};
   if (!version || !integrity) {
     throw new Error(
-      `releases.json's ${COMPILER} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
+      `releases.json's ${row.compiler} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
         "artifacts (`npm`: { version, integrity }) — commit a published version built from " +
         "this row, or read the private release packages (unset SAUCE_ARTIFACT_SOURCE)",
     );
@@ -838,6 +841,71 @@ function publicPackage(row = SET) {
   };
 }
 
+// Only the historical quote service has a fixed-address generation. The current execution Router
+// is content-addressed and keeps its release metadata verbatim rather than inventing a generation.
+const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
+const routerGeneration = (router) => {
+  const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
+  const generation = match ? Number.parseInt(match.groups.generation, 16) : 0;
+  if (router?.saltName !== "Router" || generation < 1) {
+    throw new Error(`the Router's salt ${router?.rawSalt} is not a fixed-generation Router salt`);
+  }
+
+  return generation;
+};
+
+/**
+ * V12Deployments.json, made of the `addresses.json` each of the four releases publishes and the quote
+ * Router's: the one place it is assembled. The private path writes what it returns, and the public
+ * source holds the file its tarball carries to what it returns for the raw addresses.json that
+ * tarball carries too. `potCreationHash` is keccak256 of the Pot's creation code: a CREATE3
+ * release's addresses.json records no `initCodeHash`, and the one the Kitchen's `potInitCodeHash()`
+ * reports is that.
+ */
+function assembleDeployments({
+  compiler,
+  evm,
+  kitchenEvm,
+  svm,
+  kitchenSvm,
+  quoteRouter,
+  potCreationHash,
+}) {
+  return {
+    compiler,
+    version: kitchenEvm.version,
+    commit: kitchenEvm.commit,
+    releases: Object.fromEntries(
+      Object.entries({
+        "v12-evm": evm,
+        "kitchen-evm": kitchenEvm,
+        "v12-svm": svm,
+        "kitchen-svm": kitchenSvm,
+      }).map(([component, { version, commit }]) => [component, { version, commit }]),
+    ),
+    evm: {
+      chainIndependent: true,
+      factory: kitchenEvm.factory,
+      deployer: kitchenEvm.deployer,
+      contracts: {
+        engine: evm.contracts.engine,
+        router: kitchenEvm.contracts.router,
+        quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
+        kitchen: kitchenEvm.contracts.kitchen,
+        kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
+      },
+      pot:
+        kitchenEvm.pot.scheme === "create3"
+          ? { ...kitchenEvm.pot, initCodeHash: potCreationHash }
+          : kitchenEvm.pot,
+    },
+    svm: {
+      clusterIndependent: true,
+      programs: { engine: svm.programs.engine, kitchen: kitchenSvm.programs.kitchen },
+    },
+  };
+}
+
 function syncFromPublicPackage() {
   const read = publicPackage();
   const where = `${PUBLIC_PACKAGE}@${SET.npm.version}`;
@@ -884,8 +952,9 @@ function syncFromPublicPackage() {
       V12_KITCHEN_IDL,
     ].map((p) => [p, artifact(`svm/${p.asset}`)]),
   ]);
-  // The tarball carries no raw addresses.json or pot-profile.json: what they pin is held below,
-  // through the identities of the derived V12Deployments.json and V12EngineGate.json.
+  // The raw abis.json, addresses.json and pot-profile.json are held to their digests by
+  // `readReleaseAssets`; what the first two say is held below, by rebuilding the derived files from
+  // them, and through the identities of the derived V12Deployments.json and V12EngineGate.json.
   for (const p of PINS.filter((pin) => pin !== V12_EVM_ABIS && !OPTIONAL_PINS.includes(pin))) {
     if (!carried.has(p)) refuse(`is not read for ${p.tag}/${p.asset}: this script needs updating`);
     const actual = p.hash(carried.get(p));
@@ -941,6 +1010,15 @@ function syncFromPublicPackage() {
             same(deployments.evm?.pot?.fixedRouter, kitchenPin.fixedRouter) &&
             same(deployments.evm?.pot?.initCodeHash, gate.potInitCodeHash) &&
             same(gate.potInitCodeHash, keccak256(parse(derived.V12Pot).bytecode)),
+          // …and what the private path holds a CREATE3 row's whole stack to: the Router the Kitchen
+          // names and the engine's gate carries, the scheme of both, and who deploys the Pot.
+          Router:
+            same(contracts.router?.address, kitchenPin.fixedRouter) &&
+            same(gate.fixedRouter, kitchenPin.fixedRouter),
+          "CREATE3 scheme":
+            gate.scheme === "create3" &&
+            deployments.evm?.pot?.scheme === "create3" &&
+            same(deployments.evm?.pot?.deployer, kitchenPin.kitchen),
         }),
     "Router, Kitchen implementation, SVM Kitchen": Boolean(
       contracts.router?.address &&
@@ -957,6 +1035,47 @@ function syncFromPublicPackage() {
   const disagree = Object.keys(held).filter((what) => !held[what]);
   if (disagree.length > 0) {
     refuse(`disagrees with releases.json's ${COMPILER} row on: ${disagree.join(", ")}`);
+  }
+
+  // The tarball carries the raw abis.json and addresses.json too, each held to the row's digest, so
+  // what it carries derived from them is held to them as well as to what the row records: the ABIs
+  // and V12Deployments.json are made again here as the private path makes them, and must be the
+  // files it carries. The quote Router's addresses.json has no raw copy in it, so that entry is the
+  // file's own, as `held` checked it.
+  const raw = (component, asset) => {
+    const found = available.find((entry) => entry.component === component && entry.asset === asset);
+    if (found === undefined) {
+      refuse(`carries no raw ${asset} of ${component} to hold the files it derives from it to`);
+    }
+
+    return parse(found.bytes);
+  };
+  const roundTrip = (value) => JSON.parse(JSON.stringify(value));
+  const rawAbis = raw("kitchen-evm", "abis.json").contracts ?? {};
+  const unlike = Object.entries(RELEASE_ABIS)
+    .filter(
+      ([name, contract]) =>
+        !isDeepStrictEqual(
+          parse(derived[name]),
+          roundTrip({ abi: rawAbis[contract]?.abi, bytecode: rawAbis[contract]?.bytecode }),
+        ),
+    )
+    .map(([name]) => `${name}.json`);
+  const rebuilt = assembleDeployments({
+    compiler: sourceCompiler,
+    evm: raw("v12-evm", "addresses.json"),
+    kitchenEvm: raw("kitchen-evm", "addresses.json"),
+    svm: raw("v12-svm", "addresses.json"),
+    kitchenSvm: raw("kitchen-svm", "addresses.json"),
+    quoteRouter: contracts.quoteRouter,
+    potCreationHash: keccak256(rawAbis.Pot?.bytecode ?? "0x"),
+  });
+  if (!isDeepStrictEqual(deployments, roundTrip(rebuilt))) unlike.push("V12Deployments.json");
+  if (unlike.length > 0) {
+    refuse(
+      `carries ${unlike.join(", ")} that the raw, digest-pinned abis.json and addresses.json it ` +
+        "also carries do not make",
+    );
   }
 
   // Only compiler compatibility metadata changes; verified release artifacts remain byte-for-byte.
@@ -1199,18 +1318,6 @@ try {
 const DEPLOYMENTS_DEST = "V12Deployments.json";
 const tagVersion = (tag) => tag.replace(/^.*-v(?=\d)/, "");
 
-// Only the historical quote service has a fixed-address generation. The current execution Router
-// is content-addressed and keeps its release metadata verbatim rather than inventing a generation.
-const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
-const routerGeneration = (router) => {
-  const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
-  const generation = match ? Number.parseInt(match.groups.generation, 16) : 0;
-  if (router?.saltName !== "Router" || generation < 1) {
-    throw new Error(`the Router's salt ${router?.rawSalt} is not a fixed-generation Router salt`);
-  }
-
-  return generation;
-};
 const addressesFor = (tag) => {
   const parsed = releaseAddresses(tag);
   if (parsed.version !== tagVersion(tag)) {
@@ -1235,41 +1342,15 @@ try {
   const svm = addressesFor(V12_SVM.tag); // engine program
   const kitchenSvm = addressesFor(V12_KITCHEN.tag); // kitchen program
   const create3 = SET["kitchen-evm"].potProxyInitCodeHash !== undefined;
-  const deployments = {
+  const deployments = assembleDeployments({
     compiler: COMPILER,
-    version: kitchenEvm.version,
-    commit: kitchenEvm.commit,
-    releases: Object.fromEntries(
-      Object.entries({
-        "v12-evm": evm,
-        "kitchen-evm": kitchenEvm,
-        "v12-svm": svm,
-        "kitchen-svm": kitchenSvm,
-      }).map(([component, { version, commit }]) => [component, { version, commit }]),
-    ),
-    evm: {
-      chainIndependent: true,
-      factory: kitchenEvm.factory,
-      deployer: kitchenEvm.deployer,
-      contracts: {
-        engine: evm.contracts.engine,
-        router: kitchenEvm.contracts.router,
-        quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
-        kitchen: kitchenEvm.contracts.kitchen,
-        kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
-      },
-      // A CREATE3 release's addresses.json records no `initCodeHash`: the one the Kitchen's
-      // `potInitCodeHash()` reports is keccak256 of the Pot's creation code.
-      pot:
-        kitchenEvm.pot.scheme === "create3"
-          ? { ...kitchenEvm.pot, initCodeHash: POT_CREATION_HASH }
-          : kitchenEvm.pot,
-    },
-    svm: {
-      clusterIndependent: true,
-      programs: { engine: svm.programs.engine, kitchen: kitchenSvm.programs.kitchen },
-    },
-  };
+    evm,
+    kitchenEvm,
+    svm,
+    kitchenSvm,
+    quoteRouter,
+    potCreationHash: POT_CREATION_HASH,
+  });
   // A partial address set is the 0.7.0 failure shape — refuse to write one.
   const required = {
     "evm.contracts.engine": deployments.evm.contracts.engine?.address,

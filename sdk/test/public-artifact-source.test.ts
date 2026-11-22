@@ -134,6 +134,31 @@ function privateCache(root: string, installed: Row, local: { quoteRouter: QuoteR
   local.quoteRouter.assets["abis.json"] = digest;
 }
 
+/** The fields of V12Deployments.json a scenario changes. */
+interface DeploymentsFile {
+  evm: {
+    contracts: { router: { address: string }; kitchenImplementation: { address: string } };
+    pot: { scheme: string; deployer: string };
+  };
+  svm: { programs: { kitchen: { programId: string } } };
+}
+
+/** The fields of V12EngineGate.json a scenario changes. */
+interface GateFile {
+  fixedRouter: string;
+  scheme: string;
+}
+
+/** The field of V12Pot.json a scenario changes. */
+interface PotFile {
+  abi: object[];
+}
+
+/** An address no release names, for an identity a scenario changes. */
+const OTHER = "0x0000000000000000000000000000000000000002";
+/** A base58 program id no release names (the System program's). */
+const OTHER_PROGRAM = "11111111111111111111111111111111";
+
 /**
  * The sync script copied beside a table of its own, the way `SAUCE_ARTIFACT_SOURCE=npm` reads the
  * public package of the version the installed row names — standing in for it with a tarball built
@@ -189,6 +214,59 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
   if (scenario === "derived identity changed")
     deployments.evm.contracts.engine.address = "0x0000000000000000000000000000000000000001";
   writeFileSync(deploymentsPath, JSON.stringify(deployments));
+  /** Rewrites one artifact of the tarball as JSON, as the type `T` its caller changes. */
+  const rewrite = <T>(name: string, change: (json: T) => void) => {
+    const path = join(contents, "artifacts", name);
+    const json = JSON.parse(readFileSync(path, "utf8")) as T;
+    change(json);
+    writeFileSync(path, JSON.stringify(json));
+  };
+  const deploymentsFile = (change: (json: DeploymentsFile) => void) =>
+    rewrite("V12Deployments.json", change);
+  const gateFile = (change: (json: GateFile) => void) => rewrite("V12EngineGate.json", change);
+  const changed: Record<string, () => void> = {
+    "Router changed": () =>
+      deploymentsFile((d) => {
+        d.evm.contracts.router.address = OTHER;
+      }),
+    "gate Router changed": () =>
+      gateFile((g) => {
+        g.fixedRouter = OTHER;
+      }),
+    "gate scheme changed": () =>
+      gateFile((g) => {
+        g.scheme = "create2";
+      }),
+    "Pot scheme changed": () =>
+      deploymentsFile((d) => {
+        d.evm.pot.scheme = "create2";
+      }),
+    "Pot deployer changed": () =>
+      deploymentsFile((d) => {
+        d.evm.pot.deployer = OTHER;
+      }),
+    // What the checks of the release's identities leave alone: an ABI, a Kitchen implementation and
+    // the SVM Kitchen's program, each only read for being there.
+    "derived ABI changed": () =>
+      rewrite<PotFile>("V12Pot.json", (pot) => {
+        pot.abi.push({
+          type: "function",
+          name: "added",
+          inputs: [],
+          outputs: [],
+          stateMutability: "view",
+        });
+      }),
+    "Kitchen implementation changed": () =>
+      deploymentsFile((d) => {
+        d.evm.contracts.kitchenImplementation.address = OTHER;
+      }),
+    "SVM Kitchen program changed": () =>
+      deploymentsFile((d) => {
+        d.svm.programs.kitchen.programId = OTHER_PROGRAM;
+      }),
+  };
+  changed[scenario ?? ""]?.();
   if (scenario === "asset digest changed") {
     const path = join(contents, "artifacts/V12RuntimeBytecode.json");
     const runtime = JSON.parse(readFileSync(path, "utf8"));
@@ -216,6 +294,9 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
     appendFileSync(join(legacy, "artifacts/svm/engine-mainnet.so"), Buffer.from([0]));
   }
   earlier.npm = { version: "0.0.2", compiler: "2.6.1", integrity: pack("legacy", "0.0.2") };
+  if (scenario === "earlier row without a public version") {
+    earlier.npm = { compiler: "2.6.1" } as Row["npm"];
+  }
   if (scenario === "deployedCompiler set") installed.deployedCompiler = EARLIER;
   if (sourceKind === "private") privateCache(root, installed, local);
 
@@ -393,6 +474,71 @@ describe("the release's raw assets", () => {
       }
     },
   );
+});
+
+describe("the public source holds the release to its row's identities and to its raw assets", () => {
+  // What the private path holds a CREATE3 row's Router, scheme and deployer to, in the gate and in
+  // the deployments the tarball carries.
+  it.each([
+    ["Router changed", "Router"],
+    ["gate Router changed", "Router"],
+    ["gate scheme changed", "CREATE3 scheme"],
+    ["Pot scheme changed", "CREATE3 scheme"],
+    ["Pot deployer changed", "CREATE3 scheme"],
+  ])("refuses a tarball whose %s, changing nothing", (scenario, what) => {
+    const f = fixture(scenario);
+    try {
+      f.seed();
+      const before = tree(f.root);
+      const result = f.run();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(
+        `disagrees with releases.json's ${INSTALLED} row on: ${what} — refused, nothing written.`,
+      );
+      expect(tree(f.root)).toEqual(before);
+    } finally {
+      rmSync(f.root, { recursive: true, force: true });
+    }
+  });
+
+  // The tarball carries the raw abis.json and addresses.json, each held to the row's digest, and
+  // what it carries derived from them is held to them: not only to what the row records.
+  it.each([
+    ["derived ABI changed", "V12Pot.json"],
+    ["Kitchen implementation changed", "V12Deployments.json"],
+    ["SVM Kitchen program changed", "V12Deployments.json"],
+  ])(
+    "refuses a derived file its raw assets do not make: %s, changing nothing",
+    (scenario, file) => {
+      const f = fixture(scenario);
+      try {
+        f.seed();
+        const before = tree(f.root);
+        const result = f.run();
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).toContain(
+          `carries ${file} that the raw, digest-pinned abis.json and addresses.json it also carries do not make — refused, nothing written.`,
+        );
+        expect(tree(f.root)).toEqual(before);
+      } finally {
+        rmSync(f.root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("names the row an earlier release's missing pin belongs to, not the installed one", () => {
+    const f = fixture("earlier row without a public version");
+    try {
+      const result = f.run();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(
+        `releases.json's ${EARLIER} row names no public @eco-incorp/sauce version`,
+      );
+      expect(result.stderr).not.toContain(`releases.json's ${INSTALLED} row names no public`);
+    } finally {
+      rmSync(f.root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the private release packages, read from their cache", () => {

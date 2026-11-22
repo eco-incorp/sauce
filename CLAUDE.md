@@ -333,7 +333,9 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   the row's `npm` names (`{ version, integrity }`, a published version built from that row): the
   tarball held to the committed integrity, its own `releases.json` carrying the row unchanged, every
   release asset to the row's digest and the derived files to the row's versions, engines, Kitchen
-  and Pot hash; any mismatch refuses with nothing written. The release manifests' cross-check
+  and Pot hash (for a CREATE3 row also its Router, schemes and Pot deployer), and rebuilt from the
+  raw `abis.json` and `addresses.json` the same tarball carries, which must make the files it
+  carries; any mismatch refuses with nothing written. The release manifests' cross-check
   (corroboration, never the guarantee) is the one check it cannot repeat. It is EXPLICIT, never a
   fallback (a fork's workflow has a `GITHUB_TOKEN` too, so "no credential" cannot select it), never
   reads the credential, and caches apart, under `node_modules/.cache/sauce-engine-releases/npm/`. CI
