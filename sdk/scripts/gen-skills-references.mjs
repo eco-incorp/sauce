@@ -564,6 +564,28 @@ export async function skillsReferences(api, documented) {
   // Solana cluster, so it is rendered once (deployments.json, deployments.md) and never per chain.
   const release = deployments.v12DeployedAddresses();
   const { contracts } = release.evm;
+  // The earlier releases whose Pots the SDK still cooks, each on its own engine: what the installed
+  // row's `alsoRunsOn` lists, with the engine and Kitchen the release table pins for it.
+  const earlier = Object.entries(deployments.v12ReleaseSet().alsoRunsOn ?? {}).flatMap(
+    ([component, versions]) =>
+      versions.map((version) => {
+        const row = deployments.V12_RELEASE_SETS.find(
+          (candidate) => candidate[component].version === version && candidate[component].engine,
+        );
+        if (row === undefined) {
+          throw new Error(
+            `no release table row pins ${component} ${version}, which alsoRunsOn lists`,
+          );
+        }
+
+        return {
+          component,
+          version,
+          engine: row[component].engine,
+          kitchenEvm: component === "v12-evm" ? row["kitchen-evm"].version : undefined,
+        };
+      }),
+  );
 
   return {
     globals,
@@ -582,11 +604,16 @@ export async function skillsReferences(api, documented) {
         quoteRouter: contracts.quoteRouter.address,
         quoteRouterGeneration: contracts.quoteRouter.generation,
         potInitCodeHash: release.evm.pot.initCodeHash,
+        potScheme: release.evm.pot.scheme,
+        potProxyInitCodeHash: release.evm.pot.potProxyInitCodeHash,
+        potProfileHash: release.evm.pot.potProfileHash,
+        fixedRouter: release.evm.pot.fixedRouter,
       },
       svm: {
         engine: release.svm.programs.engine.programId,
         kitchen: release.svm.programs.kitchen.programId,
       },
+      earlier,
     },
     support: {
       supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
@@ -1497,10 +1524,15 @@ function renderDeploymentsJson(data) {
           "A quote service for Uniswap V3 and V4 swaps, called with eth_call, holding no tokens. No Pot's Router.",
       },
       pot: {
-        address: "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
+        address: "CREATE(CREATE2(kitchen, gateSalt, potProxyInitCodeHash), 1)",
+        gateSalt:
+          "keccak256(abi.encode(owner, salt)), with true after the salt for a fixed Router or a Shared Pot",
+        potProxyInitCodeHash: evm.potProxyInitCodeHash,
+        potProfileHash: evm.potProfileHash,
+        fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed.",
       },
     },
     svm: {
@@ -1525,7 +1557,8 @@ function renderDeploymentsJson(data) {
 /** The same release for a reader of the manual: the one page that lists its addresses, and its
  *  versions. */
 function renderDeploymentsPage(data) {
-  const { compiler, releases, evm, svm } = data.deployments;
+  const { compiler, releases, evm, svm, earlier } = data.deployments;
+  const evmEarlier = earlier.find((one) => one.component === "v12-evm");
   const lines = [
     HEADER,
     "",
@@ -1545,11 +1578,11 @@ function renderDeploymentsPage(data) {
     "own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue",
     "deployments: the SDK's Solana venues remain mainnet-only.",
     "",
-    "## Deployed defaults",
+    "## The release",
     "",
-    "The compiler the SDK pins and the engine and Kitchen versions it uses by default. Opt-in",
-    "release artifacts can differ from these deployments; see the",
-    "[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program).",
+    "The compiler the SDK pins and the engine and Kitchen versions it uses by default; the",
+    "[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program)",
+    "say what each release changed and which engines run a compiler's programs.",
     "",
     "| Component | Version |",
     "| --- | --- |",
@@ -1571,16 +1604,46 @@ function renderDeploymentsPage(data) {
     "",
     "### Pots",
     "",
-    "The Kitchen deploys an owner's Pot under a 32-byte salt, zero unless another is chosen, at",
-    "`CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`, with the Pot init-code",
-    "hash:",
+    "The Kitchen places an owner's Pot under a 32-byte salt, zero unless another is chosen, by CREATE3:",
+    "a proxy is created at `CREATE2(kitchen, gateSalt, potProxyInitCodeHash)`, and the Pot is the",
+    "contract that proxy creates first, `CREATE(proxy, 1)`. `gateSalt` is",
+    "`keccak256(abi.encode(owner, salt))`, and `keccak256(abi.encode(owner, salt, true))` for a Pot with",
+    "a fixed Router or a Shared Pot (the zero address as owner), so the three differ for one owner and",
+    "salt.",
     "",
-    `\`${evm.potInitCodeHash}\``,
+    "| What | Value |",
+    "| --- | --- |",
+    `| Pot proxy init-code hash | \`${evm.potProxyInitCodeHash}\` |`,
+    `| Pot profile hash | \`${evm.potProfileHash}\` |`,
+    `| Fixed Router | \`${evm.fixedRouter}\` |`,
+    `| Pot creation code hash, which the Kitchen's \`potInitCodeHash()\` reports | \`${evm.potInitCodeHash}\` |`,
     "",
     "`v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula",
-    "and the hash, and `sauce pot --owner <address>` prints an owner's Pot.",
-    "For opt-in releases, see [CREATE3 Pot prediction](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).",
+    "and the hashes, and `sauce pot --owner <address>` prints an owner's Pot.",
     "",
+    ...(earlier.length === 0
+      ? []
+      : [
+          "### Pots of earlier releases",
+          "",
+          ...(evmEarlier === undefined
+            ? [
+                "Pots an earlier release made keep their address. The SDK cooks each on its own",
+                "engine:",
+              ]
+            : [
+                "Pots an earlier Kitchen release made keep their address. The SDK cooks a",
+                `kitchen-evm ${evmEarlier.kitchenEvm} Pot on its own engine:`,
+              ]),
+          "",
+          "| Engine | Version | Address |",
+          "| --- | --- | --- |",
+          ...earlier.map(
+            (one) =>
+              `| ${one.component === "v12-evm" ? "EVM engine" : "Solana engine"}, \`${one.component}\` | ${one.version} | \`${one.engine}\` |`,
+          ),
+          "",
+        ]),
     "## Solana",
     "",
     "| Program | Program id | Key, the value a program holds | In TypeScript |",

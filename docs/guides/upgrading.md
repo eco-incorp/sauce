@@ -126,9 +126,10 @@ is out ([A newer version](mcp.md#a-newer-version)).
 A Sauce program is compiled by one compiler version and run by an **engine**, the on-chain code
 that carries it out. Compiler output and engines pair by exact version, in both directions: a
 compiler's programs run only on the engine releases paired with it, and an engine runs only the
-output of the compiler paired with it. A new compiler can emit different instructions for the same
-source, so an older engine can misread its programs, and an older compiler's programs can fail on a
-newer engine.
+output of the compiler paired with it. A compiler's row can also name earlier engines its programs
+run on; the SDK then cooks a Pot of that release on its own engine. A new compiler can emit
+different instructions for the same source, so an older engine can misread its programs, and an
+older compiler's programs can fail on a newer engine.
 
 The package pins one compiler and ships the engines that compiler pairs with
 ([Deployments](../reference/deployments.md) lists them). This is what it means for you:
@@ -140,28 +141,41 @@ The package pins one compiler and ships the engines that compiler pairs with
   engine. Build it again with the new version.
 - **Know which release made each Pot.** `sauce pot list` shows the release each recorded Pot was
   created under. The changelog entry for the SDK release that ships a new Kitchen or engine says,
-  under **Compiler and engines**, what changes for existing Pots.
+  under **Compiler and engines**, what changes for existing Pots. A Pot of an earlier release whose
+  engine runs your compiler's programs keeps cooking, on that engine.
 - **In TypeScript**, every SDK builder that names an engine checks the pairing first and throws for
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
 
-## Moving to SDK 1.1.0
+## Moving to SDK 1.2.0
 
-The SDK pins compiler **2.6.3** from the 2.6 maintenance line. It makes EVM engine and
-Kitchen/Router **1.4.0** and SVM engine **1.4.1** available for opt-in use. SVM Kitchen
-stays at **1.1.0**. The network defaults remain EVM engine and Kitchen **1.3.0** and
-SVM engine **1.4.0**. Availability in the package does not mean any of the new contracts
-or programs have been deployed to a network.
+SDK 1.2.0 pins the same releases as 1.1.0: compiler **2.6.3**, EVM engine and Kitchen **1.4.0**,
+SVM engine **1.4.1** and SVM Kitchen **1.1.0**. What moved is that it uses them. SDK 1.1.0 kept
+every default on the releases before (engine 1.3.0, CREATE2 Pot addresses, Solana engine 1.4.0),
+and on 2026-11-20, before it was published, every observed EVM chain with the Kitchen switched to
+kitchen-evm 1.4.0. So with 1.1.0 or 1.0.0, a new owner's Pot address is one no Kitchen of that
+release deploys to.
 
-- **Keep existing Pot bindings.** Legacy EVM Pots and their addresses do not move.
-  The opt-in EVM Kitchen uses a [separate CREATE3 derivation](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
-  Do not switch addresses just because you updated the SDK. Solana Pot seeds do not change.
-- **Check the Kitchen before you fund a CREATE3 address.** Call the chain's Kitchen `predictPot`
-  (or confirm that it is the 1.4.0 release) and fund the address only if it returns the same one:
-  the deployed 1.3.0 Kitchen deploys CREATE2 Pots at other addresses, so on a chain still running
-  it a CREATE3 prediction is an address no Pot will be deployed at. A legacy CREATE2 Pot that was
-  funded but never deployed cannot be deployed once its chain's Kitchen moves to 1.4.0, so deploy
-  it first.
+- **New Pots are CREATE3, and new Solana Pots use engine 1.4.1.** `v12PredictPot(owner)`,
+  `sauce pot` and `sauce tx` give the address the Kitchen places a new Pot at
+  ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
+  The compiler is the same, so nothing needs recompiling between 1.1.0 and 1.2.0.
+- **Pots you already have keep their address and cook on their own engine.** A kitchen-evm 1.3.0
+  Pot cooks on engine 1.3.0, which runs compiler 2.6.3's programs, and a Solana Pot on the engine
+  that owns it. Do not move funds just because you updated the SDK.
+- **Which Pot `--owner` and `--wallet` mean.** Online, an owner who already has a deployed Pot at
+  that salt from an earlier release whose engine runs this SDK's programs (kitchen-evm 1.3.0's)
+  cooks on that Pot, through its own engine. The command says it is an earlier release's Pot, and
+  that a Pot of the current release needs another salt (`--salt`). When several are deployed, the
+  oldest wins. With none, the owner's Pot is the current release's, CREATE3.
+- **Offline, the Pot store decides.** The record of the Pot (`sauce pot import` adds one) gives its
+  engine and, for `--owner`, which Pot it is. With no record the command uses the CREATE3 Pot and
+  engine 1.4.0, and says an earlier Pot cannot be seen offline: a cook built for a 1.3.0 Pot on
+  engine 1.4.0 reverts whole and strands no funds, so pass an RPC endpoint, or import the Pot first.
+- **An address 1.0.0 or 1.1.0 predicted that you funded and never deployed.** No Pot can be
+  deployed there now: a kitchen-evm 1.4.0 Kitchen places a Pot elsewhere. What was sent to that
+  address cannot be recovered with a Pot. Check the address against the Kitchen's `predictPot`
+  before you fund any address.
 - **Coordinate settlement producer and verifier upgrades.** If you still use the historical
   410-byte program, prepare verifiers for both explicit pins before recompiling producers.
   See [compiler upgrades and historical pins](verification.md#compiler-upgrades-and-historical-pins).
@@ -205,8 +219,9 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
    Error bytes may be empty/truncated (256-byte cap); validate before decoding them. SVM has no
    catch support.
 5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;
-   the new engine refuses old Pots. Use the earlier SDK/compiler/engine to manage an old Pot,
-   and review the destination before moving funds. An upgrade never migrates balances.
+   the new engine refuses old Pots. An SDK whose compiler's programs that Pot's engine runs keeps
+   cooking it; for older Pots use the SDK the refusal names, and review the destination before
+   moving funds. An upgrade never migrates balances.
    Signed cooks are new, and only newly created Pots take them; old Pots do not acquire them.
    The owner signs with `sauce sign`, `sauce_sign` or `signedCookTypedData` from
    `@eco-incorp/sauce/evm/engine`, and any account sends the result

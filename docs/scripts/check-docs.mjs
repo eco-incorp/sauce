@@ -365,7 +365,7 @@ console.log(`Manual links: ${manual.length} files checked`);
       Object.values(entry?.assets ?? {}).some((digest) => digest === null);
     const changelog = outsideFences(join(docs, "changelog.md"));
     // The table as the build reads it (`sdk/scripts/lib/sdk-releases.mjs`): every line of it a row,
-    // each row's cells versions, the Unreleased one included.
+    // each row's cells versions, the Unreleased and None rows included.
     let table;
     try {
       table = versionTableOf(changelog);

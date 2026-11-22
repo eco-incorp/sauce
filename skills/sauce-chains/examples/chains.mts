@@ -25,7 +25,13 @@ import {
   v12SvmKitchenProgramId,
 } from "@eco-incorp/sauce/deployments";
 import { address, getAddressEncoder } from "@eco-incorp/sauce/svm";
-import { encodeAbiParameters, getCreate2Address, keccak256, type Hex } from "viem";
+import {
+  encodeAbiParameters,
+  getContractAddress,
+  getCreate2Address,
+  keccak256,
+  type Hex,
+} from "viem";
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`check failed: ${message}`);
@@ -236,12 +242,18 @@ check(
 const owner = evm.engine.address as Hex;
 check(
   DEFAULT_POT_SALT === `0x${"00".repeat(32)}` &&
-    getCreate2Address({
-      from: evm.kitchen.address,
-      bytecodeHash: evm.pot.initCodeHash,
-      salt: keccak256(
-        encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, DEFAULT_POT_SALT]),
-      ),
+    getContractAddress({
+      from: getCreate2Address({
+        from: evm.kitchen.address,
+        bytecodeHash: evm.pot.potProxyInitCodeHash,
+        salt: keccak256(
+          encodeAbiParameters(
+            [{ type: "address" }, { type: "bytes32" }],
+            [owner, DEFAULT_POT_SALT],
+          ),
+        ),
+      }),
+      nonce: 1n,
     }) === v12PredictPot(owner),
   "deployments.json's evm.pot gives an owner's default Pot, under the zero salt",
 );

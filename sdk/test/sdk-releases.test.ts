@@ -62,16 +62,16 @@ describe("the SDK releases a refusal names", () => {
       "v12-svm": "0.8.0",
       "kitchen-svm": "0.4.0",
     });
-    // Unreleased and Deployed are metadata rows, not SDK versions.
+    // Unreleased and None are metadata rows, not SDK versions.
     const sdks = SDK_RELEASES.map((row) => row.sdk!);
     expect(sdks.every((sdk) => /^\d+\.\d+\.\d+$/.test(sdk))).toBe(true);
     expect(new Set(sdks).size).toBe(sdks.length);
   });
 
-  it("keeps deployment and Unreleased metadata out of the SDK release history", () => {
+  it("keeps None and Unreleased metadata out of the SDK release history", () => {
     const metadata = [
       "| Unreleased | 2.6.3 | 1.4.0 | 1.4.0 | 1.4.1 | 1.1.0 |",
-      "| Deployed | 2.6.3 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |",
+      "| None | 2.6.2 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |",
     ];
     expect(sdkReleasesOf(withTable([HEADER, ...metadata, ROW].join("\n")))).toEqual([
       RELEASE_0_99_9,
@@ -93,6 +93,11 @@ describe("the SDK releases a refusal names", () => {
     expect(() =>
       sdkReleasesOf(withTable(`${HEADER}\n| next | 2.5.0 | 1.2.0 | 1.2.0 | 1.3.0 | 1.0.0 |`)),
     ).toThrow(/SDK cell.*"next"/);
+    expect(() =>
+      sdkReleasesOf(
+        withTable(`${HEADER}\n| Deployed | 2.6.2 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |\n${ROW}`),
+      ),
+    ).toThrow(/SDK cell "Deployed" must be a version, Unreleased or None/);
     expect(() => sdkReleasesOf(withTable(`${HEADER}\n${ROW}\n${ROW}`))).toThrow(
       /0\.99\.9 has two rows/,
     );
@@ -122,10 +127,19 @@ describe("the SDK releases a refusal names", () => {
 
   it("are read by the one parser of the table, which the docs check reads it through too", () => {
     const unreleased = "| Unreleased | 2.6.0 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |";
-    expect(versionTableOf(withTable(`${HEADER}\n${unreleased}\n${ROW}`))).toEqual([
+    const none = "| None | 2.6.2 | 1.3.0 | 1.3.0 | 1.4.0 | 1.1.0 |";
+    expect(versionTableOf(withTable(`${HEADER}\n${unreleased}\n${none}\n${ROW}`))).toEqual([
       {
         sdk: "Unreleased",
         compiler: "2.6.0",
+        "v12-evm": "1.3.0",
+        "kitchen-evm": "1.3.0",
+        "v12-svm": "1.4.0",
+        "kitchen-svm": "1.1.0",
+      },
+      {
+        sdk: "None",
+        compiler: "2.6.2",
         "v12-evm": "1.3.0",
         "kitchen-evm": "1.3.0",
         "v12-svm": "1.4.0",

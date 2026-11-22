@@ -971,7 +971,7 @@ EVM chains only:
 Solana only:
       --keypair <path>  Sign with a keypair file (a JSON array of 64 bytes)
 
-A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known
+A Pot's address is the released Kitchen's for (owner, salt), so it is known
 before it exists. You need not deploy it yourself: sauce run deploys it when it first
 needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by
 hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with

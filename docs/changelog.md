@@ -50,9 +50,11 @@ kitchen-svm its public instruction APIs. No package promises the bytecode a prog
 derived from a version.
 
 Pot addresses can change even within a 1.x release: kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed
-the Pot address family. Derive addresses with the SDK rather than from a version number. Existing
-Pots and programs retain their original pairing; an upgrade does not move their funds or migrate
-them. [Deployments](reference/deployments.md) lists the SDK's current release addresses.
+the Pot address family. kitchen-evm 1.4.0 made new Pots CREATE3. Derive addresses with the SDK
+rather than from a version number. Existing Pots keep their address and their engine, and the SDK
+cooks each on its own engine where that engine runs its compiler's programs; an upgrade does not
+move their funds or migrate them. [Deployments](reference/deployments.md) lists the SDK's current
+release addresses.
 
 The SDK's 0.99.x releases included breaking changes in patch versions. Read each release's
 **Now refused**, **Removed** and **Also breaking** items before you upgrade, even for a patch.
@@ -61,34 +63,35 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK      | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| -------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.1.0    | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
-| Deployed | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 1.0.0    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18  | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17  | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16  | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9   | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5   | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4   | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3   | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2   | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1   | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0   | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 1.2.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
-The **Deployed** row is the pairing the network defaults use: the engines compiler 2.6.2 was
-released with, which also run compiler 2.6.3's programs. The SDK's CLI labels that set with the
-SDK's own compiler, 2.6.3.
+**None** marks compiler 2.6.2, which no SDK release installs. Its row is the set SDK 1.1.0's
+network defaults used by mistake (see 1.2.0); it is kept because its engines still run Pots made
+under it.
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -108,12 +111,128 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
+## SDK 1.2.0 — <date of release>
+
+Compiler 2.6.3, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. Same
+compiler and pins as 1.1.0; what moved is that the SDK now uses them.
+
+SDK 1.1.0 pinned these releases but kept every default on the ones before: engine 1.3.0, CREATE2
+Pot addresses and Solana engine 1.4.0. On 2026-11-20, before 1.1.0 was published, every observed
+EVM chain with the Kitchen switched to kitchen-evm 1.4.0, which places new Pots by CREATE3. So with
+1.1.0, and with 1.0.0:
+
+- online, `sauce pot`, `sauce tx` and `sauce simulate` for an owner with no Pot refused, and told
+  you to upgrade to a newer SDK that did not exist yet;
+- offline and unsigned, `sauce pot` and `sauce tx`, and in TypeScript `v12PredictPot(owner)`,
+  gave a CREATE2 address where no Pot can ever be deployed. A cook sent there succeeds, runs
+  nothing and leaves its value at that address, and tokens sent there are lost;
+- Pots of the new Kitchen were not recognised: `sauce pot import` refused them,
+  `checkSignedCookPot` said they predate signed cooks, and `potRouterUpdate` proposed the new
+  Router for old Pots.
+
+1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: kitchen-evm
+1.4.0 and engine 1.4.0 on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
+keeps working, cooked on its own engine: a kitchen-evm 1.3.0 Pot on engine 1.3.0, a Solana Pot on
+the engine that owns it. If you funded an address that 1.0.0 or 1.1.0 predicted and no Pot was
+ever deployed there, see [Upgrading](guides/upgrading.md#moving-to-sdk-120).
+
+### SauceScript
+
+No language change.
+
+### Compiler and engines
+
+- **kitchen-evm 1.4.0 (now the default):** New private, fixed-Router and Shared Pots are CREATE3:
+  their address comes from the Kitchen, the owner, the salt and the Pot proxy's init-code hash, not
+  from a hash of the Pot's own code. Pots a kitchen-evm 1.3.0 Kitchen made keep their address and
+  keep working. The 1.1.0 entry describes the release itself.
+- **v12-evm 1.4.0 (now the default):** The engine every new Pot cooks on. It refuses a
+  kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0 Pot, so the SDK names the engine of the
+  Pot it cooks on. Compiler 2.6.3's output also runs on v12-evm 1.3.0, which the compiler's row in
+  `releases.json` records as `alsoRunsOn`: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0 with no
+  recompile.
+- **v12-svm 1.4.1 (now the default):** The engine a Solana Pot that does not exist yet is created
+  under and cooked on. A Solana Pot's address does not depend on the engine: the engine that cooks
+  a Pot is the program that owns its account. Compiler 2.6.3's output also runs on v12-svm 1.4.0
+  (`alsoRunsOn`), so a Pot made under 1.4.0 keeps cooking on 1.4.0.
+
+### The `sauce` command and the MCP server
+
+- **Changed (EVM): `--owner` and `--wallet` mean the Pot that is there.** Online, an owner who
+  already has a deployed Pot at that salt from an earlier release whose engine runs this SDK's
+  programs (today kitchen-evm 1.3.0's) cooks on that Pot, through its own engine. The command says
+  it is an earlier release's Pot and that a Pot of the current release needs another salt. When
+  several are deployed, the oldest release's wins: anyone may deploy a Pot for any owner, so a
+  newer one deployed by someone else never displaces a funded older one. With no such Pot, the
+  owner's Pot is the current release's CREATE3 one. Offline, the Pot store's record of that
+  chain, owner and salt decides, else the CREATE3 Pot, with a note that an earlier Pot cannot be
+  seen offline.
+- **Changed (EVM): `--pot <address>` names its own engine.** Online, the engine is the one of the
+  release that made the Pot, and the command says so. Offline, it comes from the Pot store's
+  record of that Pot; with no record it is engine 1.4.0, with a note. A cook on the wrong engine
+  reverts whole, so no funds are stranded.
+- **Changed: `sauce pot` and `sauce pot list` know every release.** `sauce pot` says which engine
+  cooks the Pot and lists an owner's deployed Pot of an earlier release; `sauce pot import`
+  records a kitchen-evm 1.4.0 Pot, which it refused before ("no release this sauce knows minted
+  it"). A record of a 1.4.0 Pot carries the Pot proxy's and the profile's hashes and its engine,
+  and a record SDK 1.1.0 wrote for one is identified when read.
+- **Changed: `sauce verify` takes cooks on the engines the installed row's `alsoRunsOn` lists**
+  (v12-evm 1.3.0 and v12-svm 1.4.0 today), as well as the installed release's own.
+- **Changed (EVM): a wallet whose policy names only its earlier-release Pot signs for it.**
+  `sauce sign` checks the policy's gate, chains and limits before it reads anything, and the
+  policy's `to` once it knows which Pot signs, so a Pot guessed first is no longer refused.
+- **Changed (Solana): a cook goes to the engine that owns its Pot.** New Pots are created under
+  v12-svm 1.4.1. The local copy a simulation runs in loads each program with the code its cluster
+  is shown to run, held to the release's digest, and refuses rather than run other code.
+
+### SDK
+
+- **Changed: `v12PredictPot(owner, salt?)` predicts the current release's Pot, CREATE3.** It
+  predicted CREATE2 by default before. `{ compiler }` is optional now, and the compiler of an
+  earlier row predicts that release's Pot, where it threw before. `{ routerFixed: true }` and the
+  zero owner (a Shared Pot) are as before.
+- **Changed: `v12ReleaseSet()` is the installed compiler's own row, the SDK's defaults.**
+  `v12DeployedReleaseSet()` and `v12OptInReleaseSet()` stay, kept for compatibility, and return the
+  same row. A row's `deployedCompiler` is gone: a row's own releases are its defaults.
+- **Added: `engineRunsCompiler(target, engine, compiler?)`.** An engine runs a compiler's output
+  when that compiler's row names it or lists its version in `alsoRunsOn`; `assertEngineRunsCompiler`
+  reads it, so `v12Pot.encodeCook` with engine 1.3.0 and compiler 2.6.3 passes.
+- **Changed: `v12PotDerivation()` gains `scheme`, `potProxyInitCodeHash`, `potProfileHash` and
+  `fixedRouter`.** Its `initCodeHash` is what the Kitchen's `potInitCodeHash()` reports, the hash of
+  the Pot's creation code. From kitchen-evm 1.4.0 (`scheme: "create3"`) CREATE2 under it is not a
+  Pot's address and funds sent there are lost: use `v12PredictPot`. `V12EngineGate.json` and
+  `V12Deployments.json` gain the same fields.
+- **Changed: `checkSignedCookPot` takes a Private Pot of kitchen-evm 1.3.0 or 1.4.0** and refuses
+  an earlier one by its release's version. `potRouterUpdate` proposes the Kitchen's Router only for
+  a Pot of the current release, returns nothing for a Pot of an earlier release or a fixed-Router
+  or Shared Pot, and still throws for an address no known release derives.
+- The release files 1.1.0 shipped as opt-in artifacts under `sdk/dist/artifacts/releases/2.6.3/`
+  still ship there, unchanged: they are now the same release as the package's own top-level
+  artifacts, which are derived from them, so code reading either reads one release.
+
+### Fixed
+
+- `potParameters` is gone from `v12KitchenAbi`: the live Kitchen reverts on it. The kitchen-evm 1.4.0
+  Kitchen's errors, the Pot's five-argument constructor and `WrongDeployer` are in the ABIs.
+- `sauce inspect` names the Pot of a three-argument `deployPot` and of `deploySharedPot`.
+
+### The testing kit
+
+- **Fixed: on a fork of a chain that runs kitchen-evm 1.4.0, the kit uses the live stack.** SDK
+  1.1.0's kit deployed kitchen-evm 1.3.0's stack over it. The kit now finds the stack it pins live
+  (every contract has code, the Kitchen reports the Pot hash and the Router, and a Pot is placed
+  where `v12PredictPot` says) and deploys nothing over it.
+- **Changed: a test account's Pot is the release's CREATE3 address**, as `v12PredictPot` gives it.
+- **Changed (Solana):** the kit's bank loads the packaged engine and Kitchen only when the cluster
+  is shown to run them, and cooks a Pot on the engine that owns it; `SolanaCookResult.engine` says
+  which.
+
 ## SDK 1.1.0 — 2026-11-20
 
 Compiler 2.6.3, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
 1.0.0: compiler 2.6.3 (from 2.6.1), and v12-evm 1.4.0, kitchen-evm 1.4.0 and v12-svm 1.4.1 as
 opt-in artifacts. The network defaults keep v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and
-kitchen-svm 1.1.0.
+kitchen-svm 1.1.0. The defaults were wrong on the day it shipped: see SDK 1.2.0.
 
 The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
 support from the compiler's main line are not included.
@@ -122,7 +241,7 @@ The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and 
 SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
 Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
 their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
-Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen)
+Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#fixed-router-shared-and-earlier-releases-pots)
 to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
 CREATE3 Pots. Omitting the release selection still uses CREATE2.
 
@@ -284,7 +403,7 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   from an earlier caught call. The network defaults do not select this engine.
 - **kitchen-evm 1.3.0 → 1.4.0 (opt-in):** New private, fixed-Router and shared Pots use CREATE3;
   existing CREATE2 Pots keep their addresses and bindings. Before funding a prediction or
-  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen),
+  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#fixed-router-shared-and-earlier-releases-pots),
   including deploying any funded but undeployed CREATE2 Pot first. The old constructor-only
   `potParameters()` method is removed. The Router preserves a V3 or Maverick V2 leg's spend
   receipt and an outer flash callback's authorization when the pool runs another leg. The

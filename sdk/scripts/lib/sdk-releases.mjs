@@ -6,8 +6,9 @@
 //
 // Each row is keyed by its column's name lowercased (`sdk`, `compiler`, `v12-evm`, `kitchen-evm`,
 // `v12-svm`, `kitchen-svm`), in the table's order, every version exactly as the table gives it.
-// `Unreleased` and `Deployed` rows document compatibility without naming a published SDK version;
-// `sdkReleasesOf` leaves both out. The release workflow stamps the package version after the build.
+// `Unreleased` and `None` rows document compatibility without naming a published SDK version:
+// `Unreleased` the next release's set, `None` a set no SDK release installs. `sdkReleasesOf` leaves
+// both out. The release workflow stamps the package version after the build.
 //
 // A table this cannot read throws, naming what is wrong, so the build fails rather than ship a
 // refusal that names no SDK release; so does a line of it that is not a row, rather than drop the
@@ -28,7 +29,7 @@ const cellsOf = (line) =>
     .map((cell) => cell.trim());
 
 /**
- * Every row of `changelog`'s version table, in its order, the Unreleased one included:
+ * Every row of `changelog`'s version table, in its order, the Unreleased and None rows included:
  * `{ sdk, compiler, … }`.
  */
 export function versionTableOf(changelog) {
@@ -82,8 +83,8 @@ export function versionTableOf(changelog) {
         `${WHERE}: the row of ${sdk}: ${row.length} cells, and the table has ${COLUMNS.length} columns`,
       );
     }
-    if (sdk !== "Unreleased" && sdk !== "Deployed" && !VERSION.test(sdk)) {
-      throw new Error(`${WHERE}: SDK cell "${sdk}" must be a version, Unreleased or Deployed`);
+    if (sdk !== "Unreleased" && sdk !== "None" && !VERSION.test(sdk)) {
+      throw new Error(`${WHERE}: SDK cell "${sdk}" must be a version, Unreleased or None`);
     }
     if (seen.has(sdk)) throw new Error(`${WHERE}: ${sdk} has two rows in the version table`);
     seen.add(sdk);
