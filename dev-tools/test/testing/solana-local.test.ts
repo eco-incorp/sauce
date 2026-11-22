@@ -14,7 +14,14 @@ import {
   type SolanaChange,
   type SolanaTestChain,
 } from "../../src/testing/index.js";
-import { deriveCodeBufferPda } from "../../src/testing/sdk.js";
+import { Bank } from "../../src/testing/solana-bank.js";
+import { SolanaTestChain as StartedChain } from "../../src/testing/solana.js";
+import {
+  deriveCodeBufferPda,
+  requireChain,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../../src/testing/sdk.js";
 import { program } from "./support.js";
 import { solanaMissing } from "./solana-support.js";
 
@@ -295,3 +302,63 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     });
   });
 });
+
+describe(
+  "a Solana chain opened over an address that holds only lamports",
+  { skip: solanaMissing() },
+  () => {
+    it("leaves account 0's Pot as it is, so a SOL payout through the System Program still works", async () => {
+      const system = address("11111111111111111111111111111111");
+      // Account 0's Pot address, from a chain opened only to read it.
+      const probe = await local({ chain: "solana" });
+      const pot = probe.account(0).pot;
+      await probe.stop();
+      // A bank that holds lamports there BEFORE the chain opens, as a fork or a replay does of a
+      // cluster where someone sent them: the kit creates a Pot only where nothing is, never over
+      // an address that holds only lamports, whose owner may pay SOL out of it (the System
+      // Program's transfer takes no `from` that carries data).
+      const unixTimestamp = BigInt(Math.floor(Date.now() / 1000));
+      const bank = await Bank.open({
+        mode: "local",
+        header: {
+          clock: {
+            slot: 0n,
+            epochStartTimestamp: unixTimestamp,
+            epoch: 0n,
+            leaderScheduleEpoch: 0n,
+            unixTimestamp,
+          },
+        },
+        engine: address(v12SvmEngineProgramId()),
+        kitchen: address(v12SvmKitchenProgramId()),
+      });
+      bank.moveClock(1_000n, unixTimestamp);
+      await bank.ensure([pot]);
+      bank.set(pot, {
+        lamports: 5_000_000n,
+        owner: system,
+        data: new Uint8Array(),
+        executable: false,
+      });
+      const chain = await StartedChain.start(requireChain("solana"), bank, { zeroFee: true });
+      try {
+        const held = await chain.getAccount(pot);
+        assert.deepEqual([held?.owner, held?.lamports, held?.data.length], [system, 5_000_000n, 0]);
+        const to = chain.account(5).address;
+        const source =
+          "function main(system: Account, pot: Account<Writable, Signer>, to: Account<Writable>) {\n" +
+          "  let native = hex`02000000`;\n" +
+          "  svm.call(system, [pot, to], native.concat(1000000n.toBytesLe(8)));\n}\n";
+        const result = await chain.run(
+          { source },
+          { accounts: { system: "system", pot: "pot", to } },
+        );
+        assert.equal(result.delta(to, "SOL"), 1_000_000n);
+        const after = await chain.getAccount(pot);
+        assert.deepEqual([after?.owner, after?.lamports], [system, 4_000_000n]);
+      } finally {
+        await chain.stop();
+      }
+    });
+  },
+);

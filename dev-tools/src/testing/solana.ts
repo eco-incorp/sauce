@@ -249,7 +249,9 @@ export class SolanaTestChain {
       funder,
       options.recordTo,
     );
-    await testChain.deployPot(0);
+    // Only where nothing is at its address: opening a fork or a replay must not create a Pot over
+    // an address that holds only lamports, which is cooked as it is (`deployPot` is the choice).
+    await testChain.createPot(testChain.account(0), false);
 
     return testChain;
   }
