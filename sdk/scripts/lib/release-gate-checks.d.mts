@@ -69,3 +69,12 @@ export declare function requireSigningEndpoint(args: readonly string[]): void;
 
 /** Writes an endpoint as a `--config` file only its owner can read, and returns its path. */
 export declare function writeEndpointConfig(dir: string, id: number, url: string): string;
+
+/** What the kit's children need of the operator's environment: PATH, TMPDIR, HOME, USERPROFILE. */
+export declare const GATE_ENVIRONMENT: readonly string[];
+
+/** `env` with every variable but those of `keep` deleted, in place; returns it. */
+export declare function confineEnvironment<T extends Record<string, string | undefined>>(
+  env: T,
+  keep: readonly string[],
+): T;

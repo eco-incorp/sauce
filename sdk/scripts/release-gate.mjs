@@ -17,10 +17,13 @@
 // segment and query value of eight characters or more), an error prints one line, and a
 // configuration the gate cannot read is named by its path alone. No endpoint reaches a command line,
 // where the process list shows it: the Solana one goes to `sauce` in a 0600 `--config` file in the
-// gate's temp dir, removed with it. Every child gets PATH, TMPDIR, a temp HOME and USERPROFILE and
-// npm's cache alone, never the operator's environment, and the installs run with `--ignore-scripts`.
-// A command that carries a key is refused unless its endpoint is the kit's own loopback fork, so
-// "sends nothing to a live chain" is checked, not assumed.
+// gate's temp dir, removed with it. The gate's own environment is cut to PATH, TMPDIR, HOME and
+// USERPROFILE once it has read npm's cache and before any installed code loads, since the installed
+// testing kit runs in this process and starts anvil and its recorder with no environment of its own:
+// they inherit it. Every child the gate starts itself gets PATH, TMPDIR, a temp HOME and USERPROFILE
+// and npm's cache alone, and the installs run with `--ignore-scripts`. A command that carries a key
+// is refused unless its endpoint is the kit's own loopback fork, so "sends nothing to a live chain"
+// is checked, not assumed.
 //
 // A MISSING KEY IS A FAILURE, never a skip. The gate checks all seven keys first, prints
 // `FAIL <chain>: no endpoint in --rpc-config` for each one missing, runs every step on every chain it
@@ -54,8 +57,10 @@ import { createPublicClient, decodeFunctionData, getAddress, http } from "viem";
 
 import {
   childEnvironment,
+  confineEnvironment,
   endpointSecrets,
   evmCookProblem,
+  GATE_ENVIRONMENT,
   requireSigningEndpoint,
   solanaCookProblem,
   writeEndpointConfig,
@@ -251,6 +256,11 @@ const npmCache =
       }),
     }).stdout ?? ""
   ).trim() || undefined;
+
+// The installed testing kit runs in this process, and starts anvil and its recorder with no
+// environment of its own: they inherit this one. It is cut to what they need once the gate has read
+// what it needs of the operator's, and before any installed code loads (`installed`, below).
+confineEnvironment(process.env, GATE_ENVIRONMENT);
 
 /**
  * `npm install` in the temp project, with the temp HOME, the operator's npm cache and no more of the

@@ -230,3 +230,22 @@ export function writeEndpointConfig(dir, id, url) {
 
   return path;
 }
+
+/** What the kit's children need of the operator's environment: `PATH` finds anvil, the rest is a
+ *  place for temporary files and a home. */
+export const GATE_ENVIRONMENT = ["PATH", "TMPDIR", "HOME", "USERPROFILE"];
+
+/**
+ * `env` with every variable but those of `keep` deleted, in place; returns it. The installed testing
+ * kit runs inside the gate's own process and starts anvil, and its recorder, with no environment of
+ * its own, so they inherit the gate's: cut to what they need, the operator's tokens, keys and
+ * settings go no further. (What the gate starts itself is given its own small environment:
+ * `childEnvironment`.)
+ */
+export function confineEnvironment(env, keep) {
+  for (const name of Object.keys(env)) {
+    if (!keep.includes(name)) delete env[name];
+  }
+
+  return env;
+}

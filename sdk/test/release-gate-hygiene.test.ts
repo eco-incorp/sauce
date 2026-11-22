@@ -8,14 +8,17 @@
  * The pieces are pure functions (`scripts/lib/release-gate-checks.mjs`), tested here; the script's
  * use of them is held by its own text, since running it needs live chains.
  */
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { delimiter, dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   childEnvironment,
+  confineEnvironment,
   endpointSecrets,
+  GATE_ENVIRONMENT,
   requireLoopback,
   requireSigningEndpoint,
   writeEndpointConfig,
@@ -175,6 +178,106 @@ describe("the file that holds the Solana endpoint", () => {
   });
 });
 
+describe("the environment the release gate keeps for itself", () => {
+  // The installed testing kit runs inside the gate's own process and starts anvil, and its recorder,
+  // with no environment of its own: they inherit the gate's. What the gate keeps is what they need.
+  it("is PATH, TMPDIR, HOME and USERPROFILE: no token, key or registry setting of the operator's", () => {
+    expect([...GATE_ENVIRONMENT].sort()).toEqual(["HOME", "PATH", "TMPDIR", "USERPROFILE"]);
+  });
+
+  it("is the environment cut to those variables, in place", () => {
+    const env: Record<string, string | undefined> = {
+      PATH: "/usr/bin:/bin",
+      HOME: "/home/operator",
+      TMPDIR: "/var/tmp",
+      NPM_TOKEN: "npm_secret",
+      AWS_SECRET_ACCESS_KEY: "aws_secret",
+      npm_config_cache: "/home/operator/.npm",
+      ETH_RPC_URL: "https://live.example.invalid/KEYSEGMENT",
+    };
+    const cut = confineEnvironment(env, GATE_ENVIRONMENT);
+    expect(cut).toBe(env);
+    expect(env).toEqual({ PATH: "/usr/bin:/bin", HOME: "/home/operator", TMPDIR: "/var/tmp" });
+  });
+
+  describe("as the installed kit's anvil inherits it", () => {
+    // The kit's own `startAnvil` (dev-tools/src/testing/node.ts, the code the published kit is
+    // built from) in a process holding what an operator's environment holds. A stand-in binary
+    // stands where anvil would, and writes the names of the variables it was started with: what
+    // the kit hands anvil is what `spawn` gives a child that is given no `env` of its own.
+    let dir: string;
+    beforeAll(() => {
+      dir = mkdtempSync(join(tmpdir(), "sauce-release-gate-kit-"));
+    });
+    afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const KIT = pathToFileURL(resolve(here, "../../dev-tools/src/testing/node.ts")).href;
+    const LIB = pathToFileURL(resolve(here, "../scripts/lib/release-gate-checks.mjs")).href;
+    const OPERATOR = {
+      OPERATOR_CANARY: "operator-canary-3f9a1c7e",
+      NPM_TOKEN: "npm_secret_token_value",
+      ETH_RPC_URL: "https://live.example.invalid/KEYSEGMENT-0123456789",
+    };
+
+    /** The names of the variables the kit's anvil started with, the gate's cut made first or not. */
+    function anvilEnvironment(cut: boolean): string[] {
+      const seen = join(dir, `anvil-environment-${cut ? "cut" : "uncut"}.json`);
+      const standIn = join(dir, `anvil-${cut ? "cut" : "uncut"}.mjs`);
+      writeFileSync(
+        standIn,
+        [
+          "#!/usr/bin/env node",
+          'import { writeFileSync } from "node:fs";',
+          `writeFileSync(${JSON.stringify(seen)}, JSON.stringify(Object.keys(process.env)));`,
+          // It is no node: the kit sees anvil exit, which it reports, and the file is written.
+          "process.exit(1);",
+          "",
+        ].join("\n"),
+      );
+      chmodSync(standIn, 0o755);
+      const driver = [
+        `import { startAnvil } from ${JSON.stringify(KIT)};`,
+        ...(cut
+          ? [
+              `import { confineEnvironment, GATE_ENVIRONMENT } from ${JSON.stringify(LIB)};`,
+              "confineEnvironment(process.env, GATE_ENVIRONMENT);",
+            ]
+          : []),
+        `await startAnvil([], { binary: ${JSON.stringify(standIn)} }).catch(() => undefined);`,
+      ].join("\n");
+      const ran = spawnSync(
+        process.execPath,
+        ["--no-warnings", "--input-type=module", "-e", driver],
+        {
+          encoding: "utf8",
+          env: {
+            PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
+            HOME: dir,
+            TMPDIR: dir,
+            ...OPERATOR,
+          },
+        },
+      );
+      expect(ran.stderr).toBe("");
+      expect(ran.status).toBe(0);
+
+      return JSON.parse(readFileSync(seen, "utf8")) as string[];
+    }
+
+    it("carries the operator's variables to it when nothing cuts them: what the probe sees", () => {
+      // The control: without it a test that finds none would pass for a probe that sees nothing.
+      expect(anvilEnvironment(false)).toEqual(expect.arrayContaining(Object.keys(OPERATOR)));
+    });
+
+    it("carries none of them once the gate has cut its environment, and what a chain needs stays", () => {
+      const names = anvilEnvironment(true);
+      expect(names).toEqual(expect.arrayContaining(["PATH", "HOME", "TMPDIR"]));
+      expect(names.filter((name) => name in OPERATOR)).toEqual([]);
+    });
+  });
+});
+
 describe("the release gate script", () => {
   const source = readFileSync(SCRIPT, "utf8");
 
@@ -183,6 +286,15 @@ describe("the release gate script", () => {
     expect(source).not.toMatch(/"--rpc-url",\s*url\b/);
     expect(source).toMatch(/writeEndpointConfig\(/);
     expect(source).toMatch(/"--config"/);
+  });
+
+  it("cuts its own environment before any installed code loads, once it has read npm's cache", () => {
+    const cacheRead = source.indexOf('"config", "get", "cache"');
+    const confined = source.indexOf("confineEnvironment(process.env, GATE_ENVIRONMENT)");
+    const firstLoad = source.indexOf("await installed(");
+    expect(cacheRead).toBeGreaterThan(-1);
+    expect(confined).toBeGreaterThan(cacheRead);
+    expect(firstLoad).toBeGreaterThan(confined);
   });
 
   it("installs without lifecycle scripts, and runs every child in the small environment", () => {

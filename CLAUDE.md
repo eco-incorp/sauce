@@ -2185,10 +2185,15 @@ a missing endpoint is a failure, never a skip. The endpoints carry provider keys
 command line or an output: the Solana one goes to `sauce` in a 0600 `--config` file in the gate's temp
 dir, every message is scrubbed of each endpoint whole, in its parts and by each path segment and query
 value of eight characters or more, and an endpoint given where the file's path goes is refused without
-being repeated, whitespace around it or not. Each child gets only `PATH`, `TMPDIR`, a temp `HOME` and
-`USERPROFILE` and npm's cache, and the installs run with `--ignore-scripts`. A command that carries a
+being repeated, whitespace around it or not. Each child the gate starts gets only `PATH`, `TMPDIR`, a
+temp `HOME` and `USERPROFILE` and npm's cache, and the installs run with `--ignore-scripts`. The
+installed testing kit runs in the gate's own process and starts anvil and its recorder with no
+environment of its own, so they inherit the gate's: it is cut to `PATH`, `TMPDIR`, `HOME` and
+`USERPROFILE` once npm's cache is read and before any installed code loads. A command that carries a
 key is refused unless its `--rpc-url` is the kit's own loopback fork, which is what makes "sends nothing
-to a live chain" a checked property (`sdk/test/release-gate-hygiene.test.ts`, `release-gate-config.test.ts`).
+to a live chain" a checked property (`sdk/test/release-gate-hygiene.test.ts`,
+`release-gate-config.test.ts`, and `release-gate-stop.test.ts`, which runs the whole script against a
+stand-in package and looks at what the installed kit's children inherit while it waits on a chain).
 
 ```sh
 # before dispatching the real release (on the release commit):
