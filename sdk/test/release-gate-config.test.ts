@@ -72,4 +72,30 @@ describe("the release gate's configuration errors", () => {
     expect(shown.filter((window) => printed.includes(window))).toEqual([]);
     expect(printed).toMatch(/takes the path of a file, not a URL/);
   });
+
+  // An endpoint pasted where the path goes, with whitespace around it: classified on its trimmed
+  // form, so what `resolve` makes of it (a path under the working directory that holds the whole
+  // endpoint) is never what the message names.
+  it.each([
+    ["a leading space", ` ${URL_TEXT}`],
+    ["a trailing space", `${URL_TEXT} `],
+    ["spaces and a tab around it", `  ${URL_TEXT}\t`],
+    ["a tab and a newline before it", `\t\n${URL_TEXT}`],
+    ["a scheme in capitals", ` HTTPS://example.invalid/rpc?key=hunter2-secret-value`],
+    ["a websocket endpoint", ` wss://example.invalid/rpc?key=hunter2-secret-value`],
+  ])("does not repeat an endpoint given where the path goes, with %s", (_what, given) => {
+    const ran = gate(given);
+
+    expect(ran.status).toBe(2);
+    const printed = `${ran.stdout}\n${ran.stderr}`;
+    const secret = given.trim();
+    const shown = [...secret].flatMap((_c, at) =>
+      at + 6 <= secret.length ? [secret.slice(at, at + 6)] : [],
+    );
+    // Not one run of six of its characters, so not the key, the host or the path; and no path of
+    // a file that holds it, which `resolve` would have made of it.
+    expect(shown.filter((window) => printed.includes(window))).toEqual([]);
+    expect(printed).not.toMatch(/hunter2|example\.invalid/);
+    expect(printed).toMatch(/takes the path of a file, not a URL/);
+  });
 });

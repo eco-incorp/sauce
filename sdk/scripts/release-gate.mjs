@@ -13,8 +13,14 @@
 // chain id to URL (sdk/rpc.config.json is one) that holds the seven chains the gate reads: 1
 // (Ethereum), 8453 (Base), 5042 (Arc), 5042002 (Arc Testnet), 84532 (Base Sepolia), 11155111
 // (Sepolia) and 1399811149 (Solana mainnet-beta); other entries are ignored. A URL is never printed:
-// every message is scrubbed of the configured endpoints, an error prints one line, and a
-// configuration the gate cannot read is named by its path alone.
+// every message is scrubbed of the configured endpoints (each whole, in its parts, and by each path
+// segment and query value of eight characters or more), an error prints one line, and a
+// configuration the gate cannot read is named by its path alone. No endpoint reaches a command line,
+// where the process list shows it: the Solana one goes to `sauce` in a 0600 `--config` file in the
+// gate's temp dir, removed with it. Every child gets PATH, TMPDIR, a temp HOME and USERPROFILE and
+// npm's cache alone, never the operator's environment, and the installs run with `--ignore-scripts`.
+// A command that carries a key is refused unless its endpoint is the kit's own loopback fork, so
+// "sends nothing to a live chain" is checked, not assumed.
 //
 // A MISSING KEY IS A FAILURE, never a skip. The gate checks all seven keys first, prints
 // `FAIL <chain>: no endpoint in --rpc-config` for each one missing, runs every step on every chain it
@@ -46,7 +52,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { createPublicClient, decodeFunctionData, getAddress, http } from "viem";
 
-import { evmCookProblem, solanaCookProblem } from "./lib/release-gate-checks.mjs";
+import {
+  childEnvironment,
+  endpointSecrets,
+  evmCookProblem,
+  requireSigningEndpoint,
+  solanaCookProblem,
+  writeEndpointConfig,
+} from "./lib/release-gate-checks.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -124,12 +137,23 @@ function refuseConfig(what) {
   process.exit(2);
 }
 
+/**
+ * Whether `text`, given where a file's path goes, is an endpoint instead: a URL scheme before `//`
+ * once its whitespace is trimmed, or an http(s) or ws(s) URL inside it, as it stands after `resolve`
+ * collapsed the slashes. An endpoint carries a key, so it is told apart before anything is echoed.
+ */
+const givenAsEndpoint = (text) =>
+  /^[a-z][a-z0-9+.-]*:\/\//i.test(text.trim()) || /\b(?:https?|wss?):\/+[^/\s]/i.test(text);
+
 const configured = {};
 {
   const given = values["rpc-config"];
-  // An endpoint pasted where the path goes is not repeated either.
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(given)) refuseConfig("takes the path of a file, not a URL");
+  // An endpoint pasted where the path goes is not repeated either, whatever surrounds it.
+  if (givenAsEndpoint(given)) refuseConfig("takes the path of a file, not a URL");
   const file = resolve(given);
+  // With whitespace before it, `resolve` makes of an endpoint a path of the working directory that
+  // holds it whole: not a path to name either.
+  if (givenAsEndpoint(file)) refuseConfig("takes the path of a file, not a URL");
   let config;
   try {
     config = JSON.parse(readFileSync(file, "utf8"));
@@ -143,32 +167,11 @@ const configured = {};
     const url = config[String(id)];
     if (typeof url !== "string" || url.trim() === "") continue;
     configured[id] = url.trim();
-    secrets.push(url.trim());
-    try {
-      const parsed = new URL(url.trim());
-      for (const part of [
-        parsed.username,
-        parsed.password,
-        parsed.search,
-        parsed.pathname,
-        parsed.host,
-      ]) {
-        for (const text of [part, safeDecode(part)]) {
-          if (text.length > 2 && !secrets.includes(text)) secrets.push(text);
-        }
-      }
-    } catch {
-      // Not a URL: the whole string is scrubbed all the same.
+    for (const secret of endpointSecrets(url.trim())) {
+      if (!secrets.includes(secret)) secrets.push(secret);
     }
   }
   secrets.sort((a, b) => b.length - a.length);
-}
-function safeDecode(text) {
-  try {
-    return decodeURIComponent(text);
-  } catch {
-    return text;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -234,14 +237,35 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   });
 }
 
-/** `npm install` in the temp project, with the temp HOME and the user's npm cache. */
+/**
+ * The operator's npm cache, asked of npm with the operator's own HOME and the small environment;
+ * unset where npm does not answer, which the first install then reports.
+ */
+const npmCache =
+  (
+    spawnSync("npm", ["config", "get", "cache"], {
+      encoding: "utf8",
+      env: childEnvironment(process.env, {
+        home: process.env.HOME ?? process.env.USERPROFILE ?? tmpdir(),
+        cache: process.env.npm_config_cache,
+      }),
+    }).stdout ?? ""
+  ).trim() || undefined;
+
+/**
+ * `npm install` in the temp project, with the temp HOME, the operator's npm cache and no more of the
+ * environment, and none of the lifecycle scripts of what it installs.
+ */
 function npm(args) {
-  const cache = spawnSync("npm", ["config", "get", "cache"], { encoding: "utf8" }).stdout.trim();
-  const ran = spawnSync("npm", ["install", "--engine-strict", "--no-audit", "--no-fund", ...args], {
-    cwd: project,
-    encoding: "utf8",
-    env: { ...process.env, HOME: home, USERPROFILE: home, npm_config_cache: cache },
-  });
+  const ran = spawnSync(
+    "npm",
+    ["install", "--engine-strict", "--ignore-scripts", "--no-audit", "--no-fund", ...args],
+    {
+      cwd: project,
+      encoding: "utf8",
+      env: childEnvironment(process.env, { home, cache: npmCache }),
+    },
+  );
   if (ran.status !== 0) {
     // npm's own words, not its pointer to a log file: the first lines it reports as errors.
     const said = (ran.stderr || ran.stdout)
@@ -255,13 +279,17 @@ function npm(args) {
   }
 }
 
-/** A command of the installed `sauce`, run with the temp HOME; its output scrubbed. */
+/**
+ * A command of the installed `sauce`, run with the temp HOME and the small environment; its output
+ * scrubbed. A command that carries a key is refused unless its endpoint is the kit's loopback fork.
+ */
 let sauceBin;
 function sauce(args) {
+  requireSigningEndpoint(args);
   const ran = spawnSync(process.execPath, [sauceBin, "--no-update-check", ...args], {
     cwd: project,
     encoding: "utf8",
-    env: { ...process.env, HOME: home, USERPROFILE: home },
+    env: childEnvironment(process.env, { home, cache: npmCache }),
     maxBuffer: 256 * 1024 * 1024,
   });
 
@@ -550,10 +578,13 @@ async function solana(dep) {
       (id) => id !== null && id !== engine,
     );
     const recipient = freshPublicKey();
+    // The endpoint reaches the command in a file only this process's owner reads, in the gate's temp
+    // dir: never on a command line, where the process list shows it.
+    const config = writeEndpointConfig(tmp, SOLANA.id, url);
     const simulated = jsonOf(
       sauce([
         ...["simulate", pay, "--chain", "solana", "--owner", freshPublicKey()],
-        ...["--rpc-url", url, "--assume-balance", "USDC:5", "--json"],
+        ...["--config", config, "--assume-balance", "USDC:5", "--json"],
         ...["--args", recipient, String(PAYMENT)],
       ]),
       "sauce simulate",
@@ -580,7 +611,10 @@ try {
       for (const chain of on) report(n, chain, false, "not run: the package did not install");
     }
   } else {
-    const anvil = spawnSync("anvil", ["--version"], { encoding: "utf8" });
+    const anvil = spawnSync("anvil", ["--version"], {
+      encoding: "utf8",
+      env: childEnvironment(process.env, { home }),
+    });
     const kit = await installed("./testing");
     const dep = await installed("./deployments");
     const abis = await installed("./evm/engine");

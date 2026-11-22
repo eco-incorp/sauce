@@ -51,3 +51,21 @@ export declare function evmCookProblem(
   observed: EvmCookObserved,
   expected: EvmCookExpected,
 ): string | undefined;
+
+/** Every string a message of the gate is scrubbed of for `url`, an endpoint that carries a key. */
+export declare function endpointSecrets(url: string): string[];
+
+/** The environment of a child of the gate: PATH and TMPDIR, the temp home, npm's cache, no more. */
+export declare function childEnvironment(
+  env: Readonly<Record<string, string | undefined>>,
+  options: { readonly home: string; readonly cache?: string | undefined },
+): Record<string, string>;
+
+/** Throws unless `url` is the loopback endpoint of the kit's own fork. */
+export declare function requireLoopback(url: string): void;
+
+/** Throws for a command line that carries a key unless its `--rpc-url` is the kit's loopback fork. */
+export declare function requireSigningEndpoint(args: readonly string[]): void;
+
+/** Writes an endpoint as a `--config` file only its owner can read, and returns its path. */
+export declare function writeEndpointConfig(dir: string, id: number, url: string): string;

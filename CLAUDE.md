@@ -2172,8 +2172,15 @@ skip the publish, and tag that commit, which the tarball does not contain.
 release is for: the installed testing kit finds the live stack on all six supported EVM chains,
 `sauce pot`, `sauce run` and `sauce simulate` deploy, cook and swap on it, a kitchen-evm 1.3.0 Pot
 still cooks on its engine, and a Solana cook names the package's engine. It is not CI: it reads
-seven endpoints from a `--rpc-config` and forks the live chains locally, sending nothing to them,
-and a missing endpoint is a failure, never a skip.
+seven endpoints from a `--rpc-config` and forks the live chains locally, sending nothing to them, and
+a missing endpoint is a failure, never a skip. The endpoints carry provider keys, so none reaches a
+command line or an output: the Solana one goes to `sauce` in a 0600 `--config` file in the gate's temp
+dir, every message is scrubbed of each endpoint whole, in its parts and by each path segment and query
+value of eight characters or more, and an endpoint given where the file's path goes is refused without
+being repeated, whitespace around it or not. Each child gets only `PATH`, `TMPDIR`, a temp `HOME` and
+`USERPROFILE` and npm's cache, and the installs run with `--ignore-scripts`. A command that carries a
+key is refused unless its `--rpc-url` is the kit's own loopback fork, which is what makes "sends nothing
+to a live chain" a checked property (`sdk/test/release-gate-hygiene.test.ts`, `release-gate-config.test.ts`).
 
 ```sh
 # before dispatching the real release (on the release commit):
