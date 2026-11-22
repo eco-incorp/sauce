@@ -326,7 +326,15 @@ async function evmChain({ slug, id }, kit, dep, abis) {
   }
   let chain;
   await step(2, slug, async () => {
-    const block = await createPublicClient({ transport: http(url) }).getBlockNumber();
+    // The kit forces the requested chain id onto its anvil (`--chain-id`), so what the endpoint
+    // itself reports is the only evidence it serves this chain: another chain's endpoint under this
+    // id would be forked as this one, and pass every step here for a chain the gate never read.
+    const upstream = createPublicClient({ transport: http(url) });
+    const served = await upstream.getChainId();
+    if (served !== id) {
+      throw new Error(`the endpoint in --rpc-config for chain id ${id} serves chain id ${served}`);
+    }
+    const block = await upstream.getBlockNumber();
     chain = await kit.fork(slug, { mode: "live", rpcUrl: url, block });
     forks.push(chain);
     if (chain.stack.origin !== "live") {
@@ -493,6 +501,20 @@ async function solana(dep) {
     return;
   }
   await step(7, SOLANA.slug, async () => {
+    // The command holds an endpoint to its chain's cluster by genesis hash, and the gate does too,
+    // before it reads anything from it: no other cluster's endpoint passes for mainnet-beta.
+    const MAINNET_BETA_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+    const genesis = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getGenesisHash", params: [] }),
+    }).then((reply) => reply.json());
+    if (genesis.result !== MAINNET_BETA_GENESIS) {
+      throw new Error(
+        `the endpoint in --rpc-config for chain id ${SOLANA.id} is not mainnet-beta's: its genesis ` +
+          `hash is ${genesis.result ?? `unanswered (${genesis.error?.message ?? "no result"})`}`,
+      );
+    }
     const pay = join(installedRoot, "docs/examples/pay.sauce.ts");
     const engine = dep.v12SvmEngineProgramId();
     const earlier = dep.V12_RELEASE_SETS.map((row) => row["v12-svm"].engine).filter(
