@@ -7,7 +7,7 @@
 // move nothing, or move another token, or pay another account, and a mined cook can go to another
 // contract. Each check therefore reads what the cook DID.
 
-import { writeFileSync } from "node:fs";
+import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const sameAddress = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -229,6 +229,20 @@ export function writeEndpointConfig(dir, id, url) {
   writeFileSync(path, JSON.stringify({ rpcUrls: { [String(id)]: url } }), { mode: 0o600 });
 
   return path;
+}
+
+/**
+ * Runs `use` with the path of an endpoint's `--config` file (`writeEndpointConfig`) and removes the
+ * file when `use` returns or throws: the endpoint is in a file for as long as a command reads it,
+ * not for as long as the gate lives, which a signal may end with the file there.
+ */
+export function withEndpointConfig(dir, id, url, use) {
+  const path = writeEndpointConfig(dir, id, url);
+  try {
+    return use(path);
+  } finally {
+    rmSync(path, { force: true });
+  }
 }
 
 /** What the kit's children need of the operator's environment: `PATH` finds anvil, the rest is a

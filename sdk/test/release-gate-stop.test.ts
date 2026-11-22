@@ -1,13 +1,16 @@
 /**
  * The operator release gate (`scripts/release-gate.mjs`), run as a whole against a package that is
- * not the real one, to see what it does with its process while it waits: it waits on a chain at
- * every step.
+ * not the real one, to see what it does with its process and its disk while it waits: it waits on
+ * a chain at every step, and a person stops it there with Ctrl-C.
  *
  * A stand-in `npm` "installs" a stand-in package, and the one endpoint the gate is given holds its
  * first request open, so the gate is waiting on a chain when the test acts. The stand-in package's
  * testing kit starts a child the way the real kit starts anvil and its recorder: with no
- * `env` of its own, so with the gate's. That child saw none of the operator's variables, only what
- * a chain needs of them.
+ * `env` of its own, so with the gate's. Then:
+ *
+ *   - that child saw none of the operator's variables, only what a chain needs of them;
+ *   - a signal that stops the gate removes its temp dir, which holds the Solana endpoint's file
+ *     while step 7 runs, and the gate exits 130.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import {
@@ -200,4 +203,21 @@ describe("the release gate, waiting on a chain", () => {
       await gate.stop();
     }
   }, 120_000);
+
+  it.each(["SIGINT", "SIGTERM", "SIGHUP"] as const)(
+    "removes its temp dir when %s stops it, and exits 130",
+    async (signal) => {
+      const gate = await startWaiting();
+      try {
+        // It made one, and holds it while it waits: the Solana endpoint's file goes there in step 7.
+        expect(gate.tempDirs()).toHaveLength(1);
+        gate.child.kill(signal);
+        expect(await gate.exited).toBe(130);
+        expect(gate.tempDirs()).toEqual([]);
+      } finally {
+        await gate.stop();
+      }
+    },
+    120_000,
+  );
 });

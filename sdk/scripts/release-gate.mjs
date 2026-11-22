@@ -17,13 +17,14 @@
 // segment and query value of eight characters or more), an error prints one line, and a
 // configuration the gate cannot read is named by its path alone. No endpoint reaches a command line,
 // where the process list shows it: the Solana one goes to `sauce` in a 0600 `--config` file in the
-// gate's temp dir, removed with it. The gate's own environment is cut to PATH, TMPDIR, HOME and
-// USERPROFILE once it has read npm's cache and before any installed code loads, since the installed
-// testing kit runs in this process and starts anvil and its recorder with no environment of its own:
-// they inherit it. Every child the gate starts itself gets PATH, TMPDIR, a temp HOME and USERPROFILE
-// and npm's cache alone, and the installs run with `--ignore-scripts`. A command that carries a key
-// is refused unless its endpoint is the kit's own loopback fork, so "sends nothing to a live chain"
-// is checked, not assumed.
+// gate's temp dir, which exists for as long as that command runs. The gate's own environment is cut
+// to PATH, TMPDIR, HOME and USERPROFILE once it has read npm's cache and before any installed code
+// loads, since the installed testing kit runs in this process and starts anvil and its recorder with
+// no environment of its own: they inherit it. Every child the gate starts itself gets PATH, TMPDIR,
+// a temp HOME and USERPROFILE and npm's cache alone, and the installs run with `--ignore-scripts`.
+// A command that carries a key is refused unless its endpoint is the kit's own loopback fork, so
+// "sends nothing to a live chain" is checked, not assumed. Stopped by SIGINT, SIGTERM or SIGHUP, the
+// gate stops its forks, removes its temp dir and exits 130.
 //
 // A MISSING KEY IS A FAILURE, never a skip. The gate checks all seven keys first, prints
 // `FAIL <chain>: no endpoint in --rpc-config` for each one missing, runs every step on every chain it
@@ -63,7 +64,7 @@ import {
   GATE_ENVIRONMENT,
   requireSigningEndpoint,
   solanaCookProblem,
-  writeEndpointConfig,
+  withEndpointConfig,
 } from "./lib/release-gate-checks.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -236,9 +237,14 @@ async function release(fork) {
   if (at >= 0) forks.splice(at, 1);
   await fork.stop().catch(() => undefined);
 }
+// Stopped by a signal, the gate stops its forks and removes its temp dir before it exits: the dir
+// holds the Solana endpoint's file while step 7 runs, and the forks are what the signal interrupted.
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.once(signal, () => {
-    void stopForks().finally(() => process.exit(130));
+    void stopForks().finally(() => {
+      rmSync(tmp, { recursive: true, force: true });
+      process.exit(130);
+    });
   });
 }
 
@@ -589,15 +595,17 @@ async function solana(dep) {
     );
     const recipient = freshPublicKey();
     // The endpoint reaches the command in a file only this process's owner reads, in the gate's temp
-    // dir: never on a command line, where the process list shows it.
-    const config = writeEndpointConfig(tmp, SOLANA.id, url);
-    const simulated = jsonOf(
-      sauce([
-        ...["simulate", pay, "--chain", "solana", "--owner", freshPublicKey()],
-        ...["--config", config, "--assume-balance", "USDC:5", "--json"],
-        ...["--args", recipient, String(PAYMENT)],
-      ]),
-      "sauce simulate",
+    // dir: never on a command line, where the process list shows it, and there only while the
+    // command runs (a failure, or a signal that stops the gate, leaves nothing behind).
+    const simulated = withEndpointConfig(tmp, SOLANA.id, url, (config) =>
+      jsonOf(
+        sauce([
+          ...["simulate", pay, "--chain", "solana", "--owner", freshPublicKey()],
+          ...["--config", config, "--assume-balance", "USDC:5", "--json"],
+          ...["--args", recipient, String(PAYMENT)],
+        ]),
+        "sauce simulate",
+      ),
     );
     // What the simulation shows it DID, in its own effects: the engine ran, and the payment is
     // there, from the Pot to the recipient.

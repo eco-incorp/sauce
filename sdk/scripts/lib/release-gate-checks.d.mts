@@ -70,6 +70,17 @@ export declare function requireSigningEndpoint(args: readonly string[]): void;
 /** Writes an endpoint as a `--config` file only its owner can read, and returns its path. */
 export declare function writeEndpointConfig(dir: string, id: number, url: string): string;
 
+/**
+ * Runs `use` with the path of an endpoint's `--config` file and removes the file when `use` returns
+ * or throws.
+ */
+export declare function withEndpointConfig<T>(
+  dir: string,
+  id: number,
+  url: string,
+  use: (path: string) => T,
+): T;
+
 /** What the kit's children need of the operator's environment: PATH, TMPDIR, HOME, USERPROFILE. */
 export declare const GATE_ENVIRONMENT: readonly string[];
 

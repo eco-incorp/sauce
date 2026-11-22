@@ -9,7 +9,15 @@
  * use of them is held by its own text, since running it needs live chains.
  */
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -21,6 +29,7 @@ import {
   GATE_ENVIRONMENT,
   requireLoopback,
   requireSigningEndpoint,
+  withEndpointConfig,
   writeEndpointConfig,
 } from "../scripts/lib/release-gate-checks.mjs";
 
@@ -278,13 +287,49 @@ describe("the environment the release gate keeps for itself", () => {
   });
 });
 
+describe("the file that holds the Solana endpoint, for as long as a command needs it", () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-release-gate-config-file-"));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const url = "https://solana.example.invalid/KEYSEGMENT-0123456789";
+
+  it("is there while the command runs, and gone once it returns", () => {
+    let during: string | undefined;
+    const returned = withEndpointConfig(dir, 1399811149, url, (path) => {
+      during = path;
+      expect(existsSync(path)).toBe(true);
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ rpcUrls: { "1399811149": url } });
+
+      return "the command's result";
+    });
+    expect(returned).toBe("the command's result");
+    expect(existsSync(during!)).toBe(false);
+  });
+
+  it("is gone when the command throws, too", () => {
+    let during: string | undefined;
+    expect(() =>
+      withEndpointConfig(dir, 1399811149, url, (path) => {
+        during = path;
+        throw new Error("the command failed");
+      }),
+    ).toThrow("the command failed");
+    expect(existsSync(during!)).toBe(false);
+  });
+});
+
 describe("the release gate script", () => {
   const source = readFileSync(SCRIPT, "utf8");
 
   it("passes no configured endpoint on a command line: the Solana one goes in a --config file", () => {
     // `--rpc-url` takes the kit's own fork (`chain.rpcUrl`), never `url`, the operator's endpoint.
     expect(source).not.toMatch(/"--rpc-url",\s*url\b/);
-    expect(source).toMatch(/writeEndpointConfig\(/);
+    // The file lives as long as the command that reads it, whatever the command does.
+    expect(source).toMatch(/withEndpointConfig\(/);
+    expect(source).not.toMatch(/\bwriteEndpointConfig\(/);
     expect(source).toMatch(/"--config"/);
   });
 
