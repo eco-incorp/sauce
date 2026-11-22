@@ -273,7 +273,9 @@ that chain as they do for the command.
 
 A revert and a rejected settle are results (`ok: false`, `valid: false`), not errors. An error is a
 call that could not be answered: a program that does not compile, an input that is wrong, a chain
-that cannot be read.
+that cannot be read. Where the command knows more than its message, what it knows follows the
+message in the error's text, as the command prints it on stderr: a Solana cook that fails before it
+is sent says what its Pot is.
 
 A simulation that leaves anything in the Pot adds a note saying so, for the agent to pass on to the
 user: what stays in the Pot is not in the owner's wallet

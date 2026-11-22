@@ -1407,7 +1407,13 @@ anyone can put an address in that state by sending it lamports, so refusing it w
 stranger stop an owner's first cook. `sauce pot` and `sauce_pot` report it as not created, and
 `--deploy` creates it (the Kitchen's `create_pot` tops up the rent, allocates and assigns: checked
 in LiteSVM with the address funded below, at and above the Pot's rent); an account any other
-program owns is no Pot. **On Solana nothing may name an engine that the release table
+program owns is no Pot. What a Pot's state means for a cook (`solana.ts#svmPotNotes`: only
+lamports, or an engine this compiler's output does not run on) is said with every result of one,
+with the error of a `sauce run` that stops before its cook is sent (`CliError#notes`, which
+`run.ts` prints after the message and the MCP registrar returns in its error result), and with
+every step of a plan (`svm-plan.ts#potNow`), so a cursor resumed with `sauce send` says it too,
+and says that its step that creates the Pot is dropped where lamports reached the address since.
+**On Solana nothing may name an engine that the release table
 (`svm/engine-release.ts`) and the pairing rules (`engineRunsCompiler`) do not hold**, because the
 Kitchen pins no engine to a Pot and signs for it into whatever program a cook names: a Pot of
 either release engine cooks through the other and the chain refuses neither (probe S2, pinned in

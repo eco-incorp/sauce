@@ -16,9 +16,30 @@ import type { CookVia } from "../svm/client.js";
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
 export class UsageError extends Error {}
 
-/** A failure that is not the invocation's fault: a program that does not compile, a chain that
- *  disagrees. Exit 1, where a {@link UsageError} is exit 2. */
-export class CliError extends Error {}
+/**
+ * A failure that is not the invocation's fault: a program that does not compile, a chain that
+ * disagrees. Exit 1, where a {@link UsageError} is exit 2.
+ *
+ * `notes` are what the command knows of the failure's setting that its message does not say (what a
+ * Pot's state means for the cook that just failed): the command prints each on stderr after the
+ * message, and a tool returns each in its error result. Most failures carry none.
+ */
+export class CliError extends Error {
+  notes: readonly string[] = [];
+}
+
+/**
+ * `error` with `notes` said beside its message, when it is a {@link CliError}; any other error is
+ * not the command's to annotate and passes as it is. A note the failure carries already is not said
+ * twice. Returns `error` itself, so its class and stack stay.
+ */
+export function withNotes(error: unknown, notes: readonly string[]): unknown {
+  if (error instanceof CliError) {
+    error.notes = [...error.notes, ...notes.filter((note) => !error.notes.includes(note))];
+  }
+
+  return error;
+}
 
 /** A flag, as `parseArgs` takes it, plus the placeholder and sentence `--help` prints for it. */
 export interface FlagSpec {

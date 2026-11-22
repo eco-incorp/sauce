@@ -209,6 +209,15 @@ No language change.
   `sauce pot` and the MCP `sauce_pot` report it as not created, with a note, and
   `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An account any
   other program owns is no Pot, and is refused.
+- **Solana: a cook that stops, and a plan resumed from its cursor, say what the Pot is.** The note
+  on a Pot of v12-svm 1.2.0 or 1.3.0 (cooked on the installed engine, so a check that the Pot's
+  owner is `ctx.self()` fails) and on an address that holds only lamports came with the result of
+  a cook that was sent. It now also comes with the error of a `sauce run` that stops before its
+  cook is sent (a setup transaction that failed, a wait, a cook that would fail its simulation,
+  an endpoint that did not simulate it), with every step of a plan, so `sauce send --cursor` and
+  the MCP `sauce_send` and `sauce_wallet_send` say it, and in a tool's error result, after the
+  message. A plan made while the Pot was missing, whose address was funded since, says that its
+  step that creates the Pot is dropped.
 
 ### SDK
 

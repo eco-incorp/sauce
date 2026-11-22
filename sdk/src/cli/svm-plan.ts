@@ -107,6 +107,7 @@ import {
   failureReason,
   potAccountOf,
   requireReleased,
+  svmPotNotes,
   svmTokenAccountsToCreate,
 } from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
@@ -881,21 +882,32 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
   return value !== null;
 }
 
+/** What the cluster shows of the plan's Pot now. */
+interface PotNow {
+  /** No account at its address: the plan's setup (or its cook) is to create it. */
+  readonly missing: boolean;
+  /** What its state means for the cook, as the command that made the plan said it (`svmPotNotes`):
+   *  none for a plan with no cook left to build. */
+  readonly notes: readonly string[];
+}
+
 /**
- * Whether the plan's Pot is still to be created: no account at its address. An address that holds
- * only lamports is not: the Kitchen cooks it as it is (a Pot "need not exist for a program that
- * keeps no storage"), no engine owns it, and a `create_pot` would give it data, which a program
- * that pays SOL out of the Pot through the System Program cannot have. A Pot there that a Kitchen
- * cook is to be built on must be one the engine the plan was made for (`planEngine`) cooks: the
- * cook names that engine, which is the Pot's owner where that engine runs this SDK's programs and
- * the installed engine for a Pot of one that does not (`potCookEngine`). Any other engine refuses
- * the step. A plan with no cook left to build (its cook landed, or it is given up: `cooking`
- * false) is not held to it: what is left of it is the code buffer's close, which no Pot's owner
- * changes. A Pot no engine owns yet (no account, or only lamports) is held to it too: it is created
- * under and cooked on the installed engine, so a plan made for another engine, the earlier one
- * included, is refused there as it is for a Pot another engine owns.
+ * What the cluster shows of the plan's Pot now: whether it is still to be created (no account at
+ * its address), and what its state means for the cook. An address that holds only lamports is not
+ * missing: the Kitchen cooks it as it is (a Pot "need not exist for a program that keeps no
+ * storage"), no engine owns it, and a `create_pot` would give it data, which a program that pays
+ * SOL out of the Pot through the System Program cannot have. Where the plan was to create the Pot,
+ * its note says that step is dropped. A Pot there that a Kitchen cook is to be built on must be one
+ * the engine the plan was made for (`planEngine`) cooks: the cook names that engine, which is the
+ * Pot's owner where that engine runs this SDK's programs and the installed engine for a Pot of one
+ * that does not (`potCookEngine`). Any other engine refuses the step. A plan with no cook left to
+ * build (its cook landed, or it is given up: `cooking` false) is not held to it: what is left of it
+ * is the code buffer's close, which no Pot's owner changes. A Pot no engine owns yet (no account,
+ * or only lamports) is held to it too: it is created under and cooked on the installed engine, so a
+ * plan made for another engine, the earlier one included, is refused there as it is for a Pot
+ * another engine owns.
  */
-async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<boolean> {
+async function potNow(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<PotNow> {
   const pot = await potOf(plan);
   const { value } = await ask(ctx.url, "the Pot", () =>
     ctx.rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
@@ -911,8 +923,12 @@ async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Pr
             `${planEngine(plan)}: make the plan again (sauce tx)`,
     );
   }
+  const lamports = value === null ? undefined : BigInt(value.lamports);
 
-  return value === null;
+  return {
+    missing: value === null,
+    notes: cooking ? svmPotNotes(pot, { state, lamports }, plan.pot !== "there") : [],
+  };
 }
 
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */
@@ -1009,7 +1025,10 @@ export async function nextStep(
         "closed it (sauce reclaim?). Make a new plan",
     );
   }
-  if (current.via === "kitchen" && current.pot !== "setup") await potIsMissing(current, ctx);
+  let potNotes: readonly string[] = [];
+  if (current.via === "kitchen" && current.pot !== "setup") {
+    potNotes = (await potNow(current, ctx)).notes;
+  }
   const setup = await setupTransactions(current, ctx, state, finalized);
   if (setup.transactions.length > 0) {
     return {
@@ -1017,11 +1036,14 @@ export async function nextStep(
       transactions: setup.transactions,
       plan: setup.plan,
       overview: overview(setup.plan, "setup"),
-      notes: setup.notes,
+      notes: [...potNotes, ...setup.notes],
     };
   }
+  // The cook's step says what the Pot's state means for it as the setup's would: a cursor resumed
+  // later, or a send that builds the next step, tells it as the command that made the plan did.
+  const cook = await cookStep(setup.plan, ctx);
 
-  return cookStep(setup.plan, ctx);
+  return { ...cook, notes: [...potNotes, ...setup.notes, ...cook.notes] };
 }
 
 /**
@@ -1031,7 +1053,7 @@ export async function nextStep(
  */
 export async function transactionsAhead(plan: SvmPlan, ctx: StepContext): Promise<PlanTx[]> {
   if (plan.cooked === undefined && plan.closing !== true && plan.via === "kitchen") {
-    if (plan.pot !== "setup") await potIsMissing(plan, ctx);
+    if (plan.pot !== "setup") await potNow(plan, ctx);
   }
   const buffer = await planBuffer(plan);
   const state = buffer === undefined ? undefined : await bufferState(ctx, plan);
@@ -1084,10 +1106,10 @@ async function setupTransactions(
   const notes: string[] = [];
   // The Pot, where the setup creates it, and the token accounts the cook names that the cluster
   // does not hold, found and made as `sauce run` makes them (`svmTokenAccountsToCreate`).
-  const [potMissing, made] = await Promise.all([
+  const [pot, made] = await Promise.all([
     plan.pot === "setup"
-      ? potIsMissing(plan, ctx, plan.cooked === undefined && plan.closing !== true)
-      : false,
+      ? potNow(plan, ctx, plan.cooked === undefined && plan.closing !== true)
+      : { missing: false, notes: [] },
     svmTokenAccountsToCreate(
       ctx.rpc,
       ctx.url,
@@ -1105,7 +1127,8 @@ async function setupTransactions(
       ctx.signer,
     ),
   ]);
-  if (potMissing) {
+  notes.push(...pot.notes);
+  if (pot.missing) {
     transactions.push({
       what: "creating the Pot",
       kind: "pot",

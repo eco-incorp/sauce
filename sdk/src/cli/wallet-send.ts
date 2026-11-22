@@ -712,9 +712,11 @@ export async function sendSvmPlan(input: {
   }
   for (let waits = 0; ;) {
     const step = await nextStep(plan, ctx);
+    // What the Pot's state means for the cook (`svmPotNotes`) and the step's own, each said once
+    // however many steps repeat it.
+    said.push(...step.notes.filter((note) => !said.includes(note)));
     if (step.name === "done") {
       done = true;
-      said.push(...step.notes);
       break;
     }
     if (step.wait !== undefined) {

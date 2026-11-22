@@ -1386,7 +1386,7 @@ const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
 /** What the cluster holds at a Pot's address, as {@link potAccountState} tells it. */
-interface PotRead {
+export interface PotRead {
   readonly state: PotAccountState;
   /** The account's lamports; `undefined` where the cluster holds no account there. */
   readonly lamports: bigint | undefined;
@@ -1462,6 +1462,31 @@ export async function svmPotState(target: SvmTarget, rpcUrl: string): Promise<Sv
   return lamports === undefined ? { created: false } : { created: false, lamportsOnly: lamports };
 }
 
+/**
+ * What a Pot's state means for a cook on it, as the cook (`Prepared.notes`) and every step of a plan
+ * on it (`svm-plan.ts`'s `nextStep`, so a cursor resumed later says what the command that made it
+ * said) tell it. An address that holds only lamports is cooked as it is, and no cook creates it. A
+ * Pot of a release this SDK's programs do not run on is cooked on the installed engine. With
+ * `creates`, the plan the note goes with was to create the Pot, so a note on lamports says that step
+ * is dropped.
+ */
+export function svmPotNotes(pot: string, read: PotRead, creates = false): string[] {
+  const { state, lamports } = read;
+  if (state.kind === "unallocated") {
+    return lamports === undefined
+      ? []
+      : [
+          `Pot ${pot} holds ${lamports} lamports and no engine owns it yet` +
+            (creates ? ", so the step of this plan that creates it is dropped" : "") +
+            ": the cook runs on it as it is, on the installed engine, and nothing creates it. " +
+            `\`sauce pot --deploy\` creates it, with ${MAX_POT_LEN} bytes of storage, after which a ` +
+            "program can no longer pay SOL out of it through the System Program.",
+        ];
+  }
+
+  return state.kind === "engine" && !state.runsCompiler ? [svmOlderPotNote(pot, state, true)] : [];
+}
+
 /** What a cook on a Pot names, and what it says of the Pot. */
 export interface SvmPotCooking {
   /** The engine every cook of this Pot names. */
@@ -1480,31 +1505,20 @@ export interface SvmPotCooking {
  * owned by any other program, naming it.
  */
 export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise<SvmPotCooking> {
-  const { state, lamports } = await readPot(rpc, url, pot);
+  const read = await readPot(rpc, url, pot);
+  const { state } = read;
   switch (state.kind) {
     case "unallocated":
       return {
         engine: engine(),
-        lamportsOnly: lamports !== undefined,
-        notes:
-          lamports === undefined
-            ? []
-            : [
-                `Pot ${pot} holds ${lamports} lamports and no engine owns it yet: the cook runs on ` +
-                  "it as it is, on the installed engine, and nothing creates it. `sauce pot " +
-                  `--deploy\` creates it, with ${MAX_POT_LEN} bytes of storage, after which a ` +
-                  "program can no longer pay SOL out of it through the System Program.",
-              ],
+        lamportsOnly: read.lamports !== undefined,
+        notes: svmPotNotes(pot, read),
       };
     case "engine":
-      if (state.runsCompiler) {
-        return { engine: address(state.engine), lamportsOnly: false, notes: [] };
-      }
-
       return {
-        engine: engine(),
+        engine: state.runsCompiler ? address(state.engine) : engine(),
         lamportsOnly: false,
-        notes: [svmOlderPotNote(pot, state, true)],
+        notes: svmPotNotes(pot, read),
       };
     case "other":
       throw new CliError(
@@ -3126,7 +3140,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     json,
     notes: [
       potNote,
-      ...prepared.notes,
+      // The step's own: what the Pot's state means for the cook first, as every step of the plan says it.
       ...step.notes,
       ...(prepared.stops === undefined
         ? []
@@ -3406,6 +3420,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
   const staged: SvmSent[] = [];
   const tabled: SvmSent[] = [];
+  // A run that stops before its cook is sent says what the Pot's state means for the cook beside its
+  // message (`Prepared.notes`): a cook that fails for what they explain is told so. One that was
+  // sent says them in its result, whatever happened to it.
+  const stopped = (message: string): CliError =>
+    Object.assign(new CliError(message), { notes: prepared.notes });
   // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
   // table it created stays, and is named.
   const closedAgain = async (): Promise<string> =>
@@ -3420,7 +3439,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     try {
       return await nextStep(plan, ctx);
     } catch (error) {
-      throw new CliError(`${(error as Error).message}${await closedAgain()}`);
+      throw stopped(`${(error as Error).message}${await closedAgain()}`);
     }
   };
 
@@ -3440,14 +3459,14 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       try {
         sent = await sendPlanTx(ctx, tx);
       } catch (error) {
-        throw new CliError(
+        throw stopped(
           `${staging ? "staging the program failed: " : ""}${(error as Error).message}${await closedAgain()}`,
         );
       }
       if (staging) staged.push(sent);
       if (tx.kind === "table") tabled.push(sent);
       if (!sent.ok) {
-        throw new CliError(
+        throw stopped(
           tx.kind === "pot" || tx.kind === "accounts"
             ? sentLine(tx.what, sent)
             : `${staging ? "staging the program failed: " : ""}${tx.what} failed in ` +
@@ -3468,10 +3487,10 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
     step = await after();
   }
-  if (step.wait !== undefined) throw new CliError(`${step.wait}${await closedAgain()}`);
+  if (step.wait !== undefined) throw stopped(`${step.wait}${await closedAgain()}`);
   if (step.fails !== undefined) {
     const wallets = await walletHints(prepared, input);
-    throw new CliError(
+    throw stopped(
       `the cook would fail, so it was not sent: ${step.fails.reason}` +
         (step.fails.logs.length === 0
           ? ""
@@ -3482,12 +3501,12 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   }
   const cookTx = step.transactions[0];
   if (step.name !== "cook" || cookTx === undefined) {
-    throw new CliError(
+    throw stopped(
       `the plan's step after its setup is ${step.name}, not the cook${await closedAgain()}`,
     );
   }
   if (step.unrehearsed === true) {
-    throw new CliError(
+    throw stopped(
       `the endpoint did not simulate the cook, so it was not sent${await closedAgain()}`,
     );
   }

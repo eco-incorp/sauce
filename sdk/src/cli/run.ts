@@ -3917,6 +3917,8 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
     }
     const message = error instanceof Error ? error.message : String(error);
     io.stderr(`sauce ${label}: ${message}\n`);
+    // What the failure's setting adds (a Pot's state, for a cook that failed), after the failure.
+    if (error instanceof CliError) for (const note of error.notes) io.stderr(`${note}\n`);
 
     return 1;
   } finally {

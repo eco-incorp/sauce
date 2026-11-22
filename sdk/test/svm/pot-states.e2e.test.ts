@@ -104,6 +104,15 @@ const OWNER_CHECK = [
   "}",
   "",
 ].join("\n");
+/** The same check on an account the command is told by name, `p`: the Pot's account, passed in. */
+const LAMPORTS_CHECK = [
+  "// @chain solana",
+  "function main(p: Account<Signer>): Uint256 {",
+  '  require(p.owner == ctx.self(), "lamport-owner-check");',
+  "  return 7;",
+  "}",
+  "",
+].join("\n");
 /** The same, in a program past one transaction: staged first, then cooked from its code buffer. */
 const ownerCheckStaged = (bytes: number): string =>
   [
@@ -352,15 +361,58 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       expect(first.transactions!.map((tx) => tx.what)[0]).toBe("creating the Pot");
       // Lamports reach the address before the owner signs a thing.
       harness.svm.airdrop(pot, lamports(1_000_000n));
-      const resumed = read<Sent>(
-        await sauce("send", "--cursor", first.cursor, "--rpc-url", RPC_URL, "--json"),
+      const resumedRun = await sauce(
+        "send",
+        "--cursor",
+        first.cursor,
+        "--rpc-url",
+        RPC_URL,
+        "--json",
       );
+      const resumed = read<Sent>(resumedRun);
       expect(resumed.ok).toBe(true);
+      // The step that created the Pot is gone, and the plan says so rather than carry on in silence.
+      expect(resumedRun.stderr).toContain(
+        `Pot ${pot} holds 1000000 lamports and no engine owns it yet, so the step of this plan ` +
+          "that creates it is dropped",
+      );
       expect(resumed.next.step).toBe("setup");
       const whats = resumed.next.transactions!.map((tx) => tx.what);
       expect(whats).not.toContain("creating the Pot");
       expect(whats[0]).toBe("creating the code buffer");
       expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+    }, 180_000);
+
+    it("tells a run that stops before its cook is sent what holds the address, and the same run passes once --deploy has created it", async () => {
+      // Anyone can put a new owner's Pot address in this state for the rent of an empty account: what
+      // the note says is what tells that owner to run `sauce pot --deploy`.
+      const owner = await keypair("lamports-fail");
+      const pot = await potOf(owner.signer.address, "lamports-fail");
+      harness.svm.airdrop(pot, lamports(1_000_000n));
+      const program = join(work, "lamports-check.sauce.ts");
+      writeFileSync(program, LAMPORTS_CHECK);
+      const flags = [
+        ...signedAs(owner.path, "lamports-fail"),
+        ...["--account", `p=${pot}`, "--yes"],
+      ];
+      const sent = shim.sent.length;
+
+      const before = await sauce("run", program, ...flags);
+      expect(before.code).toBe(1);
+      expect(before.stderr).toContain("the cook would fail, so it was not sent");
+      expect(before.stderr).toContain("lamport-owner-check");
+      expect(before.stderr).toContain(
+        `Pot ${pot} holds 1000000 lamports and no engine owns it yet`,
+      );
+      expect(before.stderr).toContain("`sauce pot --deploy` creates it");
+      expect(shim.sent.length).toBe(sent);
+
+      const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "lamports-fail"));
+      expect(deployed.code).toBe(0);
+      expect(account(pot)).toMatchObject({ programAddress: INSTALLED });
+      const after = await sauce("run", program, ...flags);
+      expect(after.code).toBe(0);
+      expect(after.stderr).not.toContain("no engine owns it yet");
     }, 180_000);
 
     it("is not created: `sauce pot` says so and that cooks run on it, and --deploy creates it, keeping its lamports", async () => {
@@ -559,7 +611,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
 
     it("fails a program that requires the Pot's owner to be ctx.self() at the simulation, and sends nothing; the installed engine's own Pot passes it", async () => {
       const owner = await keypair("old-check");
-      await plantOld(owner.signer.address, "old-check");
+      const pot = await plantOld(owner.signer.address, "old-check");
       const accounts = ["--account", "pot=pot"];
       const sent = shim.sent.length;
 
@@ -572,17 +624,29 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         ok: false,
         reason: 'the program threw "the engine does not own the Pot"',
       });
+      expect(simulated.stderr).toContain(cookTold(pot));
       // The plan is not built for a cook that fails, and the run does not send one.
       const planned = await sauce(
         ...["tx", ownerCheck, ...named(owner.signer.address, "old-check"), ...accounts],
       );
       expect(planned.code).toBe(1);
       expect(planned.stderr).toContain("the engine does not own the Pot");
+      expect(planned.stderr).toContain(cookTold(pot));
+      // A plan resumed from its cursor says the Pot's engine as the command that made it did, and
+      // the cook it simulates again still fails. The failing plan prints its cursor all the same.
+      const { cursor } = JSON.parse(planned.stdout) as Planned;
+      const resumed = await sauce("send", "--cursor", cursor, "--rpc-url", RPC_URL, "--json");
+      expect(resumed.code).toBe(0);
+      expect(resumed.stderr).toContain(cookTold(pot));
+      expect(resumed.stderr).toContain("simulated now, the cook would fail");
       const ran = await sauce(
         ...["run", ownerCheck, ...signedAs(owner.path, "old-check"), ...accounts, "--yes"],
       );
       expect(ran.code).toBe(1);
       expect(ran.stderr).toContain("the cook would fail, so it was not sent");
+      // A run that stops before its cook is sent is told what the Pot is, beside why it stopped.
+      expect(ran.stderr).toContain("the engine does not own the Pot");
+      expect(ran.stderr).toContain(cookTold(pot));
       expect(shim.sent.length).toBe(sent);
 
       // The same program on a Pot the installed engine created: its owner is ctx.self().
@@ -617,6 +681,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       expect(ran.code).toBe(1);
       expect(ran.stderr).toContain("the cook would fail, so it was not sent");
       expect(ran.stderr).toContain("the engine does not own the Pot");
+      expect(ran.stderr).toContain(cookTold(pot));
       // What landed: every setup transaction (the code buffer made, written and finalized), no cook,
       // and then the buffer's close.
       const landed = shim.sent.slice(sent);

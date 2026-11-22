@@ -37,6 +37,7 @@ import {
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
+  CliError,
   type CliFiles,
   type CommandOutput,
   compileCommand,
@@ -1283,13 +1284,23 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
           // A public endpoint's failure (a rate limit) is the one an endpoint of your own fixes.
           const said = reach.publicNotes();
+          // What the failure's setting adds (`CliError#notes`), as the command prints it after it.
+          const noted =
+            error instanceof CliError
+              ? error.notes.map((note) => errorText(note, reach.scrub))
+              : [];
 
           return {
             isError: true,
             content: [
               {
                 type: "text",
-                text: [errorText(error, reach.scrub), ...said, ...kept.map(reach.scrub)].join("\n"),
+                text: [
+                  errorText(error, reach.scrub),
+                  ...noted,
+                  ...said,
+                  ...kept.map(reach.scrub),
+                ].join("\n"),
               },
             ],
           };
