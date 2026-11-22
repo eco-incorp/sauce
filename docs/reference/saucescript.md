@@ -44,8 +44,8 @@ documented builtins with one example program per target.
 
 - Accounts are `main` parameters with roles: `Account` in §1, account properties in §12, and the
   `svm` calls in §11, which only SVM has.
-- `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account, and not only
-  Pot accounts),
+- `ctx` (§6): `ctx.self()` is the program id of the engine running the cook (the engine that
+  created a Pot owns its account),
   `ctx.msgSender()` the first signer among the accounts the engine receives, and
   `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract`, `isEOA` and the block and
   transaction reads (`txOrigin`, `baseFee`, `blockHash`, …) do not exist.
@@ -330,9 +330,11 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `ctx.self()` → number, **Both**
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances; a
     program compiled for a chain names it `pot`
-  - On SVM: the engine's program id, which owns every Pot account:
-    `Account(pot.address).owner == ctx.self()` holds for a Pot, and for any other account assigned
-    to the engine, so it does not prove an account is the Pot; re-deriving the Pot's address does
+  - On SVM: the program id of the engine running the cook. The engine that created a Pot owns its
+    account, and a Pot an earlier engine created can be cooked by the installed one, so
+    `Account(pot.address).owner == ctx.self()` holds only for a Pot the cooking engine created, and
+    for any other account assigned to that engine: it does not prove an account is the Pot;
+    re-deriving the Pot's address does
   - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id

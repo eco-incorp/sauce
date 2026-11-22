@@ -40,8 +40,10 @@ is `sauce-solana-distributed-swap`'s.
   The hex is how `sauce globals --chain solana --json` prints a token's `address`.
 - **The Pot** is the Kitchen's program address for `"pot"`, its owner and a 32-byte salt (zero
   unless `--salt` names another). `pot` is the Pot: `pot.USDC` is the Pot's USDC. `ctx.self()`
-  alone is the engine's program id, which owns every Pot account, **not the Pot**; as a token's
-  holder it is the account that signs the engine call, the Pot through the Kitchen.
+  alone is the program id of the engine running the cook, **not the Pot**; as a token's holder it
+  is the account that signs the engine call, the Pot through the Kitchen. The engine that created
+  a Pot owns its account, and the command cooks a Pot an earlier engine created on the installed
+  one, where the Pot's owner is not `ctx.self()`.
 - **Two token programs**: SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) and Token-2022
   (`TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb`). USDC, USDT and WSOL are SPL Token mints; PYUSD
   and the tokenized stocks are Token-2022 mints.
@@ -295,9 +297,10 @@ The Pot itself is `pda:<the Kitchen program id>:"pot",owner,<its 32-byte salt>`.
 
 Declared `pot: Account<Signer>` and passed as `--account pot=pot`, the Pot's slot proves nothing by
 itself: a `Signer` slot takes any signer (`pot=owner` satisfies it too); `ctx.msgSender()` is only
-the first signer the engine receives; and `pot.owner == ctx.self()` says only that the engine owns
-the account. **The engine owns every Pot, but not only Pots**: a keypair account assigned to the
-engine, which the transaction signs, passes that check as well.
+the first signer the engine receives; and `pot.owner == ctx.self()` says only that the engine
+running the cook owns the account. **An engine owns the Pots it created, but not only Pots**: a
+keypair account assigned to the engine, which the transaction signs, passes that check as well, and
+a Pot an earlier engine created, cooked on the installed one, fails it.
 
 **To bind the slot to the Pot, re-derive the Pot's address and require the slot to be it.** Only a
 Kitchen cook can make that address sign, so a signing slot at it is the Pot. Take the owner as a
