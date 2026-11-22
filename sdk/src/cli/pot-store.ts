@@ -152,6 +152,20 @@ const FIELDS = {
   recordedAt: "string",
 } as const;
 
+/**
+ * Whether `value` is a record's `deployment`: an object of the strings `tx`, `block` and `from`, and
+ * `blockHash` where it has one.
+ */
+function isDeployment(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const given = value as Record<string, unknown>;
+
+  return (
+    ["tx", "block", "from"].every((field) => typeof given[field] === "string") &&
+    (given.blockHash === undefined || typeof given.blockHash === "string")
+  );
+}
+
 /** `parsed`, read from `path`, as a record: refused unless it has every field a record has. */
 function asRecord(path: string, parsed: unknown): PotRecord {
   const record = parsed as Record<string, unknown> | null;
@@ -163,6 +177,12 @@ function asRecord(path: string, parsed: unknown): PotRecord {
     .map(([field]) => field);
   if (missing.length > 0) {
     throw new Error(`${path} is not a Pot record: it has no ${missing.join(", ")}`);
+  }
+  if (record.deployment !== undefined && !isDeployment(record.deployment)) {
+    throw new Error(
+      `${path} is not a Pot record: its deployment is not an object of the strings tx, block and ` +
+        "from (and blockHash, where it has one)",
+    );
   }
 
   return record as unknown as PotRecord;

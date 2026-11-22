@@ -359,6 +359,27 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(cookedOn(badOwner).pot).toBe(CURRENT);
       expect(badOwner.stderr).toContain(wrong.file);
     });
+
+    it("a record that is right but for its deployment is a note too, never a throw", async () => {
+      // `deployment` is optional, so a record may lack it; one that is there and is no object of
+      // strings is a damaged record, however well it is filed.
+      for (const deployment of [null, "0xabc", {}, { ...RECORD.deployment, tx: 7 }]) {
+        const odd = filed(
+          String(BASE.id),
+          `${EARLIER.toLowerCase()}.json`,
+          JSON.stringify({ ...RECORD, deployment }),
+        );
+        const byOwner = await tx(odd.dir, "--value", "0", "--owner", OWNER);
+        expect([JSON.stringify(deployment), byOwner.code]).toEqual([JSON.stringify(deployment), 0]);
+        expect(cookedOn(byOwner).pot).toBe(CURRENT);
+        expect(byOwner.stderr).toContain(odd.file);
+        expect(byOwner.stderr).toContain("its deployment");
+        const byPot = await tx(odd.dir, "--value", "0", "--pot", EARLIER);
+        expect(byPot.code).toBe(0);
+        expect(cookedOn(byPot).engine).toBe(ENGINE);
+        expect(byPot.stderr).toContain(odd.file);
+      }
+    });
   });
 
   describe("--owner, with a record that is not its file's", () => {
@@ -374,6 +395,18 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(cookedOn(run).pot).toBe(CURRENT);
       expect(run.stderr).toContain(file);
       expect(run.stderr).toContain("ignored");
+    });
+  });
+
+  describe("--owner, with no --value", () => {
+    it("refuses for the record first, as with a value; the missing value is said only with none", async () => {
+      const { dir, file } = storeWith();
+      const argv = ["tx", program, "--chain", "base", "--offline", "--owner", OWNER];
+      refused(await sauceIn(dir, ...argv), file);
+      // No record to refuse for: the value is what is missing, as ever.
+      const none = await sauceIn(undefined, ...argv);
+      expect(none.code).not.toBe(0);
+      expect(none.stderr).toContain("missing --value");
     });
   });
 });

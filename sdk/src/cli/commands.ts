@@ -860,8 +860,13 @@ export interface TxInput extends CookInput {
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
 export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
-  if (input.value === undefined && input.rpcUrl === undefined)
+  if (input.value === undefined && input.rpcUrl === undefined) {
+    // Offline the Kitchen's fee cannot be read, so a value must be given, and that is a usage error
+    // said before the program compiles. An owner whose earlier release's Pot only the Pot store
+    // records is told that first, since no value makes the cook buildable (`cook-pot.ts`).
+    refuseUnchosen(input.chain, await cookPotOf(input.chain, input.target));
     valueOf(undefined, undefined, input.chain);
+  }
   const { program, payload } = cookProgram(input, files);
   requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
