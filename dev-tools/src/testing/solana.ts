@@ -660,6 +660,8 @@ export async function forkSolana(
       engine,
       kitchen,
       unrecorded: source.unrecorded,
+      // The engine build the recording ran on: a replay loads that one, never a default.
+      engineBuild: source.engine,
     });
 
     return SolanaTestChain.start(chain, bank, { zeroFee: options.zeroFee ?? false });

@@ -225,7 +225,10 @@ No language change.
 - **Changed: a test account's Pot is the release's CREATE3 address**, as `v12PredictPot` gives it.
 - **Changed (Solana):** the kit's bank loads the packaged engine and Kitchen only when the cluster
   is shown to run them, and cooks a Pot on the engine that owns it; `SolanaCookResult.engine` says
-  which.
+  which. The engine has a mainnet and a devnet build, which read different chain ids, so a
+  recording now names the build it was made on and its digest, and a replay runs exactly that
+  build: a package whose build has another digest refuses the replay, and a recording from before
+  recordings named a build was made on mainnet's and replays on it.
 
 ## SDK 1.1.0 — 2026-11-20
 

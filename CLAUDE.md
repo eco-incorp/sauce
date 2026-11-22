@@ -2013,8 +2013,15 @@ from the cluster (`clusterSource`, a hundred to a request, a program's code from
 errors scrubbed of the URL), from a state file (`stateSource`), or nowhere (`local`). A Solana node
 serves accounts only as they are now, so a recording pins the slot it read at (the Clock, Rent and
 EpochSchedule sysvars go in its header) and has no `block` option. The file is gzipped
-`{ sauce: { version: 1, chain, clock, rent, epochSchedule }, accounts, programs }`, sorted, so the
-same reads record the same bytes, and must not mention the RPC. A replayed key the file lacks reads
+`{ sauce: { version: 2, chain, engine: { build, sha256 }, clock, rent, epochSchedule }, accounts,
+programs }`, sorted, so the same reads record the same bytes, and must not mention the RPC. The
+engine has two builds, mainnet's and devnet's, which compile in different chain ids
+(`ctx.chainId()`); a bank over a cluster loads the one that cluster serves, and a recording names it
+with its digest, so a replay loads exactly that packaged build and refuses a package whose build has
+another digest (`Bank.open`'s `engineBuild`). Version 1, written before a recording named a build,
+was made by banks that always ran the mainnet build, and `stateSource` reads it as mainnet's by its
+version: never a default, and a version 2 file that names no build is refused. A replayed key the
+file lacks reads
 as missing and is noted on the `CookReverted` (or a missing mint's error). LiteSVM has no snapshots:
 the bank snapshots every account it ever read or wrote, plus the clock, and puts back each key read
 since a snapshot as it was first read. Cooks (`solana-cook.ts`) are `sauce run`'s, rebuilt without
