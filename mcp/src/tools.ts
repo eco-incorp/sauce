@@ -2230,7 +2230,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
         "of every token the chain registers but its tokenized stocks; on Solana the Pot's " +
         "associated token account for each registered mint but the tokenized stocks, whether it " +
-        "exists, and its balance. On a preview chain the Pot " +
+        "exists, and its balance. Without an endpoint, where the Pot store records an earlier " +
+        "release's Pot for the owner and salt, nothing says which of the two is theirs: the result " +
+        "has `candidates` (this release's Pot and the earlier one, with the record's file, " +
+        "transaction and block hash), no `pot` and no deployment, and sauce_tx and " +
+        "sauce_signed_cook refuse until `pot` names one or an endpoint is given. On a preview chain the Pot " +
         "is predicted and read, and the deployment is left out: `refused` says why, and how to " +
         `request the chain. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
@@ -2245,7 +2249,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         rpcUrl: RPC_URL,
       },
       output: {
-        pot: z.string(),
+        pot: z.string().optional(),
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),

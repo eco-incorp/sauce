@@ -45,7 +45,7 @@ import {
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
-import { cookPotOf, type CookPot } from "./cook-pot.js";
+import { cookPotOf, refuseUnchosen, type CookPot } from "./cook-pot.js";
 import {
   awaitPot,
   connect,
@@ -866,6 +866,9 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
   const at = await cookPotOf(input.chain, input.target, client);
+  // Nothing is built, funded or deployed before this: an owner's earlier release's Pot that only the
+  // Pot store records is not chosen offline until the user names a Pot (`cook-pot.ts`).
+  refuseUnchosen(input.chain, at);
   const fee =
     client === undefined ? undefined : await requireCookContracts(client, input.chain, at.engine);
   const state =
@@ -1289,6 +1292,33 @@ export function potCommand(input: PotCommandInput, at?: CookPot): CommandOutput 
   }
   requirePotOwner(input.owner);
   const kitchen = kitchenAddress();
+  if (at?.stored !== undefined) {
+    // Two Pots, neither the owner's as far as anything offline can tell: both are shown with where
+    // the record came from, and nothing is built to send to either.
+    const { stored } = at;
+    const json = {
+      chainId: input.chain.id,
+      owner: input.owner,
+      salt: input.salt,
+      kitchen,
+      candidates: [
+        { pot: at.pot, release: familyRelease(at.family!), engine: at.engine },
+        {
+          pot: stored.pot,
+          release: familyRelease(stored.family),
+          engine: stored.engine,
+          record: {
+            path: stored.path,
+            ...stored.deployment,
+            sdk: stored.sdk,
+            recordedAt: stored.recordedAt,
+          },
+        },
+      ],
+    };
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [...at.notes] };
+  }
   const pot = v12PredictPot(input.owner, input.salt) as Address;
   if (at !== undefined && at.pot !== getAddress(pot)) {
     const json = {

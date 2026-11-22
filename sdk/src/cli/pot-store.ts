@@ -19,6 +19,11 @@
  * fork or another network with the same chain id, or the Pot was closed and created again (on
  * Solana), and neither is the store's to drop. Nothing is ever read, changed and written back.
  *
+ * A record says what its file says only where it is that file's own: `filesOf` and `listFiles` give
+ * each record with its path and whether it is `bound` (in its chain's directory, under its Pot's
+ * name). One filed under any other name was moved or edited, and a reader that takes a Pot's
+ * release or engine from the store takes it from a bound record alone (`cook-pot.ts`).
+ *
  * A record holds only public chain data: no key, password or endpoint. What a Pot holds, and
  * whether it is still there, is read from the chain every time. NODE-ONLY (the filesystem), and it
  * imports nothing at run time but Node's own modules, so a test runs it in processes of its own;
@@ -163,6 +168,39 @@ function asRecord(path: string, parsed: unknown): PotRecord {
   return record as unknown as PotRecord;
 }
 
+/** A record, with the file it was read from. */
+export interface StoredPot {
+  readonly record: PotRecord;
+  /** The file's path. */
+  readonly path: string;
+  /**
+   * Whether the file is the record's own: in its chain's directory (a cluster's after the chain id
+   * on Solana), named for its Pot's address, or for another deployment of it by that address and
+   * the deployment's transaction. A record filed under any other name was moved or edited, and says
+   * nothing of the Pot its file names.
+   */
+  readonly bound: boolean;
+}
+
+/** Whether `record`, read from the file `name` of the directory `folder`, is bound to it. */
+function filedAs(folder: string, name: string, record: PotRecord): boolean {
+  try {
+    if (folder !== chainDir(record.chainId, record.cluster)) return false;
+    const stem = stemOf(record.pot);
+
+    return (
+      name === `${stem}.json` ||
+      (record.deployment !== undefined && name === besideOf(stem, record.deployment.tx))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** What `list()` and `filesOf` say of a file they cannot read, which they leave out. */
+const unreadable = (error: unknown): string =>
+  `warning: ${error instanceof Error ? error.message : String(error)}; that Pot is left out`;
+
 export class PotStore {
   readonly dir: string;
 
@@ -254,33 +292,92 @@ export class PotStore {
   }
 
   /**
-   * Every record the store holds, oldest first, and a warning for each file it cannot read (not
-   * JSON, another schema, a field missing), which is left out.
+   * `recordsOf`, each record with the file it was read from and whether that is its own file
+   * ({@link StoredPot.bound}); a file it cannot read is a warning, not a throw, so a caller that
+   * only asks what a Pot is does not fail on a damaged one. The Pot's first file first, then each
+   * other deployment kept beside it, oldest first.
    */
-  list(): { readonly pots: PotRecord[]; readonly warnings: string[] } {
+  filesOf(
+    chainId: number,
+    pot: string,
+    cluster?: string,
+  ): { readonly files: StoredPot[]; readonly warnings: string[] } {
+    const folder = chainDir(chainId, cluster);
+    const stem = stemOf(pot);
+    let names: string[];
+    try {
+      names = readdirSync(join(this.dir, folder));
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return { files: [], warnings: [] };
+      throw error;
+    }
+    const warnings: string[] = [];
+    const read = (name: string): StoredPot | undefined => {
+      try {
+        return this.stored(folder, name);
+      } catch (error) {
+        warnings.push(unreadable(error));
+
+        return undefined;
+      }
+    };
+    const first = names.includes(`${stem}.json`) ? [read(`${stem}.json`)] : [];
+    const beside = names
+      .filter((name) => name.startsWith(`${stem}@`) && name.endsWith(".json"))
+      .map(read)
+      .filter((one): one is StoredPot => one !== undefined)
+      .sort((a, b) => a.record.recordedAt.localeCompare(b.record.recordedAt));
+
+    return {
+      files: [...first.filter((one): one is StoredPot => one !== undefined), ...beside],
+      warnings,
+    };
+  }
+
+  /** The record of the file `name` in the directory `folder`, with its path and whether it is bound. */
+  private stored(folder: string, name: string): StoredPot {
+    const path = join(this.dir, folder, name);
+    const record = this.read(path);
+
+    return { record, path, bound: filedAs(folder, name, record) };
+  }
+
+  /**
+   * Every file the store holds, each with its record, oldest first, and a warning for each file it
+   * cannot read (not JSON, another schema, a field missing), which is left out.
+   */
+  listFiles(): { readonly files: StoredPot[]; readonly warnings: string[] } {
     let chains: string[];
     try {
       chains = readdirSync(this.dir);
     } catch (error) {
-      if ((error as { code?: string }).code === "ENOENT") return { pots: [], warnings: [] };
+      if ((error as { code?: string }).code === "ENOENT") return { files: [], warnings: [] };
       throw error;
     }
-    const pots: PotRecord[] = [];
+    const files: StoredPot[] = [];
     const warnings: string[] = [];
     for (const chain of chains.filter((name) => CHAIN_DIR.test(name))) {
       for (const name of readdirSync(join(this.dir, chain))) {
         if (name.startsWith(".") || !name.endsWith(".json")) continue;
         try {
-          pots.push(this.read(join(this.dir, chain, name)));
+          files.push(this.stored(chain, name));
         } catch (error) {
-          warnings.push(
-            `warning: ${error instanceof Error ? error.message : String(error)}; that Pot is left out`,
-          );
+          warnings.push(unreadable(error));
         }
       }
     }
-    pots.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+    files.sort((a, b) => a.record.recordedAt.localeCompare(b.record.recordedAt));
 
-    return { pots, warnings };
+    return { files, warnings };
+  }
+
+  /**
+   * Every record the store holds, oldest first, and a warning for each file it cannot read (not
+   * JSON, another schema, a field missing), which is left out.
+   */
+  list(): { readonly pots: PotRecord[]; readonly warnings: string[] } {
+    const { files, warnings } = this.listFiles();
+
+    return { pots: files.map((one) => one.record), warnings };
   }
 }

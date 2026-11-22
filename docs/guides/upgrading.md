@@ -174,10 +174,19 @@ release deploys to.
   cooks on that Pot, through its own engine. The command says it is an earlier release's Pot, and
   that a Pot of the current release needs another salt (`--salt`). When several are deployed, the
   oldest wins. With none, the owner's Pot is the current release's, CREATE3.
-- **Offline, the Pot store decides.** The record of the Pot (`sauce pot import` adds one) gives its
-  engine and, for `--owner`, which Pot it is. With no record the command uses the CREATE3 Pot and
-  engine 1.4.0, and says an earlier Pot cannot be seen offline: a cook built for a 1.3.0 Pot on
-  engine 1.4.0 reverts whole and strands no funds, so pass an RPC endpoint, or import the Pot first.
+- **Offline, a record in the Pot store is not a Pot.** The store keeps what landed on a fork or
+  another network with the chain's id beside what landed on the chain, and a command that reads
+  no chain cannot tell them apart. With `--owner` or `--wallet` the Pot is the current release's,
+  CREATE3, and the command says an earlier Pot cannot be seen offline. Where the store records an
+  earlier release's Pot for that owner and salt, `sauce tx` (with `--fund` or `--value` too),
+  `sauce sign` (`--cancel` too), `sauce_tx` and `sauce_signed_cook` refuse before they build
+  anything: the message names the record's file, its transaction and block hash, and both
+  addresses. Name the Pot you mean with `--pot <address>`, or pass an RPC endpoint and the chain
+  decides. `sauce pot --offline` and `sauce_pot` show both Pots and build nothing. With `--pot`,
+  the engine comes from the store's record of that Pot when the record is its own (its chain and
+  Pot are the ones named, and it is filed under its Pot's name), else it is engine 1.4.0, with a
+  note: a cook built for a 1.3.0 Pot on engine 1.4.0 reverts whole and strands no funds, so pass
+  an RPC endpoint, or import the Pot first.
 - **An address 1.0.0 or 1.1.0 predicted that you funded and never deployed.** No Pot can be
   deployed there now: a kitchen-evm 1.4.0 Kitchen places a Pot elsewhere. What was sent to that
   address cannot be recovered with a Pot. Check the address against the Kitchen's `predictPot`

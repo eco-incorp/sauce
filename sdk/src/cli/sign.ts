@@ -42,7 +42,7 @@ import {
   type SignedCookExecution,
 } from "../evm/engine.js";
 import { CliError, UsageError } from "./args.js";
-import { cookPotOf } from "./cook-pot.js";
+import { cookPotOf, refuseUnchosen } from "./cook-pot.js";
 import {
   connect,
   kitchenFee,
@@ -202,14 +202,18 @@ export async function signCommand(
   // A wallet's policy, in two parts. What does not depend on the Pot (the release's gate, `chains`,
   // `native` and `tokens`) is held first, before anything is read: what a signed cook moves is not
   // measurable now. The Pot is held to `to` once it is known — the chain's word with an endpoint (an
-  // earlier release's Pot of the owner, where there is one), else the Pot store's — so a policy that
-  // names only that Pot is not refused for another one guessed before it was found.
+  // earlier release's Pot of the owner, where there is one), else the installed release's, or the
+  // one `--pot` names — so a policy that names only that Pot is not refused for another one guessed
+  // before it was found.
   const guard = signer === undefined ? undefined : guardOf(signer.address);
   guard?.preflightSignedCook(chain);
 
   // The Pot, the fee and the time, where the command reaches the chain.
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
   const at = await cookPotOf(chain, target, client);
+  // Before the policy is asked about a Pot, or anything is built or signed for one: an owner's
+  // earlier release's Pot that only the Pot store records is not chosen offline (`cook-pot.ts`).
+  refuseUnchosen(chain, at);
   const pot = at.pot;
   guard?.authorizeSignedCook(chain, pot);
   let owner = named;
@@ -429,9 +433,12 @@ export async function cancelCommand(
         "signer to print it unsigned instead",
     );
   }
-  // The Pot the owner has, told from the chain where there is an endpoint and else from the Pot store.
+  // The Pot the owner has, told from the chain where there is an endpoint, else the installed
+  // release's (an earlier release's Pot only the Pot store records is refused below).
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
-  const pot = (await cookPotOf(chain, target, client)).pot;
+  const at = await cookPotOf(chain, target, client);
+  refuseUnchosen(chain, at);
+  const pot = at.pot;
   const nonces = [...new Set(input.nonces)];
   const transactions = cookNonceMasks(nonces).map(({ word, mask }) => {
     const covered = nonces.filter((nonce) => nonce >> 8n === word);

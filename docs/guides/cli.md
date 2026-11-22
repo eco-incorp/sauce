@@ -201,7 +201,10 @@ because a provider's URL often carries a key.
 The built-in endpoints are one to three keyless ones per chain, each checked to serve the chain and
 state overrides. When one cannot be reached, refuses, rate-limits or fails, the next takes over.
 Kava, ZetaChain and Evmos have none. `--offline` reads no chain at all: `sauce tx` then needs
-`--value`, and `sauce pot` only predicts.
+`--value`, and `sauce pot` only predicts. `--owner` then means the current release's Pot, and where
+the Pot store records an earlier release's Pot for that owner and salt, `sauce tx` and `sauce sign`
+build nothing until `--pot <address>` names a Pot: offline, nothing tells a record of a fork's Pot
+from the chain's ([Troubleshooting](troubleshooting.md#the-pot-store-records-an-earlier-releases-pot-for-this-owner-and-salt)).
 
 ## Keep the command current
 

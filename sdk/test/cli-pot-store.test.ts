@@ -206,6 +206,70 @@ describe("the Pot store", () => {
     ]);
   });
 
+  it("tells a record from the file it is read from: bound only to its chain's directory and its Pot's name", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    const first = join(dir, "8453", `${RECORD.pot.toLowerCase()}.json`);
+    // Another deployment of the Pot, kept beside the first by its transaction.
+    const again: PotRecord = {
+      ...RECORD,
+      deployment: { ...RECORD.deployment!, tx: `0x${"ef".repeat(32)}`, block: "99" },
+      recordedAt: "2026-10-16T00:00:00.000Z",
+    };
+    store.save(again);
+    const beside = join(dir, "8453", `${RECORD.pot.toLowerCase()}@0x${"ef".repeat(32)}.json`);
+    expect(store.filesOf(8453, RECORD.pot)).toEqual({
+      files: [
+        { record: RECORD, path: first, bound: true },
+        { record: again, path: beside, bound: true },
+      ],
+      warnings: [],
+    });
+    expect(store.filesOf(1, RECORD.pot)).toEqual({ files: [], warnings: [] });
+
+    // A record under another Pot's name, and one under another chain's directory: not bound.
+    const elsewhere = "0x00000000000000000000000000000000000ba5e0";
+    writeFileSync(join(dir, "8453", `${elsewhere}.json`), JSON.stringify(RECORD));
+    mkdirSync(join(dir, "1"), { recursive: true });
+    writeFileSync(join(dir, "1", `${RECORD.pot.toLowerCase()}.json`), JSON.stringify(RECORD));
+    // And a file beside the first, named for a transaction its record does not have.
+    const wrongTx = join(dir, "8453", `${RECORD.pot.toLowerCase()}@0x${"aa".repeat(32)}.json`);
+    writeFileSync(wrongTx, JSON.stringify({ ...again, recordedAt: "2026-10-17T00:00:00.000Z" }));
+    const movedName = store.filesOf(8453, elsewhere);
+    expect(movedName.files).toEqual([
+      { record: RECORD, path: join(dir, "8453", `${elsewhere}.json`), bound: false },
+    ]);
+    expect(store.filesOf(1, RECORD.pot).files).toEqual([
+      { record: RECORD, path: join(dir, "1", `${RECORD.pot.toLowerCase()}.json`), bound: false },
+    ]);
+    expect(store.filesOf(8453, RECORD.pot).files.map((one) => [one.path, one.bound])).toEqual([
+      [first, true],
+      [beside, true],
+      [wrongTx, false],
+    ]);
+
+    // A file it cannot read is a warning, not a throw, and the rest are read.
+    const unreadable = join(dir, "8453", `${RECORD.pot.toLowerCase()}@0x${"bb".repeat(32)}.json`);
+    writeFileSync(unreadable, "not json");
+    const listed = store.filesOf(8453, RECORD.pot);
+    expect(listed.files.map((one) => one.path)).toEqual([first, beside, wrongTx]);
+    expect(listed.warnings).toEqual([expect.stringContaining(`${unreadable} is not JSON`)]);
+    // The whole store, each file with its own say; `list()` is what it was.
+    const all = store.listFiles();
+    expect(all.files.map((one) => one.path).sort()).toEqual(
+      [
+        first,
+        beside,
+        wrongTx,
+        join(dir, "8453", `${elsewhere}.json`),
+        join(dir, "1", `${RECORD.pot.toLowerCase()}.json`),
+      ].sort(),
+    );
+    expect(all.files.filter((one) => !one.bound)).toHaveLength(3);
+    expect(all.warnings).toHaveLength(1);
+    expect(store.list().pots).toEqual(all.files.map((one) => one.record));
+  });
+
   it("lets exactly one of two processes record a Pot, and both see the same file", async () => {
     for (let round = 0; round < 5; round++) {
       const at = join(dir, `round-${round}`);

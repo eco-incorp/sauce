@@ -9,7 +9,10 @@
  *   - `sauce tx`, `simulate` and `run` on a 1.3.0 Pot named by address name its own engine;
  *   - `--owner` means the owner's deployed 1.3.0 Pot at that salt, the oldest release's, even once
  *     a 1.4.0 Pot is deployed there too, and the 1.4.0 Pot for an owner with none (D1);
- *   - offline, the Pot store's record decides, and without one the 1.4.0 engine with a note (D2);
+ *   - offline, a Pot named by address takes its engine from the Pot store's record of that Pot, else
+ *     engine 1.4.0 with a note (D2); an owner's Pot is the 1.4.0 one, and a record of an earlier
+ *     Pot for the owner is refused until the user names a Pot (`cli-pot-offline.test.ts` holds
+ *     the rule on its own, with no chain); online the chain decides whatever the store holds;
  *   - a wallet whose policy names only its 1.3.0 Pot signs for it, before and without anything being
  *     read that could refuse it for the Pot an offline guess would have named first.
  *
@@ -30,6 +33,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { PotStore } from "../src/cli/pot-store.js";
+import { evmRelease } from "../src/cli/pots.js";
 import { WalletStore } from "../src/cli/wallets.js";
 import { v12EngineAddress, v12KitchenAddress } from "../src/deployments/index.js";
 import { v12PredictPot } from "../src/deployments/pot.js";
@@ -238,7 +242,7 @@ describeUpgraded("each Pot cooks on its own engine", () => {
         ...argv,
       );
 
-    it("the store record decides, else the 1.4.0 engine with a note", async () => {
+    it("a record names the engine of the Pot it is of, and an owner's Pot only with a chain to say; else the 1.4.0 engine", async () => {
       const recorded = join(work, "recorded");
       const empty = join(work, "empty");
       const { pot, engine: legacyEngine } = local.legacy!;
@@ -258,12 +262,29 @@ describeUpgraded("each Pot cooks on its own engine", () => {
       expect(byPot.code).toBe(0);
       expect(engineOf((JSON.parse(byPot.stdout) as Tx).data)).toBe(getAddress(legacyEngine));
       expect(byPot.stderr).toContain("the Pot store records");
+      // The record is no evidence the Pot is on this chain (the store keeps fork deployments too),
+      // so --owner builds nothing for it, nor for the CREATE3 Pot: the user names one, or gives an
+      // endpoint (cook-pot.ts#refuseUnchosen).
       const byOwner = await offline(recorded, "--owner", owner, "--salt-hex", POT_SALT);
-      expect(byOwner.code).toBe(0);
-      const found = JSON.parse(byOwner.stdout) as Tx;
-      expect(getAddress(found.to)).toBe(pot);
-      expect(engineOf(found.data)).toBe(getAddress(legacyEngine));
-      expect(byOwner.stderr).toContain("(from the Pot store)");
+      expect(byOwner.code).toBe(1);
+      expect(byOwner.stdout).toBe("");
+      expect(byOwner.stderr).toContain(join(recorded, "8453", `${pot.toLowerCase()}.json`));
+      expect(byOwner.stderr).toContain(pot);
+      expect(byOwner.stderr).toContain(getAddress(v12PredictPot(owner, POT_SALT)));
+      expect(byOwner.stderr).toContain(
+        "Nothing offline can tell whether that record landed on base itself or on a fork",
+      );
+      // Online, with that store, the chain decides, as ever: the owner's deployed 1.3.0 Pot.
+      const onChain = await sauceWith(
+        { potsDir: recorded },
+        ...["tx", program, "--chain", "base", "--owner", owner, "--salt-hex", POT_SALT],
+        ...rpc(),
+      );
+      expect(onChain.code).toBe(0);
+      const chosen = JSON.parse(onChain.stdout) as Tx;
+      expect(getAddress(chosen.to)).toBe(pot);
+      expect(engineOf(chosen.data)).toBe(getAddress(legacyEngine));
+      expect(onChain.stderr).toContain("needs another salt");
 
       // Not recorded: the 1.4.0 engine, and the note says what an offline cook cannot know.
       const unknown = await offline(empty, "--pot", pot);
@@ -282,6 +303,57 @@ describeUpgraded("each Pot cooks on its own engine", () => {
         "Offline, this is the current release's Pot for this owner and salt (CREATE3, kitchen-evm 1.4.0)",
       );
     }, 180_000);
+
+    it("a record of a Pot that is not on this chain changes nothing online: the chain decides (D1)", async () => {
+      // What SDK 1.1.0 recorded for a deployment that landed on a fork with this chain's id.
+      const fresh = privateKeyToAccount(generatePrivateKey()).address;
+      const earlier = getAddress(
+        v12PredictPot(fresh, POT_SALT, { compiler: legacyRow("evm").compiler }),
+      );
+      expect(await local.publicClient.getCode({ address: earlier })).toBeUndefined();
+      const forkOnly = join(work, "fork-only");
+      new PotStore(forkOnly).save({
+        schema: "sauce.pot/1",
+        chain: "base",
+        chainId: local.chain.id,
+        pot: earlier,
+        owner: fresh,
+        salt: POT_SALT,
+        kind: "private",
+        kitchen,
+        potInitCodeHash: legacyRow("evm")["kitchen-evm"].potInitCodeHash!,
+        engine: getAddress(local.legacy!.engine),
+        release: evmRelease(legacyRow("evm")),
+        sdk: "1.1.0",
+        origin: "deployed",
+        deployment: {
+          tx: `0x${"11".repeat(32)}`,
+          block: "39000000",
+          blockHash: `0x${"22".repeat(32)}`,
+          from: fresh,
+        },
+        recordedAt: "2026-11-19T10:00:00.000Z",
+      });
+      // Offline nothing says whether the record is the chain's: nothing is built.
+      const refused = await offline(forkOnly, "--owner", fresh, "--salt-hex", POT_SALT);
+      expect(refused.code).toBe(1);
+      expect(refused.stdout).toBe("");
+      expect(refused.stderr).toContain(earlier);
+      // Online the chain says no Pot is there, so the owner's Pot is the 1.4.0 one, with its
+      // deployment planned first and the cook on engine 1.4.0, and the record is not mentioned.
+      const online = await sauceWith(
+        { potsDir: forkOnly },
+        ...["tx", program, "--chain", "base", "--owner", fresh, "--salt-hex", POT_SALT],
+        ...rpc(),
+      );
+      expect(online.code).toBe(0);
+      const plan = JSON.parse(online.stdout) as Plan;
+      expect(plan.pot).toBe(getAddress(v12PredictPot(fresh, POT_SALT)));
+      expect(plan.transactions).toHaveLength(2);
+      expect(engineOf(plan.transactions.at(-1)!.data)).toBe(engine);
+      expect(online.stderr).not.toContain("needs another salt");
+      expect(online.stderr).not.toContain(earlier);
+    }, 120_000);
   });
 
   describe("a wallet whose policy names only its 1.3.0 Pot", () => {
@@ -289,6 +361,7 @@ describeUpgraded("each Pot cooks on its own engine", () => {
       writeFileSync(join(walletsDir(), "agent.policy.json"), JSON.stringify(fields), {
         mode: 0o600,
       });
+    /** `sauce sign` from the wallet, the Pot its owner's at POT_SALT unless the flags name one. */
     const signing = (pots: string, ...flags: string[]): Promise<Run> =>
       sauceWith(
         {
@@ -297,7 +370,8 @@ describeUpgraded("each Pot cooks on its own engine", () => {
           readEnv: (name) => (name === "SAUCE_TEST_SIGN_PW" ? PASSWORD : undefined),
         },
         ...["sign", program, "--chain", "base", "--wallet", "agent"],
-        ...["--password-env", "SAUCE_TEST_SIGN_PW", "--salt-hex", POT_SALT, "--max-fee", "1"],
+        ...["--password-env", "SAUCE_TEST_SIGN_PW", "--max-fee", "1"],
+        ...(flags.includes("--pot") ? [] : ["--salt-hex", POT_SALT]),
         ...["--json", ...flags],
       );
 
@@ -350,14 +424,23 @@ describeUpgraded("each Pot cooks on its own engine", () => {
         `to allows 1 address(es), and this cook runs on Pot ${getAddress(v12PredictPot(agent, POT_SALT))}`,
       );
 
-      // Recorded, offline finds it too.
+      // Recorded, offline still cannot tell the record from a fork's: the wallet is the owner, so
+      // nothing is signed for either Pot, and the message names the record...
       const imported = await sauceWith(
         { potsDir: empty },
         ...["pot", "import", "--pot", pot, "--chain", "base"],
         ...rpc(),
       );
       expect(imported.code).toBe(0);
-      const known = await signing(empty, "--offline");
+      const unchosen = await signing(empty, "--offline");
+      expect(unchosen.code).toBe(1);
+      expect(unchosen.stdout).toBe("");
+      expect(unchosen.stderr).toContain(join(empty, "8453", `${pot.toLowerCase()}.json`));
+      expect(unchosen.stderr).toContain(
+        "Nothing offline can tell whether that record landed on base itself or on a fork",
+      );
+      // ...until the user names the Pot: its recorded engine, and the policy names that Pot.
+      const known = await signing(empty, "--offline", "--pot", pot);
       expect(known.code).toBe(0);
       const offline = JSON.parse(known.stdout) as { pot: Address; engine: Address };
       expect(offline.pot).toBe(pot);

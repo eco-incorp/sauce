@@ -169,13 +169,20 @@ No language change.
   it is an earlier release's Pot and that a Pot of the current release needs another salt. When
   several are deployed, the oldest release's wins: anyone may deploy a Pot for any owner, so a
   newer one deployed by someone else never displaces a funded older one. With no such Pot, the
-  owner's Pot is the current release's CREATE3 one. Offline, the Pot store's record of that
-  chain, owner and salt decides, else the CREATE3 Pot, with a note that an earlier Pot cannot be
-  seen offline.
+  owner's Pot is the current release's CREATE3 one. Offline the chain cannot say, and the Pot
+  store is no stand-in for it, since it also keeps Pots that landed on a fork or another network
+  with the chain's id: the owner's Pot is the CREATE3 one, with a note that an earlier Pot cannot
+  be seen offline. Where the store records an earlier release's Pot for that chain, owner and
+  salt, `sauce tx` (with `--fund` or `--value` too), `sauce sign` (`--cancel` too) and the MCP
+  `sauce_tx` and `sauce_signed_cook` refuse before they build anything, naming the record's
+  file, its transaction and block hash and both addresses, until `--pot <address>` names one or
+  an endpoint is given; `sauce pot --offline` and `sauce_pot` show both and build nothing.
 - **Changed (EVM): `--pot <address>` names its own engine.** Online, the engine is the one of the
   release that made the Pot, and the command says so. Offline, it comes from the Pot store's
-  record of that Pot; with no record it is engine 1.4.0, with a note. A cook on the wrong engine
-  reverts whole, so no funds are stranded.
+  record of that Pot when the record is the Pot's own (its chain and Pot are the ones named, and
+  it is filed under its Pot's name; any other record is ignored, with a note naming its file, and
+  a record that cannot be read is a note too); with no record it is engine 1.4.0, with a note. A
+  cook on the wrong engine reverts whole, so no funds are stranded.
 - **Changed: `sauce pot` and `sauce pot list` know every release.** `sauce pot` says which engine
   cooks the Pot and lists an owner's deployed Pot of an earlier release; `sauce pot import`
   records a kitchen-evm 1.4.0 Pot, which it refused before ("no release this sauce knows minted

@@ -1380,8 +1380,19 @@ read and written back; it imports only Node's modules, so `cli-pot-store.test.ts
 child processes. Which Pot a cook names, and the engine it cooks on, is `cook-pot.ts`'s: a Pot given
 by address cooks on the engine of the release that made it; an owner (`--owner`, `--wallet`) means
 the owner's deployed Pot of an earlier release whose engine runs this SDK's programs (`alsoRunsOn`;
-the oldest wins), else the installed release's CREATE3 Pot; offline the Pot store's record decides,
-else the CREATE3 Pot and engine 1.4.0, with a note. A Pot's identity (the release families, an
+the oldest wins), else the installed release's CREATE3 Pot. Offline the chain cannot say, and the
+Pot store is no stand-in for it: it also keeps what landed on a fork or another network with the
+chain's id (`PotRecord.deployment.blockHash` is what tells them apart, and nothing offline can
+check it). So an owner's Pot is the CREATE3 one, with a note, and where the store records an
+earlier release's Pot for the owner and salt (`CookPot.stored`) nothing is built for either until
+the user names one (`--pot`) or gives an endpoint: `cook-pot.ts#refuseUnchosen` runs right after
+`cookPotOf` in `txCommand` and in both of `sign.ts`'s commands, before any `--fund` transfer, the
+policy or a signature, and the MCP tools `sauce_tx` and `sauce_signed_cook` get it by calling them;
+`sauce pot --offline` and `sauce_pot` show both Pots and build nothing. A Pot given by address
+takes its engine from a record only when the record is its own: its chain and Pot are the ones
+named and `PotStore#filesOf` says it is `bound` (filed in its chain's directory under its Pot's
+name); any other record is ignored with a note naming its file, a record that cannot be read is a
+note, and with none the engine is 1.4.0, with a note. A Pot's identity (the release families, an
 address, which release made a Pot) is `deployments/pot.ts`'s alone, browser-safe and shared with
 `engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads. A
 Solana Pot cooks on the engine that owns its account (`solana.ts#svmPotEngine`, each engine held to

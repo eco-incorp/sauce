@@ -2139,6 +2139,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one",
       "approval, or nothing happens.",
       "",
+      "Offline (--offline, or no endpoint) --owner means this release's Pot, and an earlier release's",
+      "cannot be seen. The Pot store also keeps Pots that landed on a fork, so where it records an",
+      "earlier release's Pot for the owner and salt, nothing is built, naming the record, until",
+      "--pot <address> names a Pot or an endpoint lets the chain say.",
+      "",
       "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },",
       "the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via",
       "engine, the engine's own paid cook, with no Pot. A Pot not created yet is created by the",
@@ -2230,7 +2235,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any",
       "account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot",
       "and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the",
-      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing.",
+      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing: --owner",
+      "then means this release's Pot, and where the Pot store records an earlier release's Pot for",
+      "the owner and salt (it also keeps Pots that landed on a fork) nothing is signed or built",
+      "until --pot <address> names a Pot or an endpoint lets the chain say.",
       "",
       "--cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce",
       "word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a",
@@ -2602,6 +2610,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
       "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
       "",
+      "With --offline (or no endpoint) it only predicts: this release's Pot. The Pot store also",
+      "keeps Pots that landed on a fork or another network with the chain's id, so where it",
+      "records an earlier release's Pot for the owner and salt, nothing says which is the owner's:",
+      "both are printed under `candidates`, each with where it came from (the record's file,",
+      "transaction and block hash), with no `pot` and no deployment to send.",
+      "",
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
       "the signer is the owner.",
@@ -2690,7 +2704,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         };
 
         if (rpcUrl !== undefined) return potStatusCommand({ ...target, rpcUrl });
-        // Offline, the Pot store is all that can say the owner's Pot is an earlier release's.
+        // Offline the Pot store can only say an earlier release's Pot may be the owner's: both Pots
+        // are shown then (`CookPot.stored`), and nothing is built for either.
         const at = await cookPotOf(chain, target);
         const predicted = potCommand(target, at);
 

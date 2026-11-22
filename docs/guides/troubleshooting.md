@@ -202,6 +202,26 @@ has code, but is not a Pot`.
 **Fix.** If the message says the Kitchen is newer than this SDK, upgrade the package. Otherwise
 check the Pot you named with `--pot`, or the `--owner` and `--salt` that give it.
 
+### `the Pot store records an earlier release's Pot for this owner and salt`
+
+```text
+sauce tx: the Pot store records an earlier release's Pot for this owner and salt: /home/you/.sauce/pots/8453/0x7e….json (tx 0x…, block 39000000, block hash 0x…; recorded by @eco-incorp/sauce 1.1.0 on …) names 0x7e… (kitchen-evm 1.3.0, engine 0x0F…), and this SDK's Pot for them is 0x8a… (kitchen-evm 1.4.0, engine 0x98…). Nothing offline can tell whether that record landed on base itself or on a fork or another network with its chain id, so nothing is built for either Pot: pass --pot <address> to name one, or an RPC endpoint to read the chain.
+```
+
+**Cause.** The command read no chain (`--offline`, or no endpoint), and which Pot an owner has is
+told from the chain. The Pot store records every Pot a command on this machine deployed, and that
+includes one that landed on a fork or another network with the chain's id, which nothing offline
+tells from the chain's own. A cook, a transfer or a signature built for the wrong one of the two
+Pots is value, or a signature, at an address the current release's Kitchen cannot deploy a Pot
+at for that owner. So `sauce tx` (with `--fund` or `--value` too) and `sauce sign` (`--cancel`
+too), and the MCP tools `sauce_tx` and `sauce_signed_cook`, build nothing for either.
+
+**Fix.** Pass an RPC endpoint, and the chain decides: the owner's deployed earlier release's Pot
+if there is one, else the current release's. Or name the Pot you mean with `--pot <address>`: its
+engine then comes from the record when the record is that Pot's own, else it is the current
+release's, with a note. `sauce pot --offline` prints both Pots with the record's file,
+transaction and block hash, and builds nothing.
+
 ## The command cannot reach the chain
 
 ### `missing --rpc-url <url> (or --config <file>)`
