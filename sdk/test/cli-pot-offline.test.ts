@@ -20,6 +20,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
@@ -407,6 +408,32 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       const none = await sauceIn(undefined, ...argv);
       expect(none.code).not.toBe(0);
       expect(none.stderr).toContain("missing --value");
+    });
+  });
+
+  describe("sauce sign --cancel from a signer", () => {
+    it("refuses for the record first, as for an owner; the missing endpoint is said only with none", async () => {
+      const key = generatePrivateKey();
+      const mine = privateKeyToAccount(key).address;
+      const theirs = getAddress(
+        v12PredictPot(mine, DEFAULT_POT_SALT, { compiler: LEGACY.compiler }),
+      );
+      const { dir, file } = storeWith({ ...RECORD, pot: theirs, owner: mine });
+      const run = await cancel(dir, "--private-key", key);
+      expect(run.code).toBe(1);
+      expect(run.stdout).toBe("");
+      for (const part of [
+        file,
+        theirs,
+        getAddress(v12PredictPot(mine, DEFAULT_POT_SALT)),
+        "Nothing offline can tell whether that record landed on base itself or on a fork",
+      ]) {
+        expect(run.stderr).toContain(part);
+      }
+      // No record to refuse for: sending needs an endpoint, as ever.
+      const none = await cancel(undefined, "--private-key", key);
+      expect(none.code).not.toBe(0);
+      expect(none.stderr).toContain("sending the cancellation needs an RPC endpoint");
     });
   });
 });

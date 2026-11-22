@@ -427,17 +427,19 @@ export async function cancelCommand(
       `${signer.address} does not own the Pot: only its owner, ${named}, cancels its nonces`,
     );
   }
+  // The Pot the owner has, told from the chain where there is an endpoint, else the installed
+  // release's (an earlier release's Pot only the Pot store records is refused below).
+  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
+  const at = await cookPotOf(chain, target, client);
+  refuseUnchosen(chain, at);
+  // Sent from a signer, the cancellation needs an endpoint: said after the Pot is chosen, so an owner
+  // whose earlier release's Pot only the Pot store records is told that first, signer or not.
   if (signer !== undefined && input.rpcUrl === undefined) {
     throw new UsageError(
       "sending the cancellation needs an RPC endpoint (--rpc-url or --config): leave out the " +
         "signer to print it unsigned instead",
     );
   }
-  // The Pot the owner has, told from the chain where there is an endpoint, else the installed
-  // release's (an earlier release's Pot only the Pot store records is refused below).
-  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
-  const at = await cookPotOf(chain, target, client);
-  refuseUnchosen(chain, at);
   const pot = at.pot;
   const nonces = [...new Set(input.nonces)];
   const transactions = cookNonceMasks(nonces).map(({ word, mask }) => {
