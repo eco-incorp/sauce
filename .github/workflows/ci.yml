@@ -327,7 +327,17 @@ jobs:
   ci:
     name: Build & Test
     if: always()
-    needs: [checks, sdk-e2e, sdk-unit, actions-mainnet, mcp-and-dev-tools, packed, legacy-evm, legacy-svm]
+    needs:
+      [
+        checks,
+        sdk-e2e,
+        sdk-unit,
+        actions-mainnet,
+        mcp-and-dev-tools,
+        packed,
+        legacy-evm,
+        legacy-svm,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Every job passed
