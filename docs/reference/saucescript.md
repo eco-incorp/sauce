@@ -331,10 +331,10 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances; a
     program compiled for a chain names it `pot`
   - On SVM: the program id of the engine running the cook. The engine that created a Pot owns its
-    account, and a Pot an earlier engine created can be cooked by the installed one, so
-    `Account(pot.address).owner == ctx.self()` holds only for a Pot the cooking engine created, and
-    for any other account assigned to that engine: it does not prove an account is the Pot;
-    re-deriving the Pot's address does
+    account; a Pot an engine this SDK pairs with the compiler created is cooked by that engine, and
+    one an older engine created by the installed one, so `Account(pot.address).owner == ctx.self()`
+    holds only for a Pot the cooking engine created, and for any other account assigned to that
+    engine: it does not prove an account is the Pot; re-deriving the Pot's address does
   - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id

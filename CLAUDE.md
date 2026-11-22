@@ -1397,10 +1397,17 @@ name); any other record is ignored with a note naming its file, a record that ca
 note, and with none the engine is 1.4.0, with a note. A Pot's identity (the release families, an
 address, which release made a Pot) is `deployments/pot.ts`'s alone, browser-safe and shared with
 `engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads. A
-Solana Pot cooks on the engine that owns its account (`solana.ts#svmPotEngine`, each engine held to
-its release's digest by `solana-release.ts`), told by `svm/engine-release.ts#potAccountState`,
-which the testing kit shares: an address with no account, or only lamports (the System Program's,
-no data), is a Pot no engine owns yet, and is cooked as it is on the installed engine with no
+Solana Pot cooks on the engine that owns its account where that engine runs this compiler's output
+(the installed release's, and a release `alsoRunsOn` lists: v12-svm 1.4.0's today), and on the
+installed engine where it does not (v12-svm 1.2.0's and 1.3.0's, which no row pairs with the
+compiler), as SDKs before this one cooked every Pot: the Kitchen binds no engine to a Pot, but inside
+the program `ctx.self()` is the engine that runs it, so a check that the Pot's owner is `ctx.self()`
+fails there, and so does a write to the Pot's storage, which only its owner's engine may make
+(`solana.ts#svmPotEngine`, each engine held to its release's digest by `solana-release.ts`; the rule
+is `svm/engine-release.ts#potCookEngine`, the one the plan and the testing kit take it from). A Pot's
+account is told by `svm/engine-release.ts#potAccountState`, which the testing kit shares: an address
+with no account, or only lamports (the System Program's, no data), is a Pot no engine owns yet, and
+is cooked as it is on the installed engine with no
 `create_pot`: the Kitchen signs for a Pot that need not exist, a program that pays SOL out of the
 Pot through the System Program needs it so (that transfer takes no `from` that carries data), and
 anyone can put an address in that state by sending it lamports, so refusing it would let a
@@ -1419,7 +1426,7 @@ Kitchen pins no engine to a Pot and signs for it into whatever program a cook na
 either release engine cooks through the other and the chain refuses neither (probe S2, pinned in
 `svm/engine-binding.e2e.test.ts`), unlike EVM, where an engine refuses another release's Pots. So
 a cook's engine comes from the Pot's own owner program (`potCookEngine`); a plan's cursor carries
-one only if `decodeCursor` finds it in the table and running this compiler; `potIsMissing` holds
+one only if `decodeCursor` finds it in the table and running this compiler; `potNow` holds
 it against the Pot at every step, a Pot no engine owns yet included (the installed engine's); and
 a path that let outside data choose it would hand that program the Pot's authority over every
 account in the transaction. A Pot's store key is its chain id AND, on Solana, its

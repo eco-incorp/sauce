@@ -403,7 +403,7 @@ export function decodeCursor(text: string): SvmPlan {
   // The engine a cook names signs for the Pot into whatever program it is, and a cursor carries it in
   // from outside: only an engine the release table names whose programs this SDK's run passes (the
   // installed release's, and an earlier one the installed row's `alsoRunsOn` lists). Whether that
-  // engine is the Pot's to cook on is held where the plan is used (`potIsMissing`), against the Pot.
+  // engine is the Pot's to cook on is held where the plan is used (`potNow`), against the Pot.
   const engineKey = (value: unknown): Address => {
     const program = key(value, "engine");
     if (!svmEngineReleases().has(program)) {

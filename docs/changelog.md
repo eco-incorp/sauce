@@ -133,11 +133,12 @@ EVM chain with the Kitchen switched to kitchen-evm 1.4.0, which places new Pots 
 1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: kitchen-evm
 1.4.0 and engine 1.4.0 on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
 keeps working: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0; a Solana Pot of v12-svm 1.4.0 cooks
-on 1.4.0, a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 (the only created Pots on
-mainnet-beta are 1.3.0's) cooks on the installed engine, as earlier SDKs cooked every Pot: inside
-the program `ctx.self()` is that engine, so a check that the Pot's owner is `ctx.self()` fails, and
-so does a write to the Pot's storage. If you funded an address that 1.0.0 or 1.1.0 predicted and no
-Pot was ever deployed there, see [Upgrading](guides/upgrading.md#moving-to-sdk-120).
+on 1.4.0, a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 (on 2026-11-22, at slot
+472365757, the only created Pots on mainnet-beta were 1.3.0's) cooks on the installed engine, as
+earlier SDKs cooked every Pot: inside the program `ctx.self()` is that engine, so a check that the
+Pot's owner is `ctx.self()` fails, and so does a write to the Pot's storage. If you funded an
+address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
+[Upgrading](guides/upgrading.md#moving-to-sdk-120).
 
 ### SauceScript
 
@@ -200,15 +201,20 @@ No language change.
 - **Changed (EVM): a wallet whose policy names only its earlier-release Pot signs for it.**
   `sauce sign` checks the policy's gate, chains and limits before it reads anything, and the
   policy's `to` once it knows which Pot signs, so a Pot guessed first is no longer refused.
-- **Changed (Solana): a cook goes to the engine that owns its Pot.** New Pots are created under
-  v12-svm 1.4.1. The local copy a simulation runs in loads each program with the code its cluster
-  is shown to run, held to the release's digest, and refuses rather than run other code.
-- **Solana: which Pot addresses are cooked.** A Pot an engine owns cooks on that engine. An address
-  with no account at it, or only lamports (the System Program's, no data), is a Pot no engine owns
-  yet: it is cooked as it is, on the installed engine, and nothing creates it, as SDK 1.1.0 did.
-  `sauce pot` and the MCP `sauce_pot` report it as not created, with a note, and
-  `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An account any
-  other program owns is no Pot, and is refused.
+- **Changed (Solana): a cook goes to the engine that owns its Pot, where that engine runs this
+  compiler's output.** New Pots are created under v12-svm 1.4.1. A Pot of v12-svm 1.2.0 or 1.3.0,
+  whose engines do not run it, is cooked on the installed engine, as below. The local copy a
+  simulation runs in loads each program with the code its cluster is shown to run, held to the
+  release's digest, and refuses rather than run other code.
+- **Solana: which Pot addresses are cooked.** A Pot owned by an engine that runs this compiler's
+  output (v12-svm 1.4.1, and 1.4.0 through `alsoRunsOn`) cooks on that engine. A Pot of v12-svm 1.2.0
+  or 1.3.0 cooks on the installed engine, where `ctx.self()` is not the Pot's owner, a check of the
+  Pot's account owner against it fails and the Pot's storage cannot be written; the command says so
+  with each cook. An address with no account at it, or only lamports (the System Program's, no
+  data), is a Pot no engine owns yet: it is cooked as it is, on the installed engine, and nothing
+  creates it, as SDK 1.1.0 did. `sauce pot` and the MCP `sauce_pot` report it as not created, with
+  a note, and `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An
+  account any other program owns is no Pot, and is refused.
 - **Solana: a cook that stops, and a plan resumed from its cursor, say what the Pot is.** The note
   on a Pot of v12-svm 1.2.0 or 1.3.0 (cooked on the installed engine, so a check that the Pot's
   owner is `ctx.self()` fails) and on an address that holds only lamports came with the result of
@@ -259,8 +265,9 @@ No language change.
   where `v12PredictPot` says) and deploys nothing over it.
 - **Changed: a test account's Pot is the release's CREATE3 address**, as `v12PredictPot` gives it.
 - **Changed (Solana):** the kit's bank loads the packaged engine and Kitchen only when the cluster
-  is shown to run them, and cooks a Pot on the engine that owns it; `SolanaCookResult.engine` says
-  which. The engine has a mainnet and a devnet build, which read different chain ids, so a
+  is shown to run them, and cooks a Pot on the engine that owns it where that engine runs this
+  compiler's output, else on the installed engine, as the command does; `SolanaCookResult.engine`
+  says which. The engine has a mainnet and a devnet build, which read different chain ids, so a
   recording now names the build it was made on and its digest, and a replay runs exactly that
   build: a package whose build has another digest refuses the replay, and a recording from before
   recordings named a build was made on mainnet's and replays on it.
