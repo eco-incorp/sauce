@@ -26,14 +26,15 @@
 //      behind the proxy (its EIP-1967 implementation slot).
 //   3. A new owner's Pot, on all six: the installed `sauce pot` names the Pot the Kitchen's own
 //      `predictPot` names, finds none there, then deploys it (2,886 bytes of code).
-//   4. A cook, on all six: the installed `sauce run` cooks on it, and the transaction names the
-//      package's engine.
+//   4. A cook, on all six: the installed `sauce run` cooks on it; the mined transaction goes to that
+//      Pot and names the package's engine, and the trace of it returns the program's 7.
 //   5. A real Uniswap V3 swap, on Base: `sauce simulate` of the skill's `buy.sauce.ts` shows WETH
 //      arriving.
 //   6. The solver's kitchen-evm 1.3.0 Pot, on Ethereum, Base and Arc: simulated through engine
 //      1.3.0, by address and by its owner.
 //   7. Solana, through engine 1.4.1: `sauce simulate` of the manual's `pay.sauce.ts` names the
-//      package's engine program.
+//      package's engine program, and its own effects show 1 USDC leaving the Pot and reaching the
+//      recipient.
 //   8. Prints the summary table, step by chain, and stops every fork.
 import { generateKeyPairSync } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -43,6 +44,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { createPublicClient, decodeFunctionData, getAddress, http } from "viem";
+
+import { evmCookProblem, solanaCookProblem } from "./lib/release-gate-checks.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -78,6 +81,9 @@ const IMPLEMENTATION_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a92
 const ZERO_SALT = `0x${"00".repeat(32)}`;
 /** What a Pot of this release weighs, in bytes of code. */
 const POT_CODE_BYTES = 2886;
+/** Solana mainnet-beta's USDC mint, and what step 7's payment moves of it: 1 USDC, in base units. */
+const USDC_SOLANA = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const PAYMENT = 1_000_000n;
 
 const { values } = parseArgs({
   options: { package: { type: "string" }, "rpc-config": { type: "string" } },
@@ -420,13 +426,19 @@ async function evmChain({ slug, id }, kit, dep, abis) {
       if (ran.cook?.status !== "success") throw new Error(`the cook is ${ran.cook?.status}`);
       const sent = await chain.client.getTransaction({ hash: ran.cook.hash });
       const decoded = decodeFunctionData({ abi: abis.v12PotAbi, data: sent.input });
-      if (!sameAddress(decoded.args[0], dep.v12EngineAddress())) {
-        throw new Error(
-          `the cook names engine ${decoded.args[0]}, not the package's ${dep.v12EngineAddress()}`,
-        );
-      }
+      // What the cook DID, as the chain shows it: where the mined transaction went, and what its top
+      // call returned (a program's return, with no ABI framing), traced as the kit reads a cook's.
+      const traced = await chain.client.request({
+        method: "debug_traceTransaction",
+        params: [ran.cook.hash, { tracer: "callTracer", tracerConfig: { onlyTopCall: true } }],
+      });
+      const problem = evmCookProblem(
+        { to: sent.to, engine: decoded.args[0], output: traced?.output },
+        { pot, engine: dep.v12EngineAddress(), value: 7n },
+      );
+      if (problem !== undefined) throw new Error(problem);
 
-      return `cook ${ran.cook.hash} on engine ${decoded.args[0]}`;
+      return `cook ${ran.cook.hash} went to the Pot ${pot}, on engine ${decoded.args[0]}, and returned 7`;
     });
 
     if (slug === "base") {
@@ -520,26 +532,28 @@ async function solana(dep) {
     const earlier = dep.V12_RELEASE_SETS.map((row) => row["v12-svm"].engine).filter(
       (id) => id !== null && id !== engine,
     );
+    const recipient = freshPublicKey();
     const simulated = jsonOf(
       sauce([
         ...["simulate", pay, "--chain", "solana", "--owner", freshPublicKey()],
         ...["--rpc-url", url, "--assume-balance", "USDC:5", "--json"],
-        ...["--args", freshPublicKey(), "1000000"],
+        ...["--args", recipient, String(PAYMENT)],
       ]),
       "sauce simulate",
     );
-    if (simulated.ok !== true) throw new Error(`the cook does not simulate: ${simulated.reason}`);
-    const logs = Array.isArray(simulated.logs) ? simulated.logs : [];
-    if (!logs.some((line) => String(line).startsWith(`Program ${engine} invoke`))) {
-      throw new Error(`the simulated cook never invokes the package's engine ${engine}`);
-    }
-    const other = earlier.find((id) =>
-      logs.some((line) => String(line).startsWith(`Program ${id} invoke`)),
-    );
-    if (other !== undefined)
-      throw new Error(`the simulated cook invokes the earlier engine ${other}`);
+    // What the simulation shows it DID, in its own effects: the engine ran, and the payment is
+    // there, from the Pot to the recipient.
+    const problem = solanaCookProblem(simulated, {
+      engine,
+      earlier,
+      recipient,
+      mint: USDC_SOLANA,
+      symbol: "USDC",
+      amount: PAYMENT,
+    });
+    if (problem !== undefined) throw new Error(problem);
 
-    return `the simulated cook invokes engine ${engine}`;
+    return `the simulated cook invokes engine ${engine} and pays ${PAYMENT} USDC from the Pot ${simulated.pot} to ${recipient}`;
   });
 }
 
