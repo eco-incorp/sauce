@@ -196,40 +196,25 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
     });
 
-    // potRouterUpdate proposes a Router switch only for a Pot of the installed release (D13); the
-    // legacy arm's Pot is an earlier release's, for which it returns nothing (A3).
+    // potRouterUpdate proposes a Router switch only for a Pot of the installed release (D13), and
+    // only onto the Router this release pins; the legacy arm's Pot is an earlier release's, for
+    // which it returns nothing (A3).
     (releaseArm("evm") === "default" ? it : it.skip)(
-      "hands back the switch for a Pot the Kitchen moved past, which only its owner can sign",
+      "hands back the switch for a Pot off the Router this release pins, which only its owner can sign, and nothing while the Kitchen names another",
       async () => {
         // A new Router on the Kitchen: what a Router rollout is. The Kitchen's own switch is its
         // owner's alone…
         const next = await deploy(ROUTER.bytecode);
-        const kitchenSwitch = encodeFunctionData({
-          abi: v12KitchenAbi,
-          args: [next],
-          functionName: "setRouter",
-        });
-        expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch)).toBe("reverted");
-        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch)).toBe("success");
+        const kitchenSwitch = (to: typeof next) =>
+          encodeFunctionData({ abi: v12KitchenAbi, args: [to], functionName: "setRouter" });
+        expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch(next))).toBe("reverted");
+        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch(next))).toBe("success");
 
         // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
         expect(await potRouter(sauce.pot)).toBe(sauce.router);
 
-        const update = await potRouterUpdate(publicClient, sauce.pot);
-        expect(update).toEqual({
-          to: sauce.pot,
-          data: encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
-        });
-
-        // Anyone but the owner is refused with NotOwner().
-        const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
-        expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
-        expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
-        expect(await potRouter(sauce.pot)).toBe(sauce.router);
-
-        // The owner signs it; the Pot is current, and says so.
-        expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
-        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+        // The Kitchen names a Router this release does not pin: nothing is proposed, however far
+        // behind the Pot is (D13: a pairing nobody qualified).
         expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
 
         // A Pot minted after the Kitchen's switch starts on the new Router.
@@ -254,14 +239,41 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
         expect(await potRouter(fresh)).toBe(getAddress(next));
         expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
 
-        // Back to the release's Router, for the swaps below — the same owner-only path.
+        // The Kitchen back on the release's Router: the harness Pot is on it, so nothing is handed back.
+        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch(sauce.router))).toBe("success");
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+
+        // A Pot its owner moved onto another Router gets the switch back to the release's: the
+        // owner's call alone.
         expect(
           await sendAs(
             OWNER,
             sauce.pot,
-            encodeFunctionData({ abi: v12PotAbi, args: [sauce.router], functionName: "setRouter" }),
+            encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
           ),
         ).toBe("success");
+        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+        const update = await potRouterUpdate(publicClient, sauce.pot);
+        expect(update).toEqual({
+          to: sauce.pot,
+          data: encodeFunctionData({
+            abi: v12PotAbi,
+            args: [sauce.router],
+            functionName: "setRouter",
+          }),
+        });
+
+        // Anyone but the owner is refused with NotOwner().
+        const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
+        expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
+        expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
+        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+
+        // The owner signs it; the Pot is back on the release's Router for the swaps below, and
+        // says so.
+        expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
+        expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
         expect(POT_SALT).not.toBe(salt);
       },
     );

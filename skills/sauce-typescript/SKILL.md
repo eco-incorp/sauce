@@ -108,7 +108,8 @@ export async function cookTransactions(
   only where it has no code yet.
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
-  when the Kitchen has a newer one.
+  when its Kitchen names the Router this package pins and the Pot is not on it; where the Kitchen
+  names another Router it returns nothing.
 
 ## A cook the owner signs and another account sends
 

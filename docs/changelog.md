@@ -224,9 +224,10 @@ No language change.
   Pot's address and funds sent there are lost: use `v12PredictPot`. `V12EngineGate.json` and
   `V12Deployments.json` gain the same fields.
 - **Changed: `checkSignedCookPot` takes a Private Pot of kitchen-evm 1.3.0 or 1.4.0** and refuses
-  an earlier one by its release's version. `potRouterUpdate` proposes the Kitchen's Router only for
-  a Pot of the current release, returns nothing for a Pot of an earlier release or a fixed-Router
-  or Shared Pot, and still throws for an address no known release derives.
+  an earlier one by its release's version. `potRouterUpdate` proposes the Router this release pins,
+  and only for a Pot of the current release whose Kitchen names that Router: it returns nothing for
+  a Pot of an earlier release, a fixed-Router or Shared Pot, or a Kitchen that names another
+  Router, and still throws for an address no known release derives.
 - The release files 1.1.0 shipped as opt-in artifacts under `sdk/dist/artifacts/releases/2.6.3/`
   still ship there, unchanged: they are now the same release as the package's own top-level
   artifacts, which are derived from them, so code reading either reads one release.

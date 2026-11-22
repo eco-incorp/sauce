@@ -159,9 +159,12 @@ in that USDC.
 
 After a Router rollout, `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` reads the
 Pot's Router and the Kitchen's through your client. It returns the `setRouter` call for the Pot's
-owner to sign, or nothing when the Pot is already current. Nothing sends it for you, and a call
-from anyone but the owner reverts with `NotOwner()`. It throws for a Pot of an earlier Kitchen
-release, which has no `setRouter` and keeps its Router for good.
+owner to sign when the Pot is not on the Router this release pins and the Kitchen names that
+Router, and nothing when the Pot is already on the Kitchen's Router or when the Kitchen names
+another one (upgrade the SDK to hear of that rollout). Nothing sends it for you, and a call from
+anyone but the owner reverts with `NotOwner()`. A Pot of an earlier Kitchen release keeps its
+Router for good, and so does a fixed-Router or Shared Pot: it returns nothing for them, and throws
+only for an address no known release derives.
 [pot-router.ts](../examples/pot-router.ts) shows the check.
 
 ### Signed cooks

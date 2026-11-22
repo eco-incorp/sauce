@@ -4,13 +4,15 @@
  */
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from "viem";
 
-import { v12KitchenAddress } from "../../src/deployments/index.js";
+import { v12KitchenAddress, v12RouterAddress } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12PotAbi, type PotRouterClient } from "../../src/evm/engine.js";
 
 const OWNER = "0x8B5D51AF4C4542f241C4e54CFd903CeEd145f082" as Address;
 const OLD_ROUTER = "0x1111111111111111111111111111111111111111" as Address;
 const NEW_ROUTER = "0x2222222222222222222222222222222222222222" as Address;
+/** The Router this release pins: the only one `potRouterUpdate` proposes. */
+const RELEASE_ROUTER = getAddress(v12RouterAddress());
 
 /** A client answering the four Pot reads and the Kitchen's `router()` from a table. */
 const stub = (answers: {
@@ -60,14 +62,23 @@ describe("potRouterUpdate", () => {
     expect(await potRouterUpdate(client, POT)).toBeUndefined();
   });
 
-  it("returns the owner's setRouter call, naming the Kitchen's Router, for a Pot behind it", async () => {
-    const client = stub({ pot: POT, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
+  it("returns the owner's setRouter call, naming the Router this release pins, for a Pot behind it", async () => {
+    const client = stub({ pot: POT, potRouter: OLD_ROUTER, kitchenRouter: RELEASE_ROUTER });
     const update = await potRouterUpdate(client, POT);
     expect(update?.to).toBe(getAddress(POT));
     const call = decodeFunctionData({ abi: v12PotAbi, data: update!.data });
     expect(call.functionName).toBe("setRouter");
-    expect(call.args).toEqual([NEW_ROUTER]);
+    expect(call.args).toEqual([RELEASE_ROUTER]);
     // The Kitchen is the one the Pot names, and the Router is the one that Kitchen names.
+    expect(client.reads).toContain(`${getAddress(v12KitchenAddress())}.router`);
+  });
+
+  it("returns nothing where the Kitchen names a Router this release does not pin, however far behind the Pot is", async () => {
+    // A Kitchen rolled past this SDK: a pairing of a Pot with a Router none of this SDK's releases
+    // qualified is advice it does not give. The Kitchen is asked, and what it names is not proposed.
+    const client = stub({ pot: POT, potRouter: OLD_ROUTER, kitchenRouter: NEW_ROUTER });
+    expect(NEW_ROUTER).not.toBe(RELEASE_ROUTER);
+    expect(await potRouterUpdate(client, POT)).toBeUndefined();
     expect(client.reads).toContain(`${getAddress(v12KitchenAddress())}.router`);
   });
 

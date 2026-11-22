@@ -35,6 +35,7 @@ import {
 
 import { v12DefaultPotFamily, v12PotRelease } from "../deployments/pot.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
+import { v12RouterAddress } from "../deployments/v12-addresses.js";
 
 /**
  * V12Pot — private Pots restrict `cook()` to their owner; Shared Pots allow any caller.
@@ -649,12 +650,15 @@ export interface PotRouterUpdate {
 }
 
 /**
- * Whether `pot` runs its Kitchen's current Router, and if not, the call that switches it.
+ * Whether `pot` runs the Router this release pins, and if not, the call that switches it.
  *
  * Reads `pot.router()` and the Kitchen's `router()` through `client` — the caller's, since the SDK
- * holds no RPC endpoint — and returns `undefined` when they are the same Router, or the
- * `pot.setRouter(kitchenRouter)` call otherwise. It never sends anything, and the Router's address
- * never passes through the caller: the Kitchen names it.
+ * holds no RPC endpoint. It proposes `pot.setRouter(router)` only where the Kitchen names the
+ * Router THIS release pins (`v12RouterAddress()`) and the Pot is not on it, and returns `undefined`
+ * when the Pot is on the Kitchen's Router, and when the Kitchen names another: a Kitchen rolled past
+ * this SDK names a Router none of its releases qualified, and moving a Pot onto it is advice this
+ * SDK does not give (upgrade it to hear of that rollout). It never sends anything, and the Router's
+ * address never passes through the caller: it is the release's, which the Kitchen confirms.
  *
  * **Only the Pot's owner can make this call** — `setRouter` has `cook`'s gate and reverts
  * `NotOwner()` for anyone else — and nothing makes it on the owner's behalf: **the Kitchen cannot
@@ -689,6 +693,9 @@ export async function potRouterUpdate(
     client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
     client.readContract({ address: kitchen, abi: v12KitchenAbi, functionName: "router" }),
   ]);
+  // Only the Router this release pins: what the Kitchen names now is the chain's word, not this
+  // release's, and a Pot is never pointed at a Router nobody qualified with it.
+  if (getAddress(target) !== getAddress(v12RouterAddress())) return undefined;
   if (getAddress(current) === getAddress(target)) return undefined;
 
   return {
