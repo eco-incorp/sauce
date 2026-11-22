@@ -83,6 +83,7 @@
     "skip": {
       "sdk/test/svm/abi-clusters.e2e.test.ts": "compares the installed release's cluster builds",
       "sdk/test/svm/legacy-engine.e2e.test.ts": "loads both engines itself (T14)",
+      "sdk/test/svm/pot-states.e2e.test.ts": "CLI: the engine at the released id, held to the installed release's build",
       "sdk/test/cli-solana.e2e.test.ts": "CLI: the engine at the released id, held to the installed release's build",
       "sdk/test/cli-solana-testnet.e2e.test.ts": "CLI: the engine at the released id, held to the installed release's build",
       "sdk/test/cli-solana-token-methods.e2e.test.ts": "CLI: the engine at the released id, held to the installed release's build",

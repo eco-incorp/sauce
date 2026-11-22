@@ -60,7 +60,7 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
-import { svmEngineReleases } from "../svm/engine-release.js";
+import { potAccountState, svmEngineReleases, type PotAccountState } from "../svm/engine-release.js";
 import {
   engineMismatch,
   instructionAddresses,
@@ -1374,35 +1374,108 @@ const saltBytes = (salt: Hex): Uint8Array => hexToBytes(salt);
 const potOf = async (target: SvmTarget): Promise<Address> =>
   (await derivePotPda(kitchen(), target.owner, saltBytes(target.salt))).address;
 
+/** What the cluster holds at a Pot's address, as {@link potAccountState} tells it. */
+interface PotRead {
+  readonly state: PotAccountState;
+  /** The account's lamports; `undefined` where the cluster holds no account there. */
+  readonly lamports: bigint | undefined;
+}
+
+/** The account an RPC reply holds, as `potAccountState` reads one: its owner and its data's length. */
+export const potAccountOf = (
+  value: { readonly owner: string; readonly data: readonly [string, string] } | null,
+): { readonly owner: string; readonly dataLength: number } | null =>
+  value === null
+    ? null
+    : { owner: value.owner, dataLength: Buffer.from(value.data[0], "base64").length };
+
+async function readPot(rpc: Rpc, url: string, pot: Address): Promise<PotRead> {
+  const { value } = await ask(url, `the Pot ${pot}`, () =>
+    rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
+  );
+
+  return {
+    state: potAccountState(potAccountOf(value)),
+    lamports: value === null ? undefined : BigInt(value.lamports),
+  };
+}
+
+/**
+ * Why an address that holds only lamports is not a created Pot, said where a Pot's state is
+ * reported. The Kitchen cooks it as it is: its Pot "need not exist for a program that keeps no
+ * storage", and a program that pays SOL out of the Pot through the System Program needs it so.
+ */
+export const svmLamportsOnlyNote = (pot: string, lamports: bigint): string =>
+  `The Pot ${pot} holds ${lamports} lamports and no engine owns it, so it is not created: cooks ` +
+  `run on it as it is, on ${engine()}. \`sauce pot --deploy\` creates it, with ${MAX_POT_LEN} ` +
+  "bytes of storage, after which a program can no longer pay SOL out of it through the System " +
+  "Program.";
+
+/** What the cluster says of `target`'s Pot, for a tool that tells whether to deploy it. */
+export interface SvmPotState {
+  /** The Kitchen has made it: an account an engine (or any program) owns is at its address. */
+  readonly created: boolean;
+  /** Where the address holds only lamports, how many: no engine owns it, so it is not created. */
+  readonly lamportsOnly?: bigint;
+}
+
 /** Whether the Kitchen has created `target`'s Pot on the cluster `rpcUrl` serves. */
-export async function svmPotExists(target: SvmTarget, rpcUrl: string): Promise<boolean> {
+export async function svmPotState(target: SvmTarget, rpcUrl: string): Promise<SvmPotState> {
   const rpc = createSolanaRpc(rpcUrl);
   await requireCluster(rpc, rpcUrl, target.chain);
+  const { state, lamports } = await readPot(rpc, rpcUrl, await potOf(target));
+  if (state.kind !== "unallocated") return { created: true };
 
-  return exists(rpc, rpcUrl, await potOf(target), "the Pot");
+  return lamports === undefined ? { created: false } : { created: false, lamportsOnly: lamports };
+}
+
+/** What a cook on a Pot names, and what it says of the Pot. */
+export interface SvmPotCooking {
+  /** The engine every cook of this Pot names. */
+  readonly engine: Address;
+  /** The address holds only lamports: no engine owns it, and it is cooked as it is. */
+  readonly lamportsOnly: boolean;
+  /** What the Pot's state means for the cook, said with its result. */
+  readonly notes: readonly string[];
 }
 
 /**
  * The engine a cook on `pot` names: the program that owns the Pot's account, where it is a
  * release's engine that runs this SDK's programs; the installed release's for a Pot not created
- * yet. Refuses a Pot owned by any other program, naming it.
+ * yet, and for an address that holds only lamports, which is cooked as it is. Refuses a Pot owned
+ * by any other program, naming it.
  */
-export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise<Address> {
-  const { value } = await ask(url, `the Pot ${pot}`, () =>
-    rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
-  );
-  if (value === null) return engine();
-  if (svmEngineReleases().has(value.owner)) {
-    if (engineRunsCompiler("svm", value.owner) === true) return address(value.owner);
-    throw new CliError(
-      `the Pot ${pot} is owned by engine ${engineMismatch(value.owner)}. Nothing was ` +
-        "simulated, built or sent",
-    );
+export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise<SvmPotCooking> {
+  const { state, lamports } = await readPot(rpc, url, pot);
+  switch (state.kind) {
+    case "unallocated":
+      return {
+        engine: engine(),
+        lamportsOnly: lamports !== undefined,
+        notes:
+          lamports === undefined
+            ? []
+            : [
+                `Pot ${pot} holds ${lamports} lamports and no engine owns it yet: the cook runs on ` +
+                  "it as it is, on the installed engine, and nothing creates it. `sauce pot " +
+                  `--deploy\` creates it, with ${MAX_POT_LEN} bytes of storage, after which a ` +
+                  "program can no longer pay SOL out of it through the System Program.",
+              ],
+      };
+    case "engine":
+      if (state.runsCompiler) {
+        return { engine: address(state.engine), lamportsOnly: false, notes: [] };
+      }
+      throw new CliError(
+        `the Pot ${pot} is owned by engine ${engineMismatch(state.engine)}. Nothing was ` +
+          "simulated, built or sent",
+      );
+    case "other":
+      throw new CliError(
+        `the account at ${pot}, the Pot's address, is owned by ${state.owner}, not by an engine: ` +
+          "it is no Pot",
+      );
   }
-  throw new CliError(
-    `the account at ${pot}, the Pot's address, is owned by ${value.owner}, not by an engine: it ` +
-      "is no Pot",
-  );
 }
 
 /** The Pot's associated token account for one registered mint, and what it holds. */
@@ -1823,6 +1896,10 @@ interface Prepared {
    * for a cook straight to the engine.
    */
   readonly engine: Address;
+  /** The address holds only lamports: no engine owns it, and it is cooked as it is. */
+  readonly lamportsOnly: boolean;
+  /** What the Pot's state means for the cook, said with every result of the command. */
+  readonly notes: readonly string[];
   readonly fee: bigint;
   readonly program: CompiledSauceProgram;
   readonly bytecode: Uint8Array;
@@ -1896,7 +1973,11 @@ async function prepare(
   // The endpoint serves the cluster the chain names, before anything is read from it.
   await requireCluster(rpc, input.rpcUrl, input.chain);
   const pot = await potOf(input);
-  const potEngine = via === "engine" ? engine() : await svmPotEngine(rpc, input.rpcUrl, pot);
+  const cooking: SvmPotCooking =
+    via === "engine"
+      ? { engine: engine(), lamportsOnly: false, notes: [] }
+      : await svmPotEngine(rpc, input.rpcUrl, pot);
+  const potEngine = cooking.engine;
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
     Object.keys(plain.derivedAccounts ?? {}).filter((name) => !Object.hasOwn(input.accounts, name)),
@@ -1996,6 +2077,8 @@ async function prepare(
     via,
     pot,
     engine: potEngine,
+    lamportsOnly: cooking.lamportsOnly,
+    notes: cooking.notes,
     fee,
     program,
     bytecode,
@@ -2271,11 +2354,17 @@ export async function svmSimulateCommand(
   return revertedFirst(await simulateSvm(input, files));
 }
 
+/** `output` with what the Pot's state means for the cook (`Prepared.notes`) first among its notes. */
+const withPotNotes = (output: CommandOutput, prepared: Prepared): CommandOutput =>
+  prepared.notes.length === 0
+    ? output
+    : { ...output, notes: [...prepared.notes, ...(output.notes ?? [])] };
+
 async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<CommandOutput> {
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
   const { output } = await withStops(prepared, (again) => simulatePrepared(again, input));
 
-  return output;
+  return withPotNotes(output, prepared);
 }
 
 /** The share of their units the venues are given, round by round, in a cook that runs out. */
@@ -2987,7 +3076,9 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       "the program acts with, so the accounts it spends from are the signer's own."
     : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
       (plan.pot === "there"
-        ? "It is created. Fund its accounts with what the program spends."
+        ? prepared.lamportsOnly
+          ? "Fund its accounts with what the program spends."
+          : "It is created. Fund its accounts with what the program spends."
         : plan.pot === "inline"
           ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, the " +
             "owner paying its rent) ahead of the cook."
@@ -2999,6 +3090,7 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     json,
     notes: [
       potNote,
+      ...prepared.notes,
       ...step.notes,
       ...(prepared.stops === undefined
         ? []
@@ -3452,10 +3544,14 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         ? []
         : sentLines(input.chain, "closed the code buffer in", closed.sent)),
     ].join("\n"),
-    ...(closed?.open === undefined && stopNotes.length === 0
+    ...(closed?.open === undefined && stopNotes.length === 0 && prepared.notes.length === 0
       ? {}
       : {
-          notes: [...stopNotes, ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`])],
+          notes: [
+            ...prepared.notes,
+            ...stopNotes,
+            ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`]),
+          ],
         }),
     json: {
       ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
@@ -3683,12 +3779,16 @@ async function deployment(
     program(kitchen(), "the Kitchen program"),
     ask(url, "the Pot", () => rpc.getAccountInfo(pot, { encoding: "base64" }).send()),
   ]);
-  const potThere = potAccount.value !== null;
-  // The engine that owns the Pot, where it is a release's: the one its cooks run on.
-  const potOwner =
-    potAccount.value !== null && svmEngineReleases().has(potAccount.value.owner)
-      ? potAccount.value.owner
+  // Created is an account an engine (or any program) owns: an address that holds nothing, or only
+  // lamports, is not, and an engine owns it only once `create_pot` has made it.
+  const potState = potAccountState(potAccountOf(potAccount.value));
+  const potThere = potState.kind !== "unallocated";
+  const lamportsOnly =
+    potState.kind === "unallocated" && potAccount.value !== null
+      ? BigInt(potAccount.value.lamports)
       : undefined;
+  // The engine that owns the Pot, where it is a release's: the one its cooks run on.
+  const potOwner = potState.kind === "engine" ? potState.engine : undefined;
   const fee = kitchenThere ? await kitchenFee(rpc, url).catch(() => undefined) : undefined;
   const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
 
@@ -3714,6 +3814,7 @@ async function deployment(
       ...(kitchenThere && fee === undefined
         ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
         : []),
+      ...(lamportsOnly === undefined ? [] : [svmLamportsOnlyNote(pot, lamportsOnly)]),
       ...(potOwner === undefined || potOwner === engine()
         ? []
         : [
@@ -3757,7 +3858,11 @@ export async function svmPotStatusCommand(
   };
 }
 
-/** `sauce pot --deploy --chain solana`: creates the signer's Pot unless it is already there. */
+/**
+ * `sauce pot --deploy --chain solana`: creates the signer's Pot unless it is already there. An
+ * address that holds only lamports is not a created Pot, and the Kitchen's `create_pot` takes it
+ * (it tops up the rent, allocates and assigns), so it is created like any other.
+ */
 export async function svmPotDeployCommand(
   target: SvmTarget & { readonly rpcUrl: string; readonly signer: KeyPairSigner },
 ): Promise<CommandOutput> {
@@ -3767,7 +3872,8 @@ export async function svmPotDeployCommand(
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);
   await requireReleased(rpc, target.rpcUrl, chain, ["engine", "Kitchen"]);
-  if (await exists(rpc, target.rpcUrl, pot, "the Pot")) {
+  const { state, lamports } = await readPot(rpc, target.rpcUrl, pot);
+  if (state.kind !== "unallocated") {
     const json = { ...predicted.json, deployed: true };
 
     return {
@@ -3790,7 +3896,16 @@ export async function svmPotDeployCommand(
   return {
     text: JSON.stringify(json, null, 2),
     json,
-    notes: sentLines(chain, `created Pot ${pot} in`, sent).map((line) => line.trim()),
+    notes: [
+      ...sentLines(chain, `created Pot ${pot} in`, sent).map((line) => line.trim()),
+      ...(sent.ok && lamports !== undefined
+        ? [
+            `Pot ${pot} held ${lamports} lamports and no engine owned it: create_pot made it for ` +
+              `${engine()}, with ${MAX_POT_LEN} bytes of storage and the lamports kept. A program ` +
+              "can no longer pay SOL out of it through the System Program.",
+          ]
+        : []),
+    ],
     ...(sent.ok ? {} : { exitCode: 1 }),
   };
 }

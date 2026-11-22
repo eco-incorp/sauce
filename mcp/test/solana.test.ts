@@ -15,6 +15,7 @@ import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+const SYSTEM = "11111111111111111111111111111111";
 /** `sauce_pot`'s salt when none is given. */
 const ZERO_SALT = new Uint8Array(32);
 /** Each cluster's genesis hash, by the endpoint path that serves it. */
@@ -38,6 +39,9 @@ describe("sauce_pot on Solana", () => {
   let mcp: Connected;
   /** The accounts the endpoint holds, with each token account's balance. */
   const present = new Map<string, string | null>();
+  /** The Pot's address as the endpoint serves it: an engine's account with its storage, as
+   *  `create_pot` leaves it, or the System Program's holding lamports and no data. */
+  const pots = new Map<string, "engine" | "lamports">();
   const asked: string[] = [];
 
   before(async () => {
@@ -55,16 +59,26 @@ describe("sauce_pot on Solana", () => {
             : call.method === "getAccountInfo"
               ? {
                   context,
-                  value: present.has(account)
-                    ? {
-                        data: ["", "base64"],
-                        executable: false,
-                        lamports: 2_039_280,
-                        owner: "11111111111111111111111111111111",
-                        rentEpoch: 0,
-                        space: 0,
-                      }
-                    : null,
+                  value:
+                    pots.get(account) === "engine"
+                      ? {
+                          data: [Buffer.alloc(10_240).toString("base64"), "base64"],
+                          executable: false,
+                          lamports: 72_161_280,
+                          owner: v12SvmEngineProgramId(),
+                          rentEpoch: 0,
+                          space: 10_240,
+                        }
+                      : pots.get(account) === "lamports" || present.has(account)
+                        ? {
+                            data: ["", "base64"],
+                            executable: false,
+                            lamports: 2_039_280,
+                            owner: SYSTEM,
+                            rentEpoch: 0,
+                            space: 0,
+                          }
+                        : null,
                 }
               : {
                   context,
@@ -99,7 +113,7 @@ describe("sauce_pot on Solana", () => {
     assert.ok(accounts.every((each) => !each.exists && each.balance === null));
 
     // The Pot, and its USDC account holding 2.5 USDC.
-    present.set(empty.pot as string, null);
+    pots.set(empty.pot as string, "engine");
     present.set(usdc.account, "2500000");
     const held = ok(await mcp.call("sauce_pot", { chain: "solana", owner: OWNER, rpcUrl: url }));
     assert.equal(held.deployed, true);
@@ -120,6 +134,27 @@ describe("sauce_pot on Solana", () => {
     assert.equal(bare.deployed, true);
     assert.equal(bare.tokenAccounts, undefined);
     assert.deepEqual(asked, [`getAccountInfo ${String(empty.pot)}`]);
+  });
+
+  it("does not call a Pot address that holds only lamports deployed: no engine owns it, and cooks run on it as it is", async () => {
+    const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+    const before = ok(await mcp.call("sauce_pot", bare));
+    // What anyone can do to an owner's Pot address: send it lamports. The Kitchen cooks it as it is.
+    pots.set(before.pot as string, "lamports");
+    const funded = ok(await mcp.call("sauce_pot", bare));
+    assert.equal(funded.deployed, false);
+    const notes = funded.notes as string[];
+    assert.ok(
+      notes.some(
+        (note) =>
+          note.includes("holds 2039280 lamports and no engine owns it") &&
+          note.includes("cooks run on it as it is"),
+      ),
+      notes.join("\n"),
+    );
+    assert.ok(!notes.some((note) => /deployed already/.test(note)));
+    // Not created, so its deployment is still there to sign, and create_pot tops up the rent.
+    assert.deepEqual(funded.instruction, before.instruction);
   });
 
   it("predicts a Pot on solana-devnet through a devnet endpoint alone, with its create_pot", async () => {

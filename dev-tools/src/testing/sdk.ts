@@ -89,6 +89,7 @@ export {
 export {
   elfLength,
   isPinnedProgram,
+  potAccountState,
   svmEngineReleases,
 } from "../../../sdk/dist/svm/engine-release.js";
 

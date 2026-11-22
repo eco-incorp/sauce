@@ -43,6 +43,7 @@ import {
   exactUnits,
   EXECUTION_FEE_CONFIG_DISCRIMINATOR,
   MAX_POT_LEN,
+  potAccountState,
   svmTokenAccount,
   svmTokenRows,
   TOKEN_2022_PROGRAM_ID,
@@ -275,11 +276,23 @@ export class SolanaTestChain {
     return decodeExecutionFeeConfig(config.data);
   }
 
-  /** Creates `account`'s Pot through the Kitchen if it is not created yet. */
+  /**
+   * Creates `account`'s Pot through the Kitchen if it is not created yet: where nothing is at its
+   * address, and where the address holds only lamports (no engine owns it, so it is not created),
+   * which `create_pot` takes and tops up. A cook creates the Pot only where nothing is, as
+   * `sauce run` does: an address that holds only lamports is cooked as it is.
+   */
   async deployPot(account: number | SolanaTestAccount = 0): Promise<Address> {
-    const owner = this.accountOf(account);
+    return this.createPot(this.accountOf(account), true);
+  }
+
+  private async createPot(owner: SolanaTestAccount, overLamports: boolean): Promise<Address> {
     await this.bank.ensure([owner.pot]);
-    if (this.bank.account(owner.pot) !== null) return owner.pot;
+    const held = this.bank.account(owner.pot);
+    const lamportsOnly =
+      held !== null &&
+      potAccountState({ owner: held.owner, dataLength: held.data.length }).kind === "unallocated";
+    if (held !== null && !(overLamports && lamportsOnly)) return owner.pot;
     await sendStep(
       this.cookChain,
       this.signers[owner.index]!,
@@ -540,8 +553,9 @@ export class SolanaTestChain {
   ): Promise<SolanaCookResult> {
     const compiled = this.compile(program);
     const owner = this.accountOf(options.from);
-    // Kept even by a simulation, as on an EVM chain: the Pot is the account's from then on.
-    await this.deployPot(owner);
+    // Kept even by a simulation, as on an EVM chain: the Pot is the account's from then on. Created
+    // only where nothing is at its address: lamports alone are cooked as they are.
+    await this.createPot(owner, false);
     const fee = await this.executionFee();
     if (!keep) this.bank.snapshot();
     try {

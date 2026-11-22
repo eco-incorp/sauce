@@ -145,6 +145,32 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     assert.equal((await chain.getAccount(other.pot))?.owner, chain.engine);
   });
 
+  it("cooks from an address that holds only lamports as it is, and deployPot creates it on request", async () => {
+    const account = chain.account(8);
+    const system = address("11111111111111111111111111111111");
+    // Lamports sent to a Pot's address before its first cook: no engine owns it yet. The Kitchen
+    // cooks it as it is (its Pot "need not exist for a program that keeps no storage"), and so
+    // does `sauce run`: nothing creates it, so it stays the System Program's.
+    await chain.setAccount(account.pot, {
+      lamports: 1_000_000n,
+      owner: system,
+      data: new Uint8Array(),
+      executable: false,
+    });
+    const result = await chain.run(program("multiply"), { from: 8, args: [3n, 4n, 100n] });
+    assert.equal(result.returned, 12n);
+    assert.equal(result.engine, chain.engine);
+    const held = await chain.getAccount(account.pot);
+    assert.deepEqual([held?.owner, held?.lamports, held?.data.length], [system, 1_000_000n, 0]);
+    // Creating it is a choice, which `deployPot` makes: the engine's, with its storage, the
+    // lamports already there kept.
+    await chain.deployPot(8);
+    const made = await chain.getAccount(account.pot);
+    assert.equal(made?.owner, chain.engine);
+    assert.equal(made?.data.length, 10_240);
+    assert.ok(made!.lamports >= 1_000_000n);
+  });
+
   it("asks for the accounts nothing derives, and refuses one the program does not take", async () => {
     const source =
       "function main(destination: Account<Writable>, amount: Uint256): Uint256 {\n" +

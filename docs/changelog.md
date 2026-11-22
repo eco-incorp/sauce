@@ -184,6 +184,12 @@ No language change.
 - **Changed (Solana): a cook goes to the engine that owns its Pot.** New Pots are created under
   v12-svm 1.4.1. The local copy a simulation runs in loads each program with the code its cluster
   is shown to run, held to the release's digest, and refuses rather than run other code.
+- **Solana: which Pot addresses are cooked.** A Pot an engine owns cooks on that engine. An address
+  with no account at it, or only lamports (the System Program's, no data), is a Pot no engine owns
+  yet: it is cooked as it is, on the installed engine, and nothing creates it, as SDK 1.1.0 did.
+  `sauce pot` and the MCP `sauce_pot` report it as not created, with a note, and
+  `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An account any
+  other program owns is no Pot, and is refused.
 
 ### SDK
 

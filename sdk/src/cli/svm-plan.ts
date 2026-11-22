@@ -97,9 +97,14 @@ import {
   recommendedComputeUnitLimit,
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
-import { svmEngineReleases } from "../svm/engine-release.js";
+import { potAccountState, svmEngineReleases } from "../svm/engine-release.js";
 import { CliError, UsageError } from "./args.js";
-import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
+import {
+  failureReason,
+  potAccountOf,
+  requireReleased,
+  svmTokenAccountsToCreate,
+} from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
 import { instructionAddresses, programsCalled, type ProgramName } from "./solana-release.js";
 
@@ -855,11 +860,15 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
 }
 
 /**
- * Whether the plan's Pot is still to be created. A Pot there that a Kitchen cook is to be built on
- * must be owned by the engine the plan was made for (`planEngine`): the cook names that engine, and
- * a Pot is cooked by the engine that owns it. Any other owner refuses the step. A plan with no cook
- * left to build (its cook landed, or it is given up: `cooking` false) is not held to it: what is
- * left of it is the code buffer's close, which no Pot's owner changes.
+ * Whether the plan's Pot is still to be created: no account at its address. An address that holds
+ * only lamports is not: the Kitchen cooks it as it is (a Pot "need not exist for a program that
+ * keeps no storage"), no engine owns it, and a `create_pot` would give it data, which a program
+ * that pays SOL out of the Pot through the System Program cannot have. A Pot there that a Kitchen
+ * cook is to be built on must be owned by the engine the plan was made for (`planEngine`): the
+ * cook names that engine, and a Pot is cooked by the engine that owns it. Any other owner refuses
+ * the step. A plan with no cook left to build (its cook landed, or it is given up: `cooking`
+ * false) is not held to it: what is left of it is the code buffer's close, which no Pot's owner
+ * changes.
  */
 async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<boolean> {
   const pot = await potOf(plan);
@@ -867,6 +876,7 @@ async function potIsMissing(plan: SvmPlan, ctx: StepContext, cooking = true): Pr
     ctx.rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
   );
   if (value === null) return true;
+  if (potAccountState(potAccountOf(value)).kind === "unallocated") return false;
   if (cooking && plan.via === "kitchen" && value.owner !== planEngine(plan)) {
     throw new CliError(
       `the Pot ${pot} is owned by ${value.owner}, and this plan was made for engine ` +

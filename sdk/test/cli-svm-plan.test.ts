@@ -834,3 +834,68 @@ describe("a cook on the engine that owns the Pot", () => {
     );
   });
 });
+
+describe("a Pot address that holds only lamports", () => {
+  const INSTALLED = address(v12SvmEngineProgramId());
+  const SYSTEM = "11111111111111111111111111111111";
+  const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  /** The Pot's address as a transfer to it leaves it: the System Program's, with no data. */
+  const lamportsOnly = () => ({
+    context: { slot: 2_000n },
+    value: {
+      data: ["", "base64"],
+      executable: false,
+      lamports: 1_000_000n,
+      owner: SYSTEM,
+      space: 0n,
+    },
+  });
+  const reads = {
+    ...COOK_READS,
+    getMultipleAccounts: () => ({ context: { slot: 1n }, value: [] }),
+  };
+
+  it("is a Pot no engine owns yet: a plan made before the lamports came cooks on it, creating nothing", async () => {
+    // Made while the Pot was missing, so its setup creates the Pot; the address funded since, which
+    // the Kitchen cooks as it is (its IDL: the Pot "need not exist for a program that keeps no
+    // storage"), and which main cooked.
+    const rpc = endpoint({ ...reads, getAccountInfo: lamportsOnly });
+    const step = await nextStep(plan({ pot: "setup" }), context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.transactions.map((tx) => tx.kind)).toEqual(["cook"]);
+    expect(step.transactions[0]!.createsPot).toBeFalsy();
+    // The cook names the installed engine: no engine owns the address.
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(INSTALLED);
+  });
+
+  it("is listed ahead as the cook alone, whichever way the plan holds the Pot", async () => {
+    // What a wallet's policy counts before anything is sent: no create_pot among it.
+    const rpc = endpoint({ ...reads, getAccountInfo: lamportsOnly });
+    for (const pot of ["setup", "inline", "there"] as const) {
+      const ahead = await transactionsAhead(plan({ pot }), context(rpc));
+      expect([pot, ahead.map((tx) => tx.kind)]).toEqual([pot, ["cook"]]);
+      expect(ahead[0]!.createsPot).toBeFalsy();
+    }
+  });
+
+  it("is still no Pot where another program owns the address, or where the System Program's carries data", async () => {
+    for (const value of [
+      { data: ["", "base64"], owner: TOKEN_PROGRAM },
+      { data: ["AAAA", "base64"], owner: SYSTEM },
+    ]) {
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: () => ({
+          context: { slot: 2_000n },
+          value: { executable: false, lamports: 1_000_000n, space: 0n, ...value },
+        }),
+      });
+      await expect(nextStep(plan(), context(rpc))).rejects.toThrow(
+        `is owned by ${value.owner}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+      );
+    }
+  });
+});

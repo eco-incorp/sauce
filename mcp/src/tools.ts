@@ -105,9 +105,10 @@ import {
   supportedChainNames,
   svmAssumedBalances,
   type SvmCookInput,
+  svmLamportsOnlyNote,
   svmPoolsCommand,
   svmPotCommand,
-  svmPotExists,
+  svmPotState,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -2263,7 +2264,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (chain.kind === "svm") {
         const target = { chain, owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
-        const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
+        const state = rpcUrl === undefined ? undefined : await svmPotState(target, rpcUrl);
+        const deployed = state === undefined ? null : state.created;
         const tokenAccounts = reading ? await svmPotTokenAccounts(target, rpcUrl!) : undefined;
 
         return {
@@ -2275,6 +2277,10 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           notes: [
             ...(output.notes ?? []),
             ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+            // An address that holds only lamports is not created, and cooks run on it as it is.
+            ...(state?.lamportsOnly === undefined
+              ? []
+              : [svmLamportsOnlyNote(String(output.json.pot), state.lamportsOnly)]),
           ],
         };
       }

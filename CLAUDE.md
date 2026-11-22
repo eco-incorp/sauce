@@ -1385,7 +1385,16 @@ else the CREATE3 Pot and engine 1.4.0, with a note. A Pot's identity (the releas
 address, which release made a Pot) is `deployments/pot.ts`'s alone, browser-safe and shared with
 `engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads. A
 Solana Pot cooks on the engine that owns its account (`solana.ts#svmPotEngine`, each engine held to
-its release's digest by `solana-release.ts`). A Pot's store key is its chain id AND, on Solana, its
+its release's digest by `solana-release.ts`), told by `svm/engine-release.ts#potAccountState`,
+which the testing kit shares: an address with no account, or only lamports (the System Program's,
+no data), is a Pot no engine owns yet, and is cooked as it is on the installed engine with no
+`create_pot`: the Kitchen signs for a Pot that need not exist, a program that pays SOL out of the
+Pot through the System Program needs it so (that transfer takes no `from` that carries data), and
+anyone can put an address in that state by sending it lamports, so refusing it would let a
+stranger stop an owner's first cook. `sauce pot` and `sauce_pot` report it as not created, and
+`--deploy` creates it (the Kitchen's `create_pot` tops up the rent, allocates and assigns: checked
+in LiteSVM with the address funded below, at and above the Pot's rent); an account any other
+program owns is no Pot. A Pot's store key is its chain id AND, on Solana, its
 cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
 the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
 Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside
