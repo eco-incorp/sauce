@@ -1068,5 +1068,41 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       }
       expect(shim.sent.length).toBe(sent);
     }, 180_000);
+
+    it("says whose account it is in `sauce pot` and `sauce pot --deploy`, and sends nothing", async () => {
+      const owner = await keypair("unknown-status");
+      const pot = await potOf(owner.signer.address, "unknown-status");
+      const unknown = randomAddress();
+      harness.svm.setAccount({
+        address: pot,
+        data: new Uint8Array(165),
+        executable: false,
+        lamports: lamports(1_000_000_000n),
+        programAddress: unknown,
+        space: 165n,
+      });
+      const sent = shim.sent.length;
+      const note =
+        `The Pot's account is owned by ${unknown}, which is not an engine this SDK knows. This SDK ` +
+        "cooks nothing on it; where a later release's engine owns it, a newer SDK does.";
+
+      const status = await sauce("pot", ...named(owner.signer.address, "unknown-status"));
+      expect(status.code).toBe(0);
+      expect(status.stderr).toContain(note);
+      expect(read<PotStatus>(status).deployment.pot).toEqual({
+        address: pot,
+        deployed: true,
+        ownerProgram: unknown,
+      });
+
+      const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "unknown-status"));
+      expect(deployed.code).toBe(0);
+      expect(deployed.stderr).toContain(note);
+      expect(read<{ deployed: boolean; ownerProgram?: string }>(deployed)).toMatchObject({
+        deployed: true,
+        ownerProgram: unknown,
+      });
+      expect(shim.sent.length).toBe(sent);
+    }, 180_000);
   });
 });

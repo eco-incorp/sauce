@@ -1444,6 +1444,15 @@ export const svmOlderPotNote = (
       "buffer, token accounts) may already have landed and can be closed."
     : ".");
 
+/**
+ * What a Pot whose account a program this SDK does not know as an engine owns is told where its state
+ * is reported. That program may be a later release's engine: the note names it, and says the SDK
+ * cooks nothing on the account.
+ */
+const svmUnknownOwnerNote = (owner: string): string =>
+  `The Pot's account is owned by ${owner}, which is not an engine this SDK knows. This SDK cooks ` +
+  "nothing on it; where a later release's engine owns it, a newer SDK does.";
+
 /** What the cluster says of `target`'s Pot, for a tool that tells whether to deploy it. */
 export interface SvmPotState {
   /** The Kitchen has made it: an account an engine (or any program) owns is at its address. */
@@ -3892,6 +3901,7 @@ async function deployment(
         address: pot,
         deployed: potThere,
         ...(potOwner === undefined ? {} : { engine: potOwner }),
+        ...(potState.kind === "other" ? { ownerProgram: potState.owner } : {}),
       },
     },
     notes: [
@@ -3903,6 +3913,7 @@ async function deployment(
         ? ["The Kitchen has no execution-fee config on this cluster: a cook there is refused."]
         : []),
       ...(lamportsOnly === undefined ? [] : [svmLamportsOnlyNote(pot, lamportsOnly)]),
+      ...(potState.kind === "other" ? [svmUnknownOwnerNote(potState.owner)] : []),
       ...(potState.kind !== "engine" || potState.engine === engine()
         ? []
         : potState.runsCompiler
@@ -3964,12 +3975,19 @@ export async function svmPotDeployCommand(
   await requireReleased(rpc, target.rpcUrl, chain, ["engine", "Kitchen"]);
   const { state, lamports } = await readPot(rpc, target.rpcUrl, pot);
   if (state.kind !== "unallocated") {
-    const json = { ...predicted.json, deployed: true };
+    const json = {
+      ...predicted.json,
+      deployed: true,
+      ...(state.kind === "other" ? { ownerProgram: state.owner } : {}),
+    };
 
     return {
       text: JSON.stringify(json, null, 2),
       json,
-      notes: [`Pot ${pot} is already created on ${chain.slug}.`],
+      notes: [
+        `Pot ${pot} is already created on ${chain.slug}.`,
+        ...(state.kind === "other" ? [svmUnknownOwnerNote(state.owner)] : []),
+      ],
     };
   }
   const sent = await sendInstructions(
