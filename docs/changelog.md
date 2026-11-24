@@ -173,6 +173,8 @@ and engines as 1.2.0.
   swap that trades and 306,000 for one that does not (`SVM_CREMA_SWAP_FIXED` and
   `SVM_CREMA_SWAP_IDLE`), in place of the 255,000 and 120,000 every other venue's swap is, which are
   as they were. `sauce simulate` and `sauce run` measure each cook's own units.
+  In a program with three Crema swaps the reservations leave less than one Crema pool needs to
+  trade, so `sauce tx` gives none of them units.
 
 ## SDK 1.2.0 — 2026-11-24
 
