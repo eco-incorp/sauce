@@ -71,7 +71,13 @@ import { svmClusterOf } from "../routes/token-registry.js";
 import { derivePotPda, KITCHEN_DISCRIMINATORS } from "../svm/kitchen.js";
 import { CliError } from "./args.js";
 import type { Landed } from "./keep.js";
-import { MAINNET_CLUSTER, POT_SCHEMA, type PotRecord, type PotStore } from "./pot-store.js";
+import {
+  MAINNET_CLUSTER,
+  POT_SCHEMA,
+  type PotRecord,
+  type PotStore,
+  type StoredPot,
+} from "./pot-store.js";
 
 let version: string | undefined;
 
@@ -226,6 +232,45 @@ export function recordRelease(record: PotRecord): PotRecord["release"] {
 
   return familyRelease(found.family);
 }
+
+/** What a listing says of one record: see {@link recordFacts}. */
+export interface RecordFacts {
+  /** The kind its address says, or the one the record stores where that cannot be told. */
+  readonly kind: PotKind;
+  /** The release the record names, else the one its address tells; none where neither does. */
+  readonly release: PotRecord["release"];
+  /** Why its address cannot be read, where a field of the record is no address. */
+  readonly unreadable?: string;
+}
+
+/**
+ * What a listing says of `record`: its kind and release as {@link recordKind} and
+ * {@link recordRelease} tell them. The store checks that a record's fields are strings, not that
+ * they are addresses, so a record with a field that is none cannot be told from its address: it is
+ * listed with the kind it stores and the release it names, `unreadable` saying why, where it would
+ * otherwise stop every listing of the store.
+ */
+export function recordFacts(record: PotRecord): RecordFacts {
+  try {
+    return { kind: recordKind(record), release: recordRelease(record) };
+  } catch (error) {
+    return {
+      kind: record.kind,
+      release: record.release,
+      unreadable:
+        error instanceof BaseError
+          ? error.shortMessage
+          : error instanceof Error
+            ? (error.message.split("\n")[0] ?? error.message)
+            : String(error),
+    };
+  }
+}
+
+/** The warning for a record `recordFacts` found unreadable, naming its file. */
+export const unreadableNote = (path: string, facts: RecordFacts): string =>
+  `warning: ${path} cannot be told from its address (${facts.unreadable}): it is listed with the ` +
+  `kind it stores and ${releaseText(facts.release)}`;
 
 /** Every EVM engine a release set names, each once, newest first. */
 export const releaseEngines = (): readonly Address[] => [
@@ -678,9 +723,9 @@ export function ownerPotsText(
   owner: Address,
   except: Address,
 ): string {
-  let records: PotRecord[];
+  let files: StoredPot[];
   try {
-    records = store.list().pots;
+    files = store.listFiles().files;
   } catch (error) {
     return (
       `The Pot store ${store.dir} could not be read: ` +
@@ -688,7 +733,7 @@ export function ownerPotsText(
     );
   }
   const listed = new Set<string>([except.toLowerCase()]);
-  const pots = records.filter((record) => {
+  const pots = files.filter(({ record }) => {
     const pot = record.pot.toLowerCase();
     if (record.chainId !== chain.id || record.owner.toLowerCase() !== owner.toLowerCase()) {
       return false;
@@ -703,14 +748,15 @@ export function ownerPotsText(
 
   return [
     `The Pot store ${store.dir} holds ${pots.length} other Pot${pots.length === 1 ? "" : "s"} ${whose}:`,
-    ...pots.map((record) => {
-      const release = recordRelease(record);
-      const paired = release === undefined ? undefined : pairedSdkReleases(release);
+    ...pots.flatMap(({ record, path }) => {
+      const facts = recordFacts(record);
+      const paired = facts.release === undefined ? undefined : pairedSdkReleases(facts.release);
 
-      return (
-        `  ${record.pot}  ${recordKind(record)}, salt ${record.salt}: ${releaseText(release)}` +
-        (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`)
-      );
+      return [
+        `  ${record.pot}  ${facts.kind}, salt ${record.salt}: ${releaseText(facts.release)}` +
+          (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`),
+        ...(facts.unreadable === undefined ? [] : [`  ${unreadableNote(path, facts)}`]),
+      ];
     }),
   ].join("\n");
 }

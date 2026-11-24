@@ -302,6 +302,28 @@ describe("a record written before its release was known", () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  // SDK 1.1.0 filed a fixed-Router Pot as `private` where it could not read the Kitchen's kind, and a
+  // record is a file anyone can edit: the listings print what the address says.
+  const FIXED = getAddress(v12PredictPot(OWNER, SALT, { routerFixed: true }));
+  const filed = (pot: Address, kind: PotRecord["kind"], tx: Hex): PotRecord => ({
+    schema: "sauce.pot/1",
+    chain: "base",
+    chainId: BASE.id,
+    origin: "deployed",
+    pot,
+    owner: OWNER,
+    salt: SALT,
+    kind,
+    kitchen: KITCHEN,
+    potInitCodeHash: v12PotDerivation().initCodeHash,
+    sdk: "1.1.0",
+    deployment: { tx, block: "12", from: SENDER },
+    recordedAt: "2026-11-20T21:00:00.000Z",
+  });
+  /** Where the store keeps the record of `pot` on base. */
+  const fileOf = (pot: Address): string =>
+    join(dir, "pots", String(BASE.id), `${pot.toLowerCase()}.json`);
+
   it("a record SDK 1.1.0 wrote for a CREATE3 Pot is identified when read", () => {
     // SDK 1.1.0 recorded a CREATE3 Pot with the hash its Kitchen reports and with no release or
     // engine: it knew no release that placed Pots that way.
@@ -333,38 +355,64 @@ describe("a record written before its release was known", () => {
   });
 
   it("lists the kind the address says, not the one a hand-edited or earlier-written record stores", () => {
-    // SDK 1.1.0 filed a fixed-Router Pot as `private` where it could not read the Kitchen's kind, and
-    // a record is a file anyone can edit: both listings print what the address says.
-    const FIXED = getAddress(v12PredictPot(OWNER, SALT, { routerFixed: true }));
-    const filed = (pot: Address, kind: PotRecord["kind"], tx: Hex): PotRecord => ({
-      schema: "sauce.pot/1",
-      chain: "base",
-      chainId: BASE.id,
-      origin: "deployed",
-      pot,
-      owner: OWNER,
-      salt: SALT,
-      kind,
-      kitchen: KITCHEN,
-      potInitCodeHash: v12PotDerivation().initCodeHash,
-      sdk: "1.1.0",
-      deployment: { tx, block: "12", from: SENDER },
-      recordedAt: "2026-11-20T21:00:00.000Z",
-    });
     const store = new PotStore(join(dir, "pots"));
     // A fixed-Router Pot stored as private, and a dynamic one stored as shared.
-    store.save(filed(FIXED, "private", `0x${"01".repeat(32)}`));
-    store.save(filed(OWN_POT, "shared", `0x${"02".repeat(32)}`));
+    const asWritten = [
+      filed(FIXED, "private", `0x${"01".repeat(32)}`),
+      filed(OWN_POT, "shared", `0x${"02".repeat(32)}`),
+    ];
+    for (const record of asWritten) store.save(record);
 
-    const listed = potListCommand(store, { chain: BASE }).text;
-    expect(listed).toContain(`base  ${FIXED}  private-fixed-router`);
-    expect(listed).toContain(`base  ${OWN_POT}  private\n`);
-    expect(listed).not.toContain(`${OWN_POT}  shared`);
+    const listing = potListCommand(store, { chain: BASE });
+    expect(listing.text).toContain(`base  ${FIXED}  private-fixed-router`);
+    expect(listing.text).toContain(`base  ${OWN_POT}  private\n`);
+    expect(listing.text).not.toContain(`${OWN_POT}  shared`);
+    // The JSON stays as written, so an agent that reads only it and the notes (the MCP server's
+    // `sauce_pot_list`) is told by a note that the stored kind is contradicted.
+    expect(listing.json.pots).toEqual(expect.arrayContaining(asWritten));
+    expect(listing.notes).toEqual(
+      expect.arrayContaining([
+        `${FIXED}: the record says private; its address makes it a private-fixed-router Pot`,
+        `${OWN_POT}: the record says shared; its address makes it a private Pot`,
+      ]),
+    );
+    expect(listing.notes).toHaveLength(2);
 
     const others = ownerPotsText(store, BASE, OWNER, SENDER);
     expect(others).toContain(`${FIXED}  private-fixed-router, salt ${SALT}`);
     expect(others).toContain(`${OWN_POT}  private, salt ${SALT}`);
     expect(others).not.toContain(`${OWN_POT}  shared`);
+  });
+
+  it("lists a record whose fields cannot be read as it is stored, with a warning naming its file, and the rest of the store", () => {
+    // The store checks that a record's fields are strings, not that they are addresses: one record
+    // with a kitchen that is none must not stop the list, or the refusal that prints it.
+    const store = new PotStore(join(dir, "pots"));
+    const good = filed(OWN_POT, "private", `0x${"01".repeat(32)}`);
+    const damaged = {
+      ...filed(FIXED, "private", `0x${"02".repeat(32)}`),
+      kitchen: "not an address",
+    } as PotRecord;
+    store.save(good);
+    store.save(damaged);
+
+    const listing = potListCommand(store, { chain: BASE });
+    expect(listing.json.pots).toHaveLength(2);
+    expect(listing.json.pots).toEqual(expect.arrayContaining([good, damaged]));
+    const lines = listing.text.split("\n");
+    // The readable record as before; the damaged one with the kind it stores and no release.
+    expect(lines).toContain(`base  ${OWN_POT}  private`);
+    const at = lines.indexOf(`base  ${FIXED}  private`);
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(lines[at + 2]).toContain("release unknown");
+    expect(listing.notes).toEqual([expect.stringContaining(fileOf(FIXED))]);
+    expect(listing.notes![0]).toContain("cannot be told from its address");
+
+    const others = ownerPotsText(store, BASE, OWNER, SENDER);
+    expect(others).toContain(`holds 2 other Pots of ${OWNER} on base:`);
+    expect(others).toContain(`${OWN_POT}  private, salt ${SALT}`);
+    expect(others).toContain(`${FIXED}  private, salt ${SALT}: release unknown`);
+    expect(others).toContain(`warning: ${fileOf(FIXED)} cannot be told from its address`);
   });
 });
 

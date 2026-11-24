@@ -175,3 +175,54 @@ describe("the tools, offline, with an earlier release's Pot recorded for the own
     assert.equal(getAddress(pot.pot), CURRENT);
   });
 });
+
+describe("sauce_pot_list, on records its address contradicts or cannot read", () => {
+  let dir: string;
+  let stdio: Connected;
+  /** The owner's fixed-Router Pot of the earlier release, at its own address. */
+  const FIXED_EARLIER = getAddress(
+    v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: LEGACY.compiler, routerFixed: true }),
+  );
+
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-pot-list-"));
+    const store = new PotStore(join(dir, "pots"));
+    // The owner's Pot of the earlier release, stored as shared by hand, and a record whose kitchen
+    // is no address (the store checks that a field is a string, not what the string is).
+    store.save({ ...RECORD, kind: "shared" } as unknown as PotRecord);
+    store.save({ ...RECORD, pot: FIXED_EARLIER, kitchen: "not an address" } as PotRecord);
+    stdio = await connect(undefined, undefined, undefined, true, { pots: store });
+  });
+
+  after(async () => {
+    await stdio?.close();
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("notes a stored kind its address contradicts, leaves the JSON as written, and still lists the record it cannot read", async () => {
+    const listed = ok(await stdio.call("sauce_pot_list", { chain: "base" })) as {
+      pots: PotRecord[];
+      notes: string[];
+    };
+    const notes = listed.notes.join("\n");
+    // The JSON is the records as written: the stored kind is shown, and a note says it is wrong.
+    assert.equal(listed.pots.length, 2);
+    assert.equal(listed.pots.find((one) => one.pot === EARLIER)?.kind, "shared");
+    assert.ok(
+      listed.notes.includes(
+        `${EARLIER}: the record says shared; its address makes it a private Pot`,
+      ),
+      notes,
+    );
+    // The record that cannot be read is listed, and a warning names its file.
+    assert.ok(listed.pots.some((one) => one.pot === FIXED_EARLIER));
+    assert.ok(
+      listed.notes.some(
+        (note) =>
+          note.includes(`${FIXED_EARLIER.toLowerCase()}.json`) &&
+          note.includes("cannot be told from its address"),
+      ),
+      notes,
+    );
+  });
+});

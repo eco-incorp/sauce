@@ -230,6 +230,9 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
         storeWith({ ...RECORD, salt: `0x${"01".padStart(64, "0")}` }).dir,
         storeWith({ ...RECORD, chain: "ethereum", chainId: ETHEREUM.id }).dir,
         storeWith({ ...RECORD, kind: "private-fixed-router", pot: fixedPot }).dir,
+        // The same Pot, filed as private: the address says it is a fixed-Router Pot, so it is no
+        // earlier Pot of this owner's to refuse for. (The stored kind once made it one.)
+        storeWith({ ...RECORD, kind: "private", pot: fixedPot }).dir,
         storeWith({
           ...RECORD,
           pot: CURRENT,
