@@ -2085,36 +2085,45 @@ async function prepare(
   );
   const accounts = resolution(input.chain, manifest, given.accounts, input.owner, pot, signer, via);
   const needs: ProgramName[] = via === "engine" ? ["engine"] : ["engine", "Kitchen"];
-  // A cluster with no fee config is asked for the release first: one without it is refused by name.
-  const fee = await kitchenFee(rpc, input.rpcUrl, () =>
-    requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]),
-  );
-  if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
-    throw new CliError(
-      `the execution fee is ${fee} lamports, above --max-execution-fee ${input.maxExecutionFee}: ` +
-        "nothing was signed or sent",
+  // What the cluster is asked past the Pot's read, and refuses (`--max-execution-fee`, a release it
+  // lacks), is told what the Pot's state means for the cook: the failure carries `cooking.notes`.
+  const cluster = await (async () => {
+    // A cluster with no fee config is asked for the release first: one without it is refused by name.
+    const fee = await kitchenFee(rpc, input.rpcUrl, () =>
+      requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]),
     );
-  }
-  // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
-  // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
-  // plan (or its staged rehearsal) says, and checks.
-  await requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]);
-  // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
-  const client = await createSauceSvmClient({
-    rpcUrl: input.rpcUrl,
-    programId: potEngine,
-    kitchen: kitchen(),
-    payer: signer,
-    potSalt: saltBytes(input.salt),
-    maxExecutionFee: fee,
-    via,
+    if (input.maxExecutionFee !== undefined && fee > input.maxExecutionFee) {
+      throw new CliError(
+        `the execution fee is ${fee} lamports, above --max-execution-fee ${input.maxExecutionFee}: ` +
+          "nothing was signed or sent",
+      );
+    }
+    // The released engine and Kitchen, as the cluster has them: before anything is simulated, built
+    // or sent. A cook straight to the engine needs the Kitchen only when it is staged, which its
+    // plan (or its staged rehearsal) says, and checks.
+    await requireReleased(rpc, input.rpcUrl, input.chain, needs, [potEngine]);
+    // The cap the cook signs is the fee just read: it pays what is shown here, or fails.
+    const client = await createSauceSvmClient({
+      rpcUrl: input.rpcUrl,
+      programId: potEngine,
+      kitchen: kitchen(),
+      payer: signer,
+      potSalt: saltBytes(input.salt),
+      maxExecutionFee: fee,
+      via,
+    });
+    const lookupTables = await lookupTablesOf(
+      rpc,
+      input.rpcUrl,
+      input.chain,
+      input.lookupTables ?? [],
+    );
+
+    return { fee, client, lookupTables };
+  })().catch((error: unknown) => {
+    throw withNotes(error, cooking.notes);
   });
-  const lookupTables = await lookupTablesOf(
-    rpc,
-    input.rpcUrl,
-    input.chain,
-    input.lookupTables ?? [],
-  );
+  const { fee, client, lookupTables } = cluster;
 
   const prepared: Prepared = {
     rpc,

@@ -950,6 +950,40 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
           await setFee(0n);
         }
       }, 180_000);
+
+      it("says it when `sauce tx`, `sauce simulate` or `sauce run` is refused for the execution fee before it builds anything", async () => {
+        // The command's own refusal, made while it prepares the cook (nothing is signed or sent): the
+        // Pot was read first, so what its state means for a cook is told beside it.
+        const owner = await keypair("old-fee-first");
+        const pot = await plantOld(owner.signer.address, "old-fee-first");
+        const sent = shim.sent.length;
+        await setFee(5_000n);
+        try {
+          for (const ran of [
+            await sauce(
+              ...["tx", seven, ...named(owner.signer.address, "old-fee-first")],
+              ...["--max-execution-fee", "100"],
+            ),
+            await sauce(
+              ...["simulate", seven, ...named(owner.signer.address, "old-fee-first")],
+              ...["--max-execution-fee", "100"],
+            ),
+            await sauce(
+              ...["run", seven, ...signedAs(owner.path, "old-fee-first")],
+              ...["--max-execution-fee", "100", "--yes"],
+            ),
+          ]) {
+            expect(ran.code).toBe(1);
+            expect(ran.stderr).toContain(
+              "the execution fee is 5000 lamports, above --max-execution-fee 100: nothing was signed or sent",
+            );
+            expect(ran.stderr).toContain(cookTold(pot));
+          }
+          expect(shim.sent.length).toBe(sent);
+        } finally {
+          await setFee(0n);
+        }
+      }, 180_000);
     });
 
     it("is created, on its own engine, and `sauce pot` says it is cooked on the installed one", async () => {
