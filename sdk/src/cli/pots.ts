@@ -77,6 +77,8 @@ import type { Landed } from "./keep.js";
 import {
   MAINNET_CLUSTER,
   POT_SCHEMA,
+  pathText,
+  recordText,
   type PotRecord,
   type PotStore,
   type StoredPot,
@@ -125,24 +127,6 @@ export function pairedSdkReleases(release: Readonly<Record<string, string>>): st
 /** `paired` SDK releases (`pairedSdkReleases`) pair with a release: one, or several. */
 export const pairWith = (paired: string): string =>
   `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
-
-/** What a record's fields hold when they are what they should be: a version, a hash, an address, a date, a kind. */
-const PLAIN_TEXT = /^[\w.:@/+-]{1,200}$/;
-
-/**
- * A string a record supplies, as a note says it: as it is where it is a plain token (letters,
- * digits and `.:@/+_-`), else quoted, on one line, at most `limit` characters, with what a terminal
- * cannot be trusted to print replaced. A record is a file anyone can edit, and a note reaches a
- * terminal and the MCP server's tool results, which read their notes as the server's own: what a
- * record says is never a line of a note's own.
- */
-export function recordText(value: unknown, limit = 80): string {
-  const text = String(value);
-
-  return PLAIN_TEXT.test(text)
-    ? text
-    : JSON.stringify(text.slice(0, limit)).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, "?");
-}
 
 /** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
 export const releaseText = (release: PotRecord["release"]): string => {
@@ -217,6 +201,22 @@ export const familyRelease = (family: PotFamily): Record<string, string> =>
   releaseOf(family.sets[0]!);
 
 /**
+ * A record whose `kitchen`, `owner`, `pot` or `salt` is not what it should be. Its message names the
+ * field and says its value through {@link recordText}, so a note says it as it is.
+ */
+export class UnreadableRecord extends Error {}
+
+/**
+ * An error met reading a record or the store, as a note says it: an {@link UnreadableRecord}'s message
+ * as it is, any other error's quoted (an operating system's error names a path, and a parser's quotes
+ * the file it read).
+ */
+export const errorText = (error: unknown): string =>
+  error instanceof UnreadableRecord
+    ? error.message
+    : recordText(error instanceof Error ? error.message : error, 400);
+
+/**
  * What an EVM record's Pot is, told again from its address (`v12PotRelease`): the family its Kitchen
  * belongs to, and its kind. A record written before its release was known is identified now, and
  * its `kind` field is not what decides: SDK 1.1.0 wrote a CREATE3 Pot with no release, and the kind
@@ -230,11 +230,11 @@ export function recordPotRelease(record: PotRecord): PotRelease | undefined {
   if (!record.pot.startsWith("0x")) return undefined;
   for (const field of ["kitchen", "owner", "pot"] as const) {
     if (!isAddress(record[field], { strict: false })) {
-      throw new Error(`its ${field} is not an address: ${recordText(record[field])}`);
+      throw new UnreadableRecord(`its ${field} is not an address: ${recordText(record[field])}`);
     }
   }
   if (!isHex(record.salt, { strict: true }) || size(record.salt) !== 32) {
-    throw new Error(`its salt is not 32 bytes of hex: ${recordText(record.salt)}`);
+    throw new UnreadableRecord(`its salt is not 32 bytes of hex: ${recordText(record.salt)}`);
   }
 
   return v12PotRelease({
@@ -289,14 +289,14 @@ export function recordFacts(record: PotRecord): RecordFacts {
     return {
       kind: record.kind,
       release: record.release,
-      unreadable: error instanceof Error ? error.message : String(error),
+      unreadable: errorText(error),
     };
   }
 }
 
 /** The warning for a record `recordFacts` found unreadable, naming its file. */
 export const unreadableNote = (path: string, facts: RecordFacts): string =>
-  `warning: ${path} cannot be told from its address (${facts.unreadable}): it is listed with the ` +
+  `warning: ${pathText(path)} cannot be told from its address (${facts.unreadable}): it is listed with the ` +
   `kind it stores and ${releaseText(facts.release)}`;
 
 /** Every EVM engine a release set names, each once, newest first. */
@@ -732,7 +732,7 @@ export function keepPots(store: PotStore, landed: Landed): string[] {
     } catch (error) {
       return (
         `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ${store.dir}: ` +
-        (error instanceof Error ? error.message : String(error))
+        errorText(error)
       );
     }
   });
@@ -755,10 +755,7 @@ export function ownerPotsText(
   try {
     ({ files, warnings } = store.listFiles());
   } catch (error) {
-    return (
-      `The Pot store ${store.dir} could not be read: ` +
-      (error instanceof Error ? error.message : String(error))
-    );
+    return `The Pot store ${store.dir} could not be read: ${errorText(error)}`;
   }
   const listed = new Set<string>([except.toLowerCase()]);
   const pots = files.filter(({ record }) => {

@@ -138,6 +138,47 @@ const besideOf = (stem: string, tx: string): string => {
   return `${stem}@${name}.json`;
 };
 
+// ---------------------------------------------------------------------------------------------
+// How a note says what a record or a path says
+// ---------------------------------------------------------------------------------------------
+
+/** What a record's fields hold when they are what they should be: a version, a hash, an address, a date, a kind. */
+const FIELD_TEXT = /^[\w.:+-]{1,200}$/;
+
+/** What the name of a file of the store is made of when it holds nothing a terminal needs protecting from. */
+const PATH_TEXT = /^[\w.:@/+-]{1,1000}$/;
+
+/** `value` as `plain` says a token, and otherwise quoted, cut at `limit` characters. */
+function said(value: unknown, plain: RegExp, limit: number): string {
+  let text: string;
+  try {
+    text = typeof value === "string" ? value : String(JSON.stringify(value));
+  } catch {
+    text = Object.prototype.toString.call(value);
+  }
+
+  return plain.test(text)
+    ? text
+    : JSON.stringify(text.slice(0, limit)).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, "?");
+}
+
+/**
+ * A string a record supplies, as a note says it. A record is a file anyone can edit, and so is the
+ * name it is filed under; a note reaches a terminal and the MCP server's tool results, which read
+ * their notes as the server's own, so what a record says is never a line of a note's own. A plain
+ * token (letters, digits and `.:+_-`: a version, a hash, an address, a date, a kind) is said as it is,
+ * so a valid record reads as it is written; anything else is quoted, at most `limit` characters, on
+ * one line, with what a terminal cannot be trusted to print replaced. What is not a string is said
+ * as JSON says it, and nothing a record can hold makes this throw.
+ */
+export const recordText = (value: unknown, limit = 80): string => said(value, FIELD_TEXT, limit);
+
+/**
+ * The path of a file of the store, as a note says it: as it is where it is made of letters, digits
+ * and `.:@/+_-`, otherwise quoted, at most 1000 characters, on one line.
+ */
+export const pathText = (path: string): string => said(path, PATH_TEXT, 1000);
+
 /** The fields every record has, and their type. */
 const FIELDS = {
   chain: "string",
@@ -181,28 +222,34 @@ function isRelease(value: unknown): boolean {
   );
 }
 
-/** `parsed`, read from `path`, as a record: refused unless it has every field a record has. */
-function asRecord(path: string, parsed: unknown): PotRecord {
+/**
+ * `parsed`, read from the file `where` says (a path said as a note says it, or what the caller calls
+ * the record), as a record: refused unless it has every field a record has.
+ */
+function asRecord(where: string, parsed: unknown): PotRecord {
   const record = parsed as Record<string, unknown> | null;
   if (record === null || typeof record !== "object" || record.schema !== POT_SCHEMA) {
-    throw new Error(`${path}: schema ${JSON.stringify(record?.schema)} is not ${POT_SCHEMA}`);
+    throw new Error(`${where}: schema ${JSON.stringify(record?.schema)} is not ${POT_SCHEMA}`);
   }
   const missing = Object.entries(FIELDS)
     .filter(([field, type]) => typeof record[field] !== type)
     .map(([field]) => field);
   if (missing.length > 0) {
-    throw new Error(`${path} is not a Pot record: it has no ${missing.join(", ")}`);
+    throw new Error(`${where} is not a Pot record: it has no ${missing.join(", ")}`);
   }
   if (record.deployment !== undefined && !isDeployment(record.deployment)) {
     throw new Error(
-      `${path} is not a Pot record: its deployment is not an object of the strings tx, block and ` +
+      `${where} is not a Pot record: its deployment is not an object of the strings tx, block and ` +
         "from (and blockHash, where it has one)",
     );
   }
   if (record.release !== undefined && !isRelease(record.release)) {
     throw new Error(
-      `${path} is not a Pot record: its release is not an object of strings that names its compiler`,
+      `${where} is not a Pot record: its release is not an object of strings that names its compiler`,
     );
+  }
+  if (record.cluster !== undefined && typeof record.cluster !== "string") {
+    throw new Error(`${where} is not a Pot record: its cluster is not a string`);
   }
 
   return record as unknown as PotRecord;
@@ -298,14 +345,15 @@ export class PotStore {
   }
 
   private read(path: string): PotRecord {
+    const where = pathText(path);
     let parsed: unknown;
     try {
       parsed = JSON.parse(readFileSync(path, "utf8"));
     } catch (error) {
-      throw new Error(`${path} is not JSON`, { cause: error });
+      throw new Error(`${where} is not JSON`, { cause: error });
     }
 
-    return asRecord(path, parsed);
+    return asRecord(where, parsed);
   }
 
   /**

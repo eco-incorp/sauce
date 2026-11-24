@@ -10,14 +10,13 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
-import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
+import { MAINNET_CLUSTER, recordText, type PotRecord, type PotStore } from "./pot-store.js";
 import {
   importEvmOwnerPots,
   importEvmPot,
   importSvmPot,
   recordFacts,
   recordOn,
-  recordText,
   releaseText,
   unreadableNote,
   type RecordFacts,

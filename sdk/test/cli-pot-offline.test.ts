@@ -16,9 +16,9 @@
  * No chain and no engine: the records are what SDK 1.1.0 wrote for a deployment on a fork. The
  * online rule, which the chain decides, is `cli-pot-routing.e2e.test.ts`'s.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
@@ -224,6 +224,14 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(run.stderr).toContain(file);
       for (const value of Object.values(hand)) expect(run.stderr).toContain(JSON.stringify(value));
       for (const line of run.stderr.split("\n")) expect(line.startsWith("INJECTED")).toBe(false);
+    });
+
+    it("says an sdk that is a URL quoted: no field of a record holds a path or a URL", async () => {
+      const { dir, file } = storeWith({ ...RECORD, sdk: "https://evil.example/x" });
+      const run = await tx(dir, "--value", "0", "--owner", OWNER);
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(file);
+      expect(run.stderr).toContain('recorded by @eco-incorp/sauce "https://evil.example/x" on');
     });
 
     it.each(["shared", "private-fixed-router", "bogus"])(
@@ -464,6 +472,35 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
         expect(run.stderr).toContain(said);
         for (const line of run.stderr.split("\n")) expect(line.startsWith("INJECTED")).toBe(false);
       }
+    });
+
+    it("says a store file's path on one line, quoted: a record under a name with a line break", async () => {
+      // Any `*.json` of a chain's directory is read, and a name is whatever someone gave it: a note
+      // names the file quoted, never a line of its own, and the other records are read as before.
+      const { dir, file } = storeWith();
+      const beside = join(dirname(file), `${EARLIER.toLowerCase()}@0xaa\nINJECTED_NAME.json`);
+      writeFileSync(beside, readFileSync(file));
+      const byPot = await tx(dir, "--value", "0", "--pot", EARLIER);
+      expect(byPot.code).toBe(0);
+      expect(cookedOn(byPot)).toEqual({ pot: EARLIER, engine: EARLIER_ENGINE });
+      expect(byPot.stderr).toContain(`The Pot store's ${JSON.stringify(beside)} is ignored`);
+      for (const line of byPot.stderr.split("\n")) expect(line.startsWith("INJECTED")).toBe(false);
+
+      // By owner, a copy under such a name decides nothing, and so does a file that is not JSON:
+      // its content is two lines, and only its name is said.
+      const copy = filed(String(BASE.id), "0xbb\nINJECTED_NAME.json", JSON.stringify(RECORD));
+      writeFileSync(
+        join(dirname(copy.file), "0xcc\nINJECTED_NAME.json"),
+        "not json {\nINJECTED_CONTENT",
+      );
+      const byOwner = await tx(copy.dir, "--value", "0", "--owner", OWNER);
+      expect(byOwner.code).toBe(0);
+      expect(cookedOn(byOwner).pot).toBe(CURRENT);
+      expect(byOwner.stderr).toContain(`The Pot store's ${JSON.stringify(copy.file)} is ignored`);
+      const garbled = join(dirname(copy.file), "0xcc\nINJECTED_NAME.json");
+      expect(byOwner.stderr).toContain(`${JSON.stringify(garbled)} is not JSON`);
+      for (const line of byOwner.stderr.split("\n"))
+        expect(line.startsWith("INJECTED")).toBe(false);
     });
   });
 

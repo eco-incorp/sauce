@@ -236,6 +236,54 @@ describe("the Pot store", () => {
     }
   });
 
+  it("leaves out a record whose cluster is no string, said, and keeps one that names a cluster or none", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    store.save({ ...SOLANA, cluster: "devnet" });
+    // Hand-edited: `{"toString": null}` is JSON, and what puts a cluster in a name or a note trips on it.
+    const bad: unknown[] = [null, 5, ["devnet"], { toString: null }];
+    bad.forEach((cluster, index) => {
+      const name = `0x${String(index + 1).repeat(40)}.json`;
+      writeFileSync(join(dir, "8453", name), JSON.stringify({ ...RECORD, cluster }));
+    });
+
+    const listing = store.list();
+    expect(listing.pots).toHaveLength(2);
+    expect(listing.warnings).toHaveLength(4);
+    for (const warning of listing.warnings) {
+      expect(warning).toMatch(
+        /\.json is not a Pot record: its cluster is not a string; that Pot is left out$/,
+      );
+    }
+  });
+
+  it("says the name of a file it leaves out on one line, quoted where it holds a line break", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    const named = (tag: string): string => join(dir, "8453", `0x${tag}\nINJECTED_NAME.json`);
+    writeFileSync(named("01"), "not json {\nINJECTED_CONTENT");
+    writeFileSync(named("02"), JSON.stringify({ schema: "sauce.pot/0" }));
+    const { owner: _owner, ...partial } = RECORD;
+    writeFileSync(named("03"), JSON.stringify(partial));
+    writeFileSync(named("04"), JSON.stringify({ ...RECORD, deployment: null }));
+
+    for (const { warnings } of [store.list(), store.listFiles()]) {
+      expect(warnings).toHaveLength(4);
+      for (const warning of warnings) expect(warning).not.toMatch(/[\r\n\u2028\u2029]/);
+      for (const tag of ["01", "02", "03", "04"]) {
+        expect(
+          warnings.filter((warning) => warning.includes(JSON.stringify(named(tag)))),
+        ).toHaveLength(1);
+      }
+    }
+    // An ordinary path is said as it is.
+    const plain = join(dir, "8453", `0x${"7".repeat(40)}.json`);
+    writeFileSync(plain, "not json");
+    expect(store.list().warnings.some((warning) => warning.includes(`${plain} is not JSON;`))).toBe(
+      true,
+    );
+  });
+
   it("tells a record from the file it is read from: bound only to its chain's directory and its Pot's name", () => {
     const store = new PotStore(dir);
     store.save(RECORD);

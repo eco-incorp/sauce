@@ -50,13 +50,13 @@ import { CliError } from "./args.js";
 import { NOTHING_SENT, potState, requireReleasePot } from "./chain.js";
 import type { PotInput } from "./commands.js"; // type-only: commands.ts imports this module
 import { keptPots } from "./keep.js";
-import type { PotStore, StoredPot } from "./pot-store.js";
+import { pathText, recordText, type PotStore, type StoredPot } from "./pot-store.js";
 import {
+  errorText,
   evmRelease,
   familyRelease,
   recordKind,
   recordPotRelease,
-  recordText,
   releaseText,
 } from "./pots.js";
 
@@ -116,24 +116,22 @@ function storedFiles(
   } catch (error) {
     return {
       files: [],
-      notes: [
-        `The Pot store ${store.dir} could not be read: ` +
-          (error instanceof Error ? error.message : String(error)),
-      ],
+      notes: [`The Pot store ${store.dir} could not be read: ${errorText(error)}`],
     };
   }
 }
 
 /** A record the store holds that decides nothing about `about`, and where it is. */
 const ignoredNote = (file: StoredPot, about: string): string =>
-  `The Pot store's ${file.path} is ignored: it holds a record of ${recordText(file.record.pot)} on chain ` +
+  `The Pot store's ${pathText(file.path)} is ignored: it holds a record of ` +
+  `${recordText(file.record.pot)} on chain ` +
   `${file.record.chainId}, but it is not filed under that Pot's name and chain, so it says ` +
   `nothing of ${about}.`;
 
 /** A record that cannot be read as the record of a Pot, and where it is. */
 const damagedNote = (file: StoredPot, error: unknown): string =>
-  `The Pot store's ${file.path} is ignored: it cannot be read as a record of a Pot: ` +
-  (error instanceof Error ? error.message : String(error));
+  `The Pot store's ${pathText(file.path)} is ignored: it cannot be read as a record of a Pot: ` +
+  errorText(error);
 
 /**
  * The engine a record names, where it names one that is an address. A field that is none is as
@@ -147,8 +145,8 @@ function namedEngine(file: StoredPot, notes: string[]): Address | undefined {
     return getAddress(engine);
   }
   notes.push(
-    `The Pot store's ${file.path} names an engine that is not an address ` +
-      `(${JSON.stringify(engine)}): that field is ignored.`,
+    `The Pot store's ${pathText(file.path)} names an engine that is not an address ` +
+      `(${recordText(engine)}): that field is ignored.`,
   );
 
   return undefined;
@@ -165,10 +163,10 @@ function provenance(stored: StoredPotChoice): string {
           ? "no block hash recorded"
           : `block hash ${recordText(deployment.blockHash)}`);
 
-  // The file's path is said whole: quoted only where it holds a space or a character a terminal
-  // cannot be trusted with, and not cut at the length of a field.
+  // The file's path is said as the store's notes say it: quoted only where it holds a space or a
+  // character a terminal cannot be trusted with, and not cut at the length of a field.
   return (
-    `${recordText(stored.path, 1000)} (${landed}; recorded by @eco-incorp/sauce ` +
+    `${pathText(stored.path)} (${landed}; recorded by @eco-incorp/sauce ` +
     `${recordText(stored.sdk)} on ${recordText(stored.recordedAt)})`
   );
 }

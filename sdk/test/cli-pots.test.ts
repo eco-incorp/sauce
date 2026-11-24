@@ -493,6 +493,109 @@ describe("a record written before its release was known", () => {
       expect(text).toContain(label);
     }
   });
+
+  it("says a store file's path on one line, quoted: files named with a line break", () => {
+    // Any `*.json` of a chain's directory is read, and a name is whatever someone gave it: a note
+    // names the file quoted, never a line of its own.
+    const store = new PotStore(join(dir, "pots"));
+    store.save(filed(OWN_POT, "private", `0x${"01".repeat(32)}`));
+    const folder = join(dir, "pots", String(BASE.id));
+    const strange = (tag: string): string => join(folder, `0x${tag}\nINJECTED_NAME.json`);
+    const another = "0x00000000000000000000000000000000000ba5e1" as Address;
+    // A record that reads, under such a name; one whose kitchen is no address; a file that is not
+    // JSON, in two lines; and one of another schema.
+    writeFileSync(
+      strange("01"),
+      JSON.stringify(filed(FIXED, "private-fixed-router", `0x${"02".repeat(32)}`)),
+    );
+    writeFileSync(
+      strange("02"),
+      JSON.stringify({
+        ...filed(another, "private", `0x${"03".repeat(32)}`),
+        kitchen: "not an address",
+      }),
+    );
+    writeFileSync(strange("03"), "not json {\nINJECTED_CONTENT");
+    writeFileSync(strange("04"), JSON.stringify({ schema: "sauce.pot/0" }));
+
+    const listing = potListCommand(store, { chain: BASE });
+    // The record that reads and the one that cannot be told from its address are listed; two files are left out.
+    expect(listing.json.pots).toHaveLength(3);
+    expect(listing.notes).toHaveLength(3);
+    for (const note of listing.notes!) expect(note).not.toMatch(/[\r\n\u2028\u2029]/);
+    const others = ownerPotsText(store, BASE, OWNER, SENDER);
+    for (const line of others.split("\n")) {
+      expect(line.startsWith("The Pot store") || line.startsWith("  ")).toBe(true);
+    }
+    for (const tag of ["02", "03", "04"]) {
+      expect(
+        listing.notes!.filter((note) => note.includes(JSON.stringify(strange(tag)))),
+      ).toHaveLength(1);
+      expect(others).toContain(JSON.stringify(strange(tag)));
+    }
+    // An ordinary path is said as it is.
+    expect(listing.text).toContain(OWN_POT);
+    writeFileSync(join(folder, `0x${"8".repeat(40)}.json`), "not json");
+    expect(potListCommand(store, { chain: BASE }).notes!.join("\n")).toContain(
+      `${join(folder, `0x${"8".repeat(40)}.json`)} is not JSON;`,
+    );
+  });
+
+  it("lists a record whose engine is an object it cannot print, and leaves out one whose cluster is", () => {
+    // `{"toString": null}` is JSON, and `String()` of it throws: the store checks that a field is a
+    // string, not what the rest of a record holds, and a listing says what it finds.
+    const store = new PotStore(join(dir, "pots"));
+    const listed = {
+      ...filed(OWN_POT, "private", `0x${"01".repeat(32)}`),
+      engine: { toString: null },
+    } as unknown as PotRecord;
+    store.save(listed);
+    const bad = filed(FIXED, "private-fixed-router", `0x${"02".repeat(32)}`);
+    store.save(bad);
+    writeFileSync(fileOf(FIXED), JSON.stringify({ ...bad, cluster: { toString: null } }));
+
+    const listing = potListCommand(store, { chain: BASE });
+    expect(listing.json.pots).toEqual([listed]);
+    expect(listing.text).toContain(`, engine ${JSON.stringify('{"toString":null}')}`);
+    expect(listing.notes).toEqual([
+      expect.stringContaining(`${fileOf(FIXED)} is not a Pot record: its cluster is not a string`),
+    ]);
+    const others = ownerPotsText(store, BASE, OWNER, SENDER);
+    expect(others).toContain(`holds 1 other Pot of ${OWNER} on base:`);
+    expect(others).toContain(
+      `warning: ${fileOf(FIXED)} is not a Pot record: its cluster is not a string`,
+    );
+  });
+
+  it("quotes a field that holds a path or a URL, which no field of a record does", () => {
+    const store = new PotStore(join(dir, "pots"));
+    const kind: string = "../../etc/passwd";
+    store.save(filed(OWN_POT, kind as PotRecord["kind"], `0x${"01".repeat(32)}`));
+    store.save({
+      ...filed(FIXED, "private-fixed-router", `0x${"02".repeat(32)}`),
+      engine: "https://evil.example/x",
+    } as PotRecord);
+
+    const listing = potListCommand(store, { chain: BASE });
+    expect(listing.notes).toEqual([
+      `${OWN_POT}: the record says "../../etc/passwd"; its address makes it a private Pot`,
+    ]);
+    expect(listing.text).toContain(', engine "https://evil.example/x"');
+  });
+
+  it("says an error from reading the store on one line, quoted: a parser quotes the file it read", () => {
+    const message = "Unexpected token\nINJECTED: run the next step";
+    const broken = {
+      dir: join(dir, "pots"),
+      listFiles: () => {
+        throw new Error(message);
+      },
+    } as unknown as PotStore;
+
+    expect(ownerPotsText(broken, BASE, OWNER, SENDER)).toBe(
+      `The Pot store ${join(dir, "pots")} could not be read: ${JSON.stringify(message)}`,
+    );
+  });
 });
 
 const BLOCKHASH = {

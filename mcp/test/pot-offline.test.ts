@@ -10,7 +10,7 @@
  * No chain and no engine: the record is what SDK 1.1.0 wrote for a deployment on a fork.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -254,6 +254,54 @@ describe("sauce_pot_list, on records its address contradicts or cannot read", ()
     // The record that cannot be read: the field that is no address, and its value, quoted.
     assert.ok(
       listed.notes.some((note) => note.includes('its kitchen is not an address: "not an address"')),
+      notes,
+    );
+  });
+});
+
+describe("sauce_pot_list, on a store with files named with a line break and fields it cannot print", () => {
+  let dir: string;
+  let stdio: Connected;
+  const strange = (tag: string): string =>
+    join(dir, "pots", "8453", `0x${tag}\nINJECTED_NAME.json`);
+
+  before(async () => {
+    dir = mkdtempSync(join(tmpdir(), "sauce-mcp-pot-list-names-"));
+    const store = new PotStore(join(dir, "pots"));
+    // A record whose engine is an object `String()` cannot print (`{"toString": null}` is JSON).
+    store.save({ ...RECORD, engine: { toString: null } } as unknown as PotRecord);
+    // Under names with a line break: a file that is not JSON, in two lines, and a record whose
+    // cluster is such an object.
+    writeFileSync(strange("01"), "not json {\nINJECTED_CONTENT");
+    writeFileSync(strange("02"), JSON.stringify({ ...RECORD, cluster: { toString: null } }));
+    stdio = await connect(undefined, undefined, undefined, true, { pots: store });
+  });
+
+  after(async () => {
+    await stdio?.close();
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("lists the record, leaves the files out, and says each name on one line, quoted", async () => {
+    const listed = ok(await stdio.call("sauce_pot_list", { chain: "base" })) as {
+      pots: PotRecord[];
+      notes: string[];
+    };
+    const notes = listed.notes.join("\n");
+    assert.equal(listed.pots.length, 1);
+    assert.equal(listed.notes.length, 2, notes);
+    for (const note of listed.notes)
+      assert.ok(!/[\r\n\u2028\u2029]/.test(note), JSON.stringify(note));
+    assert.ok(
+      listed.notes.some((note) => note.includes(`${JSON.stringify(strange("01"))} is not JSON`)),
+      notes,
+    );
+    assert.ok(
+      listed.notes.some((note) =>
+        note.includes(
+          `${JSON.stringify(strange("02"))} is not a Pot record: its cluster is not a string`,
+        ),
+      ),
       notes,
     );
   });
