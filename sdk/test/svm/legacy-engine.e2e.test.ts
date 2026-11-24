@@ -277,10 +277,13 @@ describeBoth("a Solana Pot cooks on the engine that owns it", () => {
       ...["pot", "--chain", "solana", "--owner", a.signer.address, "--salt", "earlier"],
       ...["--rpc-url", RPC_URL],
     );
+    // `engine` is the engine a cook on the Pot names, which for a Pot of 1.4.0 is its owner, and the
+    // owner is `ownerEngine` besides.
     expect(read<PotStatus>(status).deployment.pot).toEqual({
       address: potA,
       deployed: true,
       engine: EARLIER,
+      ownerEngine: EARLIER,
     });
     expect(status.stderr).toContain(
       `The Pot ${potA} is owned by engine ${EARLIER} (v12-svm 1.4.0): cooks on it run there; a ` +
