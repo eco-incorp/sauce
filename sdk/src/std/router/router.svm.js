@@ -69,15 +69,17 @@
 //
 // AT A PRICE. `priceLimit` is the most one unit bought may cost, fee included, as payToken base units
 // per buyToken base unit times 1e18. A concentrated-liquidity pool's price is a Q64.64 square root of
-// the higher-key token per lower-key token (the pair in the order of the mints' 32-byte keys), and it
-// takes its fee from the input, so its last unit costs its price divided by `1 − fee`. Each function
-// reads the pool's fee and moves `priceLimit`'s square root toward the trade by `√(1 − fee)`: the
-// pool's last unit, fee paid, then costs at most `priceLimit`, and every earlier unit less. A Phoenix
-// market charges its taker fee on top, so its limit price is `priceLimit ÷ (1 + fee)`, in the market's
-// ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped. And no
-// concentrated-liquidity swap at a price walks past the tick arrays its slot gives it, where its
-// program would fail the whole transaction: its limit is held a tick inside them (below, "The window
-// a swap at a price walks").
+// the higher-key token per lower-key token (the pair in the order of the mints' 32-byte keys), except
+// Crema's: it keeps its pair in the order its pool was created in, so its token A may be the higher
+// key. Its price is a Q64.64 square root of its token B per its token A, and paying token A (A to B)
+// makes it fall, whichever key token A is. A pool takes its fee from the input, so its last unit
+// costs its price divided by `1 − fee`. Each function reads the pool's fee and moves `priceLimit`'s
+// square root toward the trade by `√(1 − fee)`: the pool's last unit, fee paid, then costs at most
+// `priceLimit`, and every earlier unit less. A Phoenix market charges its taker fee on top, so its
+// limit price is `priceLimit ÷ (1 + fee)`, in the market's ticks. A pool whose fee is more than one
+// rate, which no such limit can hold, is skipped. And no concentrated-liquidity swap at a price
+// walks past the tick arrays its slot gives it, where its program would fail the whole transaction:
+// its limit is held a tick inside them (below, "The window a swap at a price walks").
 //
 // AT THE POOL'S OWN LIMIT. `limit` is the pool's own: the sqrt price its swap takes, as the pool
 // keeps it (a Q64.64 root on the concentrated-liquidity venues, a root times 10^24 on Invariant),
@@ -257,6 +259,76 @@ function dust(paysA: bool, price: Uint256, fee: Uint256, amountIn: Uint256): boo
   const kept = (amountIn * (1000000 - fee)) / 1000000;
   const square = price * price; // a Q64.64 price is under 2^96, so its square fits
   return paysA ? kept * square < 1 << 128 : kept << 128 < square;
+}
+
+// A Crema pool's order: `clmmOrder`'s, for a pool that keeps its pair in its own order. Crema's
+// program keeps whichever mint a pool was created with first as its token A, at 40, the higher key
+// or the lower, and its price, at 190, is a Q64.64 square root of token B per token A. So the way a
+// swap goes is the pool's own: paying token A, whichever key it is, the price falls. `mintA` is the
+// pool's token A, which the caller read. Requires the two mints to be the pair `trader` pays and
+// buys, in either order. Every other step is `clmmOrder`'s, A and B the pool's own: the limit and
+// its rounding, its √(1 − fee), the window, the dust and the order's bytes.
+function cremaOrder(
+  pool: Account,
+  trader: Account[],
+  mintA: Uint256,
+  priceLimit: Uint256,
+  amountIn: Uint256,
+  stop: Uint256,
+): bytes {
+  const pay = trader[2].address;
+  const buy = trader[3].address;
+  const mintB = svm.sload(pool, 72, 32).toBe();
+  const liquidity = svm.sload(pool, 174, 16).toLe();
+  const price = svm.sload(pool, 190, 16).toLe();
+  const fee = svm.sload(pool, 172, 2).toLe();
+  const paysA = mintA == pay;
+  require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
+  const limit = paysA
+    ? Math.sqrt(Math.mulDiv(1 << 128, 10 ** 18, priceLimit))
+    : Math.sqrt(Math.mulDiv(priceLimit, 1 << 128, 10 ** 18));
+  const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
+  let own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
+  const tick = tickAt(pool, 206);
+  let bound = price;
+  if (paysA ? stop + 1 < tick : stop > tick + 2) {
+    const n = paysA ? tick - stop - 1 : stop - tick - 2;
+    bound = ticksAway(price, n, !paysA);
+    if (paysA ? own < bound : own > bound) {
+      bound = closer(price, n, !paysA);
+    }
+  }
+  if (paysA ? own < bound : own > bound) {
+    own = bound;
+  }
+  const better = paysA ? price > own : price < own;
+  if (liquidity == 0 || !better || dust(paysA, price, fee, amountIn)) {
+    return hex``;
+  }
+  const word = (amountIn & 0xffffffffffffffff) | (own << 128);
+  return word.toBytesLe(32);
+}
+
+// `clmmCan` for a Crema pool, whose pair is in its own order (`cremaOrder`): paying its token A,
+// whichever key it is, the price falls.
+function cremaCan(
+  mintA: Uint256,
+  mintB: Uint256,
+  liquidity: Uint256,
+  price: Uint256,
+  fee: Uint256,
+  pay: Uint256,
+  buy: Uint256,
+  limit: Uint256,
+  amountIn: Uint256,
+): bool {
+  require(limit <= 0xffffffffffffffffffffffffffffffff, "limit past 128 bits");
+  const paysA = mintA == pay;
+  require(mintA == (paysA ? pay : buy) && mintB == (paysA ? buy : pay), "pool is not the pair");
+  if (liquidity == 0 || dust(paysA, price, fee, amountIn)) {
+    return false;
+  }
+  return limit == 0 || (paysA ? price > limit : price < limit);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1314,12 +1386,14 @@ function swapCrema(
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
+  // The pool's own token A (`cremaOrder`): paying it, whichever key it is, is A to B.
+  const tokenA = svm.sload(pool, 40, 32).toBe();
+  const paysA = tokenA == trader[2].address;
   const stop = cremaStop(slot, paysA);
   if (stop == 0) {
     return;
   }
-  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn, 206, stop);
+  const order = cremaOrder(pool, trader, tokenA, priceLimit, amountIn, stop);
   if (order.length == 0) {
     return;
   }
@@ -1810,12 +1884,13 @@ function swapCremaDeep(
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return;
   }
-  const paysA = trader[2].address < trader[3].address;
+  const tokenA = svm.sload(pool, 40, 32).toBe();
+  const paysA = tokenA == trader[2].address;
   const stop = cremaDeep(slot, paysA, cremaStop(slot, paysA), deep);
   if (stop == 0) {
     return;
   }
-  const order = clmmOrder(pool, 40, 72, 174, pool, 172, 2, trader, priceLimit, amountIn, 206, stop);
+  const order = cremaOrder(pool, trader, tokenA, priceLimit, amountIn, stop);
   if (order.length == 0) {
     return;
   }
@@ -2109,7 +2184,8 @@ export function cremaStopped(
   const from = (stop >> 192) & 0xffffffff;
   if (from != 0) {
     const live = tickAt(pool, 206);
-    if (trader[2].address < trader[3].address ? live > from : live < from) {
+    // Paying the pool's own token A (`cremaOrder`) the price falls.
+    if (svm.sload(pool, 40, 32).toBe() == trader[2].address ? live > from : live < from) {
       return 0;
     }
   }
@@ -2620,8 +2696,9 @@ export function cremaAtLimit(
   }
   const pay = trader[2].address;
   const buy = trader[3].address;
-  const ok = clmmCan(
-    svm.sload(pool, 40, 32).toBe(),
+  const tokenA = svm.sload(pool, 40, 32).toBe();
+  const ok = cremaCan(
+    tokenA,
     svm.sload(pool, 72, 32).toBe(),
     svm.sload(pool, 174, 16).toLe(),
     svm.sload(pool, 190, 16).toLe(),
@@ -2637,7 +2714,7 @@ export function cremaAtLimit(
   const source = trader[1];
   const held = svm.sload(source, 64, 8).toLe();
   const before = svm.sload(recipient, 64, 8).toLe();
-  cpiCrema(slot, trader, pay < buy, amountIn, limit, minOut, recipient);
+  cpiCrema(slot, trader, tokenA == pay, amountIn, limit, minOut, recipient);
   return settled(source, recipient, held, before, minOut);
 }
 

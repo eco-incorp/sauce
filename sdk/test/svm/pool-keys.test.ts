@@ -20,7 +20,7 @@ import {
 } from "../../src/svm/pool-keys.js";
 import { memoizedFindProgramAddressSync } from "../../src/svm/venues/pda-memo.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
-import { BYTES, manifest, pool, SNAPSHOT, SYSTEM, USDC, WSOL } from "./venue-fixture.js";
+import { BYTES, manifest, pool, SNAPSHOT, SYSTEM, USDC, USDT, WSOL } from "./venue-fixture.js";
 
 const keyAt = (data: Uint8Array, offset: number): Address =>
   getAddressDecoder().decode(data.subarray(offset, offset + 32));
@@ -190,6 +190,30 @@ describe("a venue's pool by key", () => {
         ["Raydium.CLMM(USDC,WSOL,400)", pool("raydium-clmm-sol-usdc").pool],
       ]),
     );
+  });
+
+  // Crema keeps its pair in the order its pool was created in, so USDT, the higher key, is the token
+  // A of mainnet's USDT/USDC pool, 7MPnn7…. The program still derives a pool's address from its
+  // pair's keys, the lower first, whichever order the pool keeps the pair in, so the pair finds the
+  // pool either way round, and the pool's vaults are its own, token A's first, whichever token is
+  // paid.
+  it("finds the Crema pool that keeps its higher key first by its pair and its tick spacing", async () => {
+    const p = pool("crema-usdt-usdc");
+    expect(svmPoolCandidates("Crema.CLMM", USDC, USDT, 2n)).toEqual([{ pool: p.pool }]);
+    expect(svmPoolCandidates("Crema.CLMM", USDT, USDC, 2n)).toEqual([{ pool: p.pool }]);
+    const ctx = {
+      chain: requireChain("solana"),
+      owner: SYSTEM,
+      pot: SYSTEM,
+      load: loader(),
+      found: new Map<string, Address | null>(),
+    };
+    const at = async (name: string) => (await resolveSvmAccountName(name, ctx)).value;
+    expect(await at("slot:Crema.CLMM(USDC,USDT,2):USDC.pool")).toBe(p.pool);
+    expect(await at("slot:Crema.CLMM(USDT,USDC,2):USDT.pool")).toBe(p.pool);
+    expect(await at("slot:Crema.CLMM(USDC,USDT,2):USDC.vaultA")).toBe(p.vaultA);
+    expect(await at("slot:Crema.CLMM(USDC,USDT,2):USDT.vaultA")).toBe(p.vaultA);
+    expect(await at("slot:Crema.CLMM(USDC,USDT,2):USDC.vaultB")).toBe(p.vaultB);
   });
 
   it("takes the one pool a fee finds under two configs, and refuses two, naming each spacing", async () => {

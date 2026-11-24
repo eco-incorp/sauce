@@ -15,6 +15,10 @@
  *   - a swap that ran below its floor reverts;
  *   - on Raydium's code and Crema, a Stopped form given a deep tick walks on into the furthest tick
  *     array its slot gives, to a tick inside it, and refuses a tick its array does not hold as read;
+ *   - Crema follows its pool's own token order, not the keys': mainnet's USDT/USDC pool keeps USDT,
+ *     the higher key, as its token A, and each Crema function trades it both ways, held to a limit
+ *     worked out from first principles (`crema-order.ts`), sending the instruction `cremaCpi` sends,
+ *     from a slot of the tick arrays the pool's map marks and no others;
  *   - a slot that is not the pair, whose program is not the venue's, or whose pool is another venue's
  *     or no venue's, is refused.
  *
@@ -22,9 +26,15 @@
  * in CI.
  */
 import { readFileSync } from "node:fs";
-import { AccountRole, getAddressCodec } from "@solana/kit";
-import type { Address, AddressesByLookupTableAddress, Instruction } from "@solana/kit";
+import { AccountRole, getAddressCodec, getCompiledTransactionMessageDecoder } from "@solana/kit";
+import type {
+  Address,
+  AddressesByLookupTableAddress,
+  Instruction,
+  TransactionMessageBytes,
+} from "@solana/kit";
 import { FailedTransactionMetadata } from "litesvm";
+import type { TransactionMetadata } from "litesvm";
 
 import { svmRanOutOfUnits } from "../../../src/cli/svm-stops.js";
 import { encodeEntryArguments } from "../../../src/routes/entry.js";
@@ -84,6 +94,14 @@ import {
   WSOL,
 } from "../../svm/venue-fixture.js";
 import type { Pool } from "../../svm/venue-fixture.js";
+import {
+  cremaFrame,
+  initializedTicks,
+  marginalCost,
+  markedIndices,
+  markedTicks,
+  sqrtAtCost,
+} from "./crema-order.js";
 import { SVM_SLOT, svmProgramCalling } from "./harness.js";
 
 type Compiled = ReturnType<typeof compileSauceProgram>;
@@ -101,10 +119,40 @@ interface Order {
   ticks?: Address[];
   /** The swap's `stop`: 0 none (the default), 1 skip, else a sqrt price it goes no further than. */
   stop?: bigint;
+  /** A `…AtLimit` or `…Cpi` function's `limit`: the pool's own sqrt price limit. */
+  limit?: bigint;
+  /** A `…Cpi` function's direction: paying the pool's token A. */
+  aToB?: boolean;
+  /** The accounts a program names for itself (a `…Cpi`'s list), given the cook's two token accounts. */
+  accounts?: (own: { source: Address; recipient: Address }) => Record<string, Meta>;
+  /** Reports what the cook cost and what the venue was sent (`Trace`). */
+  trace?: boolean;
+}
+
+interface Meta {
+  address: Address;
+  role: AccountRole;
+}
+
+/** The venue's own instruction, as the transaction carried it: its data and accounts, in order. */
+interface Cpi {
+  data: string;
+  accounts: Address[];
+}
+
+/** What a traced cook reports besides its outcome. */
+interface Trace {
+  /** The whole cook's compute units. */
+  units: number;
+  /** The first instruction the venue's program was sent, where it was sent one. */
+  cpi?: Cpi;
+  /** The Pot's two token accounts the cook used, paying and receiving. */
+  source: Address;
+  recipient: Address;
 }
 
 type Outcome =
-  | {
+  | ({
       ok: true;
       /** What `main` returned: the function's own count. */
       returned: bigint;
@@ -117,8 +165,8 @@ type Outcome =
       changed: Address[];
       /** The units the venue's own program spent. */
       venueUnits?: number;
-    }
-  | { ok: false; reason: string; logs: string[] };
+    } & Partial<Trace>)
+  | ({ ok: false; reason: string; logs: string[] } & Partial<Trace>);
 
 /** A signed i32 at `at` of an account's data. */
 const i32 = (data: Uint8Array, at: number): number =>
@@ -128,6 +176,38 @@ const i32 = (data: Uint8Array, at: number): number =>
 const KEPT = 7n;
 /** A venue's own function, by the name its venue carries. */
 const lower = (venue: string): string => venue.charAt(0).toLowerCase() + venue.slice(1);
+
+/** The first inner instruction a cook made into `program`, its accounts read off the message. */
+const cpiInto = (
+  meta: TransactionMetadata,
+  messageBytes: TransactionMessageBytes,
+  tables: AddressesByLookupTableAddress,
+  program: Address,
+): Cpi | undefined => {
+  const message = getCompiledTransactionMessageDecoder().decode(messageBytes) as unknown as {
+    staticAccounts: Address[];
+    addressTableLookups?: {
+      lookupTableAddress: Address;
+      writableIndexes: number[];
+      readonlyIndexes: number[];
+    }[];
+  };
+  const lookups = message.addressTableLookups ?? [];
+  const keys = [
+    ...message.staticAccounts,
+    ...lookups.flatMap((l) => l.writableIndexes.map((i) => tables[l.lookupTableAddress]![i]!)),
+    ...lookups.flatMap((l) => l.readonlyIndexes.map((i) => tables[l.lookupTableAddress]![i]!)),
+  ];
+  for (const inner of meta.innerInstructions().flat()) {
+    const ix = inner.instruction();
+    if (keys[ix.programIdIndex()] !== program) continue;
+    return {
+      data: Buffer.from(ix.data()).toString("hex"),
+      accounts: [...ix.accounts()].map((i) => keys[i]!),
+    };
+  }
+  return undefined;
+};
 
 describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools", () => {
   const programs = new Map<string, Compiled>();
@@ -192,6 +272,7 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       const writable = slot[j] !== SYSTEM && j !== 0 && j !== 2;
       named[name] = { address: slot[j]!, role: writable ? w : r };
     });
+    Object.assign(named, order.accounts?.({ source, recipient }));
     const tail = program.manifest!.accounts.map((entry) => {
       if (entry.kind !== "slot") throw new Error("the program takes no remaining accounts");
       const meta = named[entry.name];
@@ -210,6 +291,8 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
             priceLimit: order.priceLimit,
             minOut: order.minOut ?? 0n,
             stop: order.stop ?? 0n,
+            limit: order.limit ?? 0n,
+            aToB: order.aToB === true ? 1n : 0n,
           })[param.name]!,
       ),
     );
@@ -258,10 +341,19 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     });
     const result = harness.svm.sendTransaction(transaction);
     if (result instanceof FailedTransactionMetadata) {
+      const meta = result.meta();
       return {
         ok: false,
-        reason: new TextDecoder().decode(result.meta().returnData().data()),
-        logs: result.meta().logs(),
+        reason: new TextDecoder().decode(meta.returnData().data()),
+        logs: meta.logs(),
+        ...(order.trace === true
+          ? {
+              units: Number(meta.computeUnitsConsumed()),
+              cpi: cpiInto(meta, transaction.messageBytes, lookupTables, p.program),
+              source,
+              recipient,
+            }
+          : {}),
       };
     }
     const returned = BigInt(
@@ -288,6 +380,14 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         : { price: le(priced.data, layout.price, 16) }),
       changed,
       ...(spent === undefined ? {} : { venueUnits: Number(spent![1]) }),
+      ...(order.trace === true
+        ? {
+            units: Number(result.computeUnitsConsumed()),
+            cpi: cpiInto(result, transaction.messageBytes, lookupTables, p.program),
+            source,
+            recipient,
+          }
+        : {}),
     };
   };
 
@@ -1182,5 +1282,454 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           expect(refused(await cook(compiled(lower(venue)), order))).toBe(reason);
       }
     }, 180_000);
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // A Crema pool that keeps its pair higher key first
+  // ---------------------------------------------------------------------------------------------
+  //
+  // Crema keeps a pool's pair in the order the pool was created in, so its token A can be the higher
+  // key: it is on 14 of mainnet's 27 Crema pools, 6 of them live. Mainnet's USDT/USDC pool, 7MPnn7…,
+  // is one: USDT, its token A, is the higher key. Its price is a Q64.64 root of token B per token A,
+  // so paying USDT it falls and paying USDC it rises, the other way round from the pair's keys, which
+  // every other venue's direction follows. Each Crema function follows the pool's own order, and its
+  // slot names only the tick arrays the pool's map marks.
+  describe("Crema on a pool that keeps its pair higher key first: mainnet's USDT/USDC", () => {
+    const usdtUsdc = pool("crema-usdt-usdc");
+    const frame = cremaFrame(BYTES.get(usdtUsdc.pool)!);
+    const DIRECTIONS = [
+      { name: "paying USDC, its token B (the price rises)", pay: USDC, buy: USDT, paysA: false },
+      { name: "paying USDT, its token A (the price falls)", pay: USDT, buy: USDC, paysA: true },
+    ] as const;
+    type Direction = (typeof DIRECTIONS)[number];
+    type CremaFn = "crema" | "cremaStopped" | "cremaAtLimit";
+    const FUNCTIONS: readonly CremaFn[] = ["crema", "cremaStopped", "cremaAtLimit"];
+
+    // The pool was read after the fixture's own slot, and Crema refuses a clock before its pool's
+    // last reward update.
+    beforeAll(() => {
+      const read = Math.max(
+        manifest.unixTimestamp,
+        ...manifest.pools.map((one) => one.unixTimestamp ?? 0),
+      );
+      const clock = harness.svm.getClock();
+      clock.unixTimestamp = BigInt(read) + 60n;
+      harness.svm.setClock(clock);
+    });
+
+    /** The five tick arrays the fixture holds for the pool, by array index. */
+    const ARRAY = new Map(
+      [...usdtUsdc.payA, ...usdtUsdc.payB].map(
+        (at) => [Number(le(BYTES.get(at)!, 8, 2)), at] as const,
+      ),
+    );
+    /** A slot's tick arrays paying token A or token B: the arrays the pool's map marks, then the System program. */
+    const ticksOf = (paysA: boolean) =>
+      markedTicks(usdtUsdc, paysA ? usdtUsdc.payA : usdtUsdc.payB);
+    /** 20 whole tokens, more than the pool trades inside a limit five basis points past its price. */
+    const AMOUNT = 20_000_000n;
+    const orderOf = (d: Direction): Order => ({
+      pool: usdtUsdc,
+      pay: d.pay,
+      buy: d.buy,
+      amountIn: AMOUNT,
+      priceLimit: (allIn(usdtUsdc, d.paysA) * 10005n) / 10000n,
+      ticks: ticksOf(d.paysA),
+    });
+    /** A function's cook, traced: `…AtLimit` takes the limit worked out from the price limit. */
+    const run = (fn: CremaFn, d: Direction, change: Partial<Order> = {}): Promise<Outcome> => {
+      const order = { ...orderOf(d), ...change };
+      return cook(compiled(fn), {
+        ...order,
+        limit: change.limit ?? sqrtAtCost(order.priceLimit, frame.fee, d.paysA),
+        trace: true,
+      });
+    };
+    /** How far below the exact limit a swap at a price may stop: it rounds its roots down. */
+    const HAIR = 64n;
+
+    it("keeps USDT, the higher key, as its token A, and its map marks two of the five arrays", () => {
+      expect([frame.tokenA, frame.tokenB]).toEqual([USDT, USDC]);
+      expect(key(frame.tokenA) > key(frame.tokenB)).toBe(true);
+      // Paying token A the walk goes down: the window names the price's own array, 3465, and the
+      // two below it; paying token B, the price's own and the two above.
+      expect(
+        [usdtUsdc.payA, usdtUsdc.payB].map((window) =>
+          window.map((at) => Number(le(BYTES.get(at)!, 8, 2))),
+        ),
+      ).toEqual([
+        [3465, 3464, 3463],
+        [3465, 3466, 3467],
+      ]);
+      // The map marks 3465 and 3466 alone. The price, at tick -17, is in 3465, whose one
+      // initialized tick is -22; 3466 holds 18 and 26; the three arrays it does not mark exist and
+      // hold none.
+      expect(markedIndices(BYTES.get(usdtUsdc.extra)!)).toEqual([3465, 3466]);
+      expect(frame.tick).toBe(-17);
+      expect(
+        [3463, 3464, 3465, 3466, 3467].map((index) =>
+          initializedTicks(BYTES.get(ARRAY.get(index)!)!, frame.spacing),
+        ),
+      ).toEqual([[], [], [-22], [18, 26], []]);
+      expect([ticksOf(true), ticksOf(false)]).toEqual([
+        [ARRAY.get(3465), SYSTEM, SYSTEM],
+        [ARRAY.get(3465), ARRAY.get(3466), SYSTEM],
+      ]);
+    });
+
+    // Each function trades the pool both ways. The limit is worked out in `crema-order.ts` from the
+    // pool's own price and fee, never from the router's arithmetic or the instruction it sends: a
+    // swap ends where the next unit would cost no more than `priceLimit` (the price is the pool's
+    // after the cook), and the whole swap's average cost is held to it too.
+    describe.each(DIRECTIONS)("$name", (d) => {
+      it.each(FUNCTIONS)(
+        "%s fills, no unit costing more than the limit",
+        async (fn) => {
+          const order = orderOf(d);
+          const outcome = succeeded(await run(fn, d));
+          expect(outcome.received).toBeGreaterThan(0n);
+          expect(outcome.returned).toBe(outcome.received);
+          expect(outcome.paid).toBeLessThan(order.amountIn); // the rest stays in the paying account
+          expect(marginalCost(outcome.price!, frame.fee, d.paysA)).toBeLessThanOrEqual(
+            order.priceLimit,
+          );
+          expect(outcome.paid * E18).toBeLessThanOrEqual(order.priceLimit * outcome.received);
+        },
+        120_000,
+      );
+    });
+
+    it("paying USDC, the swap at a price reaches the limit to a hair, and the one at the pool's own limit exactly", async () => {
+      const d = DIRECTIONS[0];
+      const exact = sqrtAtCost(orderOf(d).priceLimit, frame.fee, d.paysA);
+      const priced = succeeded(await run("crema", d));
+      const stopped = succeeded(await run("cremaStopped", d));
+      const atLimit = succeeded(await run("cremaAtLimit", d));
+      expect(atLimit.price).toBe(exact);
+      for (const outcome of [priced, stopped]) {
+        expect(outcome.price! <= exact).toBe(true);
+        expect(exact - outcome.price!).toBeLessThan(HAIR);
+      }
+      expect(stopped.price).toBe(priced.price);
+      expect([priced.received, priced.paid]).toEqual([984_404n, 983_084n]);
+      expect([stopped.received, stopped.paid]).toEqual([984_404n, 983_084n]);
+      expect([atLimit.received, atLimit.paid]).toEqual([984_404n, 983_084n]);
+    }, 120_000);
+
+    // Paying USDT the price falls to the limit's tick, -22, which is the initialized tick of the
+    // pool's own array and the last of the window: below it Crema's program finds no next tick in
+    // the arrays the slot holds, and fails the transaction. A swap at a price is held a tick inside
+    // that edge, at tick -21, and fills 786,367 USDC; the pool's own limit is taken as it is given,
+    // at tick -22 (above the initialized tick's price, which it does not cross), and fills
+    // 982,738. The price limit is not what stops the first.
+    it("paying USDT, the swap at a price is held a tick inside the window's last initialized tick, the pool's own limit is taken raw", async () => {
+      const d = DIRECTIONS[1];
+      const order = orderOf(d);
+      const [last] = initializedTicks(BYTES.get(ARRAY.get(3465)!)!, frame.spacing);
+      expect(last).toBe(-22);
+      const exact = sqrtAtCost(order.priceLimit, frame.fee, d.paysA);
+      const priced = succeeded(await run("crema", d));
+      expect(priced.received).toBeGreaterThan(0n);
+      expect(i32(poolData(usdtUsdc), 206)).toBe(last! + 1);
+      expect(priced.price! > exact).toBe(true); // not past the limit: short of it
+      expect([priced.received, priced.paid]).toEqual([786_367n, 787_938n]);
+      const stopped = succeeded(await run("cremaStopped", d));
+      expect([stopped.received, stopped.paid, stopped.price]).toEqual([
+        priced.received,
+        priced.paid,
+        priced.price,
+      ]);
+      const atLimit = succeeded(await run("cremaAtLimit", d));
+      expect(i32(poolData(usdtUsdc), 206)).toBe(last);
+      expect(atLimit.price).toBe(exact);
+      expect([atLimit.received, atLimit.paid]).toEqual([982_738n, 984_750n]);
+    }, 120_000);
+
+    // The same instruction: what the function sends Crema's program is what `cremaCpi` sends for the
+    // pool's own direction, the same amount and the same limit, the same data and the same accounts
+    // (the Pot's token accounts told apart by their place).
+    /** `cremaCpi` programs, by the number of accounts they list. */
+    const cpiPrograms = new Map<number, Compiled>();
+    const compiledCpi = (accounts: number): Compiled => {
+      let program = cpiPrograms.get(accounts);
+      if (program === undefined) {
+        program = compileSauceProgram("solana", svmProgramCalling("cremaCpi", accounts));
+        cpiPrograms.set(accounts, program);
+      }
+      return program;
+    };
+    /** `cremaCpi`'s accounts in Crema's own order, each with the role the swap gives it: the
+     *  config, the pool, mints A and B, the Pot's account of each, vaults A and B, the tick-array
+     *  map, the authority, SPL Token, then the tick arrays. */
+    const cpiAccounts =
+      (d: Direction, ticks: readonly Address[]) =>
+      (own: { source: Address; recipient: Address }): Record<string, Meta> => {
+        const w = AccountRole.WRITABLE;
+        const r = AccountRole.READONLY;
+        const accountOf = (mint: Address): Address => (mint === d.pay ? own.source : own.recipient);
+        const list: [Address, AccountRole][] = [
+          [usdtUsdc.config, r],
+          [usdtUsdc.pool, w],
+          [frame.tokenA, r],
+          [frame.tokenB, r],
+          [accountOf(frame.tokenA), w],
+          [accountOf(frame.tokenB), w],
+          [usdtUsdc.vaultA, w],
+          [usdtUsdc.vaultB, w],
+          [usdtUsdc.extra, w],
+          [harness.pot, r],
+          [TOKEN, r],
+          ...ticks.filter((at) => at !== SYSTEM).map((at): [Address, AccountRole] => [at, w]),
+        ];
+        return {
+          program: { address: usdtUsdc.program, role: r },
+          ...Object.fromEntries(list.map(([address, role], i) => [`a${i}`, { address, role }])),
+        };
+      };
+    /** A cook's instruction to Crema, the Pot's two token accounts named by their place. */
+    const told = (outcome: Extract<Outcome, { ok: true }>) => ({
+      data: outcome.cpi!.data,
+      accounts: outcome.cpi!.accounts.map((at) =>
+        at === outcome.source
+          ? "the Pot's paying account"
+          : at === outcome.recipient
+            ? "the Pot's receiving account"
+            : at,
+      ),
+    });
+
+    it.each(DIRECTIONS)(
+      "$name: crema sends the instruction cremaCpi sends",
+      async (d) => {
+        const order = orderOf(d);
+        const sent = succeeded(await run("crema", d));
+        expect(sent.received).toBeGreaterThan(0n);
+        // Crema's `swap`: its discriminator, a_to_b and by_amount_in, the amount and the least out
+        // (two u64s), then the sqrt price limit (a u128).
+        const data = Buffer.from(sent.cpi!.data, "hex");
+        expect(data).toHaveLength(42);
+        expect(data.subarray(0, 8).toString("hex")).toBe("f8c69e91e17587c8");
+        expect([data[8], data[9]]).toEqual([d.paysA ? 1 : 0, 1]);
+        expect([le(data, 10, 8), le(data, 18, 8)]).toEqual([order.amountIn, 0n]);
+        const direct = succeeded(
+          await cook(compiledCpi(11 + order.ticks!.filter((at) => at !== SYSTEM).length), {
+            ...order,
+            limit: le(data, 26, 16),
+            aToB: d.paysA,
+            accounts: cpiAccounts(d, order.ticks!),
+            trace: true,
+          }),
+        );
+        expect(told(direct)).toEqual(told(sent));
+        expect([direct.paid, direct.received]).toEqual([sent.paid, sent.received]);
+        expect(direct.returned).toBe(sent.paid); // `cremaCpi` returns what the paying account paid
+      },
+      120_000,
+    );
+
+    // A swap that does not run returns 0 having moved nothing, as every other function's does: an
+    // input too small to buy one unit, a pool already past its limit, and a pool with no liquidity;
+    // and one that ran below its floor reverts. Each is shown against the swap that fills, so a 0
+    // is the skip's.
+    describe.each(DIRECTIONS)("$name", (d) => {
+      const emptied = {
+        address: usdtUsdc.pool,
+        offset: LAYOUT.crema!.liquidity,
+        bytes: Array<number>(16).fill(0),
+      };
+      const SKIPS: [string, Partial<Order>][] = [
+        ["an input too small to buy one unit", { amountIn: 1n }],
+        [
+          "a pool already past its limit",
+          { priceLimit: (allIn(usdtUsdc, d.paysA) * 9990n) / 10000n },
+        ],
+        ["a pool with no liquidity at its price", { edit: emptied }],
+      ];
+      it.each(SKIPS.flatMap(([why, change]) => FUNCTIONS.map((fn) => [fn, why, change] as const)))(
+        "%s: %s returns 0",
+        async (fn, _why, change) => {
+          expect(succeeded(await run(fn, d)).received).toBeGreaterThan(0n);
+          const skipped = succeeded(await run(fn, d, change));
+          expect({
+            returned: skipped.returned,
+            received: skipped.received,
+            paid: skipped.paid,
+            changed: skipped.changed,
+            called: skipped.cpi !== undefined,
+          }).toEqual({
+            returned: 0n,
+            received: 0n,
+            paid: 0n,
+            changed: change.edit === undefined ? [] : [change.edit.address],
+            called: false,
+          });
+        },
+        120_000,
+      );
+
+      it.each(["crema", "cremaStopped"] as const)(
+        "%s: a floor above what it receives reverts, one at it does not",
+        async (fn) => {
+          const { received } = succeeded(await run(fn, d));
+          expect(received).toBeGreaterThan(0n);
+          expect(refused(await run(fn, d, { minOut: received + 1n }))).toBe("below minOut");
+          expect(succeeded(await run(fn, d, { minOut: received })).received).toBe(received);
+        },
+        120_000,
+      );
+
+      it("cremaAtLimit: its floor is Crema's own, which refuses above what it receives", async () => {
+        const { received } = succeeded(await run("cremaAtLimit", d));
+        expect(received).toBeGreaterThan(0n);
+        const refusal = await run("cremaAtLimit", d, { minOut: received + 1n });
+        if (refusal.ok) throw new Error("the cook succeeded; expected Crema to refuse it");
+        expect(
+          refusal.logs.filter((line) => line.startsWith(`Program ${usdtUsdc.program} failed:`)),
+        ).toHaveLength(1);
+        expect(succeeded(await run("cremaAtLimit", d, { minOut: received })).received).toBe(
+          received,
+        );
+      }, 120_000);
+    });
+
+    // The Stopped form's start bound, bits 192 to 223 of `stop`: the tick the pool's price may lie
+    // no further from the stop than, as the router reads a tick (its sign bit flipped). Paying token
+    // A the price falls, so a pool whose tick has risen past the bound is skipped; paying token B,
+    // one whose tick has fallen past it. A bound a tick short of the pool's own tick the way the
+    // price may move trades as the plain swap does; one a tick past it skips, calling nothing.
+    describe("the Stopped form", () => {
+      const live = BigInt(frame.tick) + (1n << 31n);
+      it.each(DIRECTIONS)(
+        "$name: its start bound skips a pool whose price has moved a tick the wrong way",
+        async (d) => {
+          const order = orderOf(d);
+          const program = compiled("cremaStopped");
+          const [through, past] = d.paysA ? [live + 1n, live - 1n] : [live - 1n, live + 1n];
+          // A bound the price has not passed: the swap runs, and Crema is sent its instruction.
+          const passed = succeeded(
+            await cook(program, { ...order, stop: through << 192n, trace: true }),
+          );
+          expect(passed.received).toBeGreaterThan(0n);
+          expect(passed.cpi).toBeDefined();
+          // The same fill as with no bound at all.
+          const plain = succeeded(await cook(program, { ...order, stop: 0n }));
+          expect([passed.returned, passed.received, passed.paid, passed.price]).toEqual([
+            plain.returned,
+            plain.received,
+            plain.paid,
+            plain.price,
+          ]);
+          // A bound the price has passed: skipped, returning 0, and Crema is never called.
+          const skipped = succeeded(
+            await cook(program, { ...order, stop: past << 192n, trace: true }),
+          );
+          expect([skipped.returned, skipped.received, skipped.paid]).toEqual([0n, 0n, 0n]);
+          expect(skipped.cpi).toBeUndefined(); // no instruction into Crema's program
+          expect(skipped.changed).toEqual([]);
+        },
+        120_000,
+      );
+
+      // A deep tick (bits 224 to 255) walks the window on into the slot's last array. Paying USDC
+      // the slot's last array is 3466, which holds the initialized ticks 18 and 26: the plain swap
+      // stops where it begins, tick 12, and with the deep tick 26 the swap walks on across tick 18 to
+      // a tick inside 26, having bought more. Paying USDT the slot's one array, 3465, holds a single
+      // initialized tick, -22, which is already the window's end: no deep tick walks it on, and one
+      // that array does not hold as initialized leaves the window where it was.
+      it("paying USDC, a deep tick walks the window on across an initialized tick", async () => {
+        const d = DIRECTIONS[0];
+        const order = {
+          ...orderOf(d),
+          priceLimit: allIn(usdtUsdc, d.paysA) * 3n,
+          amountIn: 10_000_000_000n * 10n ** 6n,
+        };
+        const ticks = order.ticks!;
+        const deep = initializedTicks(BYTES.get(ARRAY.get(3466)!)!, frame.spacing).at(-1)!;
+        expect(deep).toBe(26);
+        const plain = succeeded(await cook(compiled("crema"), order));
+        expect(String(plain.price)).toBe(String(windowBound(usdtUsdc, d.paysA, ticks)));
+        const walked = succeeded(
+          await cook(compiled("cremaStopped"), { ...order, stop: deepStop(deep) }),
+        );
+        expect(String(walked.price)).toBe(String(windowBound(usdtUsdc, d.paysA, ticks, deep)));
+        expect(walked.received > plain.received).toBe(true);
+      }, 300_000);
+
+      it("paying USDT, a deep tick its array does not hold as initialized leaves the window where it was", async () => {
+        const d = DIRECTIONS[1];
+        const order = {
+          ...orderOf(d),
+          priceLimit: allIn(usdtUsdc, d.paysA) * 3n,
+          amountIn: 10_000_000_000n * 10n ** 6n,
+        };
+        const deep = -30;
+        expect(initializedTicks(BYTES.get(ARRAY.get(3465)!)!, frame.spacing)).not.toContain(deep);
+        const plain = succeeded(await cook(compiled("crema"), order));
+        expect(String(plain.price)).toBe(String(windowBound(usdtUsdc, d.paysA, order.ticks!)));
+        expect(plain.received).toBeGreaterThan(0n);
+        const held = succeeded(
+          await cook(compiled("cremaStopped"), { ...order, stop: deepStop(deep) }),
+        );
+        expect([held.received, held.paid, held.price]).toEqual([
+          plain.received,
+          plain.paid,
+          plain.price,
+        ]);
+      }, 300_000);
+    });
+
+    // The sorted SOL/USDC pool keeps its lower key, WSOL, as its token A, so the pair's keys and the
+    // pool's own order agree: what it trades is what it did before Crema followed the pool's order,
+    // both ways and in each function.
+    describe("the sorted SOL/USDC pool, whose token A is its lower key", () => {
+      const sorted = pool("crema-sol-usdc");
+      const sortedFrame = cremaFrame(BYTES.get(sorted.pool)!);
+      const CONTROLS = [
+        {
+          name: "paying USDC (the price rises)",
+          pay: USDC,
+          buy: WSOL,
+          paysA: false,
+          amountIn: 1_000_000n * 10n ** 6n,
+          fill: [22_094_785n, 2_677_555n],
+        },
+        {
+          name: "paying WSOL (the price falls)",
+          pay: WSOL,
+          buy: USDC,
+          paysA: true,
+          amountIn: 10n * 10n ** 9n,
+          fill: [2_671_530n, 22_144_599n],
+        },
+      ] as const;
+      it.each(CONTROLS)(
+        "$name: each function fills as it did",
+        async (c) => {
+          expect(sortedFrame.tokenA).toBe(WSOL);
+          const order: Order = {
+            pool: sorted,
+            pay: c.pay,
+            buy: c.buy,
+            amountIn: c.amountIn,
+            priceLimit: (allIn(sorted, c.paysA) * 10005n) / 10000n,
+          };
+          for (const fn of FUNCTIONS) {
+            const outcome = succeeded(
+              await cook(compiled(fn), {
+                ...order,
+                limit: sqrtAtCost(order.priceLimit, sortedFrame.fee, c.paysA),
+              }),
+            );
+            expect([fn, outcome.returned, outcome.received, outcome.paid]).toEqual([
+              fn,
+              c.fill[0],
+              c.fill[0],
+              c.fill[1],
+            ]);
+          }
+        },
+        120_000,
+      );
+    });
   });
 });
