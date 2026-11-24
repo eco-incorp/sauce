@@ -755,4 +755,51 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       expect(status.stderr).not.toContain("cooks on it run there");
     });
   });
+
+  describe("an address a program this SDK does not know as an engine owns", () => {
+    it("refuses a cook there, naming the owner as one it does not know, and sends nothing", async () => {
+      // A later release's engine would look like this to an SDK older than it: the refusal is of the
+      // owner, never a claim that the account is no Pot.
+      const owner = await keypair("unknown-owner");
+      const pot = await potOf(owner.signer.address, "unknown-owner");
+      const unknown = randomAddress();
+      harness.svm.setAccount({
+        address: pot,
+        data: new Uint8Array(165),
+        executable: false,
+        lamports: lamports(1_000_000_000n),
+        programAddress: unknown,
+        space: 165n,
+      });
+      const sent = shim.sent.length;
+      const refusal =
+        `the account at ${pot}, the Pot's address, is owned by ${unknown}, which is not an ` +
+        "engine this SDK knows";
+      const named = (extra: string[]) => [seven, ...extra];
+      for (const ran of [
+        await sauce(
+          "simulate",
+          ...named(["--chain", "solana", "--owner", owner.signer.address]),
+          "--salt",
+          "unknown-owner",
+          "--rpc-url",
+          RPC_URL,
+        ),
+        await sauce(
+          "tx",
+          ...named(["--chain", "solana", "--owner", owner.signer.address]),
+          "--salt",
+          "unknown-owner",
+          "--rpc-url",
+          RPC_URL,
+        ),
+        await sauce("run", seven, ...signedAs(owner.path, "unknown-owner"), "--yes"),
+      ]) {
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain(refusal);
+        expect(ran.stderr).not.toContain("it is no Pot");
+      }
+      expect(shim.sent.length).toBe(sent);
+    }, 180_000);
+  });
 });

@@ -337,7 +337,8 @@ export async function potEngine(chain: CookChain, pot: Address): Promise<Address
   );
   if (state.kind === "other") {
     throw new Error(
-      `the account at ${pot}, a Pot's address, is owned by ${state.owner}, not by an engine`,
+      `the account at ${pot}, a Pot's address, is owned by ${state.owner}, which is not an engine ` +
+        "this SDK knows",
     );
   }
   const cooks = potCookEngine(state, chain.engine);

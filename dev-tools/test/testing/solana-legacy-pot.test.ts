@@ -245,7 +245,7 @@ describe(
       });
       await assert.rejects(
         on.run({ source: SEVEN }, { from: 3 }),
-        /a Pot's address, is owned by TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA, not by an engine/,
+        /a Pot's address, is owned by TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA, which is not an engine this SDK knows/,
       );
     });
   },

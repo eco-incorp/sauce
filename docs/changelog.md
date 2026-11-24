@@ -214,7 +214,8 @@ No language change.
   data), is a Pot no engine owns yet: it is cooked as it is, on the installed engine, and nothing
   creates it, as SDK 1.1.0 did. `sauce pot` and the MCP `sauce_pot` report it as not created, with
   a note, and `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An
-  account any other program owns is no Pot, and is refused.
+  account owned by a program this SDK does not know as an engine (a later release's, say) is
+  refused, naming the owner.
 - **Solana: a cook that stops, and a plan resumed from its cursor, say what the Pot is.** The note
   on a Pot of v12-svm 1.2.0 or 1.3.0 (cooked on the installed engine, so a check that the Pot's
   owner is `ctx.self()` fails) and on an address that holds only lamports came with the result of

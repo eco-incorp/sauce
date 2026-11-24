@@ -1521,9 +1521,11 @@ export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise
         notes: svmPotNotes(pot, read),
       };
     case "other":
+      // The classifier knows only the engines this SDK's release table holds: an owner it does not
+      // know may be a later release's engine, so what is refused is the owner, not proof of no Pot.
       throw new CliError(
-        `the account at ${pot}, the Pot's address, is owned by ${state.owner}, not by an engine: ` +
-          "it is no Pot",
+        `the account at ${pot}, the Pot's address, is owned by ${state.owner}, which is not an ` +
+          "engine this SDK knows: nothing is cooked on it",
       );
   }
 }
