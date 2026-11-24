@@ -20,9 +20,8 @@
  *     worked out from first principles (`crema-order.ts`), sending the instruction `cremaCpi` sends,
  *     from a slot of the tick arrays the pool's map marks and no others; a slot the price has left
  *     is skipped, not failed, and a limit inside the window is what stops the swap;
- *   - what the router spends around a swap, besides the venue's program, is what `sauce tx` reserves
- *     (`svmSwapRouterUnits`): a Crema pool that cannot trade is judged before its tick array is
- *     scanned, and the scan, up to 64 reads, is reserved in full;
+ *   - what the router spends around a swap, besides the venue's program: a Crema pool that cannot
+ *     trade is judged before its tick array is scanned, and costs at most `SVM_SWAP_IDLE`;
  *   - a slot that is not the pair, whose program is not the venue's, or whose pool is another venue's
  *     or no venue's, is refused.
  *
@@ -60,7 +59,6 @@ import {
   svmComputeStops,
   svmPoolWalk,
   svmSkipStop,
-  svmSwapRouterUnits,
   type SvmComputeStop,
   type SvmStopPool,
 } from "../../../src/svm/compute-stops.js";
@@ -1408,12 +1406,6 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       new DataView(bytes.buffer).setInt32(0, tick, true);
       return { address: p.pool, offset: 206, bytes: [...bytes] };
     };
-    /** The edit that marks `place` of tick array `index` of USDT/USDC's five as holding no tick. */
-    const clearTick = (index: number, place: number): Edit => ({
-      address: ARRAY.get(index)!,
-      offset: 44 + place * 133,
-      bytes: [0],
-    });
     /** A function's program with its swap taken out: the same accounts and arguments, `main` returning 0. */
     const withoutSwap = new Map<CremaFn, Compiled>();
     const bare = (fn: CremaFn): Compiled => {
@@ -1431,7 +1423,6 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     /**
      * What a cook of `fn` spends besides the venue's own program: its units less those of the cook
      * that calls nothing (the same accounts and arguments, `main` returning 0) and less the venue's.
-     * This is what `sauce tx` reserves for the swap before it shares what is left among the venues.
      */
     const besides = async (fn: CremaFn, order: Order) => {
       const swap = succeeded(await cook(compiled(fn), { ...order, trace: true }));
@@ -2008,9 +1999,9 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       );
     });
 
-    // What the router does around a swap, and so what `sauce tx` reserves for it before it shares the
-    // rest of the cook's units among the venues (`svmSwapRouterUnits`), is measured beside the venue's
-    // own program: the cook's units less those of the same cook with no swap in it, less the venue's.
+    // What a swap costs the cook besides its venue's program, measured as the cook's units less those
+    // of the same cook with no swap in it, less the venue's: a Crema pool that cannot trade costs at
+    // most `SVM_SWAP_IDLE`, a pool whose last array holds the price or not.
     describe("what a swap costs the cook besides its venue's program", () => {
       const SKIPS: readonly {
         name: string;
@@ -2081,85 +2072,6 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
           expect(router).toBeLessThanOrEqual(SVM_SWAP_IDLE);
         },
         120_000,
-      );
-
-      // `cremaStop` reads one byte of the slot's last tick array for each position it scans, from
-      // the array's start to the price's own position paying USDT: up to 64 reads, whatever the
-      // price, since it reads the pool as it is when the swap lands. The reservation is for all 64.
-      const down = DIRECTIONS[1];
-      /** The pool's own array, 49 positions in, with no initialized tick: every position read, none found. */
-      const ahead = (): Order => ({ ...orderOf(down), edits: [clearTick(3465, 47)] });
-      /** The price in the array's last position, with none initialized: all 64 positions read. */
-      const all = (): Order => ({
-        ...orderOf(down),
-        edits: [tickAt(usdtUsdc, 10), clearTick(3465, 47)],
-      });
-      const ROUTERS = ["crema", "cremaStopped"] as const;
-
-      it.each(ROUTERS)(
-        "%s: a marked array with no initialized tick ahead of a tradable price is within the reservation",
-        async (fn) => {
-          const order = ahead();
-          expect(svmPoolWalk(poolOf(order)).none).toBe(true);
-          const { swap, router } = await besides(fn, order);
-          expect([swap.returned, swap.cpi === undefined]).toEqual([0n, true]);
-          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
-        },
-        120_000,
-      );
-
-      it.each(ROUTERS)(
-        "%s: a scan of all 64 positions is within the reservation",
-        async (fn) => {
-          const order = all();
-          expect(svmPoolWalk(poolOf(order)).none).toBe(true);
-          const { swap, router } = await besides(fn, order);
-          expect([swap.returned, swap.cpi === undefined]).toEqual([0n, true]);
-          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
-        },
-        120_000,
-      );
-
-      it.each(ROUTERS)(
-        "%s: the fill paying USDT, its scan ended by a tick 48 positions in, is within the reservation",
-        async (fn) => {
-          const order = orderOf(down);
-          const { swap, router } = await besides(fn, order);
-          expect(swap.received).toBeGreaterThan(0n);
-          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
-        },
-        120_000,
-      );
-
-      // The fill's scan ends at the tick it finds, 48 reads in; a trade whose scan went on to the
-      // price's position, with the tick it finds close below it, reads 64. A read costs a 14th of what
-      // a scan of 50 positions and one of 64 differ by, so the fill with the reads it did not make
-      // added is the dearest a trade costs the router, and the scan that finds nothing in 64 the
-      // dearest an idle swap does. The reservation is each, a little above (within a tenth): a plan
-      // is not to be starved of units it will not use.
-      it.each(ROUTERS)(
-        "%s: the reservations are the router's dearest, a little above",
-        async (fn) => {
-          const cost = async (order: Order): Promise<number> => (await besides(fn, order)).router;
-          const idle = await cost(all());
-          const step = (idle - (await cost(ahead()))) / (64 - 50);
-          const fill = orderOf(down);
-          const trade = (await cost(fill)) + (64 - 48) * step;
-          const reserved = {
-            trade: svmSwapRouterUnits(poolOf(fill)),
-            idle: svmSwapRouterUnits(poolOf(all())),
-          };
-          // Each reservation at or above what was measured, and within a tenth of it.
-          const bracket = (measured: number, units: number): string =>
-            measured <= units && units <= measured * 1.1
-              ? "ok"
-              : `reserved ${units} for ${Math.round(measured)} measured`;
-          expect({
-            trade: bracket(trade, reserved.trade),
-            idle: bracket(idle, reserved.idle),
-          }).toEqual({ trade: "ok", idle: "ok" });
-        },
-        300_000,
       );
     });
 
