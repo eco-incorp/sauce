@@ -248,8 +248,8 @@ function main(
   upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it. The
   roots are rounded down: paying the higher-key token (the price rises) that keeps the pool's limit
   inside the exact one, so the pool stops a little sooner; paying the lower-key token (the price
-  falls) it moves the limit past the exact one by a few steps of the Q64.64 root, so there the last
-  unit can cost a hair more than `priceLimit`. Crema's pair is in the pool's own order, not the
+  falls) it can move the limit past the exact one by a few steps of the Q64.64 root, so there the
+  last unit can cost a hair more than `priceLimit`. Crema's pair is in the pool's own order, not the
   keys': its price is token B per token A, so the first root is for paying token B and the second
   for paying token A, and the rounding falls the same way.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
