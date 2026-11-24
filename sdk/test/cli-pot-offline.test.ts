@@ -19,14 +19,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import { requireChain } from "../src/chains/canonical.js";
 import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
 import { evmRelease } from "../src/cli/pots.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { v12EngineAddress, v12KitchenAddress } from "../src/deployments/index.js";
+import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12PotAbi } from "../src/evm/engine.js";
 import { legacyRow } from "./release-arm.js";
@@ -56,7 +56,7 @@ const BASE = requireChain("base");
 const ETHEREUM = requireChain("ethereum");
 const OWNER = getAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
 const STRANGER = getAddress("0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
-const LEGACY = legacyRow("evm");
+const LEGACY = legacyRow("evm", "1.3.0");
 /** The owner's Pot at salt 0 under the earlier release, and under the installed one (CREATE3). */
 const EARLIER = getAddress(v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: LEGACY.compiler }));
 const CURRENT = getAddress(v12PredictPot(OWNER, DEFAULT_POT_SALT));
@@ -435,5 +435,93 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(none.code).not.toBe(0);
       expect(none.stderr).toContain("sending the cancellation needs an RPC endpoint");
     });
+  });
+});
+
+describe("offline, a CREATE3 Pot's record decides its engine only where its Router is fixed", () => {
+  // The 1.4.0 release's row: its Router, R1, is the one the Pots minted before the switch were fixed
+  // to, and its engine, E1, the only one that runs them.
+  const R14 = v12ReleaseSet("2.6.3");
+  const E1 = getAddress(R14["v12-evm"].engine!);
+  const FIXED = getAddress(v12PredictPot(OWNER, DEFAULT_POT_SALT, { routerFixed: true }));
+  const SHARED = getAddress(v12PredictPot(zeroAddress, DEFAULT_POT_SALT));
+  /** What an earlier SDK wrote for a dynamic CREATE3 Pot: the engine it was minted under. */
+  const DYNAMIC: PotRecord = {
+    schema: "sauce.pot/1",
+    chain: "base",
+    chainId: BASE.id,
+    pot: CURRENT,
+    owner: OWNER,
+    salt: DEFAULT_POT_SALT,
+    kind: "private",
+    kitchen: getAddress(v12KitchenAddress()),
+    potProxyInitCodeHash: R14["kitchen-evm"].potProxyInitCodeHash!,
+    potProfileHash: R14["kitchen-evm"].potProfileHash!,
+    engine: E1,
+    release: evmRelease(R14),
+    sdk: "1.1.0",
+    origin: "deployed",
+    deployment: { tx: TX, block: "39000000", blockHash: BLOCK_HASH, from: OWNER },
+    recordedAt: "2026-11-19T10:00:00.000Z",
+  };
+
+  let work: string;
+  let program: string;
+  let counter = 0;
+  beforeAll(() => {
+    work = mkdtempSync(join(tmpdir(), "sauce-pot-offline-create3-"));
+    program = join(work, "seven.sauce.ts");
+    writeFileSync(program, "function main(): Uint256 {\n  return 7;\n}\n");
+  });
+  afterAll(() => rmSync(work, { recursive: true, force: true }));
+
+  /** `sauce tx` offline of `record`'s Pot, with `record` as the only thing the store holds. */
+  const txOf = async (record: PotRecord): Promise<Run> => {
+    const dir = join(work, `store-${counter++}`);
+    new PotStore(dir).save(record);
+
+    return sauceIn(
+      dir,
+      ...["tx", program, "--chain", "base", "--offline", "--value", "0", "--pot", record.pot],
+    );
+  };
+
+  it("cooks a dynamic Pot on the installed engine whatever an earlier SDK's record names", async () => {
+    const run = await txOf(DYNAMIC);
+    expect(run.code).toBe(0);
+    expect(cookedOn(run)).toEqual({ pot: CURRENT, engine: ENGINE });
+    expect(run.stderr).toContain(
+      `names the engine ${E1}; a Pot whose Router can move cooks on ${ENGINE}, offline as online.`,
+    );
+    // The record did not decide the engine, so no note says it did.
+    expect(run.stderr).not.toContain("The engine is the one the Pot store records");
+  });
+
+  it("cooks a fixed-Router Pot on the engine its record names, when it is one of the family's", async () => {
+    const run = await txOf({ ...DYNAMIC, kind: "private-fixed-router", pot: FIXED });
+    expect(run.code).toBe(0);
+    expect(cookedOn(run)).toEqual({ pot: FIXED, engine: E1 });
+    expect(run.stderr).toContain("The engine is the one the Pot store records");
+    expect(run.stderr).toContain("v12-evm 1.4.0");
+  });
+
+  it("falls back to the installed engine, saying so, for a record that names none of the family's", async () => {
+    const run = await txOf({
+      ...DYNAMIC,
+      kind: "private-fixed-router",
+      pot: FIXED,
+      engine: "0x000000000000000000000000000000000000bEEF",
+    });
+    expect(run.code).toBe(0);
+    expect(cookedOn(run)).toEqual({ pot: FIXED, engine: ENGINE });
+    expect(run.stderr).toContain("names no engine of its release family");
+    expect(run.stderr).toContain("runs only on the engine built for its Router");
+  });
+
+  it("cooks a Shared Pot on the engine its record names, as a fixed-Router one", async () => {
+    const run = await txOf({ ...DYNAMIC, kind: "shared", owner: zeroAddress, pot: SHARED });
+    expect(run.code).toBe(0);
+    expect(cookedOn(run)).toEqual({ pot: SHARED, engine: E1 });
+    expect(run.stderr).toContain("The engine is the one the Pot store records");
   });
 });

@@ -26,7 +26,7 @@ export { exactUnits } from "../../../sdk/dist/amounts.js";
 export { buildSauceEvmCall } from "../../../sdk/dist/routes/sauce-calls.js";
 export { TOKEN_REGISTRY, svmTokenRows } from "../../../sdk/dist/routes/token-registry.js";
 export { BalanceSlotError, balanceOverride } from "../../../sdk/dist/evm/balance-slot.js";
-export { deployReleaseStack } from "../../../sdk/dist/evm/release-stack.js";
+export { deployReleaseStack, upgradeReleaseStack } from "../../../sdk/dist/evm/release-stack.js";
 export { DEFAULT_POT_SALT, v12PredictPot } from "../../../sdk/dist/deployments/pot.js";
 export {
   addressLabels,

@@ -11,13 +11,16 @@ import { getAddress, zeroAddress, type Address, type Hex } from "viem";
 import { v12KitchenAddress, v12PotDerivation, v12ReleaseSet } from "../src/deployments/index.js";
 import {
   DEFAULT_POT_SALT,
+  potEngineOf,
   potFamilyEngine,
   potFamilyRunsCompiler,
+  potReleaseSet,
   potSalt,
   v12DefaultPotFamily,
   v12PotFamilies,
   v12PotRelease,
   v12PredictPot,
+  type PotKind,
 } from "../src/deployments/pot.js";
 
 const OWNER = "0x000000000000000000000000000000000000dEaD" as Address;
@@ -75,12 +78,16 @@ describe("Pot families", () => {
   const find = (pot: Address, owner: Address = OWNER, salt: Hex = DEFAULT_POT_SALT) =>
     v12PotRelease({ kitchen, owner, salt, pot: getAddress(pot) });
 
-  it("has one engine per family; the installed one is CREATE3; v12PotRelease tells each", () => {
+  it("has one engine per CREATE2 family and one per fixed Router in the CREATE3 one; the installed one is CREATE3; v12PotRelease tells each", () => {
     for (const family of v12PotFamilies()) {
       const engines = new Set(family.sets.map((set) => set["v12-evm"].engine?.toLowerCase()));
+      // An engine compiles in one fixed Router: the CREATE3 family's sets name one engine per Router.
+      const routers = new Set(
+        family.sets.map((set) => set["kitchen-evm"].fixedRouter?.toLowerCase()),
+      );
       expect([family.sets[0]!["kitchen-evm"].version, engines.size]).toEqual([
         family.sets[0]!["kitchen-evm"].version,
-        1,
+        family.scheme === "create2" ? 1 : routers.size,
       ]);
       expect(potFamilyEngine(family).toLowerCase()).toBe([...engines][0]);
     }
@@ -113,5 +120,53 @@ describe("Pot families", () => {
     expect(v120?.kind).toBe("private");
     expect(v120?.family.sets[0]!["kitchen-evm"].version).toBe("1.2.0");
     expect(potFamilyRunsCompiler(v120!.family)).toBe(false);
+  });
+});
+
+describe("potReleaseSet", () => {
+  const R1 = getAddress("0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759");
+  const R2 = getAddress("0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6");
+  const UNKNOWN_ROUTER = "0x000000000000000000000000000000000000dEaD" as Address;
+  const family = v12DefaultPotFamily();
+  const [installed, earlier] = [v12ReleaseSet(), v12ReleaseSet("2.6.3")];
+
+  it("potReleaseSet picks a fixed Router's release", () => {
+    // A dynamic Pot's Router is storage, so its set is the family's first whatever it was minted
+    // with, read or not.
+    expect(potReleaseSet(family, "private", R1)).toBe(installed);
+    expect(potReleaseSet(family, "private", undefined)).toBe(installed);
+    // A fixed-Router or Shared Pot runs on the engine built for the Router it was minted with.
+    expect(potReleaseSet(family, "shared", R1)).toBe(earlier);
+    expect(potReleaseSet(family, "private-fixed-router", R1)).toBe(earlier);
+    expect(potReleaseSet(family, "shared", R2)).toBe(installed);
+    expect(potReleaseSet(family, "private-fixed-router", R2)).toBe(installed);
+    // Casing never matters.
+    expect(potReleaseSet(family, "shared", R1.toLowerCase() as Address)).toBe(earlier);
+    // A Router no release fixed names no set, and an unread one none either.
+    expect(potReleaseSet(family, "shared", UNKNOWN_ROUTER)).toBeUndefined();
+    expect(potReleaseSet(family, "private-fixed-router", undefined)).toBeUndefined();
+    expect(() => potEngineOf(family, "shared", UNKNOWN_ROUTER)).toThrow(
+      /no release this SDK knows built an engine for it/,
+    );
+    expect(() => potEngineOf(family, "shared", undefined)).toThrow(
+      /no release this SDK knows built an engine for it/,
+    );
+    // The engines: the one built for each Router, and the family's own for a dynamic Pot.
+    expect(potEngineOf(family, "shared", R1)).toBe(getAddress(earlier["v12-evm"].engine!));
+    expect(potEngineOf(family, "shared", R2)).toBe(getAddress(installed["v12-evm"].engine!));
+    expect(potEngineOf(family, "private", R1)).toBe(potFamilyEngine(family));
+    expect(potEngineOf(family, "private", undefined)).toBe(potFamilyEngine(family));
+    expect(potEngineOf(family, "shared", R1)).not.toBe(potEngineOf(family, "shared", R2));
+
+    // A CREATE2 family has no fixed-Router engine to pick: its first set, for every kind.
+    const create2 = v12PotFamilies().filter((one) => one.scheme === "create2");
+    expect(create2.length).toBeGreaterThan(0);
+    for (const one of create2)
+      for (const kind of ["private", "private-fixed-router", "shared"] as PotKind[])
+        expect([one.sets[0]!["kitchen-evm"].version, kind, potReleaseSet(one, kind, R1)]).toEqual([
+          one.sets[0]!["kitchen-evm"].version,
+          kind,
+          one.sets[0],
+        ]);
   });
 });

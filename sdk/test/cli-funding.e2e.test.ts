@@ -82,7 +82,7 @@ const nonces = parseAbi(["function nonces(address) view returns (uint256)"]);
  * there is a finding, and the empty-note assertions below keep their strength.
  */
 const EARLIER_POT_NOTES =
-  releaseArm("evm") === "legacy"
+  releaseArm("evm") !== "default"
     ? [
         /^Pot 0x[0-9a-fA-F]{40} is 0x[0-9a-fA-F]{40}'s [^\n]* needs another salt \(--salt <label>\)\.\n/m,
         /^Pot 0x[0-9a-fA-F]{40} is a [^\n]* Pot: the cook names its own engine, 0x[0-9a-fA-F]{40}\.\n/m,

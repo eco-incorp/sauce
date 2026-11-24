@@ -53,7 +53,11 @@ export interface V12PotDerivation {
   potProxyInitCodeHash?: string;
   /** CREATE3: the hash of the Pot profile the engine authenticates. */
   potProfileHash?: string;
-  /** CREATE3: the Router of every fixed-Router and Shared Pot. */
+  /**
+   * CREATE3: the Router a fixed-Router or Shared Pot minted on this release is fixed to. One minted
+   * earlier keeps its own (`v12ReleaseSet(compiler)["kitchen-evm"].fixedRouter`) and runs on that
+   * release's engine (`potEngine`).
+   */
   fixedRouter?: string;
 }
 

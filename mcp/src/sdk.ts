@@ -37,6 +37,7 @@ export {
   compileProgram,
   expectingRevert,
   potCommand,
+  potRouterStatus,
   txCommand,
   type CliFiles,
   type CommandOutput,

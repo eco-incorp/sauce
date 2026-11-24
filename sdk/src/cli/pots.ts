@@ -48,15 +48,15 @@ import {
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import {
   V12_RELEASE_SETS,
+  engineRunsCompiler,
   sdkCompilerVersion,
   v12SvmKitchenProgramId,
   type V12ReleaseSet,
 } from "../deployments/index.js";
 import {
   potAddressIn,
-  potFamilyEngine,
-  potFamilyRunsCompiler,
   potGateSalt,
+  potReleaseSet,
   preferredReleaseSets,
   v12DefaultPotFamily,
   v12PotFamilies,
@@ -174,16 +174,19 @@ export const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
 });
 
 /**
- * The release a record names for a Pot of `family`: the installed compiler with the family's engine
- * and Kitchen where that engine runs this SDK's programs, else the family's newest set.
+ * The release a record names for a Pot of `set`: the installed compiler with the set's engine and
+ * Kitchen where that engine runs this SDK's programs, else the set as it is.
  */
-export function familyRelease(family: PotFamily): Record<string, string> {
-  const set = family.sets[0]!;
-
-  return evmRelease(
-    potFamilyRunsCompiler(family) ? { ...set, compiler: sdkCompilerVersion() } : set,
+const releaseOf = (set: V12ReleaseSet): Record<string, string> =>
+  evmRelease(
+    engineRunsCompiler("evm", set["v12-evm"].engine!) === true
+      ? { ...set, compiler: sdkCompilerVersion() }
+      : set,
   );
-}
+
+/** The release a record names for a Pot of `family`'s first set: the installed one for the default family. */
+export const familyRelease = (family: PotFamily): Record<string, string> =>
+  releaseOf(family.sets[0]!);
 
 /**
  * The family an EVM record's Pot belongs to, told again from its address: a record written before
@@ -203,8 +206,11 @@ export const recordFamily = (record: PotRecord): PotFamily | undefined =>
 export function recordRelease(record: PotRecord): PotRecord["release"] {
   if (record.release !== undefined) return record.release;
   const family = recordFamily(record);
+  if (family === undefined) return undefined;
+  // An unread Router names no release for a fixed-Router or Shared Pot of a CREATE3 family.
+  if (family.scheme === "create3" && record.kind !== "private") return undefined;
 
-  return family === undefined ? undefined : familyRelease(family);
+  return familyRelease(family);
 }
 
 /** Every EVM engine a release set names, each once, newest first. */
@@ -257,10 +263,22 @@ async function evmRecord(input: {
   readonly origin: PotRecord["origin"];
   readonly deployment?: PotRecord["deployment"];
   readonly unknown?: () => Promise<{ readonly hash?: Hex; readonly kind?: PotKind }>;
+  /** A fixed-Router or Shared Pot's `router()`: the Router it runs, which names the engine built for it. */
+  readonly router?: () => Promise<Address | undefined>;
 }): Promise<PotRecord> {
   const known = v12PotRelease(input);
   const read = known === undefined ? await input.unknown?.() : undefined;
   const family = known?.family;
+  // A fixed-Router or Shared Pot of a CREATE3 family runs only on the engine built for the Router it
+  // was minted with, which the Pot says; any other Pot is its family's first set.
+  const fixed = family?.scheme === "create3" && known?.kind !== "private";
+  const router = fixed ? await input.router?.() : undefined;
+  const set =
+    family === undefined
+      ? undefined
+      : fixed
+        ? potReleaseSet(family, known!.kind, router)
+        : family.sets[0];
   const identity =
     family === undefined
       ? read?.hash === undefined
@@ -284,14 +302,20 @@ async function evmRecord(input: {
     kind,
     kitchen: getAddress(input.kitchen),
     ...identity,
-    ...(family === undefined
+    ...(set === undefined
       ? {}
-      : { engine: potFamilyEngine(family), release: familyRelease(family) }),
+      : { engine: getAddress(set["v12-evm"].engine!), release: releaseOf(set) }),
     sdk: sdkVersion(),
     ...(input.deployment === undefined ? {} : { deployment: input.deployment }),
     recordedAt: new Date().toISOString(),
   };
 }
+
+/** The Router `pot` runs, as the Pot says; `undefined` where it cannot be read. */
+const potRouter = (client: PublicClient, pot: Address): Promise<Address | undefined> =>
+  client
+    .readContract({ address: pot, abi: v12PotAbi, functionName: "router" })
+    .catch(() => undefined);
 
 /**
  * The init-code hash and kind of `pot`, which Kitchen `kitchen` minted at `blockNumber` for
@@ -410,6 +434,7 @@ export async function evmPotsDeployed(
         },
         // A Kitchen upgraded past the releases the SDK knows: as the chain says it was then.
         unknown: () => unknownRelease(client, { kitchen, owner, salt, pot }, sent.blockNumber),
+        router: () => potRouter(client, pot),
       });
     }),
   );
@@ -768,6 +793,7 @@ export async function importEvmPot(
     salt,
     pot,
     origin: "imported",
+    router: () => potRouter(client, pot),
   });
 }
 

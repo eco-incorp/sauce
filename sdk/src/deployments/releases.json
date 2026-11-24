@@ -5,7 +5,7 @@
     "`sync-engine-artifacts` takes the row whose `compiler` is the installed compiler and fetches exactly those releases: they are the SDK's defaults, so the artifacts on disk always pair with the compiler that runs. `deployments/releases.ts` refuses, at call-build time, an engine no row pairs with the program's compiler: the row's own, or one its `alsoRunsOn` lists.",
     "A row's `alsoRunsOn` names earlier engine releases its compiler's output also runs on, by version (`{ \"v12-evm\": [\"1.3.0\"] }`). Each is an evidenced fact, never read off an ISA label. The SDK cooks a Pot of an earlier Kitchen release on that Pot's own engine only where its engine is listed there or is the row's own.",
     "To bump: add or edit the row (versions), run the sync, paste the digests, engine ids and the kitchen-evm release's Kitchen and Pot init-code hash it reports. A null digest, engine id, Kitchen or hash means the release is not out yet; the sync refuses a row that still has one.",
-    "A kitchen-evm pin is the identity of every Pot its Kitchen mints: `kitchen` and `potInitCodeHash` (CREATE2, up to kitchen-evm 1.3.0), or `potProxyInitCodeHash`, `potProfileHash` and `fixedRouter` with `potInitCodeHash: null` (CREATE3, from 1.4.0). The `sauce` command tells which release minted a Pot from them, so a row keeps its own even after a newer release moves them.",
+    "A kitchen-evm pin is the identity of every Pot its Kitchen mints: `kitchen` and `potInitCodeHash` (CREATE2, up to kitchen-evm 1.3.0), or `potProxyInitCodeHash`, `potProfileHash` and `fixedRouter` with `potInitCodeHash: null` (CREATE3, from 1.4.0). The `sauce` command tells which release minted a Pot from them, so a row keeps its own even after a newer release moves them. From kitchen-evm 1.4.0 the engine compiles in one fixed Router. A release with a new Router ships with an engine release built for it, and a fixed-Router or Shared Pot cooks only on the engine of the row whose `kitchen-evm.fixedRouter` is its Router (`deployments/pot.ts#potReleaseSet`).",
     "A row's `npm` names a PUBLIC @eco-incorp/sauce artifact source by published version and tarball integrity. Optional `npm.compiler` names its actual source compiler row; otherwise the target compiler is assumed. Source and target rows must pin identical components, assets and identities, and the tarball must carry the committed source row. Only generated target-compiler compatibility metadata is rewritten after validation; no unpublished SDK is required."
   ],
   "releases": [
@@ -279,26 +279,26 @@
     },
     {
       "compiler": "2.6.4",
-      "alsoRunsOn": { "v12-evm": ["1.3.0"], "v12-svm": ["1.4.0"] },
+      "alsoRunsOn": { "v12-evm": ["1.4.0", "1.3.0"], "v12-svm": ["1.4.0"] },
       "v12-evm": {
-        "version": "1.4.0",
-        "engine": "0x983C102aa6321187877530723dDF6921AB4861a6",
+        "version": "1.5.0",
+        "engine": "0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a",
         "assets": {
-          "addresses.json": "132934f42e249d8ad14077cbbbe93f9da4e12a9a48e1cd89bc4dbe590b721ddf",
-          "runtime.creation.hex": "0xc1cb78355f1908823f04451a5fb8e007592ecdc9936611694ad66ea670d916b8",
+          "addresses.json": "e861282dd8071b89cd5a75ce82042a8cf2078570bc75e26fbeba4a85421ccb58",
+          "runtime.creation.hex": "0x06d964f1ba31aad8c7e82cfa5a01168a839c6ef6d97247ce9b65d185ee563bc3",
           "pot-profile.json": "793002adc1520b3c69fb6411207589468fda3c22d23a5de3362a099b34181f83"
         }
       },
       "kitchen-evm": {
-        "version": "1.4.0",
+        "version": "1.5.0",
         "kitchen": "0x19845b22989150E6B09dE55a661295Dd9188506b",
         "potInitCodeHash": null,
         "potProfileHash": "0x1ca6981b8c987e444f750b8c3c7224aee18696dfb2ceea3bbee2c086edbc9167",
         "potProxyInitCodeHash": "0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f",
-        "fixedRouter": "0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759",
+        "fixedRouter": "0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6",
         "assets": {
-          "addresses.json": "318ac7eab07e5ec5bb0daed594cb8573da6f642970e8b32daa31d3008d516873",
-          "abis.json": "7fdcb0e76d9094567caf94bdb303ffe098a2d1d8355d9065bd4eac3ae8993739",
+          "addresses.json": "ed675e385ad6d8da44c9ac56123a7615237510ec6c197347fffcc96ae4acb718",
+          "abis.json": "625d863d4a9260addbc5ef11448d6aa43d6d23f5f5c43a88f9fd3ae60b3b83b7",
           "pot-profile.json": "793002adc1520b3c69fb6411207589468fda3c22d23a5de3362a099b34181f83"
         }
       },

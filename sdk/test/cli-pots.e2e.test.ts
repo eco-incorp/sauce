@@ -348,13 +348,15 @@ describeEvm("the Pots the sauce command deploys, recorded", () => {
     }, 60_000);
   });
 
-  it("a 1.4.0 Pot is recorded, listed and imported with its release and engine", async () => {
-    const store = join(work, "release-1-4-0");
+  it("a Pot of the current release is recorded, listed and imported with its release and engine", async () => {
+    const store = join(work, "release-current");
     const salt = potSalt("release");
     const pot = getAddress(v12PredictPot(DEPLOYING.address, salt));
     const derivation = v12PotDerivation();
-    // kitchen-evm 1.4.0's engine: the identity this suite pins besides the one the SDK derives it by.
-    const engine = getAddress("0x983C102aa6321187877530723dDF6921AB4861a6");
+    const set = v12ReleaseSet();
+    // The engine the pinned release's row names: the identity this suite pins besides the one the SDK
+    // derives it by.
+    const engine = getAddress(set["v12-evm"].engine!);
     expect(getAddress(v12EngineAddress())).toBe(engine);
 
     const deployed = await sauceWith(
@@ -375,14 +377,18 @@ describeEvm("the Pots the sauce command deploys, recorded", () => {
       potProxyInitCodeHash: derivation.potProxyInitCodeHash,
       potProfileHash: derivation.potProfileHash,
       engine,
-      release: { compiler: sdkCompilerVersion(), "v12-evm": "1.4.0", "kitchen-evm": "1.4.0" },
+      release: {
+        compiler: sdkCompilerVersion(),
+        "v12-evm": set["v12-evm"].version,
+        "kitchen-evm": set["kitchen-evm"].version,
+      },
     });
     expect(record).not.toHaveProperty("potInitCodeHash");
 
     // `sauce pot list` says which release and engine.
     const listed = await sauceWith({ potsDir: store }, "pot", "list");
     expect(listed.stdout).toContain(
-      `compiler ${sdkCompilerVersion()} (v12-evm 1.4.0, kitchen-evm 1.4.0), engine ${engine}`,
+      `compiler ${sdkCompilerVersion()} (v12-evm ${set["v12-evm"].version}, kitchen-evm ${set["kitchen-evm"].version}), engine ${engine}`,
     );
 
     // Imported from the chain into another store, by address and by owner and salt.

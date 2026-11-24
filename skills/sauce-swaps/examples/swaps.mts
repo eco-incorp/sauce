@@ -113,6 +113,7 @@ for (const callback of [
   "algebraSwapCallback",
   "synthraV3SwapCallback",
   "unitFlowV3SwapCallback",
+  "hyperswapV3SwapCallback",
   "unlockCallback",
   "maverickV2SwapCallback",
   "lockAcquired",

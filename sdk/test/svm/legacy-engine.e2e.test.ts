@@ -70,7 +70,7 @@ const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
 const INSTALLED = address(v12SvmEngineProgramId());
 const KITCHEN = address(v12SvmKitchenProgramId());
 
-const legacyPresent = hasLegacyArtifacts("svm");
+const legacyPresent = hasLegacyArtifacts("svm", "1.4.0");
 if (!legacyPresent && process.env.CI) {
   throw new Error(
     "the earlier Solana engine's artifacts are absent in CI: sync-engine-artifacts writes them " +
@@ -181,7 +181,7 @@ describeBoth("a Solana Pot cooks on the engine that owns it", () => {
   let toUsdc: Address;
   const salt = hexToBytes(potSalt("earlier"));
   const earlierElf = (build: "devnet" | "mainnet") =>
-    join(legacyArtifactsDir("svm"), "svm", `engine-${build}.so`);
+    join(legacyArtifactsDir("svm", "1.4.0"), "svm", `engine-${build}.so`);
 
   const keypair = async (name: string): Promise<{ path: string; signer: KeyPairSigner }> => {
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");

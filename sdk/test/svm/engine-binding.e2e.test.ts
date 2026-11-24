@@ -61,7 +61,7 @@ const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
 const INSTALLED = address(v12SvmEngineProgramId());
 const KITCHEN = address(v12SvmKitchenProgramId());
 
-const legacyPresent = hasLegacyArtifacts("svm");
+const legacyPresent = hasLegacyArtifacts("svm", "1.4.0");
 if (!legacyPresent && process.env.CI) {
   throw new Error(
     "the earlier Solana engine's artifacts are absent in CI: sync-engine-artifacts writes them " +
@@ -183,7 +183,7 @@ describeBoth("the Kitchen binds no engine to a Pot", () => {
     harness = await startEngine(1_700_000_000n, ENGINE_SO as string, INSTALLED);
     harness.svm.addProgramFromFile(
       EARLIER,
-      join(legacyArtifactsDir("svm"), "svm", "engine-devnet.so"),
+      join(legacyArtifactsDir("svm", "1.4.0"), "svm", "engine-devnet.so"),
     );
   }, 120_000);
 

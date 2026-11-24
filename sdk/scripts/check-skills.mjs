@@ -584,6 +584,9 @@ const KNOWN_ADDRESSES = new Set();
   );
   for (const module of modules) collect(module.deployments);
   collect(deploymentsApi.v12DeployedAddresses());
+  // The earlier releases the table pins: their engines and Routers are recorded, and a Pot minted
+  // under one still runs on its own.
+  collect(deploymentsApi.V12_RELEASE_SETS);
   for (const chain of sdk.CANONICAL_CHAINS) collect(sdk.routes.chainDefines(chain));
 }
 

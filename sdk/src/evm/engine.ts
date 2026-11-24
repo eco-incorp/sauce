@@ -33,7 +33,7 @@ import {
   type PublicClient,
 } from "viem";
 
-import { v12DefaultPotFamily, v12PotRelease } from "../deployments/pot.js";
+import { potEngineOf, v12DefaultPotFamily, v12PotRelease } from "../deployments/pot.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
 import { v12RouterAddress } from "../deployments/v12-addresses.js";
 
@@ -702,4 +702,28 @@ export async function potRouterUpdate(
     to: getAddress(pot),
     data: encodeFunctionData({ abi: v12PotAbi, functionName: "setRouter", args: [target] }),
   };
+}
+
+/**
+ * The engine a cook on `pot` must name: its release's, and for a fixed-Router or Shared Pot the one
+ * built for the Router it was minted with (the engine compiles in one fixed Router). Reads the Pot's
+ * `kitchen`, `owner`, `userSalt` and `router` through `client`. Throws for an address no release this
+ * SDK knows derives, and for a fixed Router no known release built an engine for.
+ */
+export async function potEngine(client: PotRouterClient, pot: Address): Promise<Address> {
+  const [kitchen, owner, salt, router] = await Promise.all([
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "kitchen" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "owner" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "userSalt" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
+  ]);
+  const found = v12PotRelease({ kitchen, owner, salt, pot });
+  if (found === undefined) {
+    throw new Error(
+      `potEngine: ${pot} is not a Pot of a Kitchen release this SDK knows — its address does not ` +
+        "derive from its owner and salt under any release's Pot identity.",
+    );
+  }
+
+  return potEngineOf(found.family, found.kind, router);
 }

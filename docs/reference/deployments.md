@@ -31,8 +31,8 @@ say what each release changed and which engines run a compiler's programs.
 | Component | Version |
 | --- | --- |
 | Compiler, `@eco-incorp/sauce-compiler` | 2.6.4 |
-| EVM engine, `v12-evm` | 1.4.0 |
-| EVM Kitchen, `kitchen-evm` | 1.4.0 |
+| EVM engine, `v12-evm` | 1.5.0 |
+| EVM Kitchen, `kitchen-evm` | 1.5.0 |
 | Solana engine, `v12-svm` | 1.4.1 |
 | Solana Kitchen, `kitchen-svm` | 1.1.0 |
 
@@ -40,10 +40,10 @@ say what each release changed and which engines run a compiler's programs.
 
 | Contract | Address | What it is | In TypeScript |
 | --- | --- | --- | --- |
-| Engine | `0x983C102aa6321187877530723dDF6921AB4861a6` | the interpreter that runs a program: a cook is the Pot's `cook(engine, program)` | `v12EngineAddress()` |
+| Engine | `0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a` | the interpreter that runs a program: a cook is the Pot's `cook(engine, program)` | `v12EngineAddress()` |
 | Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays (`executionFee()`) | `v12KitchenAddress()` |
 | Kitchen implementation | `0x961Bb7e8C5304961e0E5F92B2BB3cdbE6e936a3c` | behind the Kitchen, an upgradeable proxy: call the Kitchen | `v12KitchenImplementationAddress()` |
-| Router | `0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759` | the Router a new Pot starts on, through which the swaps a pool calls back for run | `v12RouterAddress()` |
+| Router | `0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6` | the Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to; the swaps a pool calls back for run through it | `v12RouterAddress()` |
 | Quote Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` | generation 3: quotes Uniswap V3 and V4 swaps through `eth_call`, holding no tokens; no Pot's Router | `v12QuoteRouterAddress()` |
 
 ### Pots
@@ -59,7 +59,7 @@ salt.
 | --- | --- |
 | Pot proxy init-code hash | `0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f` |
 | Pot profile hash | `0x1ca6981b8c987e444f750b8c3c7224aee18696dfb2ceea3bbee2c086edbc9167` |
-| Fixed Router | `0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759` |
+| Fixed Router | `0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6` |
 | Pot creation code hash, which the Kitchen's `potInitCodeHash()` reports | `0x127f4d767a3585b9d2bb1a4d6ef3b46289cfa0452ac8323baf91fc8ffbcb03dc` |
 
 `v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula
@@ -67,13 +67,14 @@ and the hashes, and `sauce pot --owner <address>` prints an owner's Pot.
 
 ### Pots of earlier releases
 
-Pots an earlier Kitchen release made keep their address. The SDK cooks a
-kitchen-evm 1.3.0 Pot on its own engine:
+Pots an earlier release made keep their address and their engine, and so do fixed-Router and
+Shared Pots minted with an earlier Router. The SDK cooks each on the engine this table names:
 
-| Engine | Version | Address |
-| --- | --- | --- |
-| EVM engine, `v12-evm` | 1.3.0 | `0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67` |
-| Solana engine, `v12-svm` | 1.4.0 | `53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW` |
+| Engine | Version | Address | Its Pots |
+| --- | --- | --- | --- |
+| EVM engine, `v12-evm` | 1.4.0 | `0x983C102aa6321187877530723dDF6921AB4861a6` | fixed-Router and Shared Pots whose Router is 0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759 |
+| EVM engine, `v12-evm` | 1.3.0 | `0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67` | kitchen-evm 1.3.0 Pots |
+| Solana engine, `v12-svm` | 1.4.0 | `53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW` | Solana Pots whose owner program is this engine |
 
 ## Solana
 

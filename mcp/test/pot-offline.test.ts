@@ -26,7 +26,7 @@ import { legacyRow } from "../../sdk/test/release-arm.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = getAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
-const LEGACY = legacyRow("evm");
+const LEGACY = legacyRow("evm", "1.3.0");
 /** The owner's Pot at salt 0 under the earlier release, and under the installed one (CREATE3). */
 const EARLIER = getAddress(v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: LEGACY.compiler }));
 const CURRENT = getAddress(v12PredictPot(OWNER, DEFAULT_POT_SALT));

@@ -186,13 +186,55 @@ function gatherFamilies(): PotFamily[] {
 export const v12DefaultPotFamily = (): PotFamily =>
   v12PotFamilies().find((family) => family.sets[0] === v12ReleaseSet())!;
 
-/** The engine a family's Pots cook on: the v12-evm engine its sets name (one per family). */
+/**
+ * The engine of the family's first set: every Pot of a CREATE2 family, and a dynamic Pot of a CREATE3
+ * family. A fixed-Router or Shared Pot of a CREATE3 family runs on `potEngineOf`'s.
+ */
 export function potFamilyEngine(family: PotFamily): Address {
   const engine = family.sets[0]!["v12-evm"].engine;
   if (engine === null) {
     throw new Error(
       `internal: kitchen-evm ${family.sets[0]!["kitchen-evm"].version} has no released engine`,
     );
+  }
+
+  return getAddress(engine);
+}
+
+/**
+ * The release set a Pot of `family` and `kind` runs on. A fixed-Router or Shared Pot of a CREATE3
+ * family runs only on the engine built for its Router (the engine compiles in one fixed Router), so
+ * its set is the newest of the family whose Kitchen release fixes `router`, its `router()` read on
+ * chain; `undefined` when no set fixes that Router, or when `router` is not given. Any other Pot's
+ * set is the family's first: the installed one for the default family.
+ */
+export function potReleaseSet(
+  family: PotFamily,
+  kind: PotKind,
+  router?: Address,
+): V12ReleaseSet | undefined {
+  if (family.scheme === "create2" || kind === "private") return family.sets[0];
+  if (router === undefined) return undefined;
+
+  return family.sets.find((set) => {
+    const fixed = set["kitchen-evm"].fixedRouter;
+
+    return fixed !== undefined && getAddress(fixed) === getAddress(router);
+  });
+}
+
+/** The engine of `potReleaseSet`'s set; throws naming the Router when there is none. */
+export function potEngineOf(family: PotFamily, kind: PotKind, router?: Address): Address {
+  const set = potReleaseSet(family, kind, router);
+  if (set === undefined) {
+    throw new Error(
+      `the ${kind} Pot's Router ${router ?? "(unread)"} is fixed at mint, and no release this SDK ` +
+        "knows built an engine for it: no engine this SDK names can cook it",
+    );
+  }
+  const engine = set["v12-evm"].engine;
+  if (engine === null) {
+    throw new Error(`internal: kitchen-evm ${set["kitchen-evm"].version} has no released engine`);
   }
 
   return getAddress(engine);

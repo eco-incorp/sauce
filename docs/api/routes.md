@@ -209,6 +209,11 @@ To create a fixed-Router or Shared Pot, use the Kitchen's `deployPot(owner, salt
 `deploySharedPot(salt)` call. The two-argument deploy helper and the CLI deploy the private Pot
 with a mutable Router. A prediction alone does not verify the Pot's code, profile or Router.
 
+A fixed-Router or Shared Pot keeps the Router it was minted with, and an engine runs it only if it
+was built for that Router. `v12PredictPot` says where a Pot is; `potEngine(client, pot)` from
+`/evm/engine` says which engine a cook on it names, and `v12ReleaseSet(compiler)["kitchen-evm"].fixedRouter`
+is the Router of each release's fixed-Router and Shared Pots.
+
 Before you fund a predicted address, check the chain: call its Kitchen's `predictPot(owner, salt)`
 (`predictPot(owner, salt, true)` for a fixed Router, `predictSharedPot(salt)` for a shared Pot) and
 fund the address only if it returns the same one. A Kitchen of another release puts the Pot

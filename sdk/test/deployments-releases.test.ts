@@ -107,7 +107,7 @@ describe("the release table", () => {
       own["kitchen-evm"].version,
       own["v12-svm"].version,
       own["kitchen-svm"].version,
-    ]).toEqual(["1.4.0", "1.4.0", "1.4.1", "1.1.0"]);
+    ]).toEqual(["1.5.0", "1.5.0", "1.4.1", "1.1.0"]);
     expect(v12EngineAddress().toLowerCase()).toBe(own["v12-evm"].engine?.toLowerCase());
     expect(v12SvmEngineProgramId()).toBe(own["v12-svm"].engine);
     // The synced release is that row's own: versions, Kitchen and Pot identity.
@@ -147,30 +147,60 @@ describe("the release table", () => {
     const engine = v12EngineAddress();
     expect(engineRunsCompiler("evm", engine, "2.6.2")).toBe(false);
     expect(() => assertEngineRunsCompiler("evm", engine, "2.6.2")).toThrow(
-      /v12-evm 1\.4\.0, which runs compiler 2\.6\.3, 2\.6\.4 output/,
+      /v12-evm 1\.5\.0, which runs compiler 2\.6\.4 output/,
     );
   });
 
-  it("compiler 2.6.4 names compiler 2.6.3's releases, and both run on the earlier engines", () => {
+  it("compiler 2.6.4 names the Router release and the engine built for it; 2.6.3 keeps 1.1.0's", () => {
     const record = v12ReleaseSet("2.6.3");
     const current = v12ReleaseSet("2.6.4");
-    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const)
+    const [E0, E1, E2] = [
+      getAddress("0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67"),
+      getAddress("0x983C102aa6321187877530723dDF6921AB4861a6"),
+      getAddress("0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a"),
+    ];
+    const [R1, R2] = [
+      getAddress("0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759"),
+      getAddress("0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6"),
+    ];
+    // The installed row: v12-evm and kitchen-evm 1.5.0, the Router that answers HyperSwap V3's
+    // callback, and the engine built for it.
+    expect([current["v12-evm"].version, current["kitchen-evm"].version]).toEqual([
+      "1.5.0",
+      "1.5.0",
+    ]);
+    expect(getAddress(current["v12-evm"].engine!)).toBe(E2);
+    expect(getAddress(current["kitchen-evm"].fixedRouter!)).toBe(R2);
+    // The Kitchen and the Pot are 2.6.3's: only the Router, and so the engine, moved.
+    for (const field of ["kitchen", "potProxyInitCodeHash", "potProfileHash"] as const)
+      expect([field, current["kitchen-evm"][field]]).toEqual([field, record["kitchen-evm"][field]]);
+    expect(current["kitchen-evm"].assets["pot-profile.json"]).toBe(
+      record["kitchen-evm"].assets["pot-profile.json"],
+    );
+    for (const component of ["v12-svm", "kitchen-svm"] as const)
       expect([component, current[component]]).toEqual([component, record[component]]);
-    expect(current.alsoRunsOn).toEqual({ "v12-evm": ["1.3.0"], "v12-svm": ["1.4.0"] });
-    expect(record.alsoRunsOn).toEqual(current.alsoRunsOn);
+    expect(current.alsoRunsOn).toEqual({ "v12-evm": ["1.4.0", "1.3.0"], "v12-svm": ["1.4.0"] });
+    // 2.6.3 stays SDK 1.1.0's record: engine 1.4.0 on its Router.
+    expect(record["v12-evm"].version).toBe("1.4.0");
+    expect(getAddress(record["v12-evm"].engine!)).toBe(E1);
+    expect(getAddress(record["kitchen-evm"].fixedRouter!)).toBe(R1);
     expect(record.npm?.version).toBe("1.1.0");
-    const earlier = v12ReleaseSet("2.6.2");
-    for (const compiler of ["2.6.3", "2.6.4"])
-      for (const set of [earlier, current]) {
-        expect(() =>
-          assertEngineRunsCompiler("evm", set["v12-evm"].engine!, compiler),
-        ).not.toThrow();
+    // 2.6.4's output runs on E1 (the fixed-Router and Shared Pots on R1) and on E0, and 2.6.3's does
+    // not run on the new engine.
+    for (const compiler of ["2.6.3", "2.6.4"]) {
+      expect(() => assertEngineRunsCompiler("evm", E0, compiler)).not.toThrow();
+      for (const set of [v12ReleaseSet("2.6.2"), current])
         expect(() =>
           assertEngineRunsCompiler("svm", set["v12-svm"].engine!, compiler),
         ).not.toThrow();
-      }
-    expect(() => assertEngineRunsCompiler("evm", current["v12-evm"].engine!, "2.6.2")).toThrow(
-      /which runs compiler 2\.6\.3, 2\.6\.4 output/,
+    }
+    expect(() => assertEngineRunsCompiler("evm", E1, "2.6.4")).not.toThrow();
+    expect(() => assertEngineRunsCompiler("evm", E1, "2.6.3")).not.toThrow();
+    expect(() => assertEngineRunsCompiler("evm", E2, "2.6.3")).toThrow(
+      /runs compiler 2\.6\.4 output/,
+    );
+    expect(() => assertEngineRunsCompiler("evm", E2, "2.6.2")).toThrow(
+      /which runs compiler 2\.6\.4 output/,
     );
   });
 

@@ -28,13 +28,15 @@
 //
 // The installed row's raw assets also ship, under `dist/artifacts/releases/<first compiler naming
 // them>/` (SDK 1.1.0's opt-in path, `releases/2.6.3/`, kept): they are the same release as the
-// top-level artifacts, which are derived from them.
+// top-level artifacts, which are derived from them. SDK 1.1.0's documented `releases/2.6.3/` keeps
+// shipping that release (`KEPT_ASSET_FOLDERS`), read from the public package that row pins.
 //
 // The engines the installed compiler's output also runs on (`alsoRunsOn` in its row) mint Pots the
 // SDK still cooks, each on its own engine. Their artifacts do not ship: the suites that cook such a
 // Pot read them from `src/artifacts/legacy/<compiler>/`, taken from the public package of the
 // newest row pinning that engine (integrity-pinned in `releases.json`, no credential) and held to
-// that row's digests (`readLegacyArtifacts`, below).
+// that row's digests (`readLegacyArtifacts`, below). A CREATE3 row's legacy files are derived from
+// its raw assets, which the public package ships under `releases/<compiler>/`.
 //
 // A run reads and checks everything before it writes anything: the raw assets, what the default
 // artifacts are made of and the earlier releases' artifacts. It then writes them all together
@@ -907,7 +909,9 @@ function assembleDeployments({
       contracts: {
         engine: evm.contracts.engine,
         router: kitchenEvm.contracts.router,
-        quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
+        ...(quoteRouter === undefined
+          ? {}
+          : { quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) } }),
         kitchen: kitchenEvm.contracts.kitchen,
         kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
       },
@@ -1181,6 +1185,54 @@ try {
   process.exit(1);
 }
 if (REPORT) process.exit(0);
+
+// SDK 1.1.0 documented releases/2.6.3/ (its opt-in path). It keeps shipping the release it named,
+// byte for byte: that row's raw assets, read from the public package that row pins (no credential,
+// both artifact-source modes) and held to that row's digests.
+const KEPT_ASSET_FOLDERS = ["2.6.3"];
+function readKeptReleaseAssets() {
+  const components = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
+
+  return KEPT_ASSET_FOLDERS.filter((folder) => folder !== ASSETS_FOLDER).flatMap((folder) => {
+    const row = RELEASE_SETS.find((candidate) => candidate.compiler === folder);
+    if (row === undefined) {
+      throw new Error(
+        `releases.json has no ${folder} row, whose raw assets ship under releases/${folder}/`,
+      );
+    }
+    const read = publicPackage(row);
+
+    return components.flatMap((component) => {
+      const { version, assets } = row[component];
+      const tag = `${component}-v${version}`;
+
+      return Object.entries(assets).map(([asset, digest]) => {
+        const path = `releases/${folder}/${tag}/${asset}`;
+        const { hash } = ASSET_FORMATS[asset] ?? DEFAULT_FORMAT;
+        const bytes = read(`sdk/dist/artifacts/${path}`);
+        const actual = hash(bytes);
+        if (actual !== digest) {
+          throw new Error(
+            `${PUBLIC_PACKAGE}@${row.npm.version} carries ${path} hashing to ${actual}, not the ` +
+              `${folder} row's ${digest}`,
+          );
+        }
+
+        return { component, asset, path, bytes };
+      });
+    });
+  });
+}
+
+let kept = [];
+try {
+  kept = readKeptReleaseAssets();
+} catch (e) {
+  console.error(
+    `[sync-engine-artifacts] the kept release assets: ${e.message} — refused, nothing written.`,
+  );
+  process.exit(1);
+}
 
 // The earlier releases' artifacts are read and held to their rows now, before anything is written:
 // a refusal here leaves sdk/{src,dist}/artifacts as it was. Their files are written last.
@@ -1541,10 +1593,15 @@ flush();
 // top-level artifacts, which are derived from them. Dist only: nothing reads them from `src`.
 function shipAvailable() {
   const dist = resolve(SDK_DIR, "dist", "artifacts");
-  for (const { path, bytes } of available) later(() => put(resolve(dist, path), bytes));
+  for (const { path, bytes } of [...available, ...kept]) {
+    later(() => put(resolve(dist, path), bytes));
+  }
   later(() =>
     console.log(
-      `[sync-engine-artifacts] wrote the release's raw assets to dist/artifacts/releases/${ASSETS_FOLDER}`,
+      `[sync-engine-artifacts] wrote the release's raw assets to dist/artifacts/releases/${ASSETS_FOLDER}` +
+        (kept.length === 0
+          ? ""
+          : `, and the kept ${KEPT_ASSET_FOLDERS.map((folder) => `releases/${folder}`).join(", ")}`),
     ),
   );
 }
@@ -1568,82 +1625,198 @@ function readLegacyArtifacts() {
     }
   }
 
-  return [...wanted.values()].map((row) => {
-    const read = publicPackage(row);
-    const at = (path) => read(`sdk/dist/artifacts/${path}`);
-    const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
-    const deployments = parse(at("V12Deployments.json"));
-    const gate = parse(at("V12EngineGate.json"));
-    const runtime = parse(at("V12RuntimeBytecode.json")).runtimeCreationCode;
-    const pot = parse(at("V12Pot.json")).bytecode;
-    const checks = {
-      "runtime creation code": keccak256(runtime) === row["v12-evm"].assets["runtime.creation.hex"],
-      "EVM engine":
-        deployments.evm.contracts.engine.address.toLowerCase() ===
-        row["v12-evm"].engine.toLowerCase(),
-      Kitchen:
-        deployments.evm.contracts.kitchen.address.toLowerCase() ===
-          row["kitchen-evm"].kitchen.toLowerCase() &&
-        gate.kitchen.toLowerCase() === row["kitchen-evm"].kitchen.toLowerCase(),
-      "Pot init-code hash": [
-        deployments.evm.pot.initCodeHash,
-        gate.potInitCodeHash,
-        keccak256(pot),
-      ].every((h) => h.toLowerCase() === row["kitchen-evm"].potInitCodeHash.toLowerCase()),
-      "SVM engine": deployments.svm.programs.engine.programId === row["v12-svm"].engine,
-      ...Object.fromEntries(
-        ["engine-devnet.so", "engine-mainnet.so"].map((so) => [
-          so,
-          sha256(at(`svm/${so}`)) === row["v12-svm"].assets[so],
-        ]),
-      ),
-      "kitchen.so": sha256(at("svm/kitchen.so")) === row["kitchen-svm"].assets["kitchen.so"],
-      ...Object.fromEntries(
-        ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].map((c) => [
-          `${c} version`,
-          deployments.releases[c].version === row[c].version,
-        ]),
-      ),
-    };
-    const wrong = Object.keys(checks).filter((what) => !checks[what]);
-    if (wrong.length) {
+  return [...wanted.values()].map((row) =>
+    row["kitchen-evm"].potProxyInitCodeHash === undefined
+      ? legacyFromTopLevelFiles(row)
+      : legacyFromRawAssets(row),
+  );
+}
+
+/**
+ * A CREATE2 row's artifacts, as its public package carries them at the top level, each held to the
+ * row's identities and digests.
+ */
+function legacyFromTopLevelFiles(row) {
+  const read = publicPackage(row);
+  const at = (path) => read(`sdk/dist/artifacts/${path}`);
+  const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
+  const deployments = parse(at("V12Deployments.json"));
+  const gate = parse(at("V12EngineGate.json"));
+  const runtime = parse(at("V12RuntimeBytecode.json")).runtimeCreationCode;
+  const pot = parse(at("V12Pot.json")).bytecode;
+  const checks = {
+    "runtime creation code": keccak256(runtime) === row["v12-evm"].assets["runtime.creation.hex"],
+    "EVM engine":
+      deployments.evm.contracts.engine.address.toLowerCase() ===
+      row["v12-evm"].engine.toLowerCase(),
+    Kitchen:
+      deployments.evm.contracts.kitchen.address.toLowerCase() ===
+        row["kitchen-evm"].kitchen.toLowerCase() &&
+      gate.kitchen.toLowerCase() === row["kitchen-evm"].kitchen.toLowerCase(),
+    "Pot init-code hash": [
+      deployments.evm.pot.initCodeHash,
+      gate.potInitCodeHash,
+      keccak256(pot),
+    ].every((h) => h.toLowerCase() === row["kitchen-evm"].potInitCodeHash.toLowerCase()),
+    "SVM engine": deployments.svm.programs.engine.programId === row["v12-svm"].engine,
+    ...Object.fromEntries(
+      ["engine-devnet.so", "engine-mainnet.so"].map((so) => [
+        so,
+        sha256(at(`svm/${so}`)) === row["v12-svm"].assets[so],
+      ]),
+    ),
+    "kitchen.so": sha256(at("svm/kitchen.so")) === row["kitchen-svm"].assets["kitchen.so"],
+    ...Object.fromEntries(
+      ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].map((c) => [
+        `${c} version`,
+        deployments.releases[c].version === row[c].version,
+      ]),
+    ),
+  };
+  const wrong = Object.keys(checks).filter((what) => !checks[what]);
+  if (wrong.length) {
+    throw new Error(
+      `${PUBLIC_PACKAGE}@${row.npm.version} disagrees with releases.json's ${row.compiler} row ` +
+        `on: ${wrong.join(", ")}`,
+    );
+  }
+  const files = new Map();
+  for (const name of [
+    "V12Deployments",
+    "V12EngineGate",
+    "V12RuntimeBytecode",
+    "V12Pot",
+    "V12Kitchen",
+    "V12KitchenProxy",
+    "Router",
+    "ISauceRouter",
+  ]) {
+    files.set(`${name}.json`, at(`${name}.json`));
+  }
+  for (const so of ["engine-devnet.so", "engine-mainnet.so", "kitchen.so"]) {
+    files.set(`svm/${so}`, at(`svm/${so}`));
+  }
+
+  return { row, files, from: `${PUBLIC_PACKAGE}@${row.npm.version}` };
+}
+
+/**
+ * A CREATE3 row's artifacts (EVM only), DERIVED from its raw assets as the default path derives the
+ * installed row's: the public package that row pins ships them under `releases/<compiler>/`, each
+ * held to the row's digest. The package's top-level files are not used: SDK 1.1.0's tarball carries
+ * the 1.3.0 set there. What is derived is held to the row's identities.
+ */
+function legacyFromRawAssets(row) {
+  const read = publicPackage(row);
+  const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
+  const raw = (component, asset) => {
+    const tag = `${component}-v${row[component].version}`;
+    const path = `releases/${row.compiler}/${tag}/${asset}`;
+    const bytes = read(`sdk/dist/artifacts/${path}`);
+    const { hash } = ASSET_FORMATS[asset] ?? DEFAULT_FORMAT;
+    const actual = hash(bytes);
+    if (actual !== row[component].assets[asset]) {
       throw new Error(
-        `${PUBLIC_PACKAGE}@${row.npm.version} disagrees with releases.json's ${row.compiler} row ` +
-          `on: ${wrong.join(", ")}`,
+        `${PUBLIC_PACKAGE}@${row.npm.version} carries ${path} hashing to ${actual}, not the ` +
+          `${row.compiler} row's ${row[component].assets[asset]}`,
       );
     }
-    const files = new Map();
-    for (const name of [
-      "V12Deployments",
-      "V12EngineGate",
-      "V12RuntimeBytecode",
-      "V12Pot",
-      "V12Kitchen",
-      "V12KitchenProxy",
-      "Router",
-      "ISauceRouter",
-    ]) {
-      files.set(`${name}.json`, at(`${name}.json`));
-    }
-    for (const so of ["engine-devnet.so", "engine-mainnet.so", "kitchen.so"]) {
-      files.set(`svm/${so}`, at(`svm/${so}`));
-    }
 
-    return { row, files };
-  });
+    return bytes;
+  };
+  const runtime = raw("v12-evm", "runtime.creation.hex").toString("utf8").trim();
+  const evm = parse(raw("v12-evm", "addresses.json"));
+  const kitchenEvm = parse(raw("kitchen-evm", "addresses.json"));
+  const svm = parse(raw("v12-svm", "addresses.json"));
+  const kitchenSvm = parse(raw("kitchen-svm", "addresses.json"));
+  const abis = parse(raw("kitchen-evm", "abis.json")).contracts ?? {};
+  const profiles = ["v12-evm", "kitchen-evm"].map((c) => parse(raw(c, "pot-profile.json")));
+  const pin = row["kitchen-evm"];
+  const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+  const potCreationHash = keccak256(abis.Pot?.bytecode ?? "0x");
+  const checks = {
+    ...Object.fromEntries(
+      [
+        ["v12-evm", evm],
+        ["kitchen-evm", kitchenEvm],
+        ["v12-svm", svm],
+        ["kitchen-svm", kitchenSvm],
+      ].map(([c, addresses]) => [`${c} version`, addresses.version === row[c].version]),
+    ),
+    "EVM engine":
+      same(evm.contracts?.engine?.address, row["v12-evm"].engine) &&
+      same(evm.contracts?.engine?.initCodeHash, keccak256(runtime)),
+    Kitchen:
+      same(kitchenEvm.contracts?.kitchen?.address, pin.kitchen) &&
+      same(kitchenEvm.pot?.deployer, pin.kitchen),
+    Router:
+      same(kitchenEvm.contracts?.router?.address, kitchenEvm.pot?.fixedRouter) &&
+      same(kitchenEvm.pot?.fixedRouter, pin.fixedRouter) &&
+      same(kitchenEvm.contracts?.router?.initCodeHash, keccak256(abis.Router?.bytecode ?? "0x")),
+    "Pot identity":
+      same(kitchenEvm.pot?.potProxyInitCodeHash, pin.potProxyInitCodeHash) &&
+      same(kitchenEvm.pot?.potProfileHash, pin.potProfileHash),
+    "Pot profiles": profiles.every((profile) => same(profile.profileHash, pin.potProfileHash)),
+  };
+  const wrong = Object.keys(checks).filter((what) => !checks[what]);
+  if (wrong.length) {
+    throw new Error(
+      `${PUBLIC_PACKAGE}@${row.npm.version} disagrees with releases.json's ${row.compiler} row ` +
+        `on: ${wrong.join(", ")}`,
+    );
+  }
+
+  const pretty = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+  const files = new Map();
+  for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
+    files.set(
+      `${name}.json`,
+      Buffer.from(JSON.stringify({ abi: abis[contract].abi, bytecode: abis[contract].bytecode })),
+    );
+  }
+  files.set("V12RuntimeBytecode.json", pretty({ runtimeCreationCode: runtime }));
+  files.set(
+    "V12EngineGate.json",
+    pretty({
+      kitchen: pin.kitchen,
+      potInitCodeHash: potCreationHash,
+      scheme: "create3",
+      fixedRouter: pin.fixedRouter,
+      potProxyInitCodeHash: pin.potProxyInitCodeHash,
+      potProfileHash: pin.potProfileHash,
+    }),
+  );
+  files.set(
+    "V12Deployments.json",
+    pretty(
+      assembleDeployments({
+        compiler: row.compiler,
+        evm,
+        kitchenEvm,
+        svm,
+        kitchenSvm,
+        potCreationHash,
+      }),
+    ),
+  );
+
+  return {
+    row,
+    files,
+    from: `${PUBLIC_PACKAGE}@${row.npm.version}'s releases/${row.compiler}`,
+  };
 }
 
 /** Queue each earlier release's folder, replaced whole, behind everything else the run writes. */
 function writeLegacyArtifacts(prepared) {
-  for (const { row, files } of prepared) {
+  for (const { row, files, from } of prepared) {
     const dir = resolve(SDK_DIR, "src", "artifacts", "legacy", row.compiler);
     later(() => {
       rmSync(dir, { recursive: true, force: true });
       for (const [path, bytes] of files) put(resolve(dir, path), bytes);
       console.log(
         `[sync-engine-artifacts] wrote the compiler ${row.compiler} release's artifacts to ` +
-          `src/artifacts/legacy/${row.compiler} (suites only; not shipped), from ` +
-          `${PUBLIC_PACKAGE}@${row.npm.version}`,
+          `src/artifacts/legacy/${row.compiler} (suites only; not shipped), from ${from}`,
       );
     });
   }

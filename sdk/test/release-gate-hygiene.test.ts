@@ -351,4 +351,41 @@ describe("the release gate script", () => {
   it("holds every command that carries a key to a loopback endpoint, at the one place commands run", () => {
     expect(source).toMatch(/requireSigningEndpoint\(args\)/);
   });
+
+  it("an --rpc-config key that is not a chain id is refused, counted and never repeated", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sauce-release-gate-keys-"));
+    try {
+      // A pasted endpoint where a chain id goes carries its credential, and registering the values
+      // alone would not scrub it from a message that echoed the key.
+      const cfg = join(dir, "rpc.json");
+      writeFileSync(
+        cfg,
+        JSON.stringify({
+          "1": "https://one.example.invalid/AAAAAAAAAAAA",
+          "https://rpc.example.invalid/v2/SECRETKEY123": "https://two.example.invalid/BBBBBBBBBBBB",
+        }),
+        { mode: 0o600 },
+      );
+      // The package does not exist, which keeps a run that gets past the check offline.
+      const ran = spawnSync(
+        process.execPath,
+        [SCRIPT, "--package", join(dir, "missing.tgz"), "--rpc-config", cfg],
+        { encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: dir }, timeout: 120_000 },
+      );
+      expect(ran.status).toBe(2);
+      expect(ran.stderr.trim()).toBe(`--rpc-config ${cfg} has a key that is not a chain id`);
+      for (const text of [ran.stdout, ran.stderr]) {
+        for (const secret of [
+          "SECRETKEY123",
+          "rpc.example.invalid",
+          "one.example.invalid",
+          "two.example.invalid",
+        ]) {
+          expect(text).not.toContain(secret);
+        }
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

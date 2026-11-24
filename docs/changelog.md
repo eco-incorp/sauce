@@ -65,7 +65,7 @@ Each SDK release and the five releases it pins:
 
 | SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.2.0   | 2.6.4    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
 | 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
 | None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -113,9 +113,10 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## SDK 1.2.0 — <date of release>
 
-Compiler 2.6.4, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
-1.1.0: compiler 2.6.4 (from 2.6.3). The engines and Kitchens are the ones 1.1.0 pinned; what moved
-is that the SDK now uses them.
+Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
+1.1.0: compiler 2.6.4 (from 2.6.3), and kitchen-evm 1.5.0 and v12-evm 1.5.0 (both from 1.4.0): a
+Router that also answers HyperSwap V3's swap callback, and the engine built for it. v12-svm and
+kitchen-svm are the releases 1.1.0 pinned; what moved for them is that the SDK now uses them.
 
 SDK 1.1.0 pinned these releases but kept every default on the ones before: engine 1.3.0, CREATE2
 Pot addresses and Solana engine 1.4.0. On 2026-11-20, before 1.1.0 was published, every observed
@@ -131,8 +132,8 @@ EVM chain with the Kitchen switched to kitchen-evm 1.4.0, which places new Pots 
   `checkSignedCookPot` said they predate signed cooks, and `potRouterUpdate` proposed the new
   Router for old Pots.
 
-1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: kitchen-evm
-1.4.0 and engine 1.4.0 on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
+1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: the Kitchen
+and its new Router and engine on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
 keeps working: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0; a Solana Pot of v12-svm 1.4.0 cooks
 on 1.4.0, a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 (on 2026-11-22, at slot
 472365757, the only created Pots on mainnet-beta were 1.3.0's) cooks on the installed engine, as
@@ -156,11 +157,17 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
   `parcel.args`) carries each word as it arrived. To refuse a dirty word, decode it as `"Uint256"`
   and check it (`require(word >> 160 == 0)`). Entry parameters and a contract call's `bool`,
   `address` and fixed-bytes answers are checked as in 1.1.0.
+- **Changed (EVM): a swap at a HyperSwap V3 pool pays the pool.** `@sauce/router`'s `uniswapV3`
+  (and the `uniswapV3Swap` action) on a Pot whose Router is this release's: HyperSwap V3's pools
+  call back `hyperswapV3SwapCallback`, which no earlier Router answers, so the swap reverted and
+  `tryUniswapV3` returned 0. A Pot minted before its chain's switch keeps the Router it has; a
+  Pot minted after starts on the new one.
 
 ### Compiler and engines
 
-- **Compiler 2.6.3 → 2.6.4:** pairs with the same engines and Kitchens as 2.6.3. Its programs run
-  on v12-evm 1.4.0 and v12-svm 1.4.1, and on v12-evm 1.3.0 and v12-svm 1.4.0 for Pots of those
+- **Compiler 2.6.3 → 2.6.4:** pairs with v12-evm 1.5.0 and kitchen-evm 1.5.0 (2.6.3's were 1.4.0)
+  and the same Solana releases as 2.6.3. Its programs run on v12-evm 1.5.0 and v12-svm 1.4.1, and
+  on v12-evm 1.4.0, v12-evm 1.3.0 and v12-svm 1.4.0 for Pots of those
   releases. It changes how an EVM `abi.decode` reads `"bool"` and `"Address"` leaves (see
   SauceScript above) and drops what checking them cost: about 13 to 17 bytes and about a thousand
   gas a leaf, read or not. The compiler measured a WETH-to-USDC swap cook on Ethereum whose program
@@ -168,14 +175,20 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
   program whose `abi.decode` reads no `"bool"` or `"Address"` compiles to the bytes 2.6.3 gave it:
   every example and recipe this package ships does, the 426-byte settlement program included (same
   hash). The compiler's JavaScript API is unchanged.
-- **kitchen-evm 1.4.0 (now the default):** New private, fixed-Router and Shared Pots are CREATE3:
-  their address comes from the Kitchen, the owner, the salt and the Pot proxy's init-code hash, not
-  from a hash of the Pot's own code. Pots a kitchen-evm 1.3.0 Kitchen made keep their address and
-  keep working. The 1.1.0 entry describes the release itself.
-- **v12-evm 1.4.0 (now the default):** The engine every new Pot cooks on. It refuses a
-  kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0 Pot, so the SDK names the engine of the
-  Pot it cooks on. Compiler 2.6.4's output also runs on v12-evm 1.3.0, which the compiler's row in
-  `releases.json` records as `alsoRunsOn`: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0 with no
+- **kitchen-evm 1.4.0 → 1.5.0 (now the default; SDK 1.1.0's defaults were 1.3.0):** New Pots are
+  CREATE3 (1.4.0's change, described under 1.1.0), and start on a new Router that also answers
+  HyperSwap V3's swap callback, `hyperswapV3SwapCallback`. The Kitchen, its implementation and the
+  Pot are 1.4.0's, so no Pot address moves. A Pot minted before its chain's switch keeps the Router
+  it has: a dynamic Pot until its owner changes it, a fixed-Router or Shared Pot for good. On a
+  fixed-Router or Shared Pot that already exists with the 1.4.0 Router,
+  `Kitchen.deployPot(owner, salt, true)` and `deploySharedPot(salt)` now revert
+  `OccupiedPotMismatch()`: check code before deploying.
+- **v12-evm 1.4.0 → 1.5.0 (now the default; 1.1.0's was 1.3.0):** Engine 1.4.0, built for the new
+  Router. An engine runs a fixed-Router or Shared Pot only when it was built for that Pot's Router,
+  so the SDK cooks those Pots minted on the 1.4.0 Router on engine 1.4.0, and every other
+  new-Kitchen Pot on 1.5.0. It refuses a kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0
+  Pot, so the SDK names the engine of the Pot it cooks on. Compiler 2.6.4's output runs on all
+  three, and on v12-evm 1.3.0 for kitchen-evm 1.3.0 Pots (`alsoRunsOn` in its row) with no
   recompile. That Pot keeps engine 1.3.0's behaviour, which is not engine 1.4.0's: signature checks
   now require a complete `ecrecover` reply and the exact ERC-1271 return word, and newly allocated
   memory is cleared after reuse, so a fresh array does not expose values from an earlier caught
@@ -211,8 +224,20 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
   release that made the Pot, and the command says so. Offline, it comes from the Pot store's
   record of that Pot when the record is the Pot's own (its chain and Pot are the ones named, and
   it is filed under its Pot's name; any other record is ignored, with a note naming its file, and
-  a record that cannot be read is a note too); with no record it is engine 1.4.0, with a note. A
+  a record that cannot be read is a note too); with no record it is the installed engine, with a note. A
   cook on the wrong engine reverts whole, so no funds are stranded.
+- **Changed (EVM): a fixed-Router or Shared Pot cooks on the engine built for its Router.** The
+  Router is fixed when the Pot is minted, and an engine runs such a Pot only if it was built for
+  it, so online the command reads the Pot's `router()` and names that engine, and `sauce pot
+import` records it with its release in the Pot store. Offline, a record's engine decides only
+  for a fixed-Router or Shared Pot, and only when it is one of the family's; a dynamic Pot cooks on
+  the installed engine, offline as online, whatever an earlier SDK's record names. A fixed-Router
+  or Shared Pot whose Router no release this SDK knows built an engine for is refused, naming the
+  Router.
+- **Added (EVM): `sauce pot` and the MCP `sauce_pot` say which Router a deployed Pot runs.** The
+  result carries `router`, and where it is not the Router this chain's Kitchen now gives new Pots,
+  a note says that a pool calling back a name only the newer Router answers (HyperSwap V3's
+  `hyperswapV3SwapCallback` is one) cannot pay that Pot.
 - **Changed: `sauce pot` and `sauce pot list` know every release.** `sauce pot` says which engine
   cooks the Pot and lists an owner's deployed Pot of an earlier release; `sauce pot import`
   records a kitchen-evm 1.4.0 Pot, which it refused before ("no release this sauce knows minted
@@ -270,9 +295,13 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
   and only for a Pot of the current release whose Kitchen names that Router: it returns nothing for
   a Pot of an earlier release, a fixed-Router or Shared Pot, or a Kitchen that names another
   Router, and still throws for an address no known release derives.
-- The release files 1.1.0 shipped as opt-in artifacts under `sdk/dist/artifacts/releases/2.6.3/`
-  still ship there, unchanged: they are now the same release as the package's own top-level
-  artifacts, which are derived from them, so code reading either reads one release.
+- **Added: `potEngine(client, pot)`** in `/evm/engine`: the engine a cook on that Pot must name,
+  which for a fixed-Router or Shared Pot is the one built for its Router.
+- `v12RouterAddress()` and `v12PotDerivation().fixedRouter` are the new Router.
+- The release files SDK 1.1.0 shipped as opt-in artifacts under `sdk/dist/artifacts/releases/2.6.3/`
+  still ship there, unchanged. They are kitchen-evm 1.4.0's and v12-evm 1.4.0's, which the SDK still
+  cooks fixed-Router and Shared Pots on. This release's own raw files ship beside them under
+  `releases/2.6.4/`.
 
 ### Fixed
 
@@ -287,6 +316,8 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
   (every contract has code, the Kitchen reports the Pot hash and the Router, and a Pot is placed
   where `v12PredictPot` says) and deploys nothing over it.
 - **Changed: a test account's Pot is the release's CREATE3 address**, as `v12PredictPot` gives it.
+- **Changed: on a fork of a chain whose Kitchen still hands out the 1.4.0 Router, the kit deploys
+  the new Router and engine and switches the Kitchen to them**, as the release's own rollout does.
 - **Changed (Solana):** the kit's bank loads the packaged engine and Kitchen only when the cluster
   is shown to run them, and cooks a Pot on the engine that owns it where that engine runs this
   compiler's output, else on the installed engine, as the command does; `SolanaCookResult.engine`

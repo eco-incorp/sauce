@@ -1,10 +1,10 @@
 /**
- * The legacy arm (SAUCE_TEST_EVM_ARM / SAUCE_TEST_SVM_ARM = legacy, `release-arm.ts`) is the evidence
- * for `alsoRunsOn`: the engine-executing suites run again on the earlier release the installed row
- * lists, in CI on every PR. This holds the three things that make that evidence whole: the variables
- * mean only what `releaseArm` says, no engine-executing suite is left off the lists in
- * `legacy-arm.json`, and CI runs the lists for every earlier engine the row names. Nothing here starts
- * a chain.
+ * The legacy arms (SAUCE_TEST_EVM_ARM / SAUCE_TEST_SVM_ARM = an earlier engine version, `release-arm.ts`)
+ * are the evidence for `alsoRunsOn`: the engine-executing suites run again on each earlier release the
+ * installed row lists, in CI on every PR, one job per version. This holds the three things that make
+ * that evidence whole: the variables mean only what `releaseArm` says, no engine-executing suite is
+ * left off the lists in `legacy-arm.json` for any listed version, and CI runs the lists for every
+ * earlier engine the row names and for no other. Nothing here starts a chain.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -30,29 +30,48 @@ function filesUnder(dir: string, pattern: RegExp, recursive: boolean): string[] 
     .sort();
 }
 
-type Lists = Record<(typeof TARGETS)[number], { run: string[]; skip: Record<string, string> }>;
+type Lists = Record<
+  (typeof TARGETS)[number],
+  Record<string, { run: string[]; skip: Record<string, string> }>
+>;
 const manifest = JSON.parse(read("sdk/test/legacy-arm.json")) as Lists;
 
-describe("the legacy arm", () => {
-  it("releaseArm reads only its two variables and refuses any other value", () => {
+/** The earlier engine versions the installed row lists for `target`, in its order. */
+const listedFor = (target: (typeof TARGETS)[number]): readonly string[] =>
+  v12ReleaseSet().alsoRunsOn?.[COMPONENT[target]] ?? [];
+
+describe("the legacy arms", () => {
+  it("releaseArm reads only its two variables and takes only a version the installed row lists", () => {
     const saved = Object.values(VARIABLE).map((name) => [name, process.env[name]] as const);
     try {
       for (const name of Object.values(VARIABLE)) delete process.env[name];
       expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["default", "default"]);
 
       // Each target reads its own variable and no other.
-      process.env.SAUCE_TEST_EVM_ARM = "legacy";
-      expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["legacy", "default"]);
+      process.env.SAUCE_TEST_EVM_ARM = "1.4.0";
+      expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["1.4.0", "default"]);
+      process.env.SAUCE_TEST_EVM_ARM = "1.3.0";
+      expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["1.3.0", "default"]);
       process.env.SAUCE_TEST_EVM_ARM = "default";
-      process.env.SAUCE_TEST_SVM_ARM = "legacy";
-      expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["default", "legacy"]);
+      process.env.SAUCE_TEST_SVM_ARM = "1.4.0";
+      expect([releaseArm("evm"), releaseArm("svm")]).toEqual(["default", "1.4.0"]);
 
       // Any other value is refused by name, exactly as written, and does not move the other target.
+      // "legacy" named the one earlier release before there were several: it is not a version.
       process.env.SAUCE_TEST_EVM_ARM = "bogus";
       expect(() => releaseArm("evm")).toThrow(/SAUCE_TEST_EVM_ARM is "bogus"/);
-      expect(releaseArm("svm")).toBe("legacy");
+      process.env.SAUCE_TEST_EVM_ARM = "legacy";
+      expect(() => releaseArm("evm")).toThrow(/SAUCE_TEST_EVM_ARM is "legacy"/);
+      // A version the row lists for the other target only is not this one's.
+      process.env.SAUCE_TEST_SVM_ARM = "1.3.0";
+      expect(() => releaseArm("svm")).toThrow(
+        /SAUCE_TEST_SVM_ARM is "1\.3\.0": set it to one of 1\.4\.0/,
+      );
+      expect(() => releaseArm("evm")).toThrow(/SAUCE_TEST_EVM_ARM is "legacy"/);
+      process.env.SAUCE_TEST_EVM_ARM = "1.4.0";
       process.env.SAUCE_TEST_SVM_ARM = "Legacy";
       expect(() => releaseArm("svm")).toThrow(/SAUCE_TEST_SVM_ARM is "Legacy"/);
+      expect(releaseArm("evm")).toBe("1.4.0");
       process.env.SAUCE_TEST_SVM_ARM = "";
       expect(() => releaseArm("svm")).toThrow(/SAUCE_TEST_SVM_ARM is ""/);
     } finally {
@@ -76,7 +95,7 @@ describe("the legacy arm", () => {
     expect(readers).toEqual([]);
   });
 
-  it("every engine-executing suite is on one legacy-arm list of its target", () => {
+  it("every engine-executing suite is on one list of each listed version of its target", () => {
     // A suite starts an EVM chain through one of the harness starters, and a Solana engine through
     // `startEngine` or the exact-input harness.
     const executes = {
@@ -92,29 +111,48 @@ describe("the legacy arm", () => {
     const found = Object.fromEntries(
       TARGETS.map((target) => {
         const executing = suites.filter((path) => executes[target].test(read(path)));
-        const { run, skip } = manifest[target];
-        const listed = [...run, ...Object.keys(skip)];
+        const versions = Object.fromEntries(
+          Object.entries(manifest[target]).map(([version, { run, skip }]) => {
+            const listed = [...run, ...Object.keys(skip)];
 
-        return [
-          target,
-          {
-            // On neither list.
-            missing: executing.filter((path) => !listed.includes(path)),
-            // On both, or twice on `run`.
-            twice: listed.filter((path, i) => listed.indexOf(path) !== i),
-            // Listed, but not a suite that exists and executes an engine for this target.
-            notExecuting: listed.filter((path) => !executing.includes(path)),
-            // Left off with no reason.
-            noReason: Object.keys(skip).filter((path) => skip[path]!.trim() === ""),
-          },
-        ];
+            return [
+              version,
+              {
+                // On neither list.
+                missing: executing.filter((path) => !listed.includes(path)),
+                // On both, or twice on `run`.
+                twice: listed.filter((path, i) => listed.indexOf(path) !== i),
+                // Listed, but not a suite that exists and executes an engine for this target.
+                notExecuting: listed.filter((path) => !executing.includes(path)),
+                // Left off with no reason.
+                noReason: Object.keys(skip).filter((path) => skip[path]!.trim() === ""),
+              },
+            ];
+          }),
+        );
+
+        return [target, versions];
       }),
     );
     const none = { missing: [], twice: [], notExecuting: [], noReason: [] };
-    expect(found).toEqual({ evm: none, svm: none });
+    expect(found).toEqual(
+      Object.fromEntries(
+        TARGETS.map((target) => [
+          target,
+          Object.fromEntries(listedFor(target).map((version) => [version, none])),
+        ]),
+      ),
+    );
+    // The file holds a list for each version the row lists and for no other.
+    for (const target of TARGETS) {
+      expect([target, Object.keys(manifest[target]).sort()]).toEqual([
+        target,
+        [...listedFor(target)].sort(),
+      ]);
+    }
   });
 
-  it("CI runs the legacy arm for every earlier engine the installed row lists", () => {
+  it("CI runs the legacy arm for every earlier engine the installed row lists, and for no other", () => {
     const lines = read(".github/workflows/ci.yml").split("\n");
     /** The text of one job: its key, up to the next job's. */
     const job = (name: string): string | undefined => {
@@ -130,32 +168,41 @@ describe("the legacy arm", () => {
       ?.split(",")
       .map((name) => name.trim());
 
-    const row = v12ReleaseSet();
+    // One job per version: `legacy-<target>-<version with dashes>`.
+    const expected: string[] = [];
     for (const target of TARGETS) {
-      const listed = row.alsoRunsOn?.[COMPONENT[target]] ?? [];
-      // The arm runs one earlier engine per target (`legacyRow` takes the first).
-      expect(listed.length).toBeLessThanOrEqual(1);
-      if (listed.length === 0) continue;
-
-      const name = `legacy-${target}`;
-      const block = job(name);
-      expect({ job: name, defined: block !== undefined }).toEqual({ job: name, defined: true });
-      for (const workspace of workspaces[target]) {
-        expect(block).toContain(`run: pnpm --filter './${workspace}' test:${target}-legacy`);
+      for (const version of listedFor(target)) {
+        const name = `legacy-${target}-${version.replaceAll(".", "-")}`;
+        expected.push(name);
+        const block = job(name);
+        expect({ job: name, defined: block !== undefined }).toEqual({ job: name, defined: true });
+        for (const workspace of workspaces[target]) {
+          expect(block).toContain(
+            `run: pnpm --filter './${workspace}' test:${target}-legacy ${version}`,
+          );
+        }
+        // The same three setup steps as `sdk-e2e`: the sync that writes src/artifacts/legacy/ is setup's.
+        for (const step of [
+          "actions/checkout@v4",
+          "./.github/actions/setup",
+          "./.github/actions/build",
+        ]) {
+          expect(block).toContain(`uses: ${step}`);
+        }
+        expect({ job: name, neededByCi: needs?.includes(name) }).toEqual({
+          job: name,
+          neededByCi: true,
+        });
       }
-      // The same three setup steps as `sdk-e2e`: the sync that writes src/artifacts/legacy/ is setup's.
-      for (const step of [
-        "actions/checkout@v4",
-        "./.github/actions/setup",
-        "./.github/actions/build",
-      ]) {
-        expect(block).toContain(`uses: ${step}`);
-      }
-      expect({ job: name, neededByCi: needs?.includes(name) }).toEqual({
-        job: name,
-        neededByCi: true,
-      });
     }
+    // No `legacy-` job names a version the row does not list.
+    const jobs = lines
+      .map((line) => /^ {2}(legacy-[\w-]+):/.exec(line)?.[1])
+      .filter((name): name is string => name !== undefined);
+    expect([...jobs].sort()).toEqual([...expected].sort());
+    expect((needs ?? []).filter((name) => name.startsWith("legacy-")).sort()).toEqual(
+      [...expected].sort(),
+    );
 
     // The scripts those jobs run, as the runner's usage line has them.
     const scripts = [

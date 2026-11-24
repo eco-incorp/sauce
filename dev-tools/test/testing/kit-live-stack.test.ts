@@ -8,11 +8,13 @@
  * Runs wherever anvil does; skips without it locally, and fails under CI, where it must run.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { after, before, describe, it } from "node:test";
 import {
   createWalletClient,
+  encodeFunctionData,
   getAddress,
+  getCreate2Address,
   http,
   keccak256,
   pad,
@@ -20,10 +22,12 @@ import {
   type Abi,
   type Address,
   type Hex,
+  type TestClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { local, type TestChain } from "../../src/testing/index.js";
+import { deployReleaseStack } from "../../src/testing/sdk.js";
 import { setUpStack } from "../../src/testing/stack.js";
 import { anvilMissing } from "./support.js";
 
@@ -119,3 +123,168 @@ describe("setUpStack on a chain that runs the release", { skip: anvilMissing() }
     assert.equal((await setUp()).origin, "live");
   });
 });
+
+/** The 1.4.0 release's artifacts, which `sync-engine-artifacts` writes for the SDK's suites. */
+const EARLIER = new URL("../../../sdk/src/artifacts/legacy/2.6.3/", import.meta.url);
+const earlierPresent = existsSync(new URL("V12RuntimeBytecode.json", EARLIER));
+if (!earlierPresent && process.env.CI) {
+  throw new Error(
+    "the 1.4.0 release's artifacts (sdk/src/artifacts/legacy/2.6.3) are missing in CI. This suite " +
+      'must never skip here — see the "Sync engine artifacts" step in .github/workflows/ci.yml.',
+  );
+}
+const earlier = <T>(name: string): T =>
+  JSON.parse(readFileSync(new URL(`${name}.json`, EARLIER), "utf8")) as T;
+
+describe(
+  "setUpStack on a fork whose Kitchen hands out an earlier Router",
+  {
+    skip:
+      anvilMissing() || (earlierPresent ? false : "the 1.4.0 release's artifacts are not synced"),
+  },
+  () => {
+    let chain: TestChain;
+    before(async () => {
+      chain = await local();
+    });
+    after(() => chain?.stop());
+
+    it("on a fork of a Kitchen that hands out an earlier Router, the kit switches it and clears no code", async () => {
+      const owner = chain.account(0).address;
+      const wallet = createWalletClient({ transport: http(chain.rpcUrl) });
+      const clients = { publicClient: chain.client, walletClient: wallet, testClient: chain.test };
+      const codeOf = async (address: Address): Promise<Hex> =>
+        (await chain.client.getCode({ address })) ?? "0x";
+
+      // The chain as a fork of one before its switch: the release's engine and Router are not there
+      // (the rollout adds them, each by CREATE3 through a proxy child CreateX makes, which is not
+      // there either), and the Kitchen runs the 1.4.0 release, a dynamic Pot minted on it.
+      const [engine, router] = [chain.engine, chain.router];
+      const installed = JSON.parse(
+        readFileSync(
+          new URL("../../../sdk/dist/artifacts/V12Deployments.json", import.meta.url),
+          "utf8",
+        ),
+      ) as {
+        evm: { factory: Address; contracts: Record<"engine" | "router", { guardedSalt: Hex }> };
+      };
+      const childOf = (guardedSalt: Hex): Address =>
+        getCreate2Address({
+          bytecodeHash: keccak256("0x67363d3d37363d34f03d5260086018f3"),
+          from: installed.evm.factory,
+          salt: guardedSalt,
+        });
+      for (const address of [
+        engine,
+        router,
+        childOf(installed.evm.contracts.engine.guardedSalt),
+        childOf(installed.evm.contracts.router.guardedSalt),
+      ]) {
+        await chain.test.setCode({ address, bytecode: "0x" });
+      }
+      const stack = await deployReleaseStack(clients, owner, {
+        deployments: earlier<{ evm: Parameters<typeof deployReleaseStack>[2]["deployments"] }>(
+          "V12Deployments",
+        ).evm,
+        runtimeCreationCode: earlier<{ runtimeCreationCode: Hex }>("V12RuntimeBytecode")
+          .runtimeCreationCode,
+        routerBytecode: earlier<{ bytecode: Hex }>("Router").bytecode,
+        kitchen: earlier<{ abi: Abi; bytecode: Hex }>("V12Kitchen"),
+        kitchenProxyBytecode: earlier<{ bytecode: Hex }>("V12KitchenProxy").bytecode,
+      });
+      assert.equal(stack.kitchen, chain.kitchen);
+      assert.notEqual(stack.router, router);
+      const kitchenAbi = earlier<{ abi: Abi }>("V12Kitchen").abi;
+      const salt = pad("0x07");
+      const minted = await chain.client.waitForTransactionReceipt({
+        hash: await wallet.sendTransaction({
+          account: owner,
+          chain: null,
+          to: stack.kitchen,
+          data: encodeFunctionData({
+            abi: kitchenAbi,
+            functionName: "deployPot",
+            args: [owner, salt],
+          }),
+          gas: 30_000_000n,
+        }),
+      });
+      assert.equal(minted.status, "success");
+      const pot = (await chain.client.readContract({
+        abi: kitchenAbi,
+        address: stack.kitchen,
+        functionName: "predictPot",
+        args: [owner, salt],
+      })) as Address;
+      const routerOf = (at: Address) =>
+        chain.client.readContract({ abi: kitchenAbi, address: at, functionName: "router" });
+      assert.equal(
+        await routerOf(pot),
+        stack.router,
+        "a Pot starts on the Router the Kitchen hands out",
+      );
+
+      const slotOf = () =>
+        chain.client.getStorageAt({ address: stack.kitchen, slot: IMPLEMENTATION_SLOT });
+      const implementation = getAddress(`0x${((await slotOf()) ?? "0x").slice(-40)}`);
+      const before = {
+        kitchen: await codeOf(stack.kitchen),
+        implementation: await codeOf(implementation),
+        engine: await codeOf(stack.engine),
+        router: await codeOf(stack.router),
+        pot: await codeOf(pot),
+        slot: await slotOf(),
+      };
+
+      // The kit sets the chain up, its test client recording every `setCode` and whether code was
+      // there: clearing code that exists and creating it again is what a redeploy does, and unchanged
+      // bytes afterwards would not show it.
+      const cleared: Array<{ address: Address; hadCode: boolean }> = [];
+      const recording = new Proxy(chain.test, {
+        get(target, property, receiver) {
+          if (property !== "setCode") return Reflect.get(target, property, receiver);
+
+          return async (args: Parameters<TestClient["setCode"]>[0]) => {
+            const code = await chain.client.getCode({ address: args.address });
+            cleared.push({ address: args.address, hadCode: code !== undefined && code !== "0x" });
+
+            return target.setCode(args);
+          };
+        },
+      }) as TestClient;
+      const now = await setUpStack(chain.rpcUrl, chain.client, recording, owner);
+
+      // (1) Nothing that had code was cleared and created again, and nothing of the earlier stack or
+      // the Kitchen was touched.
+      assert.deepEqual(
+        cleared.filter(
+          (call) =>
+            call.hadCode ||
+            [stack.kitchen, implementation, stack.engine, stack.router].includes(call.address),
+        ),
+        [],
+      );
+      // (2) The kit switched the Kitchen to the release's Router and put the release's engine there.
+      assert.equal(now.origin, "deployed");
+      assert.equal(await routerOf(chain.kitchen), router);
+      assert.equal(now.router, router);
+      assert.equal(now.engine, engine);
+      assert.notEqual(await codeOf(engine), "0x");
+      assert.notEqual(await codeOf(router), "0x");
+      // (3) The Kitchen's proxy and what it delegates to are as they were, and the Pot keeps the
+      // Router it was minted with.
+      assert.equal(await codeOf(stack.kitchen), before.kitchen);
+      assert.equal(await slotOf(), before.slot);
+      assert.equal(await codeOf(implementation), before.implementation);
+      assert.equal(await codeOf(stack.engine), before.engine);
+      assert.equal(await codeOf(stack.router), before.router);
+      assert.equal(await codeOf(pot), before.pot);
+      assert.equal(await routerOf(pot), stack.router);
+      // The next call finds the release live.
+      assert.equal(
+        (await setUpStack(chain.rpcUrl, chain.client, chain.test, owner)).origin,
+        "live",
+      );
+    });
+  },
+);

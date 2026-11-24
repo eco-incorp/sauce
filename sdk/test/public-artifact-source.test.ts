@@ -25,13 +25,28 @@ const table = JSON.parse(readFileSync(join(repo, "sdk/src/deployments/releases.j
 const INSTALLED = JSON.parse(
   readFileSync(join(repo, "node_modules/sauce-compiler/package.json"), "utf8"),
 ).version as string;
-/** The row the installed row's `alsoRunsOn` engines come from (`readLegacyArtifacts`): the newest
- *  with a public package that pins them. */
+/** The row the installed row's `alsoRunsOn` CREATE2 engines come from (`readLegacyArtifacts`): the
+ *  newest with a public package that pins them. */
 const EARLIER = "2.6.2";
+/** The row SDK 1.1.0 shipped raw assets for, under `releases/2.6.3/`, which every later SDK keeps
+ *  (`KEPT_ASSET_FOLDERS`): kitchen-evm and v12-evm 1.4.0, the CREATE3 engine the SDK still cooks
+ *  fixed-Router and Shared Pots on. */
+const KEPT = "2.6.3";
+const COMPONENTS = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const;
+const rowOf = (compiler: string): Row =>
+  table.releases.find((row: Row) => row.compiler === compiler);
 /** The folder the release's raw assets ship in: the first row naming the installed row's four
- *  releases, which is where SDK 1.1.0 put them (`releases/2.6.3/`), whatever compiler is installed. */
-const RAW_ASSETS = "2.6.3";
+ *  releases, whatever compiler is installed. */
+const RAW_ASSETS: string = table.releases.find((row: Row) =>
+  COMPONENTS.every((component) => row[component].version === rowOf(INSTALLED)[component].version),
+).compiler;
 const LEGACY = join(repo, "sdk/src/artifacts/legacy", EARLIER);
+const LEGACY_KEPT = join(repo, "sdk/src/artifacts/legacy", KEPT);
+/** How the sync's messages name the installed row's engine and Kitchen releases. */
+const ENGINE_TAG = `v12-evm-v${rowOf(INSTALLED)["v12-evm"].version}`;
+const KITCHEN_TAG = `kitchen-evm-v${rowOf(INSTALLED)["kitchen-evm"].version}`;
+/** The kept row's engine runtime among its raw assets, which a scenario changes. */
+const KEPT_ENGINE = `releases/${KEPT}/v12-evm-v${rowOf(KEPT)["v12-evm"].version}/runtime.creation.hex`;
 
 /** One component's pin in a row of `releases.json`: only what the fixture reads or changes. */
 interface Pin {
@@ -188,6 +203,7 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
   const local: { releases: Row[]; quoteRouter: QuoteRouter } = structuredClone(table);
   const installed = local.releases.find((row) => row.compiler === INSTALLED)!;
   const earlier = local.releases.find((row) => row.compiler === EARLIER)!;
+  const keptRow = local.releases.find((row) => row.compiler === KEPT)!;
   const source = structuredClone(installed);
   source.compiler = "2.6.9";
   delete source.npm;
@@ -296,6 +312,22 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
     appendFileSync(join(legacy, "artifacts/svm/engine-mainnet.so"), Buffer.from([0]));
   }
   earlier.npm = { version: "0.0.2", compiler: "2.6.1", integrity: pack("legacy", "0.0.2") };
+
+  // The kept release's tarball, as SDK 1.1.0's carries it: the raw assets of the 2.6.3 row under
+  // releases/2.6.3/ and its table. Its top-level files, the 1.3.0 set, are never read, so none is
+  // here. The same tarball is the source of the CREATE3 engine's legacy files.
+  const keptContents = join(root, "kept/package/sdk/dist");
+  mkdirSync(join(keptContents, "deployments"), { recursive: true });
+  cpSync(
+    join(repo, "sdk/dist/artifacts/releases", KEPT),
+    join(keptContents, "artifacts/releases", KEPT),
+    { recursive: true },
+  );
+  writeFileSync(join(keptContents, "deployments/releases.json"), JSON.stringify(table));
+  if (scenario === "kept asset changed") {
+    writeFileSync(join(keptContents, "artifacts", KEPT_ENGINE), "0x00\n");
+  }
+  keptRow.npm = { version: "0.0.3", integrity: pack("kept", "0.0.3") };
   if (scenario === "earlier row without a public version") {
     earlier.npm = { compiler: "2.6.1" } as Row["npm"];
   }
@@ -338,6 +370,8 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
     output: at("sdk/dist/artifacts/V12Deployments.json"),
     rawOutput: at(`sdk/dist/artifacts/${rawAsset}`),
     rawAsset,
+    keptOutput: at(`sdk/dist/artifacts/${KEPT_ENGINE}`),
+    keptLegacy: at(`sdk/src/artifacts/legacy/${KEPT}`),
     legacyOutput: at(`sdk/src/artifacts/legacy/${EARLIER}`),
     at,
   };
@@ -361,8 +395,8 @@ describe("public artifacts from an explicitly pinned earlier compiler row", () =
   it.each([
     ["unknown source", "refused, nothing written"],
     ["source row changed", "refused, nothing written"],
-    ["target digest changed", "v12-evm-v1.4.0/runtime.creation.hex digest"],
-    ["target ABI digest changed", "kitchen-evm-v1.4.0/abis.json digest"],
+    ["target digest changed", `${ENGINE_TAG}/runtime.creation.hex digest`],
+    ["target ABI digest changed", `${KITCHEN_TAG}/abis.json digest`],
     ["asset digest changed", "refused, nothing written"],
     ["derived identity changed", "refused, nothing written"],
   ])("refuses %s before writing artifacts", (scenario, message) => {
@@ -399,14 +433,22 @@ describe("the release's raw assets", () => {
       expect(defaults.evm.contracts.engine.address.toLowerCase()).toBe(
         f.installed["v12-evm"].engine!.toLowerCase(),
       );
-      // The raw assets ship byte for byte, in the first row's folder (SDK 1.1.0's path), in dist only.
+      // The raw assets ship byte for byte, in the first row's folder, in dist only, beside the folder
+      // SDK 1.1.0 shipped, which a later SDK keeps: the same release the legacy engine runs.
       expect(digestOf(f.rawOutput)).toBe(digestOf(join(repo, "sdk/dist/artifacts", f.rawAsset)));
-      expect(readdirSync(join(f.root, "sdk/dist/artifacts/releases"))).toEqual([RAW_ASSETS]);
+      expect(digestOf(f.keptOutput)).toBe(digestOf(join(repo, "sdk/dist/artifacts", KEPT_ENGINE)));
+      expect(readdirSync(join(f.root, "sdk/dist/artifacts/releases")).sort()).toEqual(
+        [KEPT, RAW_ASSETS].sort(),
+      );
       expect(existsSync(f.at("sdk/src/artifacts/releases"))).toBe(false);
       // The earlier release's artifacts are written for the suites, src only, and never shipped.
       expect(existsSync(f.at("sdk/dist/artifacts/legacy"))).toBe(false);
       for (const file of ["V12RuntimeBytecode.json", "svm/engine-mainnet.so"]) {
         expect(digestOf(join(f.legacyOutput, file))).toBe(digestOf(join(LEGACY, file)));
+      }
+      // The CREATE3 engine's, derived from the kept raw assets (EVM only).
+      for (const file of ["V12RuntimeBytecode.json", "V12EngineGate.json", "Router.json"]) {
+        expect(digestOf(join(f.keptLegacy, file))).toBe(digestOf(join(LEGACY_KEPT, file)));
       }
     } finally {
       rmSync(f.root, { recursive: true, force: true });
@@ -415,7 +457,8 @@ describe("the release's raw assets", () => {
 
   it.each([
     ["no public release pin", "names no public @eco-incorp/sauce version"],
-    ["raw asset changed", "v12-evm-v1.4.0/runtime.creation.hex digest"],
+    ["raw asset changed", `${ENGINE_TAG}/runtime.creation.hex digest`],
+    ["kept asset changed", `carries ${KEPT_ENGINE} hashing to`],
     ["derived identity changed", "refused, nothing written"],
   ])("refuses %s before writing either set", (scenario, message) => {
     const f = fixture(scenario);

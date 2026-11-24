@@ -45,7 +45,7 @@ import type { UpgradedChain } from "./gated-engine.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
-const ready = RUNTIME_HEX_PATH !== undefined && hasLegacyArtifacts();
+const ready = RUNTIME_HEX_PATH !== undefined && hasLegacyArtifacts("evm", "1.3.0");
 const describeEvm = ready ? describe : describe.skip;
 if (!ready && process.env.CI) {
   throw new Error(

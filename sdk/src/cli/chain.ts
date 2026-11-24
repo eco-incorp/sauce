@@ -37,7 +37,12 @@ import kitchenArtifact from "../artifacts/V12Kitchen.json" with { type: "json" }
 import potArtifact from "../artifacts/V12Pot.json" with { type: "json" };
 import routerArtifact from "../artifacts/Router.json" with { type: "json" };
 import { resolveChain, type CanonicalChain } from "../chains/canonical.js";
-import { sdkCompilerVersion, v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
+import {
+  sdkCompilerVersion,
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12RouterAddress,
+} from "../deployments/index.js";
 import {
   potFamilyRunsCompiler,
   v12DefaultPotFamily,
@@ -431,7 +436,7 @@ export async function requireCookContracts(
 }
 
 /** What every refusal of a Pot says last. */
-const NOTHING_SENT = "Nothing was simulated, built or sent.";
+export const NOTHING_SENT = "Nothing was simulated, built or sent.";
 /** What a refusal of a deployment the chain already has says last instead: it was sent, and what
  *  comes after it is not. */
 const NOTHING_AFTER = "Nothing after it was sent.";
@@ -488,7 +493,28 @@ async function kitchenRelease(client: PublicClient, chain: CanonicalChain): Prom
     );
   }
   if (family === v12DefaultPotFamily()) {
-    return `${it} mints Pots of ${releaseText(familyRelease(family))}, the release this SDK pins.`;
+    const current = getAddress(v12RouterAddress());
+    const router = await client
+      .readContract({ address: kitchen, abi: v12KitchenAbi, functionName: "router" })
+      .then(getAddress, () => undefined);
+    if (router === undefined || router === current) {
+      return `${it} mints Pots of ${releaseText(familyRelease(family))}, the release this SDK pins.`;
+    }
+    // The Kitchen has not switched to this release's Router: what a new fixed-Router or Shared Pot
+    // there runs on is the engine built for the Router it hands out.
+    const earlier = family.sets.find((set) => {
+      const fixed = set["kitchen-evm"].fixedRouter;
+
+      return fixed !== undefined && getAddress(fixed) === router;
+    });
+
+    return (
+      `${it} mints Pots of ${releaseText(familyRelease(family))}, the release this SDK pins, but ` +
+      `hands new Pots the Router ${router}` +
+      `${earlier === undefined ? "" : ` (kitchen-evm ${earlier["kitchen-evm"].version})`}, not ` +
+      `this release's ${current}: a fixed-Router or Shared Pot minted there now runs on ` +
+      `${earlier === undefined ? "no engine this SDK knows" : earlier["v12-evm"].engine}.`
+    );
   }
   if (potFamilyRunsCompiler(family)) {
     return (

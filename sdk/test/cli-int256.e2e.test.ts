@@ -98,7 +98,7 @@ describeEvm("sauce, a program that takes and returns an Int256", () => {
     const run = await simulate(delta, "--args", "-5");
     // The installed release's Pot needs no word; an earlier release's (the legacy arm) is cooked on
     // its own engine, which the command says.
-    if (releaseArm("evm") === "legacy") {
+    if (releaseArm("evm") !== "default") {
       expect(run.stderr).toContain(`it runs on its own engine, ${ethereum.engineOf(pot)}`);
     } else {
       expect(run.stderr).toBe("");

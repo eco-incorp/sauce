@@ -10,9 +10,11 @@
 //   node sdk/scripts/release-gate.mjs --package 1.2.0 --rpc-config sdk/rpc.config.json
 //
 // `--package` is a tarball or a version of the published package. `--rpc-config` is a JSON object of
-// chain id to URL (sdk/rpc.config.json is one) that holds the seven chains the gate reads: 1
+// chain id to URL (sdk/rpc.config.json is one) that holds the seven chains the gate runs on: 1
 // (Ethereum), 8453 (Base), 5042 (Arc), 5042002 (Arc Testnet), 84532 (Base Sepolia), 11155111
-// (Sepolia) and 1399811149 (Solana mainnet-beta); other entries are ignored. A URL is never printed:
+// (Sepolia) and 1399811149 (Solana mainnet-beta), and every chain ROUTER_CHAINS lists, which step 2b
+// reads. A key that is not a chain id is refused (exit 2), counted and never repeated; any other
+// chain's entry is read once, to see whether the Kitchen proxy has code there. A URL is never printed:
 // every message is scrubbed of the configured endpoints (each whole, in its parts, and by each path
 // segment and query value of eight characters or more), an error prints one line, and a
 // configuration the gate cannot read is named by its path alone. No endpoint reaches a command line,
@@ -26,17 +28,27 @@
 // "sends nothing to a live chain" is checked, not assumed. Stopped by SIGINT, SIGTERM or SIGHUP, the
 // gate stops its forks, removes its temp dir and exits 130.
 //
-// A MISSING KEY IS A FAILURE, never a skip. The gate checks all seven keys first, prints
+// A MISSING KEY IS A FAILURE, never a skip. The gate checks every key it needs first (the seven and each chain of ROUTER_CHAINS), prints
 // `FAIL <chain>: no endpoint in --rpc-config` for each one missing, runs every step on every chain it
 // can, and exits 1 when any step failed. Every step prints one PASS or FAIL line naming its chain.
 //
 //   1. Installs the package into a temp project with a temp HOME (`npm install --engine-strict`),
 //      and LiteSVM at the package's own `sdk/runtime` pin, for step 7.
 //   2. The live stack, on all six supported EVM chains: the installed testing kit forks the chain
-//      live and finds the Kitchen it runs, deploying nothing over it, with kitchen-evm 1.4.0
-//      behind the proxy (its EIP-1967 implementation slot).
+//      live and finds the Kitchen it runs, deploying nothing over it (a Kitchen that still hands out
+//      an earlier Router would have the kit switch it, which fails this step), with the Kitchen's
+//      implementation behind the proxy (its EIP-1967 implementation slot) the one the package pins.
+//  2b. The Router and the engine, on every chain with the Kitchen proxy (ROUTER_CHAINS: the 19 of
+//      v12's deployment records, HyperEVM, Robinhood and World Chain included): read-only, against
+//      the live endpoint, no fork, nothing sent. The release's Router and engine have the code the
+//      release deploys, the Kitchen hands out that Router, the Router answers
+//      hyperswapV3SwapCallback and uniswapV3SwapCallback (and has no fallback), and engine 1.4.0
+//      still has code, for the Pots minted before the switch. A coverage scan then reads the other
+//      canonical EVM chains of --rpc-config, and fails one whose Kitchen proxy has code that
+//      ROUTER_CHAINS lacks. A FAIL here is a release blocker: it is never published around.
 //   3. A new owner's Pot, on all six: the installed `sauce pot` names the Pot the Kitchen's own
-//      `predictPot` names, finds none there, then deploys it (2,886 bytes of code).
+//      `predictPot` names, finds none there, then deploys it (2,886 bytes of code) on the Router the
+//      Kitchen hands out.
 //   4. A cook, on all six: the installed `sauce run` cooks on it; the mined transaction goes to that
 //      Pot and names the package's engine, and the trace of it returns the program's 7.
 //   5. A real Uniswap V3 swap, on Base: `sauce simulate` of the skill's `buy.sauce.ts` shows WETH
@@ -54,15 +66,25 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { createPublicClient, decodeFunctionData, getAddress, http } from "viem";
+import {
+  createPublicClient,
+  decodeFunctionData,
+  encodeAbiParameters,
+  getAddress,
+  http,
+} from "viem";
 
 import {
   childEnvironment,
   confineEnvironment,
+  configKeyProblem,
   endpointSecrets,
   evmCookProblem,
   GATE_ENVIRONMENT,
+  kitchenCoverage,
   requireSigningEndpoint,
+  routerProbeProblem,
+  runtimeProblem,
   solanaCookProblem,
   withEndpointConfig,
 } from "./lib/release-gate-checks.mjs";
@@ -81,9 +103,37 @@ const EVM = [
 const SOLANA = { slug: "solana", id: 1399811149 };
 const CHAINS = [...EVM, SOLANA];
 
-/** Where each step runs: step 2 to 4 on every EVM chain, 5 on Base, 6 on three, 7 on Solana. */
+/**
+ * Every chain with the Kitchen proxy: v12's deployment records (docs/deployment-records) on
+ * 2026-11-24, which step 2b reads. HyperEVM, Robinhood and World Chain are not canonical chains of
+ * this package, so they are listed by id alone.
+ */
+const ROUTER_CHAINS = [
+  { slug: "ethereum", id: 1 },
+  { slug: "optimism", id: 10 },
+  { slug: "bsc", id: 56 },
+  { slug: "unichain", id: 130 },
+  { slug: "polygon", id: 137 },
+  { slug: "monad", id: 143 },
+  { slug: "sonic", id: 146 },
+  { slug: "worldchain", id: 480 },
+  { slug: "hyperevm", id: 999 },
+  { slug: "robinhood", id: 4663 },
+  { slug: "arc", id: 5042 },
+  { slug: "base", id: 8453 },
+  { slug: "plasma", id: 9745 },
+  { slug: "arbitrum", id: 42161 },
+  { slug: "celo", id: 42220 },
+  { slug: "ink", id: 57073 },
+  { slug: "base-sepolia", id: 84532 },
+  { slug: "arc-testnet", id: 5042002 },
+  { slug: "sepolia", id: 11155111 },
+];
+
+/** Where each step runs: step 2 to 4 on every EVM chain, 2b on every chain with the Kitchen, 5 on Base, 6 on three, 7 on Solana. */
 const STEPS = [
   { n: 2, name: "live stack", on: EVM.map((c) => c.slug) },
+  { n: "2b", name: "Router and engine", on: ROUTER_CHAINS.map((c) => c.slug) },
   { n: 3, name: "new owner's Pot", on: EVM.map((c) => c.slug) },
   { n: 4, name: "cook", on: EVM.map((c) => c.slug) },
   { n: 5, name: "V3 swap", on: ["base"] },
@@ -169,11 +219,15 @@ const configured = {};
   if (config === null || typeof config !== "object" || Array.isArray(config)) {
     refuseConfig(`${file} is not a JSON object of chain id to URL`);
   }
-  for (const { id } of CHAINS) {
-    const url = config[String(id)];
-    if (typeof url !== "string" || url.trim() === "") continue;
-    configured[id] = url.trim();
-    for (const secret of endpointSecrets(url.trim())) {
+  // A key that is not a chain id is refused before anything is printed or registered, by its
+  // count: an endpoint pasted where a key goes carries its credential, and only values are scrubbed.
+  const keyProblem = configKeyProblem(Object.keys(config));
+  if (keyProblem !== undefined) refuseConfig(`${file} ${keyProblem}`);
+  // Every entry is read: the chains the gate runs on, and the others the coverage scan reads.
+  for (const [key, value] of Object.entries(config)) {
+    if (typeof value !== "string" || value.trim() === "") continue;
+    configured[key] = value.trim();
+    for (const secret of endpointSecrets(value.trim())) {
       if (!secrets.includes(secret)) secrets.push(secret);
     }
   }
@@ -215,7 +269,12 @@ function failRest(chain, reason) {
 // ---------------------------------------------------------------------------
 // The commands.
 
-const missing = CHAINS.filter(({ id }) => configured[id] === undefined);
+/** Every chain whose endpoint the gate needs: the seven it runs on and each of ROUTER_CHAINS. */
+const REQUIRED = [
+  ...CHAINS,
+  ...ROUTER_CHAINS.filter((chain) => !CHAINS.some((one) => one.id === chain.id)),
+];
+const missing = REQUIRED.filter(({ id }) => configured[id] === undefined);
 for (const { slug } of missing) console.log(`FAIL ${slug}: no endpoint in --rpc-config`);
 
 const tmp = mkdtempSync(join(tmpdir(), "sauce-release-gate-"));
@@ -385,7 +444,7 @@ async function installed(subpath) {
 
 async function evmChain({ slug, id }, kit, dep, abis) {
   const url = configured[id];
-  const needs = STEPS.filter(({ on }) => on.includes(slug));
+  const needs = STEPS.filter(({ n, on }) => n !== "2b" && on.includes(slug));
   if (url === undefined) {
     for (const { n } of needs) report(n, slug, false, "no endpoint in --rpc-config");
 
@@ -470,9 +529,19 @@ async function evmChain({ slug, id }, kit, dep, abis) {
       if (bytes !== POT_CODE_BYTES) {
         throw new Error(`the Pot ${predicted} holds ${bytes} bytes of code, not ${POT_CODE_BYTES}`);
       }
+      const potRouter = await chain.client.readContract({
+        address: predicted,
+        abi: abis.v12PotAbi,
+        functionName: "router",
+      });
+      if (!sameAddress(potRouter, dep.v12RouterAddress())) {
+        throw new Error(
+          `the Pot ${predicted} runs the Router ${potRouter}, not the package's ${dep.v12RouterAddress()}`,
+        );
+      }
       pot = predicted;
 
-      return `Pot ${predicted} is the Kitchen's prediction, was not deployed, and now has ${bytes} bytes of code`;
+      return `Pot ${predicted} is the Kitchen's prediction, was not deployed, and now has ${bytes} bytes of code, on the package's Router`;
     });
 
     await step(4, slug, async () => {
@@ -566,6 +635,147 @@ async function evmChain({ slug, id }, kit, dep, abis) {
   }
 }
 
+/** The callbacks step 2b probes: two the Router answers, and the control no Router has. */
+const CALLBACK_PROBES = [
+  { name: "hyperswapV3SwapCallback", selector: "0xfa85398b", expect: "answered", args: true },
+  { name: "uniswapV3SwapCallback", selector: "0xfa461e33", expect: "answered", args: true },
+  { name: "a name no Router has", selector: "0xdeadbeef", expect: "missing", args: false },
+];
+
+/**
+ * Step 2b on one chain of ROUTER_CHAINS: the release's Router and engine as they stand on the live
+ * chain, read through its endpoint. Nothing is forked or sent.
+ */
+async function routerChain({ slug, id }, dep, abis, root) {
+  const url = configured[id];
+  if (url === undefined) {
+    report("2b", slug, false, "no endpoint in --rpc-config");
+
+    return;
+  }
+  await step("2b", slug, async () => {
+    const client = createPublicClient({ transport: http(url) });
+    const served = await client.getChainId();
+    if (served !== id) {
+      throw new Error(`the endpoint in --rpc-config for chain id ${id} serves chain id ${served}`);
+    }
+    const artifact = (name) =>
+      JSON.parse(readFileSync(join(root, "sdk/dist/artifacts", `${name}.json`), "utf8"));
+    /** The runtime a creation code returns when it is run in an `eth_call`. */
+    const runtimeOf = async (creation) => (await client.call({ data: creation })).data;
+    const router = dep.v12RouterAddress();
+    const engine = dep.v12EngineAddress();
+    const kitchen = dep.v12KitchenAddress();
+    const earlier = dep.v12ReleaseSet("2.6.3")["v12-evm"].engine;
+    const problems = [];
+
+    // 1. The Router's code is what the release's creation code deploys.
+    problems.push(
+      runtimeProblem({
+        chain: slug,
+        address: router,
+        expected: await runtimeOf(artifact("Router").bytecode),
+        actual: await client.getCode({ address: router }),
+      }),
+    );
+    // 2. So is the engine's, with its own address appended as the engine does at deploy.
+    const deployed = await runtimeOf(artifact("V12RuntimeBytecode").runtimeCreationCode);
+    problems.push(
+      runtimeProblem({
+        chain: slug,
+        address: engine,
+        expected: `${deployed.slice(0, deployed.length - 64)}${engine.slice(2).toLowerCase().padStart(64, "0")}`,
+        actual: await client.getCode({ address: engine }),
+      }),
+    );
+    // 3. The Kitchen hands out that Router, and runs the implementation the package pins.
+    const handedOut = await client.readContract({
+      address: kitchen,
+      abi: abis.v12KitchenAbi,
+      functionName: "router",
+    });
+    if (!sameAddress(handedOut, router)) {
+      problems.push(
+        `${slug}: the Kitchen hands out the Router ${handedOut}, not the package's ${router}`,
+      );
+    }
+    const slot = await client.getStorageAt({ address: kitchen, slot: IMPLEMENTATION_SLOT });
+    const implementation = getAddress(`0x${(slot ?? "0x").slice(-40)}`);
+    if (!sameAddress(implementation, dep.v12KitchenImplementationAddress())) {
+      problems.push(
+        `${slug}: the Kitchen's implementation is ${implementation}, not the package's ${dep.v12KitchenImplementationAddress()}`,
+      );
+    }
+    // 4. The Router answers the callbacks a swap's pool calls back, and has no fallback.
+    const callbackArguments = encodeAbiParameters(
+      [{ type: "int256" }, { type: "int256" }, { type: "bytes" }],
+      [1n, 0n, "0x"],
+    ).slice(2);
+    for (const probe of CALLBACK_PROBES) {
+      let outcome;
+      try {
+        await client.call({
+          account: "0x000000000000000000000000000000000000dEaD",
+          to: router,
+          data: `${probe.selector}${probe.args ? callbackArguments : ""}`,
+        });
+        outcome = { succeeded: true };
+      } catch (error) {
+        const reverted = error.walk?.(
+          (cause) => cause.name === "ExecutionRevertedError" || typeof cause.data === "string",
+        );
+        if (reverted === null || reverted === undefined) throw error;
+        outcome = { revertData: typeof reverted.data === "string" ? reverted.data : "0x" };
+      }
+      const problem = routerProbeProblem({ ...probe, outcome });
+      if (problem !== undefined) problems.push(`${slug}: ${problem}`);
+    }
+    // 5. Engine 1.4.0 stays, for the fixed-Router and Shared Pots minted on the earlier Router.
+    const earlierCode = await client.getCode({ address: earlier });
+    if (earlierCode === undefined || earlierCode === "0x") {
+      problems.push(
+        `${slug}: engine ${earlier} (v12-evm 1.4.0) has no code, which the Pots minted before the switch need`,
+      );
+    }
+    const failed = problems.filter((problem) => problem !== undefined);
+    if (failed.length > 0) throw new Error(failed.join("; "));
+
+    return `the Router ${router} and the engine ${engine} have the release's code, the Kitchen hands out that Router, it answers hyperswapV3SwapCallback, and engine ${earlier} still has code`;
+  });
+}
+
+/** The coverage scan: the other canonical EVM chains of --rpc-config whose Kitchen proxy has code. */
+async function coverage(dep) {
+  const canonical = (await installed("./chains")).CANONICAL_CHAINS;
+  const found = await kitchenCoverage({
+    ids: Object.keys(configured).map(Number),
+    routerIds: ROUTER_CHAINS.map((chain) => chain.id),
+    canonical,
+    hasCode: async (id) => {
+      const client = createPublicClient({ transport: http(configured[id]) });
+      const served = await client.getChainId();
+      if (served !== id) {
+        throw new Error(
+          `the endpoint in --rpc-config for chain id ${id} serves chain id ${served}`,
+        );
+      }
+      const code = await client.getCode({ address: dep.v12KitchenAddress() });
+
+      return code !== undefined && code !== "0x";
+    },
+    reasonOf,
+  });
+  for (const problem of found.problems) {
+    console.log(`FAIL coverage: ${scrub(problem)}`);
+    failures += 1;
+  }
+  console.log(
+    found.skipped.length === 0
+      ? "coverage: every other chain of --rpc-config was read"
+      : `coverage: not read (not a canonical EVM chain): ${found.skipped.join(", ")}`,
+  );
+}
+
 async function solana(dep) {
   const url = configured[SOLANA.id];
   if (url === undefined) {
@@ -636,6 +846,8 @@ try {
     const kit = await installed("./testing");
     const dep = await installed("./deployments");
     const abis = await installed("./evm/engine");
+    // Step 2b reads every chain with the Kitchen proxy, first: no fork, no anvil.
+    for (const chain of ROUTER_CHAINS) await routerChain(chain, dep, abis, installedRoot);
     for (const chain of EVM) {
       try {
         if (anvil.status !== 0) failRest(chain.slug, "anvil is not on PATH");
@@ -646,6 +858,7 @@ try {
       }
     }
     await solana(dep);
+    await coverage(dep);
   }
 } catch (error) {
   console.log(`FAIL gate: ${reasonOf(error)}`);
@@ -656,7 +869,7 @@ try {
 }
 
 // Step 8: the summary, one row per step and one column per chain.
-const columns = CHAINS.map(({ slug }) => slug);
+const columns = REQUIRED.map(({ slug }) => slug);
 const widths = columns.map((slug) => Math.max(slug.length, "PASS".length));
 const rows = STEPS.map(({ n, name, on }) => [
   `${n} ${name}`,

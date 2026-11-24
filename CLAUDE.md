@@ -276,12 +276,12 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.6.4 uses v12-evm 1.4.0 / v12-svm 1.4.1, and its `alsoRunsOn` adds v12-evm 1.3.0 /
-  v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  package version (2.6.4 uses v12-evm 1.5.0 / v12-svm 1.4.1, and its `alsoRunsOn` adds v12-evm 1.4.0,
+  v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
   An ISA label is not a compatibility check. **The installed compiler's row is the SDK's defaults**
   (`v12ReleaseSet()`, `v12EngineAddress()`, the Pot a prediction gives): a row has no
   `deployedCompiler`, and the sync refuses one that sets it. A row's `alsoRunsOn` lists the earlier
-  engines its compiler's output also runs on (`{ "v12-evm": ["1.3.0"], "v12-svm": ["1.4.0"] }` for
+  engines its compiler's output also runs on (`{ "v12-evm": ["1.4.0", "1.3.0"], "v12-svm": ["1.4.0"] }` for
   2.6.4), so the SDK cooks a Pot of that release on its own engine:
   `deployments/releases.ts#engineRunsCompiler` reads it, `assertEngineRunsCompiler` reads that, and
   the legacy arm (below) is the evidence for it. `sync-engine-artifacts.mjs` syncs the row of the
@@ -297,13 +297,18 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
   diff. A compiler-only release gets a row of its own that copies the previous row's four releases
-  and `alsoRunsOn` exactly (2.6.4 copies 2.6.3's). The previous row stays, as the record of the SDK
-  release built from it.
+  and `alsoRunsOn` exactly. The previous row stays, as the record of the SDK release built from it.
   The installed row's raw release assets also ship, under
   `sdk/dist/artifacts/releases/<compiler>/<tag>/<asset>`, named for the first row of the release set
-  (`releases/2.6.3/`, where SDK 1.1.0 shipped them as opt-in artifacts; a compiler-only release
-  keeps the path), dist only: they equal the release the top-level artifacts are derived from, and
-  stay for whoever reads them by path. The engines `alsoRunsOn` names are written to
+  (`releases/2.6.4/` for the 1.5.0 set; a compiler-only release keeps the path), dist only: they
+  equal the release the top-level artifacts are derived from, and stay for whoever reads them by
+  path. `KEPT_ASSET_FOLDERS` in the sync names the folders an earlier SDK shipped that this one
+  keeps: `releases/2.6.3/`, SDK 1.1.0's, which holds kitchen-evm and v12-evm 1.4.0's assets, the
+  engine and Router the SDK still cooks fixed-Router and Shared Pots on. They are read from that
+  SDK's public tarball, each asset held to its row's digest in both artifact-source modes, and
+  written beside the installed row's. A CREATE3 row's legacy files (`src/artifacts/legacy/2.6.3/`)
+  are derived from those raw assets (`legacyFromRawAssets`), because that tarball's top-level files
+  are the 1.3.0 set. The engines `alsoRunsOn` names are written to
   `sdk/src/artifacts/legacy/<compiler>/` (src only, never dist), from the public `@eco-incorp/sauce`
   tarball of the newest row pinning each engine (`publicPackage(row)`, integrity-pinned in
   `releases.json`, no credential) and held to that row's digests, in both artifact-source modes. A
@@ -461,13 +466,17 @@ fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-c
   ABI (a Router constructor argument up to kitchen-evm 1.0.0; `setRouter` after), as v12's deploy
   tooling does.
 
-- **The legacy arm: the engine-executing suites run twice.** Once on the installed release, and
-  again with `SAUCE_TEST_EVM_ARM=legacy` or `SAUCE_TEST_SVM_ARM=legacy` (read only by
-  `sdk/test/release-arm.ts`) on the earlier release the installed row's `alsoRunsOn` names, from
-  `src/artifacts/legacy/`: the evidence for the claim `alsoRunsOn` makes for every program the SDK
-  compiles. CI's `legacy-evm` and `legacy-svm` jobs run it (`sdk/scripts/run-arm-suites.mjs`; the
-  scripts are `test:evm-legacy` in `sdk`, `actions` and `mcp`, and `test:svm-legacy` in `sdk`).
-  `sdk/test/legacy-arm.json` lists, per target, each suite that runs and, with its reason, each
+- **The legacy arms: the engine-executing suites run once per engine.** On the installed release,
+  and again with `SAUCE_TEST_EVM_ARM=<version>` or `SAUCE_TEST_SVM_ARM=<version>` (read only by
+  `sdk/test/release-arm.ts`) for each earlier engine version the installed row's `alsoRunsOn` names
+  (EVM `1.4.0` and `1.3.0`, Solana `1.4.0`), from `src/artifacts/legacy/`: the evidence for the
+  claim `alsoRunsOn` makes for every program the SDK compiles. CI has one job per version,
+  `legacy-<target>-<version with dashes>` (`legacy-evm-1-4-0`, `legacy-evm-1-3-0`,
+  `legacy-svm-1-4-0`), each running `sdk/scripts/run-arm-suites.mjs <evm|svm> <sdk|actions|mcp>
+<version>` (the scripts are `test:evm-legacy` in `sdk`, `actions` and `mcp`, and `test:svm-legacy`
+  in `sdk`, each taking the version). The `sauce` command's own suites (`cli-anvil.ts`) run on the
+  default and 1.3.0 arms only: the 1.4.0 stack has no engine at the address the command names.
+  `sdk/test/legacy-arm.json` lists, per target and version, each suite that runs and, with its reason, each
   that does not, and `legacy-arm.test.ts` fails a suite that starts an engine and is on neither
   list: a new engine suite goes on one list in the same change. A suite that passes on the
   installed release and fails only on the legacy arm means `alsoRunsOn` is wrong for some program,
@@ -1384,7 +1393,9 @@ verbs from each command's `--help`. `pot-store.ts` is the Pot store, `~/.sauce/p
 (`--pots <dir>`): one owner-only `<chainId>/<pot>.json` per Pot, linked into place once, nothing
 read and written back; it imports only Node's modules, so `cli-pot-store.test.ts` runs it in
 child processes. Which Pot a cook names, and the engine it cooks on, is `cook-pot.ts`'s: a Pot given
-by address cooks on the engine of the release that made it; an owner (`--owner`, `--wallet`) means
+by address cooks on the engine built for it (`evm/engine.ts#potEngine`: the engine of the release that
+made it, and for a fixed-Router or Shared Pot the one whose release's `fixedRouter` is its `router()`,
+`deployments/pot.ts#potReleaseSet`); an owner (`--owner`, `--wallet`) means
 the owner's deployed Pot of an earlier release whose engine runs this SDK's programs (`alsoRunsOn`;
 the oldest wins), else the installed release's CREATE3 Pot. Offline the chain cannot say, and the
 Pot store is no stand-in for it: it also keeps what landed on a fork or another network with the
@@ -1398,9 +1409,11 @@ policy or a signature, and the MCP tools `sauce_tx` and `sauce_signed_cook` get 
 takes its engine from a record only when the record is its own: its chain and Pot are the ones
 named and `PotStore#filesOf` says it is `bound` (filed in its chain's directory under its Pot's
 name); any other record is ignored with a note naming its file, a record that cannot be read is a
-note, and with none the engine is 1.4.0, with a note. A Pot's identity (the release families, an
+note, and with none the engine is the installed one, with a note (a record decides only for a fixed-Router or Shared Pot). A Pot's identity (the release families, an
 address, which release made a Pot) is `deployments/pot.ts`'s alone, browser-safe and shared with
-`engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads. A
+`engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads.
+`sauce pot` and the MCP `sauce_pot` say which Router a deployed Pot runs from one function,
+`commands.ts#potRouterStatus`, so the two cannot disagree. A
 Solana Pot cooks on the engine that owns its account where that engine runs this compiler's output
 (the installed release's, and a release `alsoRunsOn` lists: v12-svm 1.4.0's today), and on the
 installed engine where it does not (v12-svm 1.2.0's and 1.3.0's, which no row pairs with the
@@ -2017,7 +2030,11 @@ fees and block spacing. Block hashes and PREVRANDAO are not reproduced. A versio
 before, replays at its genesis's gas limit alone (`test/testing/state/base.json.gz` is one, until it
 is recorded again). `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
 release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
-— the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
+— the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too. A fork whose Kitchen
+runs the release's Pots but hands out an earlier Router gets the release's engine and Router and,
+from the Kitchen's owner (impersonated), `setRouter`, through `upgradeReleaseStack`: it deploys a
+contract only where its address holds nothing, and upgrades the implementation only where the proxy
+does not already run the pinned one. It reads no file, so
 each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot
 finder `--assume-balance` uses, moved out of `cli/` so the kit never imports the command), compiles
 through `compileSauceProgram` afresh on every call (a program is its whole import graph, so
@@ -2110,11 +2127,20 @@ what a Pot's swaps call back through). Its ABIs are synced into `sdk/{src,dist}/
 (`Router`, `ISauceRouter`). **There is no `SauceRouter` artifact any more**: it came from the engine
 repo's Solidity tree and no v12 release publishes it.
 
-**The execution Router (Kitchen 1.3.0)** is content-addressed and has one exact-input method per callback venue family:
+**The execution Router (kitchen-evm 1.5.0)** is content-addressed and has one exact-input method per callback venue family:
 `swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned
 `amountIn`, pay from the Pot, and return `(amountInUsed, amountOut)`. There is no payer argument,
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
-one of those five methods to execute a program during its authenticated callback.
+one of those five methods to execute a program during its authenticated callback. The execution
+Router answers six V3 callback names (Uniswap, PancakeSwap, Algebra, Synthra, UnitFlow, HyperSwap)
+through one handler.
+
+The engine compiles in one fixed Router, so a Router release ships with an engine built for it. A
+fixed-Router or Shared Pot keeps its Router and runs only on its engine
+(`deployments/pot.ts#potReleaseSet`, `evm/engine.ts#potEngine`). Dynamic Pots move only by their
+owner's `setRouter`. `potRouterUpdate` builds it, proposing only `v12RouterAddress()` where the
+Kitchen hands it out. The SDK never sends it, and no SDK text recommends it: that was the owner's
+call for the 1.2.0 rollout.
 
 `@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures,
 and `infinityCL`/`infinityBin` call the two Infinity methods. The library checks V3 and Maverick
@@ -2198,9 +2224,14 @@ skip the publish, and tag that commit, which the tarball does not contain.
 `sdk/scripts/release-gate.mjs` proves against live chains that the package does by default what the
 release is for: the installed testing kit finds the live stack on all six supported EVM chains,
 `sauce pot`, `sauce run` and `sauce simulate` deploy, cook and swap on it, a kitchen-evm 1.3.0 Pot
-still cooks on its engine, and a Solana cook names the package's engine. It is not CI: it reads
-seven endpoints from a `--rpc-config` and forks the live chains locally, sending nothing to them, and
-a missing endpoint is a failure, never a skip. The endpoints carry provider keys, so none reaches a
+still cooks on its engine, a Solana cook names the package's engine, and (step 2b, read-only, on
+every chain with the Kitchen proxy: `ROUTER_CHAINS`, 19 chains) the Router and engine have the
+release's code, the Kitchen hands out that Router and it answers `hyperswapV3SwapCallback`, with a
+coverage scan that fails a chain of the config whose Kitchen proxy has code but is not listed. It
+is not CI: it reads the seven endpoints and one for each chain of `ROUTER_CHAINS` from a
+`--rpc-config`, refuses a key that is not a chain id (counted, never repeated), and forks the live
+chains locally, sending nothing to them, and a missing endpoint is a failure, never a skip. The
+endpoints carry provider keys, so none reaches a
 command line or an output: the Solana one goes to `sauce` in a 0600 `--config` file in the gate's temp
 dir for as long as that command runs, every message is scrubbed of each endpoint whole, in its parts
 and by each path segment and query value of eight characters or more, and an endpoint given where

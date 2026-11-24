@@ -244,7 +244,7 @@ describeEvm("sauce, sent to a chain", () => {
           "cast",
           // Offline the command cannot tell an earlier release's Pot from the installed release's
           // and names the installed engine (D2); given the chain, it names the Pot's own (A2).
-          ...(releaseArm("evm") === "legacy" ? ["--rpc-url", ethereum.rpcUrl] : []),
+          ...(releaseArm("evm") !== "default" ? ["--rpc-url", ethereum.rpcUrl] : []),
         );
         const line = run.stdout.trim();
         expect(line).toMatch(/^cast send .* --rpc-url <RPC_URL> --private-key <PRIVATE_KEY>$/);
@@ -859,14 +859,14 @@ describeEvm("a typed main, compiled for Base and for Ethereum, run with --args",
         OWNER.address,
         "--value",
         // Online (the legacy arm, below) the command checks the value against the Kitchen's fee.
-        releaseArm("evm") === "legacy" ? String(FEE) : "0",
+        releaseArm("evm") !== "default" ? String(FEE) : "0",
         "--args",
         usdc,
         "[]",
         "1",
         "false",
         // As above: on the legacy arm the cook must name the engine of the Pot it is sent to (A2).
-        ...(releaseArm("evm") === "legacy" ? ["--rpc-url", local.rpcUrl] : []),
+        ...(releaseArm("evm") !== "default" ? ["--rpc-url", local.rpcUrl] : []),
       ),
     );
     const notSettle = await local.send(local.owner, pot, split.data as Hex, FEE);

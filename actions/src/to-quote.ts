@@ -36,7 +36,7 @@ import {
 } from "./emit.js";
 
 import { resolveChain, type ChainRef } from "../../sdk/dist/chains/canonical.js";
-import { v12RouterAddress } from "../../sdk/dist/deployments/index.js";
+import { V12_RELEASE_SETS, v12RouterAddress } from "../../sdk/dist/deployments/index.js";
 import { resolveNames, usesNames } from "./names.js";
 import { parseActions } from "./program.js";
 import { ProgramError } from "./semantics.js";
@@ -864,7 +864,13 @@ function quoteThroughRouter(
   amountIn: bigint,
   router: Address,
 ): QuoteCall {
-  if (router.toLowerCase() === v12RouterAddress().toLowerCase()) {
+  // No execution Router has a `quote`: the installed release's, and the Router each earlier release
+  // pins, which the Pots minted before a switch still run.
+  const executionRouters = [
+    v12RouterAddress(),
+    ...V12_RELEASE_SETS.flatMap((set) => set["kitchen-evm"].fixedRouter ?? []),
+  ].map((one) => one.toLowerCase());
+  if (executionRouters.includes(router.toLowerCase())) {
     throw new Error("The execution Router has no quote method; use v12QuoteRouterAddress()");
   }
   const v4 = action.type === "uniswapV4Swap";

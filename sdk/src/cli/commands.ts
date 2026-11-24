@@ -28,10 +28,12 @@ import {
   v12DeployedAddresses,
   v12EngineAddress,
   v12KitchenAddress,
+  v12RouterAddress,
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { nativeSymbol } from "../evm/effects.js";
+import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
@@ -1417,6 +1419,40 @@ function deploymentLines(
   };
 }
 
+/**
+ * What `sauce pot` and the MCP server's `sauce_pot` say of the Router a deployed Pot runs: its
+ * `router()`, and, where it is not the Router this chain's Kitchen now gives new Pots (this
+ * release's), why a pool that calls back a name only the newer Router answers cannot pay it. Online
+ * and for a deployed Pot only; nothing otherwise. No note suggests moving the Pot.
+ */
+export async function potRouterStatus(
+  client: PublicClient | undefined,
+  at: CookPot,
+): Promise<{ readonly router?: Address; readonly notes: string[] }> {
+  if (client === undefined || at.deployed !== true) return { notes: [] };
+  const read = await client
+    .readContract({ address: at.pot, abi: v12PotAbi, functionName: "router" })
+    .catch(() => undefined);
+  if (read === undefined) return { notes: [] };
+  const router = getAddress(read);
+  const handedOut = await client
+    .readContract({ address: kitchenAddress(), abi: v12KitchenAbi, functionName: "router" })
+    .then(getAddress, () => undefined);
+  const current = getAddress(v12RouterAddress());
+
+  return {
+    router,
+    notes:
+      router !== current && handedOut === current
+        ? [
+            `Pot ${at.pot} runs the Router ${router}, not the one this chain's Kitchen now gives new ` +
+              `Pots, ${current}: a pool that calls back a name only ${current} answers cannot pay ` +
+              "this Pot (HyperSwap V3's hyperswapV3SwapCallback is one).",
+          ]
+        : [],
+  };
+}
+
 /** `sauce pot` with an endpoint: the prediction, and what is deployed on the chain. */
 export async function potStatusCommand(
   input: PotCommandInput & ChainAccess,
@@ -1440,7 +1476,12 @@ export async function potStatusCommand(
     });
   }
   const deployment = deploymentLines(input.chain, released, pot, state, at.engine);
-  const json = { ...predicted.json, deployment: deployment.json };
+  const routerStatus = await potRouterStatus(client, at);
+  const json = {
+    ...predicted.json,
+    deployment: deployment.json,
+    ...(routerStatus.router === undefined ? {} : { router: routerStatus.router }),
+  };
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -1448,6 +1489,7 @@ export async function potStatusCommand(
     ...(predicted.cast === undefined ? {} : { cast: predicted.cast }),
     notes: [
       ...deployment.notes,
+      ...routerStatus.notes,
       ...(state.deployed && predicted.cast !== undefined ? [] : (predicted.notes ?? [])),
     ],
   };

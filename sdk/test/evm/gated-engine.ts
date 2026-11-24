@@ -1,5 +1,5 @@
 /**
- * Stands up the released v12 EVM stack on an anvil — engine, Router, Kitchen implementation and
+ * Stands up the released v12 EVM stack — engine, Router, Kitchen implementation and
  * Kitchen proxy — for suites that execute compiler-emitted bytecode.
  *
  * NOT a `.test.ts`, so jest never collects it.
@@ -17,18 +17,22 @@
  * and predicts the Pot the SDK derives, and mints the harness Pot. The Kitchen is left with its
  * owner (the harness account) and a zero execution fee, so no cook needs `value`.
  *
- * **Two arms** (`../release-arm.ts`): by default the stack is the release the SDK pins. With
- * `SAUCE_TEST_EVM_ARM=legacy` it is the earlier release the installed row's `alsoRunsOn` names
- * (engine v12-evm 1.3.0, kitchen-evm 1.3.0 Pots), from the artifacts the sync wrote to
- * `src/artifacts/legacy`: every suite then runs the installed compiler's programs on that engine.
+ * **Arms** (`../release-arm.ts`): by default the stack is the release the SDK pins. With
+ * `SAUCE_TEST_EVM_ARM=<version>` it is the earlier engine release of that version the installed
+ * row's `alsoRunsOn` lists, from the artifacts the sync wrote to `src/artifacts/legacy`: `1.3.0`
+ * (engine v12-evm 1.3.0, kitchen-evm 1.3.0 Pots, CREATE2) or `1.4.0` (engine 1.4.0 on its Router,
+ * kitchen-evm 1.4.0 CREATE3 Pots): every suite then runs the installed compiler's programs on that
+ * engine.
  *
- * `startUpgradedChain` is the chain as the live ones are after kitchen-evm 1.4.0's rollout: the
- * earlier release's stack with Pots minted on it, upgraded to this one, which mints another.
+ * `startUpgradedChain` is the chain as the live ones are after a rollout: the earlier release's stack
+ * with Pots minted on it, upgraded to this one, which mints another. From kitchen-evm 1.4.0 the
+ * rollout is a Router switch: the 1.4.0 stack with a dynamic, a fixed-Router and a Shared Pot on its
+ * Router, the new engine and Router deployed, and the Kitchen switched by `setRouter` alone.
  */
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { encodeFunctionData, getAddress } from "viem";
+import { encodeFunctionData, getAddress, zeroAddress } from "viem";
 import type { Abi, Address, Hex, PublicClient, TestClient, WalletClient } from "viem";
 
 import { v12PredictPot } from "../../src/deployments/pot.js";
@@ -84,8 +88,8 @@ export const POT_SALT = `0x${"00".repeat(31)}07` as Hex;
 export const NEW_POT_SALT = `0x${"00".repeat(31)}08` as Hex;
 
 export interface GatedEngine {
-  /** Which release this stack is: the installed row's (`"default"`) or the earlier one the legacy
-   *  arm runs (`"legacy"`). */
+  /** Which release this stack is: the installed row's (`"default"`) or the earlier engine version
+   *  the arm runs (`"1.4.0"`, `"1.3.0"`). */
   arm: ReleaseArm;
   /** The engine, at its release address (`v12EngineAddress()` on the default arm), deployed from
    *  creation code: its constructor bound that identity for the Pot's `EVAL` relay. */
@@ -162,9 +166,12 @@ const requireReleaseKitchen = async (
   }
 };
 
+/** How a Pot is minted: `deployPot(owner, salt)`, `deployPot(owner, salt, true)` or `deploySharedPot(salt)`. */
+type PotKindMinted = "private" | "fixed" | "shared";
+
 /**
- * Mints `owner`'s Pot at `salt` through the Kitchen and returns it: it must land at `expected` (the
- * address the SDK predicts) and start on `router`, the Router the Kitchen handed it.
+ * Mints a Pot through the Kitchen and returns it: it must land at `mint.expected` (the address the
+ * SDK predicts) and start on `router`, the Router the Kitchen handed it.
  */
 const mintPot = async (
   clients: Clients,
@@ -172,18 +179,28 @@ const mintPot = async (
   kitchen: Address,
   kitchenAbi: Abi,
   potAbi: Abi,
-  mint: { readonly for: Address; readonly salt: Hex; readonly expected: Address },
+  mint: {
+    readonly kind?: PotKindMinted;
+    readonly for: Address;
+    readonly salt: Hex;
+    readonly expected: Address;
+  },
   router: Address,
 ): Promise<Address> => {
   const { publicClient, walletClient } = clients;
+  const kind = mint.kind ?? "private";
+  const data =
+    kind === "shared"
+      ? encodeFunctionData({ abi: kitchenAbi, functionName: "deploySharedPot", args: [mint.salt] })
+      : encodeFunctionData({
+          abi: kitchenAbi,
+          functionName: "deployPot",
+          args: kind === "fixed" ? [mint.for, mint.salt, true] : [mint.for, mint.salt],
+        });
   const hash = await walletClient.sendTransaction({
     account: owner,
     chain: null,
-    data: encodeFunctionData({
-      abi: kitchenAbi,
-      functionName: "deployPot",
-      args: [mint.for, mint.salt],
-    }),
+    data,
     gas: 30_000_000n,
     to: kitchen,
   });
@@ -213,30 +230,39 @@ interface LegacyStack {
   readonly potAbi: Abi;
   /** Each owner's Pot at the salt, minted by the earlier release's Kitchen. */
   readonly pots: Readonly<Record<Address, Address>>;
+  /** The row whose release this is: what `v12PredictPot` names it by. */
+  readonly compiler: string;
+  /** Whether its Pots are CREATE3 (kitchen-evm 1.4.0 on) and so may be fixed-Router or Shared. */
+  readonly create3: boolean;
 }
 
 /**
- * The earlier release's stack — the one the installed row's `alsoRunsOn` names — deployed at its
- * release addresses from its own artifacts (`legacyArtifactsDir("evm")`), with a kitchen-evm 1.3.0
- * Pot minted for each of `owners` at `salt`, all sent by `owner` (`deployPot` takes any owner). The
- * Kitchen must land where that release's engine gates and report its Pot hash, and each Pot must
- * land where `v12PredictPot` derives it for that release and start on that release's Router.
+ * The earlier release's stack — an engine version the installed row's `alsoRunsOn` lists — deployed
+ * at its release addresses from its own artifacts (`legacyArtifactsDir("evm", version)`), with that
+ * release's dynamic Pot minted for each of `owners` at `salt`, all sent by `owner` (`deployPot`
+ * takes any owner). The Kitchen must land where that release's engine gates and report its Pot hash,
+ * and each Pot must land where `v12PredictPot` derives it for that release and start on that
+ * release's Router.
  */
 const deployLegacyStack = async (
   clients: Clients,
   owner: Address,
   owners: readonly Address[],
   salt: Hex,
+  version: string,
 ): Promise<LegacyStack> => {
   const { publicClient } = clients;
-  const dir = legacyArtifactsDir("evm");
-  if (!hasLegacyArtifacts("evm")) {
+  const dir = legacyArtifactsDir("evm", version);
+  if (!hasLegacyArtifacts("evm", version)) {
     throw new Error(
-      `the earlier release's artifacts are missing (${dir}): run sync-engine-artifacts, which ` +
+      `the ${version} release's artifacts are missing (${dir}): run sync-engine-artifacts, which ` +
         "writes them from the public package its release table names",
     );
   }
-  const gate = read<{ kitchen: Address; potInitCodeHash: Hex }>(dir, "V12EngineGate");
+  const gate = read<{ kitchen: Address; potInitCodeHash: Hex; scheme?: "create3" }>(
+    dir,
+    "V12EngineGate",
+  );
   const kitchenArtifact = artifact("V12Kitchen", dir);
   const potAbi = artifact("V12Pot", dir).abi;
   const stack = await deployReleaseStack(clients, owner, {
@@ -264,7 +290,7 @@ const deployLegacyStack = async (
         "gate rejects.",
     );
   }
-  const compiler = legacyRow("evm").compiler;
+  const { compiler } = legacyRow("evm", version);
   const pots: Record<Address, Address> = {};
   for (const minted of new Set(owners.map((one) => getAddress(one)))) {
     pots[minted] = await mintPot(
@@ -289,6 +315,8 @@ const deployLegacyStack = async (
     kitchenAbi: kitchenArtifact.abi,
     potAbi,
     pots,
+    compiler,
+    create3: gate.scheme === "create3",
   };
 };
 
@@ -299,10 +327,10 @@ const deployLegacyStack = async (
  * `Pot.cook` is `onlyOwner`, and viem's `publicClient.call` sends no `from` by default, so a read
  * that omits it reverts with `NotOwner()` rather than running anything. It also owns the Kitchen.
  *
- * On the legacy arm (`SAUCE_TEST_EVM_ARM=legacy`) the stack is the earlier release's, deployed from
- * its own artifacts, and `runtimeCreationCode` is not read: that engine's creation code is among
- * them. Every Pot the suite mints through `kitchen` is then a kitchen-evm 1.3.0 Pot, and every cook
- * names engine 1.3.0.
+ * On a legacy arm (`SAUCE_TEST_EVM_ARM=<version>`) the stack is that earlier release's, deployed
+ * from its own artifacts, and `runtimeCreationCode` is not read: that engine's creation code is
+ * among them. Every Pot the suite mints through `kitchen` is then that release's, and every cook
+ * names its engine.
  */
 export const startGatedEngine = async (
   clients: Clients,
@@ -310,23 +338,24 @@ export const startGatedEngine = async (
   runtimeCreationCode: Hex,
 ): Promise<GatedEngine> => {
   const { publicClient } = clients;
-  if (releaseArm("evm") === "legacy") {
-    const stack = await deployLegacyStack(clients, owner, [owner], POT_SALT);
+  const arm = releaseArm("evm");
+  if (arm !== "default") {
+    const stack = await deployLegacyStack(clients, owner, [owner], POT_SALT, arm);
     const fee = (await publicClient.readContract({
       abi: stack.kitchenAbi,
       address: stack.kitchen,
       functionName: "executionFee",
     })) as bigint;
-    const compiler = legacyRow("evm").compiler;
 
     return {
-      arm: "legacy",
+      arm,
       cookData: cookDataFor(stack.engine, stack.potAbi),
       engine: stack.engine,
       fee,
       kitchen: stack.kitchen,
       pot: stack.pots[getAddress(owner)]!,
-      predictPot: (who, salt = POT_SALT) => getAddress(v12PredictPot(who, salt, { compiler })),
+      predictPot: (who, salt = POT_SALT) =>
+        getAddress(v12PredictPot(who, salt, { compiler: stack.compiler })),
       router: stack.router,
     };
   }
@@ -375,38 +404,83 @@ export interface UpgradedChain extends GatedEngine {
    * The earlier release, as the chain ran it before the upgrade: its engine and Router at their
    * release addresses; `owner`'s Pot at the legacy salt (`POT_SALT`), minted by that release's
    * Kitchen; and the Pot of each of `options.legacyOwners` at that salt, minted the same way, by
-   * owner.
+   * owner. From a CREATE3 release (`from: "1.4.0"`) also `owner`'s fixed-Router Pot and the Shared
+   * Pot at that salt: on the earlier Router for good.
    */
   readonly legacy: {
     readonly engine: Address;
     readonly router: Address;
     readonly pot: Address;
     readonly pots: Readonly<Record<Address, Address>>;
+    readonly fixedPot?: Address;
+    readonly sharedPot?: Address;
   };
+  /** From a CREATE3 release: `owner`'s fixed-Router Pot and the Shared Pot minted after the switch
+   *  (at `NEW_POT_SALT`), on the new Router. */
+  readonly fixedPot?: Address;
+  readonly sharedPot?: Address;
 }
 
 /**
- * A chain as the live ones are after kitchen-evm 1.4.0's rollout: the earlier release's stack
- * deployed and `owner`'s Pot — and each `legacyOwners` Pot — minted on it at `legacySalt`
- * (`POT_SALT`), then the stack upgraded to the release this SDK pins and `owner`'s new Pot minted at
- * `NEW_POT_SALT`. Every Pot cooks, each on its own engine.
+ * A chain as the live ones are after a rollout: the earlier release's stack deployed and `owner`'s
+ * Pot — and each `legacyOwners` Pot — minted on it at `legacySalt` (`POT_SALT`), then the stack
+ * upgraded to the release this SDK pins and `owner`'s new Pot minted at `NEW_POT_SALT`. Every Pot
+ * cooks, each on its own engine. `from` is the earlier engine version (`"1.3.0"` when left out).
+ * From `"1.4.0"` the Kitchen's implementation does not change and the upgrade is `setRouter` alone;
+ * the chain also holds a fixed-Router and a Shared Pot minted before it and another pair after it.
  */
 export const startUpgradedChain = async (
   clients: Clients,
   owner: Address,
   runtimeCreationCode: Hex,
-  options?: { readonly legacyOwners?: readonly Address[]; readonly legacySalt?: Hex },
+  options?: {
+    readonly legacyOwners?: readonly Address[];
+    readonly legacySalt?: Hex;
+    readonly from?: string;
+  },
 ): Promise<UpgradedChain> => {
   const { publicClient } = clients;
   const kitchenAbi = artifact("V12Kitchen").abi;
+  const legacySalt = options?.legacySalt ?? POT_SALT;
 
   // The earlier release, as the chain ran it: its stack, and each owner's Pot minted by its Kitchen.
   const earlier = await deployLegacyStack(
     clients,
     owner,
     [owner, ...(options?.legacyOwners ?? [])],
-    options?.legacySalt ?? POT_SALT,
+    legacySalt,
+    options?.from ?? "1.3.0",
   );
+  // From a CREATE3 release, a fixed-Router and a Shared Pot minted on it keep its Router for good.
+  let legacyFixed: Address | undefined;
+  let legacyShared: Address | undefined;
+  if (earlier.create3) {
+    const mintEarlier = (kind: "fixed" | "shared"): Promise<Address> => {
+      const holder = kind === "shared" ? zeroAddress : owner;
+
+      return mintPot(
+        clients,
+        owner,
+        earlier.kitchen,
+        earlier.kitchenAbi,
+        earlier.potAbi,
+        {
+          kind,
+          for: holder,
+          salt: legacySalt,
+          expected: getAddress(
+            v12PredictPot(holder, legacySalt, {
+              compiler: earlier.compiler,
+              ...(kind === "fixed" ? { routerFixed: true } : {}),
+            }),
+          ),
+        },
+        earlier.router,
+      );
+    };
+    legacyFixed = await mintEarlier("fixed");
+    legacyShared = await mintEarlier("shared");
+  }
 
   // The rollout: the new engine, Router and implementation at their addresses, the proxy upgraded.
   const stack = await upgradeReleaseStack(clients, owner, defaultArtifacts(runtimeCreationCode));
@@ -441,15 +515,43 @@ export const startUpgradedChain = async (
         `the SDK derives ${derived}`,
     );
   }
+  const potAbi = artifact("V12Pot").abi;
   const pot = await mintPot(
     clients,
     owner,
     stack.kitchen,
     kitchenAbi,
-    artifact("V12Pot").abi,
+    potAbi,
     { for: owner, salt: NEW_POT_SALT, expected: derived },
     stack.router,
   );
+  // After the switch a fixed-Router and a Shared Pot start on the new Router, for good.
+  let fixedPot: Address | undefined;
+  let sharedPot: Address | undefined;
+  if (earlier.create3) {
+    const mintNew = (kind: "fixed" | "shared"): Promise<Address> => {
+      const holder = kind === "shared" ? zeroAddress : owner;
+
+      return mintPot(
+        clients,
+        owner,
+        stack.kitchen,
+        kitchenAbi,
+        potAbi,
+        {
+          kind,
+          for: holder,
+          salt: NEW_POT_SALT,
+          expected: getAddress(
+            v12PredictPot(holder, NEW_POT_SALT, kind === "fixed" ? { routerFixed: true } : {}),
+          ),
+        },
+        stack.router,
+      );
+    };
+    fixedPot = await mintNew("fixed");
+    sharedPot = await mintNew("shared");
+  }
   const fee = (await publicClient.readContract({
     abi: kitchenAbi,
     address: stack.kitchen,
@@ -467,9 +569,11 @@ export const startUpgradedChain = async (
       pot: earlier.pots[getAddress(owner)]!,
       pots: earlier.pots,
       router: earlier.router,
+      ...(legacyFixed === undefined ? {} : { fixedPot: legacyFixed, sharedPot: legacyShared! }),
     },
     pot,
     predictPot: defaultPredict,
     router: stack.router,
+    ...(fixedPot === undefined ? {} : { fixedPot, sharedPot: sharedPot! }),
   };
 };

@@ -79,6 +79,7 @@ import {
   poolsCommand,
   cookPotOf,
   potCommand,
+  potRouterStatus,
   potState,
   POT_UNCHECKED,
   potTarget,
@@ -2303,6 +2304,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
       const at = await cookPotOf(chain, { owner, ...salt }, client);
       const output = potCommand({ chain, owner, ...salt }, at);
+      const routerStatus = await potRouterStatus(client, at);
       const pot = at.pot;
       const state =
         at.deployed === undefined
@@ -2325,6 +2327,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       return {
         json: {
           ...output.json,
+          ...(routerStatus.router === undefined ? {} : { router: routerStatus.router }),
           deployed,
           ...(fee === undefined
             ? {}
@@ -2352,6 +2355,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         },
         notes: [
           ...(output.notes ?? []),
+          ...routerStatus.notes,
           ...(deployed === null ? [unchecked, POT_UNCHECKED] : deployed ? [deployedNote] : []),
           ...(held === undefined || nativeToken === undefined
             ? []

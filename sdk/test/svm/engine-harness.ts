@@ -82,20 +82,20 @@ const resolveArtifact = (fn: () => string): string | undefined => {
 // `pnpm --filter './sdk' sync-engine-artifacts --fetch-v12-engines` (or an installed package)
 // supplies them from `artifacts/svm` too — so a local run executes instead of skipping.
 //
-// On the legacy arm (`SAUCE_TEST_SVM_ARM=legacy`, `../release-arm.ts`) it is the earlier release's
+// On a legacy arm (`SAUCE_TEST_SVM_ARM=1.4.0`, `../release-arm.ts`) it is the earlier release's
 // `engine-devnet.so` instead — the engine the installed row's `alsoRunsOn` names (v12-svm 1.4.0),
 // from the artifacts the sync wrote to `src/artifacts/legacy` — so every suite that loads the
 // engine here runs the installed compiler's programs on it. `SAUCE_ENGINE_SO` and
 // `SAUCE_RUST_ENGINE_SO` are not read there. A missing file is `undefined`: the suites skip
 // locally, and the check below fails them under CI.
 const legacyEngineSo = (): string | undefined => {
-  const path = resolve(legacyArtifactsDir("svm"), "svm/engine-devnet.so");
+  const path = resolve(legacyArtifactsDir("svm", releaseArm("svm")), "svm/engine-devnet.so");
 
   return existsSync(path) ? path : undefined;
 };
 
 export const ENGINE_SO =
-  releaseArm("svm") === "legacy"
+  releaseArm("svm") !== "default"
     ? legacyEngineSo()
     : resolveArtifact(() =>
         svmEnginePath("devnet", process.env.SAUCE_ENGINE_SO ?? process.env.SAUCE_RUST_ENGINE_SO),

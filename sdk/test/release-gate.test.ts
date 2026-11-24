@@ -8,7 +8,16 @@
  */
 import { encodeAbiParameters, pad, toHex, type Hex } from "viem";
 
-import { evmCookProblem, solanaCookProblem } from "../scripts/lib/release-gate-checks.mjs";
+import {
+  configKeyProblem,
+  evmCookProblem,
+  kitchenCoverage,
+  routerProbeProblem,
+  runtimeProblem,
+  solanaCookProblem,
+} from "../scripts/lib/release-gate-checks.mjs";
+import { CANONICAL_CHAINS } from "../src/chains/canonical.js";
+import { v12EngineAddress } from "../src/deployments/index.js";
 
 // ---- Solana ---------------------------------------------------------------------------------
 
@@ -166,7 +175,7 @@ describe("the release gate's check of a simulated Solana payment", () => {
 
 const POT_EVM = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 const OTHER_EVM = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC";
-const ENGINE_EVM = "0x983C102aa6321187877530723dDF6921AB4861a6";
+const ENGINE_EVM = v12EngineAddress();
 const EARLIER_EVM = "0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67";
 
 /**
@@ -215,5 +224,142 @@ describe("the release gate's check of a mined EVM cook", () => {
     ],
   ] as const)("refuses a cook that succeeded but: %s", (_what, observed, problem) => {
     expect(evmCookProblem(cook(observed), EVM_EXPECTED)).toMatch(problem);
+  });
+});
+
+// ---- the Router and the Kitchen's chains ----------------------------------------------------
+
+const ROUTER_EVM = "0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6";
+const HYPERSWAP = { name: "hyperswapV3SwapCallback", selector: "0xfa85398b" } as const;
+/** `UnauthorizedCallback()`: what a Router that has a V3 callback says to a call no swap is in flight for. */
+const UNAUTHORIZED = "0xf5c6c81a";
+
+describe("the release gate's probe of the Router's callbacks", () => {
+  it("the Router probe tells an answered callback from a missing one", () => {
+    // A Router that has the callback refuses a call with no swap in flight, whatever follows the
+    // error's selector.
+    for (const revertData of [UNAUTHORIZED, `${UNAUTHORIZED}${"00".repeat(4)}`]) {
+      expect(
+        routerProbeProblem({ ...HYPERSWAP, expect: "answered", outcome: { revertData } }),
+      ).toBeUndefined();
+    }
+    // A Router that lacks it has no fallback: the call reverts with no data at all.
+    expect(
+      routerProbeProblem({ ...HYPERSWAP, expect: "answered", outcome: { revertData: "0x" } }),
+    ).toBe("the Router does not answer hyperswapV3SwapCallback (0xfa85398b)");
+    // Any other revert is not the callback's own answer either.
+    expect(
+      routerProbeProblem({
+        ...HYPERSWAP,
+        expect: "answered",
+        outcome: { revertData: "0x08c379a0" },
+      }),
+    ).toMatch(/reverted with 0x08c379a0, not UnauthorizedCallback\(\) \(0xf5c6c81a\)/);
+    // A callback no swap is in flight for must never succeed.
+    expect(
+      routerProbeProblem({ ...HYPERSWAP, expect: "answered", outcome: { succeeded: true } }),
+    ).toMatch(/hyperswapV3SwapCallback \(0xfa85398b\) answered with success/);
+  });
+
+  it("the control, a name no Router has, reverts with no data: a fallback would be a feature", () => {
+    const control = { name: "an unknown name", selector: "0xdeadbeef" } as const;
+    expect(
+      routerProbeProblem({ ...control, expect: "missing", outcome: { revertData: "0x" } }),
+    ).toBeUndefined();
+    // What a Router with a fallback says: its own error, for any name.
+    expect(
+      routerProbeProblem({ ...control, expect: "missing", outcome: { revertData: "0x1234abcd" } }),
+    ).toMatch(/0xdeadbeef reverted with 0x1234abcd, not with no data/);
+    expect(
+      routerProbeProblem({ ...control, expect: "missing", outcome: { succeeded: true } }),
+    ).toMatch(/answered with success/);
+  });
+});
+
+describe("the release gate's check of the code a release put on a chain", () => {
+  const RUNTIME = "0x6080604052";
+
+  it("accepts the expected runtime in either casing, and names the chain and address of anything else", () => {
+    const at = { chain: "base", address: ROUTER_EVM, expected: RUNTIME };
+    expect(runtimeProblem({ ...at, actual: RUNTIME })).toBeUndefined();
+    expect(
+      runtimeProblem({ ...at, actual: RUNTIME.replace("0x", "0X").toUpperCase() }),
+    ).toBeUndefined();
+    const different = runtimeProblem({ ...at, actual: "0x6080604053" });
+    expect(different).toContain("base");
+    expect(different).toContain(ROUTER_EVM);
+    for (const actual of [undefined, "0x"]) {
+      expect(runtimeProblem({ ...at, actual })).toBe(`base: ${ROUTER_EVM} has no code`);
+    }
+  });
+});
+
+/** The 19 chains v12's deployment records give the Kitchen proxy (2026-11-21). */
+const ROUTER_IDS = [
+  42161, 5042, 8453, 56, 42220, 1, 999, 57073, 143, 10, 9745, 137, 4663, 146, 130, 480, 5042002,
+  84532, 11155111,
+];
+
+describe("the release gate's scan of the Kitchen's other chains", () => {
+  const ids = [1, 8453, 999, 43114, 1399811149, 1399811150, 1399811151, 424242];
+  const kindOf = (id: number) => CANONICAL_CHAINS.find((chain) => chain.id === id)?.kind;
+  const reasonOf = (error: unknown): string =>
+    error instanceof Error ? error.message : String(error);
+
+  it("the Kitchen coverage scan reads canonical EVM chains only, never Solana's", async () => {
+    expect(kindOf(424242)).toBeUndefined();
+    expect(kindOf(1399811149)).toBe("svm");
+    const calls: number[] = [];
+    const hasCode = async (id: number) => {
+      calls.push(id);
+      if (kindOf(id) === "svm") throw new Error(`EVM call sent to ${id}`);
+
+      return id === 43114;
+    };
+    const found = await kitchenCoverage({
+      ids,
+      routerIds: ROUTER_IDS,
+      canonical: CANONICAL_CHAINS,
+      hasCode,
+      reasonOf,
+    });
+    expect(calls).toEqual([43114]);
+    expect(found.problems).toEqual([
+      "43114: the Kitchen proxy has code here, but ROUTER_CHAINS does not list this chain",
+    ]);
+    expect(found.skipped).toEqual([424242, 1399811149, 1399811150, 1399811151]);
+  });
+
+  it("is never a skip where a canonical EVM chain cannot be read", async () => {
+    const found = await kitchenCoverage({
+      ids,
+      routerIds: ROUTER_IDS,
+      canonical: CANONICAL_CHAINS,
+      hasCode: async () => {
+        throw new Error("timeout");
+      },
+      reasonOf,
+    });
+    expect(found.problems).toEqual(["43114: the Kitchen proxy could not be read — timeout"]);
+    expect(found.skipped).toEqual([424242, 1399811149, 1399811150, 1399811151]);
+  });
+});
+
+describe("the release gate's --rpc-config keys", () => {
+  it("an --rpc-config key that is not a chain id is refused, counted and never repeated", () => {
+    expect(configKeyProblem(["1", "8453"])).toBeUndefined();
+    const one = configKeyProblem(["1", "https://rpc.example.invalid/v2/SECRETKEY123"]);
+    const three = configKeyProblem([
+      "1",
+      "https://rpc.example.invalid/v2/SECRETKEY123",
+      "base",
+      "01",
+    ]);
+    expect(one).toBe("has a key that is not a chain id");
+    expect(three).toBe("has 3 keys that are not chain ids");
+    for (const said of [one, three]) {
+      expect(said).not.toContain("SECRETKEY123");
+      expect(said).not.toContain("example");
+    }
   });
 });

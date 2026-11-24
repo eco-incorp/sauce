@@ -23,7 +23,7 @@ import {
 } from "viem";
 
 import { releaseArm } from "../../sdk/test/release-arm.js";
-import { v12RouterAddress } from "../../sdk/dist/deployments/index.js";
+import { V12_RELEASE_SETS, v12RouterAddress } from "../../sdk/dist/deployments/index.js";
 import { quoteAction, type QuoteOptions } from "../src/index.js";
 import { ACTION_SPECS, ACTION_TYPES } from "../src/spec.js";
 import type { ActionType, SwapAction } from "../src/types.js";
@@ -168,9 +168,39 @@ describe("quoteAction, on mainnet state", { skip: skipReason(), timeout: 300_000
         // The stack's own Router on the default arm, as always. The legacy arm's stack has an
         // earlier release's Router, which this check does not refuse: the one it refuses is the
         // installed release's (A2).
-        { router: releaseArm("evm") === "legacy" ? getAddress(v12RouterAddress()) : env.router },
+        { router: releaseArm("evm") !== "default" ? getAddress(v12RouterAddress()) : env.router },
       ),
     );
+  });
+
+  it("refuses the Router every release of the table pins as a quote service, the Pots minted before a switch included", () => {
+    const pinned = V12_RELEASE_SETS.flatMap((set) => set["kitchen-evm"].fixedRouter ?? []);
+    assert.ok(
+      new Set(pinned.map((one) => one.toLowerCase())).size >= 2,
+      "the table pins two Routers",
+    );
+    for (const router of [
+      getAddress(v12RouterAddress()),
+      ...pinned.map((one) => getAddress(one)),
+    ]) {
+      assert.throws(
+        () =>
+          quoteAction(
+            {
+              type: "uniswapV3Swap",
+              pool: UNIV3_USDC_WETH_500,
+              tokenIn: USDC,
+              tokenOut: WETH,
+              amount: "1000000",
+              amountOutMin: "0",
+              recipient: "pot",
+            },
+            { router },
+          ),
+        /The execution Router has no quote method/,
+        `the Router ${router} has no quote method`,
+      );
+    }
   });
 
   /** The quote, sent as its `eth_call` (from the zero address) and decoded by its own decoder. */

@@ -222,10 +222,33 @@ try {
       assert.equal(actual, digest, `${tag}/${asset} ships unchanged in the package`);
     }
   }
+  // SDK 1.1.0's documented `releases/2.6.3/` keeps shipping that release, each asset held to its
+  // own row's digest, beside the installed row's folder: both, and no other.
+  for (const kept of ["2.6.3"].filter((compiler) => compiler !== folder)) {
+    const row = pinned.releases.find((candidate) => candidate.compiler === kept);
+    assert.ok(
+      row,
+      `releases.json has the ${kept} row whose raw assets ship under releases/${kept}`,
+    );
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"]) {
+      const { version, assets } = row[component];
+      const tag = `${component}-v${version}`;
+      for (const [asset, digest] of Object.entries(assets)) {
+        const bytes = readFileSync(
+          join(installedRoot, "sdk/dist/artifacts/releases", kept, tag, asset),
+        );
+        const actual =
+          asset === "runtime.creation.hex"
+            ? keccak256(bytes.toString("utf8").trim())
+            : createHash("sha256").update(bytes).digest("hex");
+        assert.equal(actual, digest, `${kept}'s ${tag}/${asset} ships unchanged in the package`);
+      }
+    }
+  }
   assert.deepEqual(
-    readdirSync(join(installedRoot, "sdk/dist/artifacts/releases")),
-    ["2.6.3"],
-    "the release's raw assets ship where SDK 1.1.0 put them, and nowhere else",
+    readdirSync(join(installedRoot, "sdk/dist/artifacts/releases")).sort(),
+    ["2.6.3", "2.6.4"],
+    "the raw assets ship in the installed row's folder and in SDK 1.1.0's, and nowhere else",
   );
   execFileSync(
     process.execPath,
@@ -590,6 +613,50 @@ try {
         assert.equal(await balanceOf(tokenOut, first.pot), 2000n, 'and the Pot received 2000 of the output');
         console.log('Clean package install: ./testing stands up the default release (engine, Router, CREATE3 account Pots), cooks on it, and a V3 swap pays through the release Router');
 
+        // The release Router answers HyperSwap V3's callback. A call no swap is in flight for reverts
+        // UnauthorizedCallback() where the Router has the name, and with no data where it has not:
+        // this Router has no fallback, so a name no Router has is the control.
+        const router = dep.v12RouterAddress();
+        const callbackArgs = encodeAbiParameters([{ type: 'int256' }, { type: 'int256' }, { type: 'bytes' }], [1n, 0n, '0x']).slice(2);
+        const probe = async (selector, data) => {
+          try {
+            await chain.client.call({ account: '0x000000000000000000000000000000000000dEaD', to: router, data: selector + data });
+          } catch (error) {
+            const found = error.walk((cause) => typeof cause.data === 'string');
+
+            return found ? found.data : '0x';
+          }
+
+          return 'succeeded';
+        };
+        assert.ok((await probe('0xfa85398b', callbackArgs)).startsWith('0xf5c6c81a'), 'the release Router answers hyperswapV3SwapCallback');
+        assert.ok((await probe('0xfa461e33', callbackArgs)).startsWith('0xf5c6c81a'), 'and uniswapV3SwapCallback');
+        assert.equal(await probe('0xdeadbeef', ''), '0x', 'a name no Router has reverts with no data: the Router has no fallback');
+        console.log('Clean package install: the release Router answers hyperswapV3SwapCallback');
+
+        // A HyperSwap-style pool, which calls that callback back, is paid by the Pot through the same Router.
+        const hyperPool = await deploy(
+          mockPool.creationCode +
+            encodeAbiParameters(
+              [{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'uint256' }],
+              [tokenIn, tokenOut, 3000, 2n * 10n ** 18n],
+            ).slice(2),
+        );
+        await mined(await wallet.writeContract({ chain: null, address: hyperPool, abi: parseAbi(['function setCallbackSelector(bytes4 selector)']), functionName: 'setCallbackSelector', args: ['0xfa85398b'] }));
+        for (const [token, to] of [[tokenIn, first.pot], [tokenOut, hyperPool]]) {
+          await mined(await wallet.writeContract({ chain: null, address: token, abi: erc20, functionName: 'mint', args: [to, 10_000n] }));
+        }
+        const [poolBefore, potBefore] = [await balanceOf(tokenIn, hyperPool), await balanceOf(tokenOut, first.pot)];
+        await chain.run({
+          source:
+            'import { uniswapV3 } from "@sauce/router";\\nfunction main() {\\n  uniswapV3(' +
+            [hyperPool, tokenIn, tokenOut].map((address) => BigInt(address).toString()).join(', ') +
+            ', 1000, 0, 0, pot);\\n}\\n',
+        });
+        assert.equal((await balanceOf(tokenIn, hyperPool)) - poolBefore, 1000n, 'the HyperSwap-style pool was paid 1000 of the input');
+        assert.equal((await balanceOf(tokenOut, first.pot)) - potBefore, 2000n, 'and the Pot received 2000 of the output');
+        console.log('Clean package install: a HyperSwap-style pool is paid through the release Router');
+
         // The installed bin on that chain, with no flag naming a release: it names the Pot the Kitchen
         // places, deploys it and cooks on it.
         const sauce = (...args) =>
@@ -826,7 +893,7 @@ try {
   assert.equal(compiled.engine.release, "v12-evm");
   assert.equal(
     compiled.engine.version,
-    "1.4.0",
+    "1.5.0",
     "compile names the release this package is for, with no flag asking for it",
   );
   const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "base", "--offline"));

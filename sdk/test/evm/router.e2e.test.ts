@@ -294,7 +294,7 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
     });
   });
 
-  describe("a Synthra V3 pool through the generation-4 Router", () => {
+  describe("a renamed-callback V3 pool (Synthra, HyperSwap) through the generation-4 Router", () => {
     const AMOUNT_IN = 1_000n;
     const RATE = 2n * 10n ** 18n; // token0 -> token1 at 2x
     let token0: Address;
@@ -346,47 +346,72 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       );
     });
 
-    it("is the release's content-addressed Router, and it answers both renamed callbacks", () => {
+    it("is the release's content-addressed Router, and it answers every renamed callback", () => {
       expect(v12DeployedAddresses().evm.contracts.router.addressing).toBe("content");
       const answered = ISAUCE_ROUTER.abi
         .filter((item) => item.type === "function")
         .map((item) => (item as { name: string }).name);
       expect(answered).toEqual(
-        expect.arrayContaining(["synthraV3SwapCallback", "unitFlowV3SwapCallback"]),
+        expect.arrayContaining([
+          "synthraV3SwapCallback",
+          "unitFlowV3SwapCallback",
+          "hyperswapV3SwapCallback",
+        ]),
       );
       // The selector Synthra's own pools call back (see the synthra-v3 skill document).
       expect(toFunctionSelector("synthraV3SwapCallback(int256,int256,bytes)")).toBe("0x13abb0ca");
+      // The one HyperSwap's pools call back: the callback the Router before this release lacks.
+      expect(toFunctionSelector("hyperswapV3SwapCallback(int256,int256,bytes)")).toBe("0xfa85398b");
     });
 
-    it("pays the pool the exact input from the Pot and delivers the output to it", async () => {
-      const at = await pool("synthraV3SwapCallback(int256,int256,bytes)");
-      const { to, data } = swapCall(at);
-      const [potIn, potOut] = [await balance(token0, sauce.pot), await balance(token1, sauce.pot)];
+    for (const callback of ["synthraV3SwapCallback", "hyperswapV3SwapCallback"] as const) {
+      // HyperSwap's callback is answered by the installed release's Router alone: an earlier
+      // release's stack (the legacy arms) reverts it, which is what T24 holds for each Pot (A3).
+      const swaps =
+        callback === "hyperswapV3SwapCallback" && releaseArm("evm") !== "default" ? it.skip : it;
+      const signature = `${callback}(int256,int256,bytes)`;
 
-      expect(await sendAs(OWNER, to, data)).toBe("success");
-      expect(await balance(token0, at)).toBe(AMOUNT_IN);
-      expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
-      expect(await balance(token1, sauce.pot)).toBe(potOut + (AMOUNT_IN * RATE) / 10n ** 18n);
-    });
+      swaps(
+        `pays the pool the exact input from the Pot and delivers the output to it: ${callback}`,
+        async () => {
+          const at = await pool(signature);
+          const { to, data } = swapCall(at);
+          const [potIn, potOut] = [
+            await balance(token0, sauce.pot),
+            await balance(token1, sauce.pot),
+          ];
+
+          expect(await sendAs(OWNER, to, data)).toBe("success");
+          expect(await balance(token0, at)).toBe(AMOUNT_IN);
+          expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
+          expect(await balance(token1, sauce.pot)).toBe(potOut + (AMOUNT_IN * RATE) / 10n ** 18n);
+        },
+      );
+
+      swaps(
+        `refuses a pool asking for more than the exact input: InputExceedsAuthorized: ${callback}`,
+        async () => {
+          const at = await pool(signature, 1n);
+          const { to, data } = swapCall(at);
+          const refusal = await revertOf(OWNER.address, to, data);
+          expect(refusal).toBeDefined();
+          expect(
+            refusal!.includes(
+              toFunctionSelector("InputExceedsAuthorized(uint256,uint256)").slice(2),
+            ),
+          ).toBe(true);
+          expect(getAddress(to)).toBe(sauce.pot);
+          expect(await sendAs(OWNER, to, data)).toBe("reverted");
+          expect(await balance(token0, at)).toBe(0n);
+        },
+      );
+    }
 
     it("reverts when the pool calls back under a name the Router does not answer", async () => {
       // What a Router older than generation 3 does with `synthraV3SwapCallback`: the Pot's fallback
       // delegatecalls a Router with no such function, and the swap dies.
       const at = await pool("someOtherV3SwapCallback(int256,int256,bytes)");
       const { to, data } = swapCall(at);
-      expect(await sendAs(OWNER, to, data)).toBe("reverted");
-      expect(await balance(token0, at)).toBe(0n);
-    });
-
-    it("refuses a pool asking for more than the exact input: InputExceedsAuthorized", async () => {
-      const at = await pool("synthraV3SwapCallback(int256,int256,bytes)", 1n);
-      const { to, data } = swapCall(at);
-      const refusal = await revertOf(OWNER.address, to, data);
-      expect(refusal).toBeDefined();
-      expect(
-        refusal!.includes(toFunctionSelector("InputExceedsAuthorized(uint256,uint256)").slice(2)),
-      ).toBe(true);
-      expect(getAddress(to)).toBe(sauce.pot);
       expect(await sendAs(OWNER, to, data)).toBe("reverted");
       expect(await balance(token0, at)).toBe(0n);
     });

@@ -149,9 +149,9 @@ The package pins one compiler and ships the engines that compiler pairs with
 
 ## Moving to SDK 1.2.0
 
-SDK 1.2.0 pins compiler **2.6.4** (1.1.0 pinned 2.6.3) and the same engines and Kitchens as 1.1.0:
-EVM engine and Kitchen **1.4.0**, SVM engine **1.4.1** and SVM Kitchen **1.1.0**. What moved is
-that it uses them. SDK 1.1.0 kept every default on the releases before (engine 1.3.0, CREATE2 Pot
+SDK 1.2.0 pins compiler **2.6.4** (1.1.0 pinned 2.6.3), EVM engine and Kitchen **1.5.0** (1.1.0
+pinned 1.4.0), SVM engine **1.4.1** and SVM Kitchen **1.1.0**. For the Kitchen's Pots and the
+Solana engine, what moved is that it uses them. SDK 1.1.0 kept every default on the releases before (engine 1.3.0, CREATE2 Pot
 addresses, Solana engine 1.4.0), and on 2026-11-20, before it was published, every observed EVM
 chain with the Kitchen switched to kitchen-evm 1.4.0. So with 1.1.0 or 1.0.0, a new owner's Pot
 address is one no Kitchen of that release deploys to.
@@ -160,8 +160,9 @@ address is one no Kitchen of that release deploys to.
   `sauce pot` and `sauce tx` give the address the Kitchen places a new Pot at
   ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
 - **Recompiled programs read a dirty `abi.decode` word instead of reverting (EVM).** The SDK pins
-  compiler **2.6.4**; 1.1.0 pinned 2.6.3. Both pair with the same engines, so a program compiled
-  with 1.1.0 runs as it did. Recompiled, an `abi.decode` field spelled `"Address"` is its word's
+  compiler **2.6.4**; 1.1.0 pinned 2.6.3. A program compiled with 1.1.0 runs on engine 1.4.0, as
+  before; 2.6.4's output runs on engine 1.5.0, and on 1.4.0 and 1.3.0 for Pots of those releases.
+  Recompiled, an `abi.decode` field spelled `"Address"` is its word's
   low 160 bits, and a `"bool"` field reads as true for any nonzero word, where 2.6.3 reverted; an
   element of an `"Address[]"` is still checked. If a program relies on that revert, decode the
   word as `"Uint256"` and check it ([`abi` in the reference](../reference/saucescript.md#9-abi-evm)).
@@ -179,6 +180,12 @@ address is one no Kitchen of that release deploys to.
   its simulation, but for a staged program the setup transactions (the code buffer, token
   accounts) may already have landed and can be closed. Do not move funds just because you updated
   the SDK.
+- **A new Router, and which Pots get it.** The EVM Kitchen now hands out a Router that also answers
+  `hyperswapV3SwapCallback`. A Pot minted before your chain's switch keeps the Router it has, so to
+  swap at HyperSwap V3, use a Pot minted after the switch, under a fresh salt (`--salt <label>`).
+  A fixed-Router or Shared Pot keeps its Router for good, and runs only on the engine built for it:
+  library code that cooks one names `potEngine(client, pot)` from `/evm/engine`, never
+  `v12EngineAddress()`. `sauce pot` and `sauce_pot` say which Router a deployed Pot runs.
 - **Which Pot `--owner` and `--wallet` mean.** Online, an owner who already has a deployed Pot at
   that salt from an earlier release whose engine runs this SDK's programs (kitchen-evm 1.3.0's)
   cooks on that Pot, through its own engine. The command says it is an earlier release's Pot, and
@@ -194,8 +201,8 @@ address is one no Kitchen of that release deploys to.
   addresses. Name the Pot you mean with `--pot <address>`, or pass an RPC endpoint and the chain
   decides. `sauce pot --offline` and `sauce_pot` show both Pots and build nothing. With `--pot`,
   the engine comes from the store's record of that Pot when the record is its own (its chain and
-  Pot are the ones named, and it is filed under its Pot's name), else it is engine 1.4.0, with a
-  note: on an EVM chain a cook built for a 1.3.0 Pot on engine 1.4.0 reverts whole and strands no
+  Pot are the ones named, and it is filed under its Pot's name), else it is the installed engine, with a
+  note: on an EVM chain a cook built for an earlier release's Pot on the installed engine reverts whole and strands no
   funds (a Solana Kitchen pins no engine to a Pot, so there the SDK picks the engine from the Pot's
   owner program), so pass an RPC endpoint, or import the Pot first.
 - **An address 1.0.0 or 1.1.0 predicted that you funded and never deployed.** No Pot can be

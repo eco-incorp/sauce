@@ -116,9 +116,14 @@ re-enter their caller mid-swap to be paid, which a program cannot answer. Those 
 | `pancakeV3SwapCallback`                           | PancakeSwap V3                                                                   |
 | `algebraSwapCallback`                             | Algebra pools (Camelot V3, QuickSwap V3), whose `swap` has Uniswap V3's selector |
 | `synthraV3SwapCallback`, `unitFlowV3SwapCallback` | Synthra V3, UnitFlow V3                                                          |
+| `hyperswapV3SwapCallback`                         | HyperSwap V3                                                                     |
 | `unlockCallback`                                  | Uniswap V4                                                                       |
 | `maverickV2SwapCallback`                          | Maverick V2                                                                      |
 | `lockAcquired`                                    | PancakeSwap Infinity, CL and bin pools alike                                     |
+
+A Pot answers these through the Router it runs, `router()` on the Pot: a Pot whose Router predates a
+callback cannot pay a pool that calls it back, and a fixed-Router or Shared Pot keeps its Router for
+good.
 
 So `uniswapV3` drives every V3-style pool above. Each callback is authenticated to the pool being
 swapped, pays **once**, and pays only the input the pool asks for, never more than `amountIn`

@@ -89,3 +89,42 @@ export declare function confineEnvironment<T extends Record<string, string | und
   env: T,
   keep: readonly string[],
 ): T;
+
+/** What a probe of one callback on the Router did: it succeeded, or reverted with this data. */
+export type RouterProbeOutcome =
+  { readonly succeeded: true } | { readonly succeeded?: undefined; readonly revertData?: string };
+
+/**
+ * Why a probe of one callback name on a Router did not find what it should, or `undefined`:
+ * `"answered"` expects `UnauthorizedCallback()` (the Router has the name), `"missing"` expects no
+ * data at all (the control: a name no Router has, the Router having no fallback).
+ */
+export declare function routerProbeProblem(probe: {
+  readonly name: string;
+  readonly selector: string;
+  readonly expect: "answered" | "missing";
+  readonly outcome: RouterProbeOutcome;
+}): string | undefined;
+
+/** Why the code at `address` on `chain` is not `expected`, the runtime the release deploys, or `undefined`. */
+export declare function runtimeProblem(code: {
+  readonly chain: string;
+  readonly address: string;
+  readonly expected: string;
+  readonly actual: string | undefined;
+}): string | undefined;
+
+/** What is wrong with the keys of the gate's endpoint file, or `undefined`: a count, never a key. */
+export declare function configKeyProblem(keys: readonly string[]): string | undefined;
+
+/**
+ * The other chains of the endpoint file whose Kitchen proxy has code though ROUTER_CHAINS lacks
+ * them. Only a canonical EVM chain is read; the rest come back in `skipped`.
+ */
+export declare function kitchenCoverage(input: {
+  readonly ids: readonly number[];
+  readonly routerIds: readonly number[];
+  readonly canonical: ReadonlyArray<{ readonly id: number; readonly kind: string }>;
+  readonly hasCode: (id: number) => Promise<boolean>;
+  readonly reasonOf: (error: unknown) => string;
+}): Promise<{ problems: string[]; skipped: number[] }>;

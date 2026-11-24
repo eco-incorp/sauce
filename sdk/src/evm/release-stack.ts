@@ -16,7 +16,9 @@
  * (1.0.0 and earlier), and set with `setRouter` — the way a fresh deploy sets it — for one that keeps
  * it in storage.
  *
- * `upgradeReleaseStack` takes such a stack to a later release, as a release's own rollout does.
+ * `upgradeReleaseStack` takes such a stack to a later release, as a release's own rollout does. A
+ * Router-only release keeps the Kitchen's implementation and sends `setRouter` alone, as v12's
+ * Kitchen deploy does.
  *
  * It reads no file: the caller passes the synced artifacts (`sdk/{src,dist}/artifacts`). Used by the
  * SDK's own suites (`test/evm/gated-engine.ts`) and by `@eco-incorp/sauce/testing`; not exported.
@@ -74,6 +76,10 @@ export interface ReleaseStack {
 const PROXY_CHILD_INITCODE = "0x67363d3d37363d34f03d5260086018f3" as Hex;
 const PROXY_CHILD_RUNTIME = "0x363d3d37363d34f0" as Hex;
 
+/** EIP-1967's implementation slot, which the Kitchen's UUPS proxy delegates through. */
+const IMPLEMENTATION_SLOT =
+  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as Hex;
+
 type Clients = { publicClient: PublicClient; walletClient: WalletClient; testClient: TestClient };
 
 /** Sends `data` to `to` from `owner`, an account the node signs for. */
@@ -124,6 +130,24 @@ async function create3(
   }
 
   return at;
+}
+
+/**
+ * CREATE3 at `ref.address` only where nothing is there yet: an address derived from a contract's
+ * content only ever holds that content, so code already there is the release's own, and `create3`
+ * would clear it first.
+ */
+async function ensure(
+  clients: Clients,
+  owner: Address,
+  factory: Address,
+  ref: ContractRef,
+  initCode: Hex,
+): Promise<Address> {
+  const code = await clients.publicClient.getCode({ address: getAddress(ref.address) });
+  if (code !== undefined && code !== "0x") return getAddress(ref.address);
+
+  return create3(clients, owner, factory, ref, initCode);
 }
 
 /**
@@ -209,6 +233,11 @@ export async function deployReleaseStack(
  * release addresses (CREATE3), then the Kitchen proxy, which stays where it is, upgraded to the new
  * implementation (`upgradeToAndCall(implementation, 0x)`) and given the new Router (`setRouter`).
  * Pots already minted keep their code, their Router and their engine.
+ *
+ * A Router-only release keeps the Kitchen's implementation: where the proxy already runs it, only
+ * the engine and the Router are new, and `setRouter` is all that is sent to the Kitchen, as v12's
+ * Kitchen deploy does. The engine and the Router are deployed only where nothing is there: a content
+ * address only ever holds that content.
  */
 export async function upgradeReleaseStack(
   clients: Clients,
@@ -229,31 +258,40 @@ export async function upgradeReleaseStack(
     );
   }
 
-  const engine = await create3(
+  const engine = await ensure(
     clients,
     owner,
     factory,
     contracts.engine,
     artifacts.runtimeCreationCode,
   );
-  const router = await create3(clients, owner, factory, contracts.router, artifacts.routerBytecode);
-  const kitchenImplementation = await create3(
-    clients,
-    owner,
-    factory,
-    contracts.kitchenImplementation,
-    artifacts.kitchen.bytecode,
-  );
-  await send(
-    clients,
-    owner,
-    kitchen,
-    encodeFunctionData({
-      abi: kitchenAbi,
-      functionName: "upgradeToAndCall",
-      args: [kitchenImplementation, "0x"],
-    }),
-  );
+  const router = await ensure(clients, owner, factory, contracts.router, artifacts.routerBytecode);
+  const implementation = getAddress(contracts.kitchenImplementation.address);
+  const slot = await clients.publicClient.getStorageAt({
+    address: kitchen,
+    slot: IMPLEMENTATION_SLOT,
+  });
+  const running = slot === undefined ? undefined : getAddress(`0x${slot.slice(-40)}`);
+  let kitchenImplementation = implementation;
+  if (running !== implementation) {
+    kitchenImplementation = await create3(
+      clients,
+      owner,
+      factory,
+      contracts.kitchenImplementation,
+      artifacts.kitchen.bytecode,
+    );
+    await send(
+      clients,
+      owner,
+      kitchen,
+      encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "upgradeToAndCall",
+        args: [kitchenImplementation, "0x"],
+      }),
+    );
+  }
   await send(
     clients,
     owner,

@@ -82,6 +82,30 @@ describe("potRouterUpdate", () => {
     expect(client.reads).toContain(`${getAddress(v12KitchenAddress())}.router`);
   });
 
+  it("proposes only this release's Router, where the Kitchen hands it out", async () => {
+    // The two Routers of the 1.4.0 and 1.5.0 Kitchens, literal: the installed release's is the second.
+    const R1 = getAddress("0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759");
+    const R2 = getAddress("0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6");
+    expect(RELEASE_ROUTER).toBe(R2);
+    // A dynamic Pot minted on R1, on a chain whose Kitchen now hands out R2: the owner's setRouter(R2).
+    const switched = await potRouterUpdate(
+      stub({ pot: POT, potRouter: R1, kitchenRouter: R2 }),
+      POT,
+    );
+    expect(switched?.to).toBe(getAddress(POT));
+    const call = decodeFunctionData({ abi: v12PotAbi, data: switched!.data });
+    expect([call.functionName, call.args]).toEqual(["setRouter", [R2]]);
+    // Before the chain switches the Kitchen still hands out R1, which this release does not pin.
+    expect(
+      await potRouterUpdate(stub({ pot: POT, potRouter: R1, kitchenRouter: R1 }), POT),
+    ).toBeUndefined();
+    // A Router no release qualified: nothing.
+    const BEEF = "0x000000000000000000000000000000000000bEEF" as Address;
+    expect(
+      await potRouterUpdate(stub({ pot: POT, potRouter: R1, kitchenRouter: BEEF }), POT),
+    ).toBeUndefined();
+  });
+
   it("returns nothing for a Pot of an earlier release", async () => {
     // A kitchen-evm 1.3.0 Pot keeps the Router it has, and the SDK pins no Router of an earlier
     // release to propose: it answers nothing, and never asks the Kitchen for its Router.

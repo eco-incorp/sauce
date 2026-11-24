@@ -645,7 +645,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
         OWNER.address,
         // The legacy arm's chain holds the harness's earlier release's Pot at the harness's salt,
         // which is where the command is to cook (A1).
-        ...(releaseArm("evm") === "legacy" ? ["--salt-hex", POT_SALT] : []),
+        ...(releaseArm("evm") !== "default" ? ["--salt-hex", POT_SALT] : []),
         "--rpc-url",
         RPC_URL,
         "--assume-balance",
@@ -661,7 +661,7 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
     );
     // A new Pot of the installed release needs no word; an earlier release's (the legacy arm) is
     // cooked on its own engine, which the command says (A2).
-    if (releaseArm("evm") === "legacy") {
+    if (releaseArm("evm") !== "default") {
       expect(code).toBe(0);
       expect(stderr).toContain(`it runs on its own engine, ${sauce.engine}`);
     } else {

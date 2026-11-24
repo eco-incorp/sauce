@@ -2,7 +2,7 @@
   "about": "The Sauce deployment, the same on every chain: one address per contract on every EVM chain, and one id per program on every Solana cluster. An address is where the contract is deployed, not proof that it is there: before relying on one, confirm it has code on the chain (eth_getCode returns more than 0x; on Solana, getAccountInfo returns an executable account).",
   "evm": {
     "engine": {
-      "address": "0x983C102aa6321187877530723dDF6921AB4861a6",
+      "address": "0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a",
       "about": "The engine, the interpreter that runs a program. A cook is the Pot's cook(engine, program), sent by the Pot's owner."
     },
     "kitchen": {
@@ -14,8 +14,8 @@
       "about": "The implementation behind the Kitchen, an upgradeable proxy. Call the Kitchen, never this."
     },
     "router": {
-      "address": "0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759",
-      "about": "The Router a new Pot starts on. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2) run through the Pot's Router."
+      "address": "0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6",
+      "about": "The Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2, HyperSwap V3) run through the Pot's Router."
     },
     "quoteRouter": {
       "address": "0x9201aF06536Cb4819cf1F08aE7063c5997D87459",
@@ -26,10 +26,20 @@
       "gateSalt": "keccak256(abi.encode(owner, salt)), with true after the salt for a fixed Router or a Shared Pot",
       "potProxyInitCodeHash": "0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f",
       "potProfileHash": "0x1ca6981b8c987e444f750b8c3c7224aee18696dfb2ceea3bbee2c086edbc9167",
-      "fixedRouter": "0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759",
+      "fixedRouter": "0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6",
       "initCodeHash": "0x127f4d767a3585b9d2bb1a4d6ef3b46289cfa0452ac8323baf91fc8ffbcb03dc",
       "about": "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed."
-    }
+    },
+    "earlierEngines": [
+      {
+        "address": "0x983C102aa6321187877530723dDF6921AB4861a6",
+        "about": "Fixed-Router and Shared Pots minted while the Kitchen handed out the Router 0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759, which only this engine runs"
+      },
+      {
+        "address": "0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67",
+        "about": "Pots an earlier Kitchen release placed by CREATE2, which only this engine runs"
+      }
+    ]
   },
   "svm": {
     "engine": {

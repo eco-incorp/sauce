@@ -578,11 +578,27 @@ export async function skillsReferences(api, documented) {
           );
         }
 
+        const kitchen = row["kitchen-evm"];
+
         return {
           component,
           version,
           engine: row[component].engine,
-          kitchenEvm: component === "v12-evm" ? row["kitchen-evm"].version : undefined,
+          kitchenEvm: component === "v12-evm" ? kitchen.version : undefined,
+          // The Pots that run on this engine and no other: what the manual's table names beside it.
+          pots:
+            component === "v12-svm"
+              ? "Solana Pots whose owner program is this engine"
+              : kitchen.potProxyInitCodeHash === undefined
+                ? `kitchen-evm ${kitchen.version} Pots`
+                : `fixed-Router and Shared Pots whose Router is ${kitchen.fixedRouter}`,
+          // The same, for the skills' file, which keeps no version number.
+          about:
+            component === "v12-svm"
+              ? "Solana Pots whose owner program is this engine"
+              : kitchen.potProxyInitCodeHash === undefined
+                ? "Pots an earlier Kitchen release placed by CREATE2, which only this engine runs"
+                : `Fixed-Router and Shared Pots minted while the Kitchen handed out the Router ${kitchen.fixedRouter}, which only this engine runs`,
         };
       }),
   );
@@ -1516,7 +1532,7 @@ function renderDeploymentsJson(data) {
       router: {
         address: evm.router,
         about:
-          "The Router a new Pot starts on. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2) run through the Pot's Router.",
+          "The Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2, HyperSwap V3) run through the Pot's Router.",
       },
       quoteRouter: {
         address: evm.quoteRouter,
@@ -1534,6 +1550,9 @@ function renderDeploymentsJson(data) {
         about:
           "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed.",
       },
+      earlierEngines: data.deployments.earlier
+        .filter((one) => one.component === "v12-evm")
+        .map(({ engine, about }) => ({ address: engine, about })),
     },
     svm: {
       engine: {
@@ -1566,7 +1585,6 @@ function renderDeploymentsJson(data) {
  *  versions. */
 function renderDeploymentsPage(data) {
   const { compiler, releases, evm, svm, earlier } = data.deployments;
-  const evmEarlier = earlier.find((one) => one.component === "v12-evm");
   const lines = [
     HEADER,
     "",
@@ -1607,7 +1625,7 @@ function renderDeploymentsPage(data) {
     `| Engine | \`${evm.engine}\` | the interpreter that runs a program: a cook is the Pot's \`cook(engine, program)\` | \`v12EngineAddress()\` |`,
     `| Kitchen | \`${evm.kitchen}\` | creates Pots (\`deployPot(owner, salt)\`) and sets the fee every cook pays (\`executionFee()\`) | \`v12KitchenAddress()\` |`,
     `| Kitchen implementation | \`${evm.kitchenImplementation}\` | behind the Kitchen, an upgradeable proxy: call the Kitchen | \`v12KitchenImplementationAddress()\` |`,
-    `| Router | \`${evm.router}\` | the Router a new Pot starts on, through which the swaps a pool calls back for run | \`v12RouterAddress()\` |`,
+    `| Router | \`${evm.router}\` | the Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to; the swaps a pool calls back for run through it | \`v12RouterAddress()\` |`,
     `| Quote Router | \`${evm.quoteRouter}\` | generation ${evm.quoteRouterGeneration}: quotes Uniswap V3 and V4 swaps through \`eth_call\`, holding no tokens; no Pot's Router | \`v12QuoteRouterAddress()\` |`,
     "",
     "### Pots",
@@ -1634,21 +1652,14 @@ function renderDeploymentsPage(data) {
       : [
           "### Pots of earlier releases",
           "",
-          ...(evmEarlier === undefined
-            ? [
-                "Pots an earlier release made keep their address. The SDK cooks each on its own",
-                "engine:",
-              ]
-            : [
-                "Pots an earlier Kitchen release made keep their address. The SDK cooks a",
-                `kitchen-evm ${evmEarlier.kitchenEvm} Pot on its own engine:`,
-              ]),
+          "Pots an earlier release made keep their address and their engine, and so do fixed-Router and",
+          "Shared Pots minted with an earlier Router. The SDK cooks each on the engine this table names:",
           "",
-          "| Engine | Version | Address |",
-          "| --- | --- | --- |",
+          "| Engine | Version | Address | Its Pots |",
+          "| --- | --- | --- | --- |",
           ...earlier.map(
             (one) =>
-              `| ${one.component === "v12-evm" ? "EVM engine" : "Solana engine"}, \`${one.component}\` | ${one.version} | \`${one.engine}\` |`,
+              `| ${one.component === "v12-evm" ? "EVM engine" : "Solana engine"}, \`${one.component}\` | ${one.version} | \`${one.engine}\` | ${one.pots} |`,
           ),
           "",
         ]),

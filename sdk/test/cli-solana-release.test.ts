@@ -450,7 +450,7 @@ describe("the code a local copy runs", () => {
 
   // The earlier engine's own ELF is a suite input like the legacy arm's: absent, a local run skips
   // and CI fails.
-  const present = hasLegacyArtifacts("svm");
+  const present = hasLegacyArtifacts("svm", "1.4.0");
   if (!present && process.env.CI) {
     throw new Error(
       "the earlier Solana engine's artifacts are absent in CI (sync-engine-artifacts)",
@@ -459,7 +459,9 @@ describe("the code a local copy runs", () => {
   (present ? it : it.skip)(
     "is the cluster's own bytes, without the account's zero padding, for the earlier engine as its release built it",
     async () => {
-      const elf = new Uint8Array(readFileSync(`${legacyArtifactsDir("svm")}/svm/engine-devnet.so`));
+      const elf = new Uint8Array(
+        readFileSync(`${legacyArtifactsDir("svm", "1.4.0")}/svm/engine-devnet.so`),
+      );
       const [program, programData] = upgradeable(elf, ENGINE_DATA, 64);
       const read = reader({ [EARLIER]: program, [ENGINE_DATA]: programData });
       const code = await releasedProgramCode(read, EARLIER, "devnet", "solana");

@@ -255,36 +255,54 @@ jobs:
       - name: Actions — mainnet-state suites
         run: pnpm --filter './actions' test:mainnet
 
-  # The engine-executing suites again, on the earlier releases the installed compiler's row lists in
-  # alsoRunsOn (src/artifacts/legacy/, written by the sync): the evidence for a claim the SDK makes
-  # for every program it compiles. sdk/test/legacy-arm.test.ts holds these jobs to that row.
-  legacy-evm:
-    name: Engine e2e on the earlier EVM release (alsoRunsOn)
+  # The engine-executing suites again, on each earlier engine release the installed compiler's row
+  # lists in alsoRunsOn (src/artifacts/legacy/, written by the sync): the evidence for a claim the SDK
+  # makes for every program it compiles, one job per version. sdk/test/legacy-arm.test.ts holds
+  # these jobs to that row.
+  legacy-evm-1-4-0:
+    name: Engine e2e on v12-evm 1.4.0 (alsoRunsOn)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/build
 
-      - name: SDK — EVM execution suites on the legacy arm
-        run: pnpm --filter './sdk' test:evm-legacy
+      - name: SDK — EVM execution suites on engine 1.4.0
+        run: pnpm --filter './sdk' test:evm-legacy 1.4.0
 
-      - name: Actions — exec and mainnet-state suites on the legacy arm
-        run: pnpm --filter './actions' test:evm-legacy
+      - name: Actions — exec and mainnet-state suites on engine 1.4.0
+        run: pnpm --filter './actions' test:evm-legacy 1.4.0
 
-      - name: MCP — chain suites on the legacy arm
-        run: pnpm --filter './mcp' test:evm-legacy
+      - name: MCP — chain suites on engine 1.4.0
+        run: pnpm --filter './mcp' test:evm-legacy 1.4.0
 
-  legacy-svm:
-    name: Engine e2e on the earlier Solana release (alsoRunsOn)
+  legacy-evm-1-3-0:
+    name: Engine e2e on v12-evm 1.3.0 (alsoRunsOn)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/build
 
-      - name: SDK — Solana execution suites on the legacy arm
-        run: pnpm --filter './sdk' test:svm-legacy
+      - name: SDK — EVM execution suites on engine 1.3.0
+        run: pnpm --filter './sdk' test:evm-legacy 1.3.0
+
+      - name: Actions — exec and mainnet-state suites on engine 1.3.0
+        run: pnpm --filter './actions' test:evm-legacy 1.3.0
+
+      - name: MCP — chain suites on engine 1.3.0
+        run: pnpm --filter './mcp' test:evm-legacy 1.3.0
+
+  legacy-svm-1-4-0:
+    name: Engine e2e on v12-svm 1.4.0 (alsoRunsOn)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/build
+
+      - name: SDK — Solana execution suites on engine 1.4.0
+        run: pnpm --filter './sdk' test:svm-legacy 1.4.0
 
   # Every MCP tool in process, the bin over stdio and Streamable HTTP, and the tools against a
   # local anvil with the released gated stack (the CLI suites' harness, which throws under CI
@@ -335,8 +353,9 @@ jobs:
         actions-mainnet,
         mcp-and-dev-tools,
         packed,
-        legacy-evm,
-        legacy-svm,
+        legacy-evm-1-4-0,
+        legacy-evm-1-3-0,
+        legacy-svm-1-4-0,
       ]
     runs-on: ubuntu-latest
     steps:

@@ -263,3 +263,91 @@ export function confineEnvironment(env, keep) {
 
   return env;
 }
+
+// ---------------------------------------------------------------------------------------------
+// The Router a release hands out, the code it put on a chain, and the chains the Kitchen is on.
+
+/** `UnauthorizedCallback()`: what a Router that has a V3 callback says to a call no swap is in flight for. */
+const UNAUTHORIZED_CALLBACK = "0xf5c6c81a";
+
+/**
+ * Why a probe of one callback `name` (`selector`) on a Router did not find what it should, or
+ * `undefined`. `outcome` is what an `eth_call` of the selector with the callback's arguments, from an
+ * account no swap is in flight for, did: `{ succeeded: true }` or `{ revertData }`.
+ * `expect: "answered"`: the Router has the name, so it reverts `UnauthorizedCallback()`.
+ * `expect: "missing"`: the control, a name no Router has, which reverts with no data at all because
+ * the Router has no `fallback`: a Router that answers it is a different release.
+ */
+export function routerProbeProblem({ name, selector, expect, outcome }) {
+  const label = `${name} (${selector})`;
+  if (outcome.succeeded === true) {
+    return `the Router's ${label} answered with success: with no swap in flight it must revert`;
+  }
+  const data = String(outcome.revertData ?? "0x").toLowerCase();
+  if (expect === "answered") {
+    if (data.startsWith(UNAUTHORIZED_CALLBACK)) return undefined;
+    if (data === "0x") return `the Router does not answer ${label}`;
+
+    return `the Router's ${label} reverted with ${data}, not UnauthorizedCallback() (${UNAUTHORIZED_CALLBACK})`;
+  }
+
+  return data === "0x"
+    ? undefined
+    : `${selector} reverted with ${data}, not with no data: a Router that answers a name it does not declare has a fallback, which this release's does not`;
+}
+
+/**
+ * Why the code at `address` on `chain` is not `expected`, the runtime the release deploys, or
+ * `undefined`. Hex compares by value, not by case.
+ */
+export function runtimeProblem({ chain, address, expected, actual }) {
+  if (actual === undefined || actual === "0x") return `${chain}: ${address} has no code`;
+  if (String(actual).toLowerCase() === String(expected).toLowerCase()) return undefined;
+
+  return (
+    `${chain}: the code at ${address} is not the release's runtime ` +
+    `(${(String(actual).length - 2) / 2} bytes there, ${(String(expected).length - 2) / 2} expected)`
+  );
+}
+
+/**
+ * What is wrong with the keys of the gate's endpoint file, or undefined. Every key must be a chain
+ * id. A key is never repeated: an endpoint pasted where a key goes carries its credential, and
+ * `endpointSecrets` registers values only.
+ */
+export function configKeyProblem(keys) {
+  const bad = keys.filter((key) => !/^[1-9][0-9]*$/.test(key)).length;
+  if (bad === 0) return undefined;
+
+  return `has ${bad === 1 ? "a key that is not a chain id" : `${bad} keys that are not chain ids`}`;
+}
+
+/**
+ * The other chains of the gate's endpoint file whose Kitchen proxy has code although ROUTER_CHAINS
+ * lacks them. Only a canonical EVM chain is read: an id the package marks "svm" (Solana's
+ * clusters) or does not know is never sent an EVM call, and comes back in `skipped`. A chain that
+ * cannot be read is a problem, never a skip. `ids` are numbers, `routerIds` the chains already read.
+ */
+export async function kitchenCoverage({ ids, routerIds, canonical, hasCode, reasonOf }) {
+  const problems = [];
+  const skipped = [];
+  for (const id of ids) {
+    if (routerIds.includes(id)) continue;
+    const known = canonical.find((chain) => chain.id === id);
+    if (known === undefined || known.kind !== "evm") {
+      skipped.push(id);
+      continue;
+    }
+    try {
+      if (await hasCode(id)) {
+        problems.push(
+          `${id}: the Kitchen proxy has code here, but ROUTER_CHAINS does not list this chain`,
+        );
+      }
+    } catch (error) {
+      problems.push(`${id}: the Kitchen proxy could not be read — ${reasonOf(error)}`);
+    }
+  }
+
+  return { problems, skipped: skipped.sort((a, b) => a - b) };
+}

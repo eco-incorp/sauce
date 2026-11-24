@@ -22,25 +22,35 @@
  * Pot's name gives. Any other record is ignored, with a note naming its file, and a record that
  * cannot be read is a note, never an error.
  */
-import { getAddress, type Address, type Hex, type PublicClient } from "viem";
+import { BaseError, getAddress, type Address, type Hex, type PublicClient } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { sdkCompilerVersion, V12_RELEASE_SETS, v12EngineAddress } from "../deployments/index.js";
+import {
+  engineRunsCompiler,
+  sdkCompilerVersion,
+  V12_RELEASE_SETS,
+  v12EngineAddress,
+  type V12ReleaseSet,
+} from "../deployments/index.js";
 import {
   potAddressIn,
+  potEngineOf,
   potFamilyEngine,
   potFamilyRunsCompiler,
+  potReleaseSet,
   v12DefaultPotFamily,
   v12PotFamilies,
   v12PredictPot,
   type PotFamily,
+  type PotKind,
 } from "../deployments/pot.js";
+import { v12PotAbi } from "../evm/engine.js";
 import { CliError } from "./args.js";
-import { potState, requireReleasePot } from "./chain.js";
+import { NOTHING_SENT, potState, requireReleasePot } from "./chain.js";
 import type { PotInput } from "./commands.js"; // type-only: commands.ts imports this module
 import { keptPots } from "./keep.js";
 import type { PotStore, StoredPot } from "./pot-store.js";
-import { familyRelease, recordFamily, releaseText } from "./pots.js";
+import { evmRelease, familyRelease, recordFamily, releaseText } from "./pots.js";
 
 /**
  * An earlier release's Pot that the Pot store records for an owner and salt, and nothing offline
@@ -173,6 +183,30 @@ export function refuseUnchosen(chain: CanonicalChain, at: CookPot): void {
   );
 }
 
+/** The Router a Pot runs, as the Pot says: fixed at mint for a fixed-Router or Shared Pot. */
+async function potRouterOf(client: PublicClient, pot: Address): Promise<Address> {
+  try {
+    return getAddress(
+      await client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
+    );
+  } catch (error) {
+    const why = error instanceof BaseError ? error.shortMessage : "the request failed";
+    throw new CliError(`reading the Pot's router() failed: ${why}. ${NOTHING_SENT}`);
+  }
+}
+
+/** What a cook on a fixed-Router or Shared Pot of an earlier Router is told: its engine is its Router's. */
+const fixedRouterNote = (
+  pot: Address,
+  kind: PotKind,
+  router: Address,
+  engine: Address,
+  set: V12ReleaseSet,
+): string =>
+  `Pot ${pot} is a ${kind === "shared" ? "Shared" : "fixed-Router"} Pot whose Router, ${router}, was ` +
+  `fixed when it was minted: it runs only on the engine built for that Router, ${engine} ` +
+  `(${releaseText(evmRelease(set))}), and this cook names it.`;
+
 /**
  * The Pot `target` names on `chain`, with the engine its cooks run on. With a `client` the chain
  * decides: a Pot named by address is told its release from its owner, salt and Kitchen; one named
@@ -217,14 +251,33 @@ export async function cookPotOf(
       return { pot, engine: defaultEngine, family: fresh, deployed: false, notes: [] };
     }
     const found = await requireReleasePot(client, chain, pot);
+    // A fixed-Router or Shared Pot runs only on the engine built for the Router it was minted with,
+    // which the Pot says.
+    const router =
+      found.family.scheme === "create3" && found.kind !== "private"
+        ? await potRouterOf(client, pot)
+        : undefined;
+    let engine: Address;
+    try {
+      engine = potEngineOf(found.family, found.kind, router);
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error);
+      throw new CliError(`${why}. ${NOTHING_SENT}`);
+    }
+    const set = potReleaseSet(found.family, found.kind, router);
 
     return {
       pot,
-      engine: potFamilyEngine(found.family),
+      engine,
       family: found.family,
       deployed: true,
       ...(state.owner === undefined ? {} : { owner: state.owner }),
-      notes: found.family === fresh ? [] : [familyNote(pot, found.family)],
+      notes:
+        found.family !== fresh
+          ? [familyNote(pot, found.family)]
+          : engine !== defaultEngine && router !== undefined && set !== undefined
+            ? [fixedRouterNote(pot, found.kind, router, engine, set)]
+            : [],
     };
   }
 
@@ -290,7 +343,8 @@ export async function cookPotOf(
           `The cook names the current release's engine, ${defaultEngine}: offline, nothing says ` +
             `which release minted ${pot}, and the Pot store holds no record of it. A Pot of an ` +
             "earlier release runs only on its own engine, and a cook naming another reverts " +
-            "whole. Pass an RPC endpoint to check.",
+            "whole. Pass an RPC endpoint to check. A fixed-Router or Shared Pot runs only on the " +
+            "engine built for its Router.",
           ...notes,
         ],
       };
@@ -303,13 +357,57 @@ export async function cookPotOf(
       );
     }
 
+    // A record's engine decides only for a fixed-Router or Shared Pot of a CREATE3 family, whose
+    // engine is the one built for its Router, and only where it is one of the family's: a Pot whose
+    // Router can move cooks on its family's engine, offline as online, whatever an earlier SDK's
+    // record names.
+    const { record } = found!.file;
+    const recorded = record.engine === undefined ? undefined : getAddress(record.engine);
+    if (family.scheme === "create3" && record.kind !== "private") {
+      const set = family.sets.find(
+        (one) =>
+          recorded !== undefined &&
+          one["v12-evm"].engine !== null &&
+          getAddress(one["v12-evm"].engine) === recorded,
+      );
+      if (set !== undefined && recorded !== undefined && engineRunsCompiler("evm", recorded)) {
+        return {
+          pot,
+          engine: recorded,
+          family,
+          notes: [
+            `The engine is the one the Pot store records for ${pot} in ${found!.file.path} ` +
+              `(${releaseText(evmRelease(set))}).`,
+            ...notes,
+          ],
+        };
+      }
+
+      return {
+        pot,
+        engine: defaultEngine,
+        family,
+        notes: [
+          `The Pot store's record of ${pot} names no engine of its release family that runs ` +
+            `compiler ${sdkCompilerVersion()} output, so the cook names the current release's ` +
+            `engine, ${defaultEngine}. A fixed-Router or Shared Pot runs only on the engine built ` +
+            "for its Router, and a cook naming another reverts whole. Pass an RPC endpoint to check.",
+          ...notes,
+        ],
+      };
+    }
+    const engine = potFamilyEngine(family);
+
     return {
       pot,
-      engine: potFamilyEngine(family),
+      engine,
       family,
       notes: [
-        `The engine is the one the Pot store records for ${pot} in ${found!.file.path} ` +
-          `(${releaseText(familyRelease(family))}).`,
+        recorded !== undefined && recorded !== engine
+          ? `The Pot store's record of ${pot} names the engine ${recorded}; a Pot whose Router ` +
+            `can move cooks on ${engine}, offline as online.`
+          : `The engine is the one the Pot store records for ${pot} in ${found!.file.path} ` +
+            `(${releaseText(familyRelease(family))}).`,
         ...notes,
       ],
     };

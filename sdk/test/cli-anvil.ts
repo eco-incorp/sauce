@@ -159,7 +159,15 @@ export interface LocalChain {
     readonly router: Address;
     readonly pot: Address;
     readonly pots: Readonly<Record<Address, Address>>;
+    /** From a chain that ran kitchen-evm 1.4.0: the DEPLOYER's fixed-Router and Shared Pot at the
+     *  legacy salt, on the earlier Router for good. */
+    readonly fixedPot?: Address;
+    readonly sharedPot?: Address;
   };
+  /** From `from: "1.4.0"`: the DEPLOYER's fixed-Router and Shared Pot minted after the Router
+   *  switch, on the new Router. */
+  readonly fixedPot?: Address;
+  readonly sharedPot?: Address;
 }
 
 /** What `startChain` can stand up besides the release this SDK pins. */
@@ -171,25 +179,36 @@ export interface ChainOptions {
   readonly legacyOwners?: readonly Address[];
   /** With `upgraded`: the salt the earlier-release Pots are minted at (`POT_SALT` when left out). */
   readonly legacySalt?: Hex;
+  /** With `upgraded`: the earlier engine version the chain ran before the upgrade (`"1.3.0"` when
+   *  left out; `"1.4.0"`: a chain whose Kitchen then switched to the new Router). */
+  readonly from?: string;
 }
 
 /**
  * Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a suite
  * never names one, so no two suites can share one.
  *
- * On the legacy arm (`SAUCE_TEST_EVM_ARM=legacy`, `release-arm.ts`) a call that does not say
+ * On a legacy arm (`SAUCE_TEST_EVM_ARM=1.3.0`, `release-arm.ts`) a call that does not say
  * `upgraded` stands up the chain as the live ones are: each of the CLI suites' fixed accounts (the
  * deployer, the owner and the "other" account) already owns an earlier-release Pot at the CLI's
  * default salt, so every command those accounts run online cooks on that Pot through the earlier
- * engine, and a fresh account still gets the installed release's Pot.
+ * engine, and a fresh account still gets the installed release's Pot. The `sauce` command cannot
+ * run on the `1.4.0` arm, whose stack has no engine at the address the command names.
  */
 export async function startChain(slug: string, requested: ChainOptions = {}): Promise<LocalChain> {
+  const arm = releaseArm("evm");
+  if (arm === "1.4.0") {
+    throw new Error(
+      "the sauce command's suites run on the default and 1.3.0 arms (sdk/test/legacy-arm.json)",
+    );
+  }
   const options: ChainOptions =
-    releaseArm("evm") === "legacy" && requested.upgraded === undefined
+    arm !== "default" && requested.upgraded === undefined
       ? {
           upgraded: true,
           legacyOwners: [DEPLOYER.address, OWNER.address, privateKeyToAccount(OTHER_KEY).address],
           legacySalt: DEFAULT_POT_SALT,
+          from: arm,
         }
       : requested;
   const chain = requireChain(slug);
@@ -237,6 +256,8 @@ export async function startChain(slug: string, requested: ChainOptions = {}): Pr
     await exited;
   };
   let legacy: LocalChain["legacy"];
+  let fixedPot: Address | undefined;
+  let sharedPot: Address | undefined;
   const legacySalt = options.legacySalt ?? gated.POT_SALT;
   // A chain that cannot be set up is stopped, not left running for the rest of the worker's life.
   try {
@@ -247,8 +268,11 @@ export async function startChain(slug: string, requested: ChainOptions = {}): Pr
       const upgraded = await gated.startUpgradedChain(clients, DEPLOYER.address, creationCode, {
         ...(options.legacyOwners === undefined ? {} : { legacyOwners: options.legacyOwners }),
         ...(options.legacySalt === undefined ? {} : { legacySalt: options.legacySalt }),
+        ...(options.from === undefined ? {} : { from: options.from }),
       });
       legacy = upgraded.legacy;
+      fixedPot = upgraded.fixedPot;
+      sharedPot = upgraded.sharedPot;
       stack = upgraded;
     } else {
       stack = await gated.startGatedEngine(clients, DEPLOYER.address, creationCode);
@@ -308,12 +332,22 @@ export async function startChain(slug: string, requested: ChainOptions = {}): Pr
 
       return minted ?? getAddress(v12PredictPot(who, salt));
     },
-    engineOf: (pot) =>
-      legacy !== undefined &&
-      Object.values(legacy.pots).some((legacyPot) => getAddress(legacyPot) === getAddress(pot))
+    engineOf: (pot) => {
+      const is = (one: Address | undefined): boolean =>
+        one !== undefined && getAddress(one) === getAddress(pot);
+      // A fixed-Router or Shared Pot minted before a Router switch runs on the earlier engine for
+      // good; a dynamic Pot of such a chain runs on the installed one, as every Pot of a CREATE3
+      // release does.
+      if (is(legacy?.fixedPot) || is(legacy?.sharedPot)) return legacy!.engine;
+      if (options.from === "1.4.0") return getAddress(v12EngineAddress());
+
+      return legacy !== undefined && Object.values(legacy.pots).some((one) => is(one))
         ? legacy.engine
-        : getAddress(v12EngineAddress()),
+        : getAddress(v12EngineAddress());
+    },
     ...(legacy === undefined ? {} : { legacy }),
+    ...(fixedPot === undefined ? {} : { fixedPot }),
+    ...(sharedPot === undefined ? {} : { sharedPot }),
   };
 }
 
