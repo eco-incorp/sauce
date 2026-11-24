@@ -136,11 +136,7 @@ and engines as 1.2.0.
   marks no tick array is a slot of the System program in its three places, and its swap is skipped,
   returning `0` having moved nothing.
 - **Fixed (Solana): `cremaAtLimit` refuses a limit of `0` and a floor past 64 bits whatever its
-  window holds.** A limit of `0` reached Crema's program on a pool with tick arrays, which refuses
-  it and fails the whole transaction without a reason, and was skipped on a direction whose map
-  marks no array. It reverts `Crema takes no zero limit` itself now, and `minOut past 64 bits` for a
-  floor past its field, before it looks at the window, as it does a limit past 128 bits. What it
-  skips first, no input and a paused pool, is skipped as before.
+  window holds.** On 1.2.0 a limit of `0` reached Crema's program, which refuses it and fails the whole transaction without a reason. It reverts `Crema takes no zero limit` itself now, before it looks at the window, as it does a limit past 128 bits, and a floor past 64 bits reverts `minOut past 64 bits` there too, so both are refused even where the pool is idle or its window has no room. What it skips first, no input and a paused pool, is skipped as before.
 - **Fixed (Solana): `crema` and `cremaStopped` skip a pool whose slot the price has left.** Paying
   a pool's token A, a slot whose last tick array starts above the pool's price (liquidity opened
   below it, or a price that fell through the slot's arrays between building and landing) failed the
@@ -149,9 +145,8 @@ and engines as 1.2.0.
 - **Changed (Solana): `crema` and `cremaStopped` read a pool's price, liquidity and fee before its
   tick array.** A pool that cannot trade for what it alone shows (its price already at or past the
   limit, no liquidity, an input too small to buy a unit) returns `0` before the router reads the
-  slot's last tick array, up to 64 reads of about 3,200 compute units each, and a pool that is not
-  the pair is refused even where its window has no room. A pool that can trade pays about 2,600
-  units more for the two steps. A Crema pool that cannot trade no longer meets the deep tick's
+  slot's last tick array, up to 64 reads of about 3,200 to 3,500 compute units each, and a pool that is not
+  the pair is refused even where its window has no room. A Crema pool that cannot trade no longer meets the deep tick's
   checks either.
 - **Fixed (Solana): paying a pool's token A, the last unit can cost a hair more than
   `priceLimit`; the documentation said it never did.** The router rounds the roots of the limit
@@ -166,7 +161,7 @@ and engines as 1.2.0.
   higher key first.** They asked Crema's program for the pair in key order alone, so USDT/USDC was
   missing from the listing. They ask both orders now, price each side by the pool's own order, and
   give the pool's slot the tick arrays its map marks.
-- **Not changed (Solana): `sauce tx` budgets compute as on 1.2.0, and the router fix costs more.**
+- **Not changed (Solana): `sauce tx` budgets compute as on 1.2.0, while Crema's router costs change.**
   `sauce tx` charges a Crema swap what it charges every venue's. Crema's router reads the slot's
   last tick array before it swaps, a position at a time, up to 64 positions of about 3,200 to 3,500
   compute units each, so a plan near the compute cap can run out of compute, as on 1.2.0. Reserving
