@@ -437,6 +437,12 @@ function whirlpoolStop(
 function cremaStop(slot: Account[], down: bool): Uint256 {
   const pool = slot[1];
   const tick = tickAt(pool, 206);
+  // No tick array marked in this direction: its tick places are all the System program, and there is
+  // none to read. The bound at the price itself leaves no room, so the order that follows, after its
+  // pair check, is empty.
+  if (slot[6].address == 0) {
+    return tick;
+  }
   const spacing = svm.sload(pool, 168, 2).toLe();
   const span = 64 * spacing;
   const last = slot[7].address == 0 ? slot[6] : slot[8].address == 0 ? slot[7] : slot[8];
@@ -1809,7 +1815,7 @@ function raydiumDeep(slot: Account[], down: bool, window: Uint256, deep: Uint256
 // Crema's window walked on to `deep`: the slot's last tick array, of 64 ticks of 133 bytes from 44
 // (`cremaStop`), a tick's state its initialized byte, then its index.
 function cremaDeep(slot: Account[], down: bool, window: Uint256, deep: Uint256): Uint256 {
-  if (window == 0 || (down ? deep >= window : deep <= window)) {
+  if (window == 0 || slot[6].address == 0 || (down ? deep >= window : deep <= window)) {
     return window;
   }
   const spacing = svm.sload(slot[1], 168, 2).toLe();
@@ -2708,7 +2714,7 @@ export function cremaAtLimit(
     limit,
     amountIn,
   );
-  if (!ok) {
+  if (!ok || slot[6].address == 0) {
     return 0;
   }
   const source = trader[1];

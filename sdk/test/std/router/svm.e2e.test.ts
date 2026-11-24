@@ -95,7 +95,7 @@ import {
   USDT,
   WSOL,
 } from "../../svm/venue-fixture.js";
-import type { Pool } from "../../svm/venue-fixture.js";
+import type { Edit, Pool } from "../../svm/venue-fixture.js";
 import {
   cremaFrame,
   initializedTicks,
@@ -129,6 +129,8 @@ interface Order {
   accounts?: (own: { source: Address; recipient: Address }) => Record<string, Meta>;
   /** Reports what the cook cost and what the venue was sent (`Trace`). */
   trace?: boolean;
+  /** More bytes to change before the cook, beside `edit`. */
+  edits?: readonly Edit[];
 }
 
 interface Meta {
@@ -235,7 +237,10 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
   }, 120_000);
 
   const cook = async (program: Compiled, order: Order): Promise<Outcome> => {
-    restoreVenues(harness.svm, order.edit);
+    restoreVenues(harness.svm, [
+      ...(order.edit === undefined ? [] : [order.edit]),
+      ...(order.edits ?? []),
+    ]);
     const source = setTokenAccount(
       harness,
       randomAddress(),
@@ -1709,6 +1714,114 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       },
       120_000,
     );
+
+    // A direction whose tick-array map marks no array. The slot the SDK reads for it names no tick
+    // array, its three places the System program: a pool with nothing marked that way has nothing to
+    // trade there (and a pool one-sided like that has no liquidity either), so every function skips
+    // it, returning 0 with no call into Crema, rather than read a tick array it was not given
+    // (`cremaStop` reads the slot's last array, and `cremaAtLimit` sends its arrays to Crema, which
+    // takes at least one). With the liquidity left as it is, which no pool on chain can have, it
+    // shows the skip does not rely on it. A pool of another program is still refused, not skipped.
+    describe("a direction whose map marks no tick array", () => {
+      const own = Number(le(BYTES.get(usdtUsdc.payA[0]!)!, 8, 2)); // the price's own array
+      /** The edits that clear the map's marks for the arrays a walk this way could take (the price's
+       *  own array and each way on) and, where `emptied`, the pool's liquidity. */
+      const editsOf = (d: Direction, emptied: boolean): Edit[] => {
+        const map = BYTES.get(usdtUsdc.extra)!;
+        const cleared = new Uint8Array(map);
+        for (const index of markedIndices(map)) {
+          const at = 8 + (index >> 3);
+          if (d.paysA ? index <= own : index >= own)
+            cleared[at] = cleared[at]! & ~(1 << (index & 7));
+        }
+        return [
+          ...(emptied
+            ? [
+                {
+                  address: usdtUsdc.pool,
+                  offset: LAYOUT.crema!.liquidity,
+                  bytes: Array<number>(16).fill(0),
+                },
+              ]
+            : []),
+          ...[...cleared].flatMap((byte, offset) =>
+            byte === map[offset] ? [] : [{ address: usdtUsdc.extra, offset, bytes: [byte] }],
+          ),
+        ];
+      };
+      /** The loader `svmPoolSlot` reads the fixture through, with `edits` applied. */
+      const loaderWith =
+        (edits: readonly Edit[]): OwnedAccountLoader =>
+        async (at) => {
+          const data = BYTES.get(at);
+          if (data === undefined) return null;
+          const edited = new Uint8Array(data);
+          for (const edit of edits) if (edit.address === at) edited.set(edit.bytes, edit.offset);
+          return { data: edited, owner: SNAPSHOT.get(at)!.owner as Address };
+        };
+      const CASES = DIRECTIONS.flatMap((d) =>
+        [true, false].flatMap((emptied) =>
+          FUNCTIONS.map((fn) => ({
+            name: `${fn}, ${d.pay === USDC ? "paying USDC" : "paying USDT"}, ${emptied ? "no liquidity" : "liquidity as it is"}`,
+            fn,
+            d,
+            emptied,
+          })),
+        ),
+      );
+      it.each(CASES)(
+        "$name: returns 0, having called nothing and moved nothing",
+        async ({ fn, d, emptied }) => {
+          const edits = editsOf(d, emptied);
+          const slot = await svmPoolSlot(loaderWith(edits), usdtUsdc.pool, d.pay);
+          expect(slot.ticks).toEqual([SYSTEM, SYSTEM, SYSTEM]);
+          const outcome = succeeded(await run(fn, d, { ticks: [...slot.ticks], edits }));
+          expect({
+            returned: outcome.returned,
+            received: outcome.received,
+            paid: outcome.paid,
+            called: outcome.cpi !== undefined,
+            changed: [...outcome.changed].sort(),
+          }).toEqual({
+            returned: 0n,
+            received: 0n,
+            paid: 0n,
+            called: false,
+            changed: [...new Set(edits.map((edit) => edit.address))].sort(),
+          });
+        },
+        120_000,
+      );
+
+      it.each(FUNCTIONS)(
+        "%s: a pool of another program with no tick array is refused, not skipped",
+        async (fn) => {
+          const orca = await orderFor(VENUES.find((one) => one.venue === "OrcaWhirlpool")!);
+          expect(
+            refused(await cook(compiled(fn), { ...orca, ticks: [SYSTEM, SYSTEM, SYSTEM] })),
+          ).toBe("not a Crema pool");
+        },
+        120_000,
+      );
+
+      // A caller's mistake is refused whatever the window holds, never skipped: a pair the pool does
+      // not hold, and for `cremaAtLimit` a limit past its 16-byte field.
+      it.each(FUNCTIONS)(
+        "%s: a pair the pool does not hold is refused, not skipped",
+        async (fn) => {
+          const none: Partial<Order> = { buy: WSOL, ticks: [SYSTEM, SYSTEM, SYSTEM] };
+          expect(refused(await run(fn, DIRECTIONS[0], none))).toBe("pool is not the pair");
+          expect(refused(await run(fn, DIRECTIONS[1], none))).toBe("pool is not the pair");
+        },
+        120_000,
+      );
+
+      it("cremaAtLimit: a limit past 128 bits is refused, not skipped", async () => {
+        const wide: Partial<Order> = { limit: 1n << 128n, ticks: [SYSTEM, SYSTEM, SYSTEM] };
+        for (const d of DIRECTIONS)
+          expect(refused(await run("cremaAtLimit", d, wide))).toBe("limit past 128 bits");
+      }, 120_000);
+    });
 
     // The sorted SOL/USDC pool keeps its lower key, WSOL, as its token A, so the pair's keys and the
     // pool's own order agree: what it trades is what it did before Crema followed the pool's order,
