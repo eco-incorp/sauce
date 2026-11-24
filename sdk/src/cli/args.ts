@@ -26,6 +26,13 @@ export class UsageError extends Error {}
  */
 export class CliError extends Error {
   notes: readonly string[] = [];
+  /**
+   * The Pot as the last read of it showed it, for a failure that came after that read: the notes it
+   * calls for, and none where it calls for none ({@link withPotNotes}). A run that stops on the
+   * failure says these where it would say what an earlier read of the Pot showed, which may no
+   * longer be so. Unset where the failure came before the Pot was read.
+   */
+  potNotes?: readonly string[];
 }
 
 /**
@@ -39,6 +46,17 @@ export function withNotes(error: unknown, notes: readonly string[]): unknown {
   }
 
   return error;
+}
+
+/**
+ * `error` told the Pot as the step that failed read it: `potNotes` are said beside its message
+ * ({@link withNotes}) and kept as {@link CliError.potNotes}, which stands in place of the notes of
+ * any earlier read, an empty list included. Returns `error` itself.
+ */
+export function withPotNotes(error: unknown, potNotes: readonly string[]): unknown {
+  if (error instanceof CliError) error.potNotes = potNotes;
+
+  return withNotes(error, potNotes);
 }
 
 /** A flag, as `parseArgs` takes it, plus the placeholder and sentence `--help` prints for it. */

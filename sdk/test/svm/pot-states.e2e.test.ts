@@ -225,6 +225,52 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
     (await derivePotPda(KITCHEN, owner, hexToBytes(potSalt(salt)))).address;
   const ataOf = async (holder: Address, mint: Address): Promise<Address> =>
     (await findAssociatedTokenPda({ owner: holder, mint, tokenProgram: TOKEN_PROGRAM_ADDRESS }))[0];
+  /** The Pot as that release's create_pot left it: 10,240 bytes, the engine its owner program. */
+  const plantOld = async (owner: Address, salt: string): Promise<Address> => {
+    const pot = await potOf(owner, salt);
+    harness.svm.setAccount({
+      address: pot,
+      data: new Uint8Array(MAX_POT_LEN),
+      executable: false,
+      lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(MAX_POT_LEN))),
+      programAddress: OLD,
+      space: BigInt(MAX_POT_LEN),
+    });
+
+    return pot;
+  };
+  /** A Pot `create_pot` made under `engine`, as a cluster holds it. */
+  const createUnder = async (
+    owner: KeyPairSigner,
+    salt: string,
+    engine: Address,
+  ): Promise<Address> => {
+    const pot = await potOf(owner.address, salt);
+    harness.svm.expireBlockhash();
+    const created = sendSigned(
+      harness,
+      await buildExecuteTransaction({
+        payer: owner,
+        instructions: [
+          buildCreatePotInstruction({
+            kitchen: KITCHEN,
+            owner: owner.address,
+            engineProgram: engine,
+            pot,
+            salt: hexToBytes(potSalt(salt)),
+            space: MAX_POT_LEN,
+          }),
+        ],
+        latestBlockhash: {
+          blockhash: harness.svm.latestBlockhash(),
+          lastValidBlockHeight: 1_000_000n,
+        },
+      }),
+    );
+    if (!created.ok) throw new Error(`create_pot failed: ${created.err}`);
+
+    return pot;
+  };
   /** The flags that name `owner`'s Pot of `salt` on the cluster, for a command that signs nothing. */
   const named = (owner: Address, salt: string): string[] => [
     ...["--chain", "solana", "--owner", owner, "--salt", salt, "--rpc-url", RPC_URL],
@@ -247,15 +293,16 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
   }
   /**
    * Runs `command` with `hook` seeing each JSON-RPC request it makes, in order: a response from the
-   * hook is the endpoint's answer, and `undefined` leaves the request to the bank.
+   * hook is the endpoint's answer, and `undefined` leaves the request to the bank. The hook may wait
+   * (to change the bank before the request is answered).
    */
   const through = async <T>(
-    hook: (request: RpcRequest) => Response | undefined,
+    hook: (request: RpcRequest) => Response | undefined | Promise<Response | undefined>,
     command: () => Promise<T>,
   ): Promise<T> => {
     const bank = globalThis.fetch;
     globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
-      hook(JSON.parse(String(init?.body ?? "{}")) as RpcRequest) ??
+      (await hook(JSON.parse(String(init?.body ?? "{}")) as RpcRequest)) ??
       bank(input, init)) as typeof fetch;
     try {
       return await command();
@@ -266,12 +313,12 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
   /** An endpoint's error answer to `request`. */
   const failing = (request: RpcRequest, message: string): Response =>
     Response.json({ id: request.id, jsonrpc: "2.0", error: { code: -32099, message } });
-  /** A hook that puts 1,000,000 lamports on `pot` as the command's second read of it is answered. */
-  const fundedAtSecondRead = (pot: Address) => {
+  /** A hook that puts 1,000,000 lamports on `pot` as the command's `nth` read of it is answered. */
+  const fundedAtRead = (pot: Address, nth: number) => {
     let reads = 0;
 
     return (request: RpcRequest): undefined => {
-      if (request.method === "getAccountInfo" && request.params?.[0] === pot && ++reads === 2) {
+      if (request.method === "getAccountInfo" && request.params?.[0] === pot && ++reads === nth) {
         harness.svm.airdrop(pot, lamports(1_000_000n));
       }
 
@@ -517,7 +564,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         writeFileSync(program, LAMPORTS_CHECK);
         const sent = shim.sent.length;
 
-        const ran = await through(fundedAtSecondRead(pot), () =>
+        const ran = await through(fundedAtRead(pot, 2), () =>
           sauce(
             "run",
             program,
@@ -538,7 +585,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         const pot = await potOf(owner.signer.address, "changed-run");
         const sent = shim.sent.length;
 
-        const ran = await through(fundedAtSecondRead(pot), () =>
+        const ran = await through(fundedAtRead(pot, 2), () =>
           sauce("run", seven, ...signedAs(owner.path, "changed-run"), "--yes", "--json"),
         );
         expect(ran.code).toBe(0);
@@ -552,13 +599,120 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         const owner = await keypair("changed-tx");
         const pot = await potOf(owner.signer.address, "changed-tx");
 
-        const planned = await through(fundedAtSecondRead(pot), () =>
+        const planned = await through(fundedAtRead(pot, 2), () =>
           sauce("tx", seven, ...named(owner.signer.address, "changed-tx")),
         );
         expect(planned.code).toBe(0);
         expect(planned.stderr).toContain(note(pot));
         expect(planned.stderr).toContain("Fund its accounts with what the program spends.");
         expect(planned.stderr).not.toContain("It is created.");
+      }, 180_000);
+    });
+
+    describe("when it comes to hold lamports after the plan chose how the Pot is created", () => {
+      // The plan reads the Pot (its second read) and chooses: to create it in the cook's own
+      // transaction, or in the setup. The step reads it again before it builds (its third), and what
+      // the step does and says of the Pot is that read's, whatever the plan chose.
+      const dropped = (pot: Address): string =>
+        `Pot ${pot} holds 1000000 lamports and no engine owns it yet, so the step of this plan ` +
+        "that creates it is dropped";
+
+      it("tells a cook planned to create the Pot, which then creates nothing, that the Pot is funded", async () => {
+        const owner = await keypair("third-inline");
+        const pot = await potOf(owner.signer.address, "third-inline");
+
+        const planned = await through(fundedAtRead(pot, 3), () =>
+          sauce("tx", seven, ...named(owner.signer.address, "third-inline")),
+        );
+        expect(planned.code).toBe(0);
+        // Nothing creates it, and the notes say what the transaction does: not both that it creates
+        // the Pot and that nothing does.
+        expect(read<Planned>(planned)).toMatchObject({ createsPot: false });
+        expect(planned.stderr).toContain(dropped(pot));
+        expect(planned.stderr).toContain("Fund its accounts with what the program spends.");
+        expect(planned.stderr).not.toContain("this transaction creates it");
+        expect(planned.stderr).not.toContain("It is created.");
+        expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+      }, 180_000);
+
+      it("does the same for a setup planned to create the Pot: no create_pot among its transactions, and no claim that the setup creates it", async () => {
+        const owner = await keypair("third-setup");
+        const pot = await potOf(owner.signer.address, "third-setup");
+
+        const planned = await through(fundedAtRead(pot, 3), () =>
+          sauce("tx", blob, ...named(owner.signer.address, "third-setup")),
+        );
+        expect(planned.code).toBe(0);
+        const step = read<Planned>(planned);
+        expect(step.step).toBe("setup");
+        const whats = step.transactions!.map((tx) => tx.what);
+        expect(whats).not.toContain("creating the Pot");
+        expect(whats[0]).toBe("creating the code buffer");
+        expect(planned.stderr).toContain(dropped(pot));
+        expect(planned.stderr).toContain("Fund its accounts with what the program spends.");
+        expect(planned.stderr).not.toContain("the setup creates it first");
+        expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+      }, 180_000);
+    });
+
+    describe("when the Pot is made while the run builds its step, and the run stops there", () => {
+      // The first read says the address holds only lamports, and its note is the run's until a later
+      // read says otherwise. A step that reads the Pot as made since and then fails says what it
+      // read: the first read's note describes an account that is no longer so.
+      /**
+       * `sauce run` of a cook on an address that holds lamports. At the run's second read of the
+       * address `make` makes the Pot, and every read of the latest blockhash fails: the step that
+       * read the Pot cannot be built.
+       */
+      const stoppedAfter = async (
+        label: string,
+        make: (owner: KeyPairSigner, label: string) => Promise<unknown>,
+      ) => {
+        const owner = await keypair(label);
+        const pot = await potOf(owner.signer.address, label);
+        harness.svm.airdrop(pot, lamports(1_000_000n));
+        const sent = shim.sent.length;
+        let reads = 0;
+
+        const ran = await through(
+          async (request) => {
+            if (
+              request.method === "getAccountInfo" &&
+              request.params?.[0] === pot &&
+              ++reads === 2
+            ) {
+              await make(owner.signer, label);
+            }
+
+            return request.method === "getLatestBlockhash"
+              ? failing(request, "the blockhash read fails")
+              : undefined;
+          },
+          () => sauce("run", seven, ...signedAs(owner.path, label), "--yes"),
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain("reading the latest blockhash failed");
+        expect(shim.sent.length).toBe(sent);
+
+        return { ran, pot };
+      };
+
+      it("says nothing of the Pot once the installed engine owns it: the first read's note describes an account that is gone", async () => {
+        const { ran, pot } = await stoppedAfter("made-installed", (owner, label) =>
+          createUnder(owner, label, INSTALLED),
+        );
+        expect(account(pot)).toMatchObject({ programAddress: INSTALLED });
+        expect(ran.stderr).not.toContain("no engine owns it yet");
+        expect(ran.stderr).not.toContain("`sauce pot --deploy` creates it");
+      }, 180_000);
+
+      it("says what the step read when v12-svm 1.3.0's engine owns it: that engine's note, not the first read's", async () => {
+        const { ran, pot } = await stoppedAfter("made-old", (owner, label) =>
+          plantOld(owner.address, label),
+        );
+        expect(account(pot)).toMatchObject({ programAddress: OLD });
+        expect(ran.stderr).toContain(`the Pot ${pot} is owned by v12-svm 1.3.0 (${OLD})`);
+        expect(ran.stderr).not.toContain("no engine owns it yet");
       }, 180_000);
     });
   });
@@ -582,20 +736,6 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       writeFileSync(ownerCheckBlob, ownerCheckStaged(1500));
     });
 
-    /** The Pot as that release's create_pot left it: 10,240 bytes, the engine its owner program. */
-    const plantOld = async (owner: Address, salt: string): Promise<Address> => {
-      const pot = await potOf(owner, salt);
-      harness.svm.setAccount({
-        address: pot,
-        data: new Uint8Array(MAX_POT_LEN),
-        executable: false,
-        lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(MAX_POT_LEN))),
-        programAddress: OLD,
-        space: BigInt(MAX_POT_LEN),
-      });
-
-      return pot;
-    };
     /** The Pot's USDC account holding 3, and an empty one for a fresh recipient: what pay moves. */
     const fundUsdc = async (pot: Address) => {
       const usdc = address(
@@ -609,38 +749,6 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       setTokenAccount(harness, toUsdc, usdc, to, 0n);
 
       return { to, potUsdc, toUsdc };
-    };
-    /** A Pot `create_pot` made under `engine`, as a cluster holds it. */
-    const createUnder = async (
-      owner: KeyPairSigner,
-      salt: string,
-      engine: Address,
-    ): Promise<Address> => {
-      const pot = await potOf(owner.address, salt);
-      harness.svm.expireBlockhash();
-      const created = sendSigned(
-        harness,
-        await buildExecuteTransaction({
-          payer: owner,
-          instructions: [
-            buildCreatePotInstruction({
-              kitchen: KITCHEN,
-              owner: owner.address,
-              engineProgram: engine,
-              pot,
-              salt: hexToBytes(potSalt(salt)),
-              space: MAX_POT_LEN,
-            }),
-          ],
-          latestBlockhash: {
-            blockhash: harness.svm.latestBlockhash(),
-            lastValidBlockHeight: 1_000_000n,
-          },
-        }),
-      );
-      if (!created.ok) throw new Error(`create_pot failed: ${created.err}`);
-
-      return pot;
     };
     const cooksOf = (from: number): (string | undefined)[] =>
       shim.sent

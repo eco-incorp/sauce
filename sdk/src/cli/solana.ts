@@ -3183,20 +3183,26 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
     ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
     cursor,
   };
+  // What the step shows of the Pot, which its transactions are built on: the plan's first read of it
+  // may be older. What creates it is what the step carries.
+  const inCook = step.transactions.some((tx) => tx.createsPot === true);
+  const inSetup = step.transactions.some((tx) => tx.kind === "pot");
   const potNote = direct
     ? `${DIRECT_COOK}: no Kitchen and no Pot. ${input.owner} is the authority ` +
       "the program acts with, so the accounts it spends from are the signer's own."
     : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
-      (plan.pot === "there"
-        ? // What the step read, which the cook is built on: the Pot's first read may be a slot older.
-          step.lamportsOnly === true
-          ? "Fund its accounts with what the program spends."
-          : "It is created. Fund its accounts with what the program spends."
-        : plan.pot === "inline"
-          ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, the " +
-            "owner paying its rent) ahead of the cook."
-          : "It isn't created yet: the setup creates it first (the Kitchen's create_pot, the " +
-            "owner paying its rent).");
+      (inCook
+        ? "It isn't created yet: this transaction creates it (the Kitchen's create_pot, the " +
+          "owner paying its rent) ahead of the cook."
+        : inSetup
+          ? "It isn't created yet: the setup creates it first (the Kitchen's create_pot, the " +
+            "owner paying its rent)."
+          : plan.pot === "inline" && step.potMissing === true
+            ? "It isn't created yet: the cook's own transaction creates it (the Kitchen's " +
+              "create_pot, the owner paying its rent) ahead of the cook."
+            : step.lamportsOnly === true
+              ? "Fund its accounts with what the program spends."
+              : "It is created. Fund its accounts with what the program spends.");
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -3518,6 +3524,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
 
         return next;
       } catch (error) {
+        // A failure that carries the Pot as its step read it replaces what the run knew of the Pot
+        // from an earlier read: that read's notes may no longer be so (`CliError#potNotes`).
+        if (error instanceof CliError && error.potNotes !== undefined) notes = error.potNotes;
         throw stopped(`${(error as Error).message}${await closedAgain()}`, error);
       }
     };

@@ -102,7 +102,7 @@ import {
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { potAccountState, potCookEngine, svmEngineReleases } from "../svm/engine-release.js";
-import { CliError, UsageError, withNotes } from "./args.js";
+import { CliError, UsageError, withNotes, withPotNotes } from "./args.js";
 import {
   failureReason,
   potAccountOf,
@@ -266,6 +266,8 @@ export interface PlanStep {
   /** The Pot's address holds only lamports now: no engine owns it, and the cook runs on it as it
    *  is. What a step says of the Pot is this read's, not an earlier one's. */
   readonly lamportsOnly?: true;
+  /** No account is at the Pot's address now: a setup step, or the cook, creates it. */
+  readonly potMissing?: true;
 }
 
 /** Where a step is built: the cluster, and the signer each transaction is built for. */
@@ -920,13 +922,18 @@ async function potNow(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<
   );
   const state = potAccountState(potAccountOf(value));
   if (cooking && plan.via === "kitchen" && potCookEngine(state, engine()) !== planEngine(plan)) {
-    throw new CliError(
-      state.kind === "unallocated"
-        ? `the Pot ${pot} is owned by no engine yet, and this plan was made for engine ` +
-            `${planEngine(plan)}: a Pot no engine owns is created under and cooked on ${engine()}, ` +
-            "so make the plan again (sauce tx)"
-        : `the Pot ${pot} is owned by ${value?.owner}, and this plan was made for engine ` +
-            `${planEngine(plan)}: make the plan again (sauce tx)`,
+    // The Pot was read and is not what this plan was made for: the refusal is all there is to say of
+    // it, so no note of an earlier read sits beside it (`CliError#potNotes`).
+    throw withPotNotes(
+      new CliError(
+        state.kind === "unallocated"
+          ? `the Pot ${pot} is owned by no engine yet, and this plan was made for engine ` +
+              `${planEngine(plan)}: a Pot no engine owns is created under and cooked on ${engine()}, ` +
+              "so make the plan again (sauce tx)"
+          : `the Pot ${pot} is owned by ${value?.owner}, and this plan was made for engine ` +
+              `${planEngine(plan)}: make the plan again (sauce tx)`,
+      ),
+      [],
     );
   }
   const lamports = value === null ? undefined : BigInt(value.lamports);
@@ -1032,20 +1039,23 @@ export async function nextStep(
         "closed it (sauce reclaim?). Make a new plan",
     );
   }
-  let potNotes: readonly string[] = [];
-  let lamportsOnly = false;
-  if (current.via === "kitchen" && current.pot !== "setup") {
-    const now = await potNow(current, ctx);
-    potNotes = now.notes;
-    lamportsOnly = now.lamportsOnly;
-  }
-  const said = lamportsOnly ? { lamportsOnly: true as const } : {};
-  // A failure past the Pot's read is told what its state means for the cook, as the step it would
-  // have been is: the error carries the notes worked out so far (`CliError#notes`), which the
-  // command prints and the tools return, so every front end of a plan says them from here.
+  // The Pot, read here for a plan whose cook is built on it. A plan whose setup creates it reads it
+  // there (`setupTransactions`): what the step says of the Pot is that read's, whichever it is.
+  const read =
+    current.via === "kitchen" && current.pot !== "setup" ? await potNow(current, ctx) : undefined;
+  // A failure past the Pot's read is told the Pot as that read showed it, as the step it would have
+  // been is: the error carries the notes worked out so far (`CliError#notes`), which the command
+  // prints and the tools return, and the Pot's own as a snapshot (`CliError#potNotes`), which a run
+  // says in place of what its earlier reads showed. So every front end of a plan says them from here.
   const setup = await setupTransactions(current, ctx, state, finalized).catch((error: unknown) => {
-    throw withNotes(error, potNotes);
+    throw read === undefined ? error : withPotNotes(error, read.notes);
   });
+  const pot = read ?? setup.pot;
+  const potNotes = read?.notes ?? [];
+  const said = {
+    ...(pot.lamportsOnly ? { lamportsOnly: true as const } : {}),
+    ...(pot.missing ? { potMissing: true as const } : {}),
+  };
   if (setup.transactions.length > 0) {
     return {
       name: "setup",
@@ -1059,7 +1069,7 @@ export async function nextStep(
   // The cook's step says what the Pot's state means for it as the setup's would: a cursor resumed
   // later, or a send that builds the next step, tells it as the command that made the plan did.
   const cook = await cookStep(setup.plan, ctx).catch((error: unknown) => {
-    throw withNotes(error, [...potNotes, ...setup.notes]);
+    throw withNotes(withPotNotes(error, pot.notes), setup.notes);
   });
 
   return { ...cook, notes: [...potNotes, ...setup.notes, ...cook.notes], ...said };
@@ -1120,7 +1130,7 @@ async function setupTransactions(
   state: BufferState | undefined,
   finalized: boolean,
   most = STEP_MOST,
-): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[] }> {
+): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[]; pot: PotNow }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
   // The Pot, where the setup creates it, and the token accounts the cook names that the cluster
@@ -1253,11 +1263,12 @@ async function setupTransactions(
       );
     }
   } catch (error) {
-    // The Pot's state, as the setup read it, is told with a failure past that read.
-    throw withNotes(error, notes);
+    // The Pot's state, as the setup read it, is told with a failure past that read; and where the
+    // setup is what read it, that read is the snapshot a run says (`CliError#potNotes`).
+    throw withNotes(plan.pot === "setup" ? withPotNotes(error, pot.notes) : error, notes);
   }
 
-  return { transactions: transactions.slice(0, most), plan: next, notes };
+  return { transactions: transactions.slice(0, most), plan: next, notes, pot };
 }
 
 /** The most transactions one step holds, all on one blockhash: what a signer and the sends that
