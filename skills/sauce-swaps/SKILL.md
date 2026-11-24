@@ -384,7 +384,8 @@ pool out of the cook's compute before then: keep it tight.
 Each of the eight concentrated-liquidity functions has a Stopped form, the same swap with its limit
 held to a `stop` as well: its low 192 bits a tighter `priceLimit` (the swap takes the lower of the
 two; `0` none), bits 192 to 223 a start bound, a tick past which the swap skips the pool (`1`
-paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price), and on
+paying the lower-key token, `2^32 - 1` paying the other, skip it whatever its price; on Crema the
+first is paying the pool's token A, whichever key it is), and on
 Raydium's code and Crema bits 224 to 255 a deep tick (`0` none): the furthest array's last
 initialized tick that way, which walks the swap on into that array, to a tick inside it. The
 Stopped form reads the deep tick in its array and checks it there: one no longer initialized leaves
@@ -539,7 +540,8 @@ against the deployed program before sending it.
 - **No price limit.** On an EVM chain a `sqrtPriceLimitX96` of `0` is none: `minOut` is then the
   only bound, and an empty pool costs a full tick walk. Set a real limit near the price.
 - **A `priceLimit` of `0` on Solana is not "none".** Paying the lower-key token of the pair (WSOL
-  before USDC: the mints in the order of their 32-byte keys; on Phoenix, the market's base) the cook
+  before USDC: the mints in the order of their 32-byte keys; on Crema, the pool's token A, which is
+  not always the lower key; on Phoenix, the market's base) the cook
   fails, dividing by zero; paying the other, the pool is skipped and the function returns `0` having
   moved nothing, which `minOut` does not catch. Give every swap at a price a real `priceLimit`, from
   `sauce pools`. Only the `…AtLimit` forms take `0` as the pool's own bound.

@@ -85,9 +85,10 @@ A correct distributed swap on Solana, whatever its tokens or venues:
 3. **Gives each pool its own limit, adjusted for its fee.** A concentrated-liquidity pool takes its
    fee from the input, so its last unit costs its price divided by `1 − fee`: each pool's limit is
    the caller's sqrt price moved toward the trade by `√(1 − fee)`, **`limit ÷ √(1 − fee)` paying
-   the lower-key token, `limit × √(1 − fee)` paying the other**. An order book charges its fee on
-   top, so its limit price is `priceLimit ÷ (1 + fee)`. The fee is read from the pool or its config
-   in the cook.
+   the lower-key token, `limit × √(1 − fee)` paying the other**; on Crema, whose pools keep their
+   pair in their own order, the first is paying the pool's token A, whichever key it is. An order
+   book charges its fee on top, so its limit price is `priceLimit ÷ (1 + fee)`. The fee is read from
+   the pool or its config in the cook.
 4. **Offers each pool everything still unspent** and lets the limit stop it. Every venue here takes
    only what it swapped before its price reached the limit and leaves the rest in the Pot: nothing
    is stranded.
@@ -225,7 +226,9 @@ function main(
   higher-key token per lower-key token, times 2^64 (the pair in the order of their 32-byte keys), so
   `priceLimit` as that price is `√(priceLimit × 2^128 ÷ 1e18)` paying the higher-key token and,
   upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it; the
-  root is rounded down, so the pool stops a little sooner, never later.
+  root is rounded down, so the pool stops a little sooner, never later. Crema's pair is in the pool's
+  own order, not the keys': its price is token B per token A, so the first root is for paying token
+  B and the second for paying token A.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
   the Pot to the recipient's SPCX_US account, and what is left of the budget to the recipient's USDC
   account; given the Pot's own address (`sauce pot --chain solana --owner <owner>` prints it), both
@@ -276,13 +279,13 @@ what fills within `priceLimit` and send the rest of the budget to the recipient.
 SPCX_US with `priceLimit` 150 gives 149.75, **149750000000000000000**.
 
 **The reference price** is the best a buyer pays, fee included, among pools deep enough for the
-order: a pool's price divided by `1 − fee` paying the higher-key token, the same upside down paying
-the other. `priceLimit` is that plus the slippage you accept, kept tight: a limit far past every
-pool's price, with a budget to reach it, can walk a deep pool across so many initialized ticks that
-the cook runs out of compute and fails, every pool's trade with it. Solana's pool prices
-differ between venues more than an EVM chain's: a thin pool can sit a percent or two from the deep
-ones, and an order book's offers further still. A `priceLimit` at or below the best price trades
-nothing and sends the whole budget to the recipient, without reverting.
+order: a pool's price divided by `1 − fee` paying the higher-key token (on Crema, token B), the same
+upside down paying the other. `priceLimit` is that plus the slippage you accept, kept tight: a
+limit far past every pool's price, with a budget to reach it, can walk a deep pool across so many
+initialized ticks that the cook runs out of compute and fails, every pool's trade with it. Solana's
+pool prices differ between venues more than an EVM chain's: a thin pool can sit a percent or two
+from the deep ones, and an order book's offers further still. A `priceLimit` at or below the best
+price trades nothing and sends the whole budget to the recipient, without reverting.
 
 ## What fits in one cook
 

@@ -67,6 +67,7 @@ Each SDK release and the five releases it pins:
 
 | SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 1.2.1   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
 | 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
 | 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
 | None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -112,6 +113,35 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## SDK 1.2.1 — 2026-11-24
+
+Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. Same compiler
+and engines as 1.2.0.
+
+### SauceScript
+
+- **Fixed (Solana): `Crema.CLMM.swap` and `@sauce/router`'s `crema`, `cremaStopped` and
+  `cremaAtLimit` trade on a pool that keeps its pair higher key first.** A Crema pool keeps its two
+  tokens in the order it was created in, so its token A is not always the lower key. On 14 of
+  mainnet's 27 Crema pools, 6 of them live, USDT/USDC among them, it is the higher one. The swap took
+  the direction from the keys, so on such a pool paying token B (USDC at USDT/USDC) failed the whole
+  cook, with the engine's `Overflow` (custom program error 51); paying token A (USDT) returned `0`
+  having moved nothing; and `cremaAtLimit` reverted `pool is not the pair`. The direction, the price
+  and the limit now follow the pool's own order: paying token A lowers the price, and the price is
+  token B per token A. A pool that keeps its pair by key, SOL/USDC among them, trades as it did. A
+  Crema swap's slot also holds only the tick arrays the pool's map marks now. It was padded with
+  arrays that exist but that the map does not mark, which Crema refuses (`InvalidTickArrayAccount`),
+  so a Crema swap built from it failed at USDT/USDC whichever way it traded. A direction whose map
+  marks no tick array is a slot of the System program in its three places, and its swap is skipped,
+  returning `0` having moved nothing.
+
+### The `sauce` command and the MCP server
+
+- **Fixed (Solana): `sauce pools` and the MCP `sauce_pools` list a Crema pool that keeps its pair
+  higher key first.** They asked Crema's program for the pair in key order alone, so USDT/USDC was
+  missing from the listing. They ask both orders now, price each side by the pool's own order, and
+  give the pool's slot the tick arrays its map marks.
 
 ## SDK 1.2.0 — 2026-11-24
 

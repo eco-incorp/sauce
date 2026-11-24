@@ -81,7 +81,11 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
   Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable at a price, where its swap is `swap_v2`, which declares it writable whatever the fee, and at its own limit for an adaptive fee and for a pool with a Token-2022 mint. Crema refuses a tick array its
   map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
-  tick array and each after it until a System program.
+  tick array and each after it until a System program. A Crema slot names only the arrays its map
+  marks, so a direction whose map marks none is three System programs there, and `crema`,
+  `cremaStopped` and `cremaAtLimit` skip the pool, returning `0`. Crema keeps its pair in the order
+  its pool was created in, not the keys': its token A is not always the lower key, and its functions
+  take the direction that pays token A, or the other, from the pool's own order.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
   authority that signs (the Pot, through the Kitchen), the token account paid from, the two mints,
   the SPL Token and Token-2022 programs and the memo program. Both are arrays because a function
@@ -116,8 +120,8 @@ Each of the eight concentrated-liquidity functions also has a Stopped form, the 
 limit held to a `stop` as well. The stop's low 192 bits are a tighter `priceLimit`, and the swap
 takes the lower of the two (`0` none). Bits 192 to 223 carry a start bound, a tick: the swap skips
 the pool if its price has moved further than that from the stop. A bound past every tick the walk's
-way skips the pool whatever its price: `1` paying the pool's lower-key token, `2^32 - 1` paying the
-other.
+way skips the pool whatever its price: `1` paying the pool's lower-key token (on Crema, its token A,
+whichever key it is), `2^32 - 1` paying the other.
 
 On Raydium's code and Crema, bits 224 to 255 carry a deep tick (`0` none). Their swap at a price
 stops where the furthest tick array its slot gives begins, because past that array's last

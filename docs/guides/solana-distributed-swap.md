@@ -78,9 +78,10 @@ A correct distributed swap on Solana, whatever its tokens or venues:
 3. **Gives each pool its own limit, adjusted for its fee.** A concentrated-liquidity pool takes its
    fee from the input, so its last unit costs its price divided by `1 − fee`: each pool's limit is
    the caller's sqrt price moved toward the trade by `√(1 − fee)`, **`limit ÷ √(1 − fee)` paying
-   the lower-key token, `limit × √(1 − fee)` paying the other**. An order book charges its fee on
-   top, so its limit price is `priceLimit ÷ (1 + fee)`. The fee is read from the pool or its config
-   in the cook.
+   the lower-key token, `limit × √(1 − fee)` paying the other**; on Crema, whose pools keep their
+   pair in their own order, the first is paying the pool's token A, whichever key it is. An order
+   book charges its fee on top, so its limit price is `priceLimit ÷ (1 + fee)`. The fee is read from
+   the pool or its config in the cook.
 4. **Offers each pool everything still unspent** and lets the limit stop it. Every venue here takes
    only what it swapped before its price reached the limit and leaves the rest in the Pot: nothing
    is stranded.
@@ -243,7 +244,9 @@ function main(
   higher-key token per lower-key token, times 2^64 (the pair in the order of their 32-byte keys), so
   `priceLimit` as that price is `√(priceLimit × 2^128 ÷ 1e18)` paying the higher-key token and,
   upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it; the
-  root is rounded down, so the pool stops a little sooner, never later.
+  root is rounded down, so the pool stops a little sooner, never later. Crema's pair is in the pool's
+  own order, not the keys': its price is token B per token A, so the first root is for paying token
+  B and the second for paying token A.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
   the Pot to the recipient's SPCX_US account, and what is left of the budget to the recipient's USDC
   account; given the Pot's own address (`sauce pot --chain solana --owner <owner>` prints it), both
@@ -294,13 +297,13 @@ what fills within `priceLimit` and send the rest of the budget to the recipient.
 SPCX_US with `priceLimit` 150 gives 149.75, **149750000000000000000**.
 
 **The reference price** is the best a buyer pays, fee included, among pools deep enough for the
-order: a pool's price divided by `1 − fee` paying the higher-key token, the same upside down paying
-the other. `priceLimit` is that plus the slippage you accept, kept tight: a limit far past every
-pool's price, with a budget to reach it, can walk a deep pool across so many initialized ticks that
-the cook runs out of compute and fails, every pool's trade with it. Solana's pool prices
-differ between venues more than an EVM chain's: a thin pool can sit a percent or two from the deep
-ones, and an order book's offers further still. A `priceLimit` at or below the best price trades
-nothing and sends the whole budget to the recipient, without reverting.
+order: a pool's price divided by `1 − fee` paying the higher-key token (on Crema, token B), the same
+upside down paying the other. `priceLimit` is that plus the slippage you accept, kept tight: a
+limit far past every pool's price, with a budget to reach it, can walk a deep pool across so many
+initialized ticks that the cook runs out of compute and fails, every pool's trade with it. Solana's
+pool prices differ between venues more than an EVM chain's: a thin pool can sit a percent or two
+from the deep ones, and an order book's offers further still. A `priceLimit` at or below the best
+price trades nothing and sends the whole budget to the recipient, without reverting.
 
 ## What fits in one cook
 
@@ -462,7 +465,10 @@ the command reads them from the pool as it builds the cook. Offsets are bytes fr
 An account a venue does not take is the System program, `11111111111111111111111111111111`, and so
 is every account of an empty slot. The concentrated-liquidity venues keep the pair in the order of
 the two mints' 32-byte keys, the lower first: paying the lower-key token pushes the price down,
-paying the other pushes it up, and the tick arrays the swap walks depend on which.
+paying the other pushes it up, and the tick arrays the swap walks depend on which. Crema is the
+exception: it keeps its pair in the order the pool was created in, so its token A may be the higher
+key. Paying token A pushes its price down, paying token B pushes it up, and its price is the square
+root of token B per token A.
 
 ### Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM
 
@@ -550,11 +556,18 @@ A pool of 748 bytes and its `swap` (`Crema.CLMM.swap`, `crema`):
 | liquidity, sqrt price (Q64.64), tick | 174 (u128), 190 (u128), 206 (i32) |
 | paused                               | 747; not zero means paused        |
 
+A pool keeps its pair in the order it was created in, so mint A (at 40) is the lower key on some
+pools and the higher on others: USDT/USDC keeps USDT, the higher key, as its token A. A swap follows
+the pool's own order, never the keys'.
+
 The slot: `config` = the `clmm_config`, `vaultA`/`vaultB` = the two vaults, `extra` = the tick-array
 map, the program address of `["tick_array_map", pool]`. The tick arrays: the program address of
 `["tick_array", pool, index]`, `index` a little-endian u16, each spanning 64 ticks times the
 spacing; the array holding the price and the next two **allocated** ones in the walk's direction,
-as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod spacing)`).
+as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod spacing)`). Crema
+refuses an array its map does not mark, whether or not the account exists, so the slot names only
+the marked ones and the System program in each place past them. A direction whose map marks none is
+three System programs, and the swap skips the pool.
 
 ### Phoenix
 
@@ -607,8 +620,9 @@ there, and refuses the fee alone where both are, naming each, for the spacing to
 
 A venue's pools are its program's accounts, so `getProgramAccounts` on the venue's program finds
 them, with the pool's size and the pair at its mints' offsets as filters: for the
-concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
-Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
+concentrated-liquidity venues the lower key at the first offset and the higher at the second
+(Crema's pools keep either one first, so ask both orders), for Phoenix the base and quote in
+either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
 and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how a program finds it.
 
@@ -622,7 +636,9 @@ and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how
 
 A pool's price, back in whole tokens: `(sqrtPrice ÷ 2^64)^2 × 10^(lowerDecimals − higherDecimals)`
 higher-key tokens per lower-key token. Paying the higher-key token, its price fee included is that
-divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`.
+divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`. Crema's is in the
+pool's own order, `(sqrtPrice ÷ 2^64)^2 × 10^(decimalsA − decimalsB)` token B per token A: that
+divided by `1 − fee` paying token B, `1 ÷ (price × (1 − fee))` paying token A.
 
 ## Next
 
