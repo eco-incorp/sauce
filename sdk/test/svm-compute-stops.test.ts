@@ -12,18 +12,23 @@ import { resolveSvmAccountName } from "../src/svm/account-names.js";
 import {
   SVM_COOK_FIXED,
   SVM_COOK_UNITS,
+  SVM_CREMA_SWAP_FIXED,
+  SVM_CREMA_SWAP_IDLE,
   SVM_HEADROOM_TICKS,
   SVM_SWAP_COSTS,
   SVM_SWAP_FIXED,
+  SVM_SWAP_IDLE,
+  SVM_SWAP_SKIPPED,
   svmComputeStops,
   svmPoolWalk,
   svmProgramStops,
   svmSwapCost,
+  svmSwapRouterUnits,
   svmTickArray,
   type SvmStopPool,
 } from "../src/svm/compute-stops.js";
 import type { OwnedAccountLoader } from "../src/svm/venues/types.js";
-import { ORCA_WHIRLPOOL_PROGRAM_ID } from "../src/svm/venues/index.js";
+import { CREMA_PROGRAM_ID, ORCA_WHIRLPOOL_PROGRAM_ID } from "../src/svm/venues/index.js";
 import { allIn, BYTES, LAYOUT, pool, SNAPSHOT, type Pool } from "./svm/venue-fixture.js";
 
 const fromFixture = (p: Pool, priceLimit: bigint): SvmStopPool => ({
@@ -37,6 +42,36 @@ const fromFixture = (p: Pool, priceLimit: bigint): SvmStopPool => ({
   paysA: false,
   priceLimit,
 });
+
+const load: OwnedAccountLoader = async (at) => {
+  const account = SNAPSHOT.get(at);
+  return account === undefined ? null : { data: BYTES.get(at)!, owner: account.owner as Address };
+};
+
+/**
+ * The stops of a program of `body`, each `SWAP` in it the swap `swap`, as the cook's builder works
+ * them out: the program compiled for Solana, the accounts its slots name derived from the fixture's
+ * pool `p` (the cook's owner and Pot stand in as its config), the walk of each swap priced.
+ */
+const programStops = async (p: Pool, swap: string, body: string, limit: bigint) => {
+  const program = compileSauceProgram(
+    "solana",
+    "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
+      `  let got = 0;\n  ${body.replaceAll("SWAP", swap)}\n  return got;\n}\n`,
+  );
+  const accounts: Record<string, string> = {};
+  for (const [name, derive] of Object.entries(program.derivedAccounts ?? {})) {
+    if (!derive.startsWith("slot:") && !derive.startsWith("mint:")) continue;
+    const { value } = await resolveSvmAccountName(derive, {
+      chain: requireChain("solana"),
+      owner: p.config,
+      pot: p.config,
+      load,
+    });
+    accounts[name] = value;
+  }
+  return svmProgramStops(program, requireChain("solana"), accounts, { priceLimit: limit }, load);
+};
 
 describe("the cook's builder's model of a swap at a price", () => {
   it("prices a program its table does not hold at the table's dearest, never at nothing", () => {
@@ -226,37 +261,7 @@ describe("the cook's builder's model of a swap at a price", () => {
     const swap =
       "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, priceLimit, 0)";
     const priceLimit = (allIn(orca, false) * 10300n) / 10000n;
-    const load: OwnedAccountLoader = async (at) => {
-      const account = SNAPSHOT.get(at);
-      return account === undefined
-        ? null
-        : { data: BYTES.get(at)!, owner: account.owner as Address };
-    };
-    const stopsOf = async (body: string, limit = priceLimit) => {
-      const program = compileSauceProgram(
-        "solana",
-        "function main(amountIn: Uint256, priceLimit: Uint256, n: Uint256): Uint256 {\n" +
-          `  let got = 0;\n  ${body.replaceAll("SWAP", swap)}\n  return got;\n}\n`,
-      );
-      const accounts: Record<string, string> = {};
-      for (const [name, derive] of Object.entries(program.derivedAccounts ?? {})) {
-        if (!derive.startsWith("slot:") && !derive.startsWith("mint:")) continue;
-        const { value } = await resolveSvmAccountName(derive, {
-          chain: requireChain("solana"),
-          owner: orca.config,
-          pot: orca.config,
-          load,
-        });
-        accounts[name] = value;
-      }
-      return svmProgramStops(
-        program,
-        requireChain("solana"),
-        accounts,
-        { priceLimit: limit },
-        load,
-      );
-    };
+    const stopsOf = (body: string, limit = priceLimit) => programStops(orca, swap, body, limit);
     const cost = SVM_SWAP_COSTS[ORCA_WHIRLPOOL_PROGRAM_ID]!;
 
     it("charges a counted loop's swap for each run, its walk once", async () => {
@@ -340,6 +345,125 @@ describe("the cook's builder's model of a swap at a price", () => {
       expect(svmStopLines(unpaid)[0]).toContain(
         "runs in a loop written to run it more times than one cook's compute units pay for",
       );
+    });
+  });
+
+  // What the cook spends on a swap besides its venue's program is reserved before the venues share
+  // what is left (`svmSwapRouterUnits`): the same for every venue's swap but Crema's, whose router
+  // also scans the slot's last tick array, a position at a time, where the price lies as the cook
+  // lands. The router suite holds each amount to the programs.
+  describe("what the cook reserves for a swap besides its venue's program", () => {
+    /** A fixture pool paying USDC (the price rises) as the builder reads it: its limit `times` basis points of its price. */
+    const reading = (p: Pool, layout: SvmStopPool["layout"], times: bigint): SvmStopPool => ({
+      name: p.name,
+      program: p.program,
+      layout,
+      pool: BYTES.get(p.pool)!,
+      fee: LAYOUT[p.venue]!.fee(p),
+      arrays: p.payB.map((at) => BYTES.get(at)),
+      paysA: false,
+      priceLimit: (allIn(p, false) * times) / 10000n,
+    });
+    const OTHERS = [
+      ["raydium-clmm-sol-usdc", "raydium"],
+      ["pancakeswap-clmm-sol-usdc", "raydium"],
+      ["orca-whirlpool-sol-usdc", "whirlpool"],
+      ["cropper-sol-usdc", "whirlpool"],
+      ["defituna-sol-usdc", "defituna"],
+    ] as const;
+
+    it.each(OTHERS)(
+      "%s: a swap that trades, one the router leaves and no pool are reserved as before",
+      (name, layout) => {
+        const p = pool(name);
+        const trades = reading(p, layout, 10030n);
+        expect(svmPoolWalk(trades).none).toBeUndefined();
+        expect(svmSwapRouterUnits(trades)).toBe(SVM_SWAP_FIXED);
+        // A limit under the price: nothing to buy, the pool is read and left.
+        const idle = reading(p, layout, 9990n);
+        expect(svmPoolWalk(idle).none).toBe(true);
+        expect(svmSwapRouterUnits(idle)).toBe(SVM_SWAP_IDLE);
+        expect(svmSwapRouterUnits(undefined)).toBe(SVM_SWAP_SKIPPED);
+      },
+    );
+
+    it("reserves a Crema swap the scan of its slot's last tick array, whether it trades or not", () => {
+      const crema = pool("crema-sol-usdc");
+      const trades = reading(crema, "crema", 10030n);
+      expect(svmPoolWalk(trades).none).toBeUndefined();
+      expect(svmSwapRouterUnits(trades)).toBe(SVM_CREMA_SWAP_FIXED);
+      const idle = reading(crema, "crema", 9990n);
+      expect(svmPoolWalk(idle).none).toBe(true);
+      expect(svmSwapRouterUnits(idle)).toBe(SVM_CREMA_SWAP_IDLE);
+      // Both are more than the others', the scan being what they add, and a trade more than a pool left.
+      expect(SVM_CREMA_SWAP_IDLE).toBeGreaterThan(SVM_SWAP_IDLE);
+      expect(SVM_CREMA_SWAP_FIXED).toBeGreaterThan(SVM_SWAP_FIXED);
+      expect(SVM_CREMA_SWAP_FIXED).toBeGreaterThan(SVM_CREMA_SWAP_IDLE);
+      // A slot that names no tick array has nothing to scan: the generic reservation for a pool left.
+      const bare = { ...trades, arrays: [undefined, undefined, undefined] };
+      expect(svmPoolWalk(bare).none).toBe(true);
+      expect(svmSwapRouterUnits(bare)).toBe(SVM_SWAP_IDLE);
+    });
+  });
+
+  // Each Crema swap of a plan is reserved its scan, before any pool is given a share, so a plan of
+  // several leaves the venues less: the command still gives a pool its share where the units that
+  // are left pay for one, and never promises the cook's units twice. Crema's SOL/USDC pool bought
+  // with USDC, three tenths of a percent past its price, written once, twice and three times. Three
+  // leave 1,400,000 - 200,000 - 3 × 372,000 = 84,000, under the 123,000 a Crema pool needs to trade
+  // at all, so none is given a share; the router's dearest trade measured in the router suite,
+  // about 364,000 a swap, leaves no more for three (about 108,000), so no pool could have been
+  // promised its units.
+  describe("a plan of Crema swaps, read from the SOL/USDC pool as the cook's builder reads it", () => {
+    const crema = pool("crema-sol-usdc");
+    const swap =
+      "Crema.CLMM.swap(Crema.CLMM.pool(USDC, WSOL, 50), USDC, WSOL, amountIn, priceLimit, 0)";
+    const priceLimit = (allIn(crema, false) * 10030n) / 10000n;
+    const cost = SVM_SWAP_COSTS[CREMA_PROGRAM_ID]!;
+    /** The least a pool is given to trade at all: its swap's units, and the headroom's crossings. */
+    const least = cost.base + cost.tick * SVM_HEADROOM_TICKS;
+
+    it.each([1, 2, 3])(
+      "%s swaps: each is reserved its scan, and a pool is given a share where what is left pays for one",
+      async (sites) => {
+        const plan = (await programStops(
+          crema,
+          swap,
+          Array<string>(sites).fill("got += SWAP;").join("\n  "),
+          priceLimit,
+        ))!;
+        expect(plan.stops).toHaveLength(sites);
+        expect(plan.fixed.units).toBe(SVM_COOK_FIXED + sites * SVM_CREMA_SWAP_FIXED);
+        expect(plan.budget).toBe(Math.max(0, SVM_COOK_UNITS - plan.fixed.units));
+        const shares = plan.stops.map((stop) => stop.share);
+        const given = shares.reduce((sum, share) => sum + share, 0);
+        // The cook's units are not promised twice, ...
+        expect(given).toBeLessThanOrEqual(plan.budget);
+        expect(plan.fixed.units + given).toBeLessThanOrEqual(
+          Math.max(SVM_COOK_UNITS, plan.fixed.units),
+        );
+        // ... and the pools are skipped all together only where what is left pays for none.
+        expect(shares.some((share) => share > 0)).toBe(plan.budget >= least);
+      },
+    );
+
+    // Crema's reservation next to other venues' swaps: each is reserved its own, the others' as
+    // they were, and the pools are still given shares. The Orca swaps name no limit (`n` is no
+    // value the plan knows), so each walks to its window's edge and trades.
+    it("a Crema swap among other venues' leaves each one its own reservation and a share", async () => {
+      const orca =
+        "Orca.Whirlpool.swap(Orca.Whirlpool.pool(USDC, WSOL, 4), USDC, WSOL, amountIn, n, 0)";
+      const plan = (await programStops(
+        crema,
+        swap,
+        `got += SWAP;\n  got += ${orca};\n  got += ${orca};`,
+        priceLimit,
+      ))!;
+      expect(plan.stops).toHaveLength(3);
+      expect(plan.fixed.units).toBe(SVM_COOK_FIXED + SVM_CREMA_SWAP_FIXED + 2 * SVM_SWAP_FIXED);
+      const given = plan.stops.reduce((sum, stop) => sum + stop.share, 0);
+      expect(plan.stops.some((stop) => stop.share > 0)).toBe(true);
+      expect(plan.fixed.units + given).toBeLessThanOrEqual(SVM_COOK_UNITS);
     });
   });
 });

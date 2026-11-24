@@ -96,12 +96,28 @@ export const SVM_COOK_UNITS = 1_400_000;
  * trades, the router reading its pool and arrays, the balances around it and the venue's invoke,
  * `SVM_SWAP_FIXED`; each whose pool it reads and leaves (past its limit, an adaptive fee),
  * `SVM_SWAP_IDLE`; and each with no pool at its key, `SVM_SWAP_SKIPPED`. Measured on the distributed
- * swap's program, a little above; `sauce simulate` and `sauce run` measure each cook's own.
+ * swap's program, a little above; `sauce simulate` and `sauce run` measure each cook's own. Crema's
+ * swaps are reserved `SVM_CREMA_SWAP_FIXED` and `SVM_CREMA_SWAP_IDLE` in their places (below).
  */
 export const SVM_COOK_FIXED = 200_000;
 export const SVM_SWAP_FIXED = 255_000;
 export const SVM_SWAP_IDLE = 120_000;
 export const SVM_SWAP_SKIPPED = 20_000;
+
+/**
+ * What the cook spends on a swap at a Crema pool whose slot has a tick array, in place of
+ * `SVM_SWAP_FIXED` (a swap that trades) and `SVM_SWAP_IDLE` (one whose pool the router reads and
+ * leaves). Crema's router also reads the slot's last tick array, a position at a time, from its
+ * start to the price's position (`cremaStop`): up to 64 reads of about 3,200 units each, where the
+ * price lies as the cook lands, not as it was built, so a pool that is idle or has no initialized
+ * tick ahead when the cook is built can cost the whole scan. Each is the router's work beside the
+ * venue's program with all 64 positions read, measured in the router suite, a little above: a swap
+ * that trades, and one that finds nothing to trade. A pool the router judges before the scan (no
+ * liquidity, past its limit, dust) costs `SVM_SWAP_IDLE` or less, but is not told apart here: its
+ * state may have changed by the time the cook lands. A slot with no tick array has no scan.
+ */
+export const SVM_CREMA_SWAP_FIXED = 372_000;
+export const SVM_CREMA_SWAP_IDLE = 306_000;
 
 /**
  * The initialized ticks each pool that trades is charged past its walk, for a price that moves
@@ -524,21 +540,39 @@ function charged(pool: SvmStopPool, n: number): number {
 }
 
 /**
+ * What the cook spends on one swap at `pool` each time it runs, besides its venue's program, as
+ * `sauce tx` reserves it before any venue is given a share of the rest: `SVM_SWAP_FIXED` for a swap
+ * that trades, `SVM_SWAP_IDLE` for one whose pool the router reads and leaves, and
+ * `SVM_SWAP_SKIPPED` where the key has no pool (`pool` undefined). A Crema pool whose slot has a
+ * tick array is reserved the router's scan of it in place of those two: `SVM_CREMA_SWAP_FIXED` and
+ * `SVM_CREMA_SWAP_IDLE`, a flat bound, since the scan reads the pool as it is when the cook lands.
+ */
+export function svmSwapRouterUnits(pool: SvmStopPool | undefined): number {
+  if (pool === undefined) return SVM_SWAP_SKIPPED;
+  const idle = svmPoolWalk(pool).none === true;
+  if (pool.layout === "crema" && pool.arrays.some((array) => array !== undefined))
+    return idle ? SVM_CREMA_SWAP_IDLE : SVM_CREMA_SWAP_FIXED;
+
+  return idle ? SVM_SWAP_IDLE : SVM_SWAP_FIXED;
+}
+
+/**
  * The `priceLimit` that holds `pool`'s swap a tick inside `tick`, the first initialized tick it is
  * not to cross: the loosest whose own limit, by the router's arithmetic (`svmOwnLimit`), keeps the
  * price short of it, found by halving, since the own limit moves with `priceLimit` one way only.
  * Undefined where none does, a tick past what the router's arithmetic reaches.
  */
 export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint | undefined {
-  // Paying the lower-key token the price falls: it is to stay at or above the sqrt price a tick
-  // above `tick`. Paying the other it rises, and is to stay at or below the one a tick below.
+  // Paying the pool's token A (the lower key on every venue but Crema) the price falls: it is to
+  // stay at or above the sqrt price a tick above `tick`. Paying the other it rises, and is to stay
+  // at or below the one a tick below.
   const bound = raydiumSqrtPriceAtTick(paysA ? tick + 1 : tick - 1);
   const keeps = (limit: bigint): boolean => {
     const own = svmOwnLimit(limit, fee, paysA);
     return paysA ? own >= bound : own <= bound;
   };
-  // The own limit falls as priceLimit rises paying the lower-key token, and rises with it otherwise:
-  // the loosest priceLimit that keeps is the greatest one.
+  // The own limit falls as priceLimit rises paying token A, and rises with it otherwise: the
+  // loosest priceLimit that keeps is the greatest one.
   let low = 2n;
   let high = 1n << 190n;
   if (!keeps(low)) return undefined;
@@ -559,8 +593,9 @@ const deepBits = (deep: number | undefined): bigint =>
 
 /**
  * The stop that skips a pool, whatever its price: a start bound past every tick the walk's way (the
- * least an i32 tick reads as paying the lower-key token, as the price falls, the greatest the other
- * way), which every pool's price has moved past, and no limit.
+ * least an i32 tick reads as paying the pool's token A, as the price falls, which is the lower key
+ * on every venue but Crema, the greatest the other way), which every pool's price has moved past,
+ * and no limit.
  */
 export function svmSkipStop(paysA: boolean): bigint {
   return (paysA ? 1n : (1n << 32n) - 1n) << 192n;
@@ -840,14 +875,8 @@ export async function svmProgramStops(
   // What the cook spends on a swap each time it runs, besides its venue's program, by the cost table:
   // one that trades more than one whose pool the router reads and leaves, and that more than a key
   // with no pool.
-  const each = (value: (typeof values)[number]): number => {
-    const pool = pools.find((one) => one.name === value.name);
-    return pool === undefined
-      ? SVM_SWAP_SKIPPED
-      : svmPoolWalk(pool).none === true
-        ? SVM_SWAP_IDLE
-        : SVM_SWAP_FIXED;
-  };
+  const each = (value: (typeof values)[number]): number =>
+    svmSwapRouterUnits(pools.find((one) => one.name === value.name));
   // A loop's count that the cook cannot pay for, that swap's runs alone: the program leaves the loop
   // sooner (a `break`, a `return`), at a point known only as it runs.
   const unpaid = values.find(

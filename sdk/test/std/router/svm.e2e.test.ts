@@ -18,7 +18,11 @@
  *   - Crema follows its pool's own token order, not the keys': mainnet's USDT/USDC pool keeps USDT,
  *     the higher key, as its token A, and each Crema function trades it both ways, held to a limit
  *     worked out from first principles (`crema-order.ts`), sending the instruction `cremaCpi` sends,
- *     from a slot of the tick arrays the pool's map marks and no others;
+ *     from a slot of the tick arrays the pool's map marks and no others; a slot the price has left
+ *     is skipped, not failed, and a limit inside the window is what stops the swap;
+ *   - what the router spends around a swap, besides the venue's program, is what `sauce tx` reserves
+ *     (`svmSwapRouterUnits`): a Crema pool that cannot trade is judged before its tick array is
+ *     scanned, and the scan, up to 64 reads, is reserved in full;
  *   - a slot that is not the pair, whose program is not the venue's, or whose pool is another venue's
  *     or no venue's, is refused.
  *
@@ -52,9 +56,11 @@ import {
   SVM_COOK_UNITS,
   SVM_SWAP_COSTS,
   SVM_SWAP_FIXED,
+  SVM_SWAP_IDLE,
   svmComputeStops,
   svmPoolWalk,
   svmSkipStop,
+  svmSwapRouterUnits,
   type SvmComputeStop,
   type SvmStopPool,
 } from "../../../src/svm/compute-stops.js";
@@ -606,10 +612,17 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     if (!account.exists) throw new Error(`pool ${p.pool} is gone`);
     return account.data;
   };
-  /** A swap's pool as the command reads it for its stop. */
+  /**
+   * A swap's pool as the command reads it for its stop: the accounts as the cook has them, the
+   * order's edits applied, and the direction the pool's own: Crema keeps its pair in its own order,
+   * so paying its token A the price falls, whichever key that is.
+   */
   const poolOf = (order: Order): SvmStopPool => {
     const p = order.pool;
-    const paysA = key(order.pay) < key(order.buy);
+    const paysA =
+      p.venue === "crema"
+        ? cremaFrame(BYTES.get(p.pool)!).tokenA === order.pay
+        : key(order.pay) < key(order.buy);
     const layout = (
       {
         "raydium-clmm": "raydium",
@@ -622,13 +635,21 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         crema: "crema",
       } as const
     )[p.venue as "byreal"];
+    const edits = [...(order.edit === undefined ? [] : [order.edit]), ...(order.edits ?? [])];
+    const bytesOf = (at: Address): Uint8Array | undefined => {
+      const data = BYTES.get(at);
+      if (data === undefined) return undefined;
+      const edited = new Uint8Array(data);
+      for (const edit of edits) if (edit.address === at) edited.set(edit.bytes, edit.offset);
+      return edited;
+    };
     return {
       name: "stop",
       program: p.program,
       layout,
-      pool: BYTES.get(p.pool)!,
+      pool: bytesOf(p.pool)!,
       fee: LAYOUT[p.venue]!.fee(p),
-      arrays: (order.ticks ?? (paysA ? p.payA : p.payB)).map((at) => BYTES.get(at)),
+      arrays: (order.ticks ?? (paysA ? p.payA : p.payB)).map((at) => bytesOf(at)),
       paysA,
       priceLimit: order.priceLimit,
     };
@@ -1355,6 +1376,100 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     /** How far below the exact limit a swap at a price may stop: it rounds its roots down. */
     const HAIR = 64n;
 
+    /**
+     * The edits that clear the tick-array map's marks for the arrays a walk this way could take (the
+     * price's own array and each way on): the SDK then has no array to name for the direction.
+     */
+    const noMarks = (p: Pool, paysA: boolean): Edit[] => {
+      const own = Number(le(BYTES.get(p.payA[0]!)!, 8, 2)); // the price's own array
+      const map = BYTES.get(p.extra)!;
+      const cleared = new Uint8Array(map);
+      for (const index of markedIndices(map)) {
+        const at = 8 + (index >> 3);
+        if (paysA ? index <= own : index >= own) cleared[at] = cleared[at]! & ~(1 << (index & 7));
+      }
+      return [...cleared].flatMap((byte, offset) =>
+        byte === map[offset] ? [] : [{ address: p.extra, offset, bytes: [byte] }],
+      );
+    };
+    /** The loader `svmPoolSlot` reads the fixture through, with `edits` applied. */
+    const loaderWith =
+      (edits: readonly Edit[]): OwnedAccountLoader =>
+      async (at) => {
+        const data = BYTES.get(at);
+        if (data === undefined) return null;
+        const edited = new Uint8Array(data);
+        for (const edit of edits) if (edit.address === at) edited.set(edit.bytes, edit.offset);
+        return { data: edited, owner: SNAPSHOT.get(at)!.owner as Address };
+      };
+    /** The edit that moves a pool's tick, and not its price, to `tick`. */
+    const tickAt = (p: Pool, tick: number): Edit => {
+      const bytes = new Uint8Array(4);
+      new DataView(bytes.buffer).setInt32(0, tick, true);
+      return { address: p.pool, offset: 206, bytes: [...bytes] };
+    };
+    /** The edit that marks `place` of tick array `index` of USDT/USDC's five as holding no tick. */
+    const clearTick = (index: number, place: number): Edit => ({
+      address: ARRAY.get(index)!,
+      offset: 44 + place * 133,
+      bytes: [0],
+    });
+    /** A function's program with its swap taken out: the same accounts and arguments, `main` returning 0. */
+    const withoutSwap = new Map<CremaFn, Compiled>();
+    const bare = (fn: CremaFn): Compiled => {
+      let program = withoutSwap.get(fn);
+      if (program === undefined) {
+        const source = svmProgramCalling(fn)
+          .replace(/^import [^\n]*\n/, "")
+          .replace(/\n {2}return [^\n]*\n\}\n$/, "\n  return 0;\n}\n");
+        expect(source).not.toContain("@sauce/router");
+        program = compileSauceProgram("solana", source);
+        withoutSwap.set(fn, program);
+      }
+      return program;
+    };
+    /**
+     * What a cook of `fn` spends besides the venue's own program: its units less those of the cook
+     * that calls nothing (the same accounts and arguments, `main` returning 0) and less the venue's.
+     * This is what `sauce tx` reserves for the swap before it shares what is left among the venues.
+     */
+    const besides = async (fn: CremaFn, order: Order) => {
+      const swap = succeeded(await cook(compiled(fn), { ...order, trace: true }));
+      const none = succeeded(await cook(bare(fn), { ...order, trace: true }));
+      return { swap, none, router: swap.units! - none.units! - (swap.venueUnits ?? 0) };
+    };
+
+    // The sorted SOL/USDC pool keeps its lower key, WSOL, as its token A, so the pair's keys and the
+    // pool's own order agree.
+    const sorted = pool("crema-sol-usdc");
+    const sortedFrame = cremaFrame(BYTES.get(sorted.pool)!);
+    const CONTROLS = [
+      {
+        name: "paying USDC (the price rises)",
+        pay: USDC,
+        buy: WSOL,
+        paysA: false,
+        amountIn: 1_000_000n * 10n ** 6n,
+        fill: [22_094_785n, 2_677_555n],
+      },
+      {
+        name: "paying WSOL (the price falls)",
+        pay: WSOL,
+        buy: USDC,
+        paysA: true,
+        amountIn: 10n * 10n ** 9n,
+        fill: [2_671_530n, 22_144_599n],
+      },
+    ] as const;
+    /** A swap through the sorted pool, as the controls fill it: a limit five basis points past its price. */
+    const sortedOrder = (c: (typeof CONTROLS)[number]): Order => ({
+      pool: sorted,
+      pay: c.pay,
+      buy: c.buy,
+      amountIn: c.amountIn,
+      priceLimit: (allIn(sorted, c.paysA) * 10005n) / 10000n,
+    });
+
     it("keeps USDT, the higher key, as its token A, and its map marks two of the five arrays", () => {
       expect([frame.tokenA, frame.tokenB]).toEqual([USDT, USDC]);
       expect(key(frame.tokenA) > key(frame.tokenB)).toBe(true);
@@ -1450,6 +1565,26 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
       expect(i32(poolData(usdtUsdc), 206)).toBe(last);
       expect(atLimit.price).toBe(exact);
       expect([atLimit.received, atLimit.paid]).toEqual([982_738n, 984_750n]);
+    }, 120_000);
+
+    // A limit two basis points past the price, paying USDT, falls inside the window: it is the limit
+    // that stops the swap, at a tick above the window's edge, to a hair of the exact limit, and the
+    // last unit it buys costs no more than `priceLimit`, fee paid. A limit taken wrongly paying
+    // token A (halved, say) runs the swap on to the window's edge instead.
+    it("paying USDT, a limit inside the window is what stops the swap, and the swap costs no more than it", async () => {
+      const d = DIRECTIONS[1];
+      const priceLimit = (allIn(usdtUsdc, d.paysA) * 10002n) / 10000n;
+      const exact = sqrtAtCost(priceLimit, frame.fee, d.paysA);
+      const [last] = initializedTicks(BYTES.get(ARRAY.get(3465)!)!, frame.spacing);
+      for (const fn of ["crema", "cremaStopped"] as const) {
+        const outcome = succeeded(await run(fn, d, { priceLimit }));
+        expect(outcome.received).toBeGreaterThan(0n);
+        expect(outcome.paid).toBeLessThan(AMOUNT); // stopped by the limit, with input left
+        expect(i32(poolData(usdtUsdc), 206)).toBeGreaterThan(last! + 1); // short of the window's edge
+        const away = outcome.price! > exact ? outcome.price! - exact : exact - outcome.price!;
+        expect(away).toBeLessThan(HAIR);
+        expect(outcome.paid * E18).toBeLessThanOrEqual(priceLimit * outcome.received!);
+      }
     }, 120_000);
 
     // The same instruction: what the function sends Crema's program is what `cremaCpi` sends for the
@@ -1723,42 +1858,19 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
     // takes at least one). With the liquidity left as it is, which no pool on chain can have, it
     // shows the skip does not rely on it. A pool of another program is still refused, not skipped.
     describe("a direction whose map marks no tick array", () => {
-      const own = Number(le(BYTES.get(usdtUsdc.payA[0]!)!, 8, 2)); // the price's own array
-      /** The edits that clear the map's marks for the arrays a walk this way could take (the price's
-       *  own array and each way on) and, where `emptied`, the pool's liquidity. */
-      const editsOf = (d: Direction, emptied: boolean): Edit[] => {
-        const map = BYTES.get(usdtUsdc.extra)!;
-        const cleared = new Uint8Array(map);
-        for (const index of markedIndices(map)) {
-          const at = 8 + (index >> 3);
-          if (d.paysA ? index <= own : index >= own)
-            cleared[at] = cleared[at]! & ~(1 << (index & 7));
-        }
-        return [
-          ...(emptied
-            ? [
-                {
-                  address: usdtUsdc.pool,
-                  offset: LAYOUT.crema!.liquidity,
-                  bytes: Array<number>(16).fill(0),
-                },
-              ]
-            : []),
-          ...[...cleared].flatMap((byte, offset) =>
-            byte === map[offset] ? [] : [{ address: usdtUsdc.extra, offset, bytes: [byte] }],
-          ),
-        ];
-      };
-      /** The loader `svmPoolSlot` reads the fixture through, with `edits` applied. */
-      const loaderWith =
-        (edits: readonly Edit[]): OwnedAccountLoader =>
-        async (at) => {
-          const data = BYTES.get(at);
-          if (data === undefined) return null;
-          const edited = new Uint8Array(data);
-          for (const edit of edits) if (edit.address === at) edited.set(edit.bytes, edit.offset);
-          return { data: edited, owner: SNAPSHOT.get(at)!.owner as Address };
-        };
+      /** The edits that clear the map's marks for a walk this way and, where `emptied`, the pool's liquidity. */
+      const editsOf = (d: Direction, emptied: boolean): Edit[] => [
+        ...(emptied
+          ? [
+              {
+                address: usdtUsdc.pool,
+                offset: LAYOUT.crema!.liquidity,
+                bytes: Array<number>(16).fill(0),
+              },
+            ]
+          : []),
+        ...noMarks(usdtUsdc, d.paysA),
+      ];
       const CASES = DIRECTIONS.flatMap((d) =>
         [true, false].flatMap((emptied) =>
           FUNCTIONS.map((fn) => ({
@@ -1821,43 +1933,245 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         for (const d of DIRECTIONS)
           expect(refused(await run("cremaAtLimit", d, wide))).toBe("limit past 128 bits");
       }, 120_000);
+
+      // The refusals of a caller's mistake come before the empty window's skip: a floor past the
+      // order's 64-bit field and a zero limit, which Crema's program refuses itself, are refused
+      // by the router, in its words, with no tick array to read.
+      it.each(DIRECTIONS)(
+        "cremaAtLimit, $name: a floor past 64 bits and a zero limit are refused, not skipped",
+        async (d) => {
+          const edits = editsOf(d, false);
+          const slot = await svmPoolSlot(loaderWith(edits), usdtUsdc.pool, d.pay);
+          expect(slot.ticks).toEqual([SYSTEM, SYSTEM, SYSTEM]);
+          const empty: Partial<Order> = { ticks: [...slot.ticks], edits };
+          expect(refused(await run("cremaAtLimit", d, { ...empty, minOut: 1n << 64n }))).toBe(
+            "minOut past 64 bits",
+          );
+          expect(refused(await run("cremaAtLimit", d, { ...empty, limit: 0n }))).toBe(
+            "Crema takes no zero limit",
+          );
+        },
+        120_000,
+      );
+    });
+
+    // `cremaStop` reads the slot's last tick array against the pool's tick as it is when the swap
+    // runs, and a slot is built for the price as it was: a last array that lies wholly on the wrong
+    // side of the price (it starts above it, paying USDT; it ends below it, paying USDC), or a price
+    // that has since left the slot's arrays behind, leaves no window, so the swap is skipped,
+    // returning 0 with no call into Crema, rather than failing the whole transaction (an underflow
+    // reading its position). The edits move the pool's tick and leave its price as it is.
+    describe("a slot whose last tick array the price is not in or ahead of", () => {
+      const CASES: readonly { name: string; d: Direction; change: Partial<Order> }[] = [
+        {
+          name: "paying USDT, the array starts above the price",
+          d: DIRECTIONS[1],
+          change: { ticks: [ARRAY.get(3466)!, SYSTEM, SYSTEM] },
+        },
+        {
+          name: "paying USDT, the price has fallen below the array",
+          d: DIRECTIONS[1],
+          change: { edit: tickAt(usdtUsdc, -150) },
+        },
+        {
+          name: "paying USDC, the array ends below the price",
+          d: DIRECTIONS[0],
+          change: { ticks: [ARRAY.get(3464)!, SYSTEM, SYSTEM] },
+        },
+        {
+          name: "paying USDC, the price has risen above the arrays",
+          d: DIRECTIONS[0],
+          change: { edit: tickAt(usdtUsdc, 150) },
+        },
+      ];
+      it.each(
+        CASES.flatMap((c) => (["crema", "cremaStopped"] as const).map((fn) => ({ ...c, fn }))),
+      )(
+        "$fn, $name: returns 0, having called nothing",
+        async ({ fn, d, change }) => {
+          const outcome = succeeded(await run(fn, d, change));
+          expect({
+            returned: outcome.returned,
+            received: outcome.received,
+            paid: outcome.paid,
+            called: outcome.cpi !== undefined,
+            changed: [...outcome.changed].sort(),
+          }).toEqual({
+            returned: 0n,
+            received: 0n,
+            paid: 0n,
+            called: false,
+            changed: change.edit === undefined ? [] : [usdtUsdc.pool],
+          });
+        },
+        120_000,
+      );
+    });
+
+    // What the router does around a swap, and so what `sauce tx` reserves for it before it shares the
+    // rest of the cook's units among the venues (`svmSwapRouterUnits`), is measured beside the venue's
+    // own program: the cook's units less those of the same cook with no swap in it, less the venue's.
+    describe("what a swap costs the cook besides its venue's program", () => {
+      const SKIPS: readonly {
+        name: string;
+        change: (paysA: boolean, p: Pool) => Partial<Order>;
+      }[] = [
+        {
+          name: "the price is past its limit",
+          change: (paysA, p) => ({ priceLimit: (allIn(p, paysA) * 9990n) / 10000n }),
+        },
+        {
+          name: "the pool has no liquidity",
+          change: (_, p) => ({
+            edit: {
+              address: p.pool,
+              offset: LAYOUT.crema!.liquidity,
+              bytes: Array<number>(16).fill(0),
+            },
+          }),
+        },
+        { name: "the input is dust", change: () => ({ amountIn: 1n }) },
+      ];
+      const SWAPS: readonly {
+        name: string;
+        order: () => Order;
+        p: Pool;
+        paysA: boolean;
+      }[] = [
+        {
+          name: "USDT/USDC paying USDT",
+          order: () => orderOf(DIRECTIONS[1]),
+          p: usdtUsdc,
+          paysA: true,
+        },
+        {
+          name: "USDT/USDC paying USDC",
+          order: () => orderOf(DIRECTIONS[0]),
+          p: usdtUsdc,
+          paysA: false,
+        },
+        {
+          name: "SOL/USDC paying WSOL",
+          order: () => sortedOrder(CONTROLS[1]),
+          p: sorted,
+          paysA: true,
+        },
+        {
+          name: "SOL/USDC paying USDC",
+          order: () => sortedOrder(CONTROLS[0]),
+          p: sorted,
+          paysA: false,
+        },
+      ];
+
+      // A swap that trades nothing for what the pool alone shows (its price past its limit, no
+      // liquidity, dust) is judged before the router reads a tick array: it costs no more than
+      // `SVM_SWAP_IDLE`, a pool whose last array holds the price or not.
+      it.each(
+        SWAPS.flatMap((s) =>
+          SKIPS.flatMap((skip) =>
+            (["crema", "cremaStopped"] as const).map((fn) => ({ ...s, skip, fn })),
+          ),
+        ),
+      )(
+        "$fn, $name, $skip.name: returns 0 for no more than SVM_SWAP_IDLE",
+        async ({ fn, order, skip, p, paysA }) => {
+          const { swap, router } = await besides(fn, { ...order(), ...skip.change(paysA, p) });
+          expect([swap.returned, swap.cpi === undefined]).toEqual([0n, true]);
+          expect(router).toBeLessThanOrEqual(SVM_SWAP_IDLE);
+        },
+        120_000,
+      );
+
+      // `cremaStop` reads one byte of the slot's last tick array for each position it scans, from
+      // the array's start to the price's own position paying USDT: up to 64 reads, whatever the
+      // price, since it reads the pool as it is when the swap lands. The reservation is for all 64.
+      const down = DIRECTIONS[1];
+      /** The pool's own array, 49 positions in, with no initialized tick: every position read, none found. */
+      const ahead = (): Order => ({ ...orderOf(down), edits: [clearTick(3465, 47)] });
+      /** The price in the array's last position, with none initialized: all 64 positions read. */
+      const all = (): Order => ({
+        ...orderOf(down),
+        edits: [tickAt(usdtUsdc, 10), clearTick(3465, 47)],
+      });
+      const ROUTERS = ["crema", "cremaStopped"] as const;
+
+      it.each(ROUTERS)(
+        "%s: a marked array with no initialized tick ahead of a tradable price is within the reservation",
+        async (fn) => {
+          const order = ahead();
+          expect(svmPoolWalk(poolOf(order)).none).toBe(true);
+          const { swap, router } = await besides(fn, order);
+          expect([swap.returned, swap.cpi === undefined]).toEqual([0n, true]);
+          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
+        },
+        120_000,
+      );
+
+      it.each(ROUTERS)(
+        "%s: a scan of all 64 positions is within the reservation",
+        async (fn) => {
+          const order = all();
+          expect(svmPoolWalk(poolOf(order)).none).toBe(true);
+          const { swap, router } = await besides(fn, order);
+          expect([swap.returned, swap.cpi === undefined]).toEqual([0n, true]);
+          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
+        },
+        120_000,
+      );
+
+      it.each(ROUTERS)(
+        "%s: the fill paying USDT, its scan ended by a tick 48 positions in, is within the reservation",
+        async (fn) => {
+          const order = orderOf(down);
+          const { swap, router } = await besides(fn, order);
+          expect(swap.received).toBeGreaterThan(0n);
+          expect(router).toBeLessThanOrEqual(svmSwapRouterUnits(poolOf(order)));
+        },
+        120_000,
+      );
+
+      // The fill's scan ends at the tick it finds, 48 reads in; a trade whose scan went on to the
+      // price's position, with the tick it finds close below it, reads 64. A read costs a 14th of what
+      // a scan of 50 positions and one of 64 differ by, so the fill with the reads it did not make
+      // added is the dearest a trade costs the router, and the scan that finds nothing in 64 the
+      // dearest an idle swap does. The reservation is each, a little above (within a tenth): a plan
+      // is not to be starved of units it will not use.
+      it.each(ROUTERS)(
+        "%s: the reservations are the router's dearest, a little above",
+        async (fn) => {
+          const cost = async (order: Order): Promise<number> => (await besides(fn, order)).router;
+          const idle = await cost(all());
+          const step = (idle - (await cost(ahead()))) / (64 - 50);
+          const fill = orderOf(down);
+          const trade = (await cost(fill)) + (64 - 48) * step;
+          const reserved = {
+            trade: svmSwapRouterUnits(poolOf(fill)),
+            idle: svmSwapRouterUnits(poolOf(all())),
+          };
+          // Each reservation at or above what was measured, and within a tenth of it.
+          const bracket = (measured: number, units: number): string =>
+            measured <= units && units <= measured * 1.1
+              ? "ok"
+              : `reserved ${units} for ${Math.round(measured)} measured`;
+          expect({
+            trade: bracket(trade, reserved.trade),
+            idle: bracket(idle, reserved.idle),
+          }).toEqual({ trade: "ok", idle: "ok" });
+        },
+        300_000,
+      );
     });
 
     // The sorted SOL/USDC pool keeps its lower key, WSOL, as its token A, so the pair's keys and the
     // pool's own order agree: what it trades is what it did before Crema followed the pool's order,
     // both ways and in each function.
     describe("the sorted SOL/USDC pool, whose token A is its lower key", () => {
-      const sorted = pool("crema-sol-usdc");
-      const sortedFrame = cremaFrame(BYTES.get(sorted.pool)!);
-      const CONTROLS = [
-        {
-          name: "paying USDC (the price rises)",
-          pay: USDC,
-          buy: WSOL,
-          paysA: false,
-          amountIn: 1_000_000n * 10n ** 6n,
-          fill: [22_094_785n, 2_677_555n],
-        },
-        {
-          name: "paying WSOL (the price falls)",
-          pay: WSOL,
-          buy: USDC,
-          paysA: true,
-          amountIn: 10n * 10n ** 9n,
-          fill: [2_671_530n, 22_144_599n],
-        },
-      ] as const;
       it.each(CONTROLS)(
         "$name: each function fills as it did",
         async (c) => {
           expect(sortedFrame.tokenA).toBe(WSOL);
-          const order: Order = {
-            pool: sorted,
-            pay: c.pay,
-            buy: c.buy,
-            amountIn: c.amountIn,
-            priceLimit: (allIn(sorted, c.paysA) * 10005n) / 10000n,
-          };
+          const order = sortedOrder(c);
           for (const fn of FUNCTIONS) {
             const outcome = succeeded(
               await cook(compiled(fn), {
@@ -1872,6 +2186,30 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
               c.fill[1],
             ]);
           }
+        },
+        120_000,
+      );
+
+      // The same refusals, in the router's words, on a pool that has tick arrays to send (a zero
+      // limit used to reach Crema's program, which fails the transaction without a reason), and
+      // on one whose direction has none: the empty window is skipped only for arguments it takes.
+      it.each(CONTROLS)(
+        "$name: cremaAtLimit refuses a zero limit and a floor past 64 bits, with a window or without one",
+        async (c) => {
+          const order = sortedOrder(c);
+          const limit = sqrtAtCost(order.priceLimit, sortedFrame.fee, c.paysA);
+          const swap = (change: Partial<Order>): Promise<Outcome> =>
+            cook(compiled("cremaAtLimit"), { ...order, limit, ...change });
+          expect(refused(await swap({ limit: 0n }))).toBe("Crema takes no zero limit");
+          expect(refused(await swap({ minOut: 1n << 64n }))).toBe("minOut past 64 bits");
+          const edits = noMarks(sorted, c.paysA);
+          const slot = await svmPoolSlot(loaderWith(edits), sorted.pool, c.pay);
+          expect(slot.ticks).toEqual([SYSTEM, SYSTEM, SYSTEM]);
+          const empty: Partial<Order> = { ticks: [...slot.ticks], edits };
+          expect(refused(await swap({ ...empty, limit: 0n }))).toBe("Crema takes no zero limit");
+          expect(refused(await swap({ ...empty, minOut: 1n << 64n }))).toBe("minOut past 64 bits");
+          // The same empty window with arguments it takes is skipped.
+          expect(succeeded(await swap(empty)).returned).toBe(0n);
         },
         120_000,
       );
