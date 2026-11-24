@@ -984,6 +984,29 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
           await setFee(0n);
         }
       }, 180_000);
+
+      it("says it when the run is refused for an approval it has no one to ask for, before it sends anything", async () => {
+        // The recipient's token account is not there, so the plan's setup creates it, which asks the
+        // owner: with no terminal and no --yes, the run stops before it sends a thing.
+        const owner = await keypair("old-approval");
+        const pot = await plantOld(owner.signer.address, "old-approval");
+        const usdc = address(
+          svmTokenRows(requireChain("solana")).find((row) => row.symbol === "USDC")!.mint,
+        );
+        setMint(harness, usdc, 6);
+        setTokenAccount(harness, await ataOf(pot, usdc), usdc, pot, 3_000_000n);
+        const to = randomAddress();
+        const sent = shim.sent.length;
+
+        const ran = await sauce(
+          ...["run", PAY, ...signedAs(owner.path, "old-approval")],
+          ...["--args", to, "1000000"],
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain("nothing was sent: this run needs an approval");
+        expect(ran.stderr).toContain(cookTold(pot));
+        expect(shim.sent.length).toBe(sent);
+      }, 180_000);
     });
 
     it("is created, on its own engine, and `sauce pot` says it is cooked on the installed one", async () => {

@@ -3385,300 +3385,309 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   // Prepared, and its swaps' stops checked, with no key at all: a rehearsal is unsigned, and the
   // owner's key signs each transaction only once its policy let it go, just before it is sent.
   let prepared = await prepare(input, files, unsignedSigner(input.owner));
-  // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
-  // would run out of compute units; one it still runs out with is refused here.
-  const stopNotes: string[] = [];
-  if (prepared.stops !== undefined && prepared.stops.unbounded === undefined) {
-    try {
-      const checked = await withStops(prepared, (again) => simulatePrepared(again, input));
-      const logs = Array.isArray(checked.output.json.logs)
-        ? (checked.output.json.logs as string[])
-        : [];
-      if (checked.output.json.ok === false && svmRanOutOfUnits(logs)) {
-        throw new CliError(checked.output.text.split("\n")[0]!);
-      }
-      prepared = checked.prepared;
-    } catch (error) {
-      if (error instanceof CliError && /runs out of compute units/.test(error.message)) throw error;
-      stopNotes.push(
-        `the stops could not be checked in a simulation first (${(error as Error).message.split("\n")[0]}): ` +
-          "they are the cost table's, and the cook is simulated on the cluster before it is sent",
-      );
-    }
-  }
-  const direct = prepared.via === "engine";
-  const ctx: StepContext = {
-    rpc: prepared.rpc,
-    url: input.rpcUrl,
-    chain: input.chain,
-    signer: input.signer,
-    fee: prepared.fee,
-  };
-  // What the Pot's state means for the cook, as the plan last read it: it starts as the first read's
+  // What the Pot's state means for the cook, as the run last read it: it starts as the first read's
   // (`Prepared.notes`) and is each step's own as the plan advances, since the plan reads the Pot
   // again and builds from that read, which may differ from the first.
   let notes: readonly string[] = prepared.notes;
-  let plan: SvmPlan;
+  // From here to the cook's send is one stretch, and a run that stops in it, whatever stops it (a
+  // plan's step that cannot be built, an approval nobody can give, a failed read or send), says what
+  // the Pot's state means for the cook beside its message: no stop can miss them. One whose cook was
+  // sent says them in its result, whatever happened to it.
   try {
-    plan = await planOf(prepared, input);
+    // The swaps' stops, checked in a simulation before anything is sent, and tightened where the cook
+    // would run out of compute units; one it still runs out with is refused here.
+    const stopNotes: string[] = [];
+    if (prepared.stops !== undefined && prepared.stops.unbounded === undefined) {
+      try {
+        const checked = await withStops(prepared, (again) => simulatePrepared(again, input));
+        const logs = Array.isArray(checked.output.json.logs)
+          ? (checked.output.json.logs as string[])
+          : [];
+        if (checked.output.json.ok === false && svmRanOutOfUnits(logs)) {
+          throw new CliError(checked.output.text.split("\n")[0]!);
+        }
+        prepared = checked.prepared;
+      } catch (error) {
+        if (error instanceof CliError && /runs out of compute units/.test(error.message))
+          throw error;
+        stopNotes.push(
+          `the stops could not be checked in a simulation first (${(error as Error).message.split("\n")[0]}): ` +
+            "they are the cost table's, and the cook is simulated on the cluster before it is sent",
+        );
+      }
+    }
+    const direct = prepared.via === "engine";
+    const ctx: StepContext = {
+      rpc: prepared.rpc,
+      url: input.rpcUrl,
+      chain: input.chain,
+      signer: input.signer,
+      fee: prepared.fee,
+    };
+    let plan = await planOf(prepared, input);
     await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan), [
       planEngine(plan),
     ]);
-  } catch (error) {
-    throw withNotes(error, notes);
-  }
-  const buffer = await planBuffer(plan);
-  let created: SvmSent | undefined;
-  let accountsMade: { sent: SvmSent; made: string[] } | undefined;
-  const staged: SvmSent[] = [];
-  const tabled: SvmSent[] = [];
-  // A run that stops before its cook is sent says what the Pot's state means for the cook beside its
-  // message: a cook that fails for what they explain is told so. `caught` is the failure the stop
-  // is made of, whose own notes (a plan's step build carries them) are kept. One that was sent says
-  // them in its result, whatever happened to it.
-  const stopped = (message: string, caught?: unknown): CliError => {
-    const error = new CliError(message);
-    if (caught instanceof CliError) error.notes = caught.notes;
+    const buffer = await planBuffer(plan);
+    let created: SvmSent | undefined;
+    let accountsMade: { sent: SvmSent; made: string[] } | undefined;
+    const staged: SvmSent[] = [];
+    const tabled: SvmSent[] = [];
+    // `caught` is the failure a stop is made of: its own notes (a plan's step build carries them) are
+    // kept.
+    const stopped = (message: string, caught?: unknown): CliError => {
+      const error = new CliError(message);
+      if (caught instanceof CliError) error.notes = caught.notes;
 
-    return withNotes(error, notes) as CliError;
-  };
-  // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
-  // table it created stays, and is named.
-  const closedAgain = async (): Promise<string> =>
-    (buffer === undefined || staged.length === 0
-      ? ""
-      : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`) +
-    (tabled.length === 0 || plan.table?.address === undefined
-      ? ""
-      : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain ${input.chain.slug} closes it.`);
-  // The step after, read from the cluster: a failure to read it is a stop like any other.
-  const after = async (): Promise<PlanStep> => {
-    try {
-      const next = await nextStep(plan, ctx);
-      notes = next.notes;
-
-      return next;
-    } catch (error) {
-      throw stopped(`${(error as Error).message}${await closedAgain()}`, error);
-    }
-  };
-
-  let step = await after();
-  while (step.name === "setup") {
-    // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
-    // before anything is sent.
-    if (step.transactions.some((tx) => tx.kind === "pot")) {
-      await approveAll(input.approver, [potApproval(input, prepared.pot)]);
-    }
-    const accounts = step.transactions.find((tx) => tx.kind === "accounts")?.accounts;
-    const made = accounts === undefined ? undefined : await approveTokenAccounts(input, accounts);
-    plan = step.plan;
-    for (const tx of step.transactions) {
-      const staging = tx.kind === "buffer" || tx.kind === "write" || tx.kind === "finalize";
-      let sent: SvmSent;
+      return error;
+    };
+    // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
+    // table it created stays, and is named.
+    const closedAgain = async (): Promise<string> =>
+      (buffer === undefined || staged.length === 0
+        ? ""
+        : `\n${(await closePlanBuffer(plan, ctx)).open ?? `The code buffer ${buffer.codeBuffer} was closed again.`}`) +
+      (tabled.length === 0 || plan.table?.address === undefined
+        ? ""
+        : `\nLookup table ${plan.table.address} stays: sauce reclaim --chain ${input.chain.slug} closes it.`);
+    // The step after, read from the cluster: a failure to read it is a stop like any other.
+    const after = async (): Promise<PlanStep> => {
       try {
-        sent = await sendPlanTx(ctx, tx);
-      } catch (error) {
-        throw stopped(
-          `${staging ? "staging the program failed: " : ""}${(error as Error).message}${await closedAgain()}`,
-          error,
-        );
-      }
-      if (staging) staged.push(sent);
-      if (tx.kind === "table") tabled.push(sent);
-      if (!sent.ok) {
-        throw stopped(
-          tx.kind === "pot" || tx.kind === "accounts"
-            ? sentLine(tx.what, sent)
-            : `${staging ? "staging the program failed: " : ""}${tx.what} failed in ` +
-                `${sent.signature}: ${sent.reason}${await closedAgain()}`,
-        );
-      }
-      if (tx.kind === "pot") {
-        created = sent;
-        await awaitAccount(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
-      }
-      if (tx.kind === "accounts") accountsMade = { sent, made: made ?? [] };
-    }
-    step = await after();
-  }
-  // A lookup table the setup just extended is in use from the next slot: a run, the owner's own
-  // process, waits for it, a little.
-  for (let tries = 0; step.readyAt !== undefined && tries < TABLE_WARMUP.tries; tries++) {
-    await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
-    step = await after();
-  }
-  if (step.wait !== undefined) throw stopped(`${step.wait}${await closedAgain()}`);
-  if (step.fails !== undefined) {
-    const wallets = await walletHints(prepared, input);
-    throw stopped(
-      `the cook would fail, so it was not sent: ${step.fails.reason}` +
-        (step.fails.logs.length === 0
-          ? ""
-          : `\nProgram logs:\n${step.fails.logs.map((l) => `  ${l}`).join("\n")}`) +
-        wallets.map((hint) => `\n${hint}`).join("") +
-        (await closedAgain()),
-    );
-  }
-  const cookTx = step.transactions[0];
-  if (step.name !== "cook" || cookTx === undefined) {
-    throw stopped(
-      `the plan's step after its setup is ${step.name}, not the cook${await closedAgain()}`,
-    );
-  }
-  if (step.unrehearsed === true) {
-    throw stopped(
-      `the endpoint did not simulate the cook, so it was not sent${await closedAgain()}`,
-    );
-  }
-  plan = step.plan;
-  const createInCook = cookTx.createsPot === true;
-  const { value: latestBlockhash } = await ask(input.rpcUrl, "the latest blockhash", () =>
-    prepared.rpc.getLatestBlockhash().send(),
-  ).catch((error: unknown) => {
-    throw withNotes(error, notes);
-  });
-  const built = buildPlanTx(cookTx, ctx, latestBlockhash);
-  // What the cook moves: every account it may write, read before it is sent and once it lands.
-  const tracked = writableAccounts(built.transaction, cookTx.lookupTables ?? {});
-  const before = await accountsNow(
-    prepared.rpc,
-    tracked,
-    AbortSignal.timeout(BEFORE_READ_MS),
-  ).catch(() => undefined);
-  let cook: SvmSent;
-  try {
-    cook = await sendAndConfirm(
-      prepared.rpc,
-      input.rpcUrl,
-      input.chain,
-      built.transaction,
-      built.sign,
-    );
-  } catch (error) {
-    // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
-    throw stopped(
-      `${(error as Error).message}` +
-        (buffer === undefined
-          ? ""
-          : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
-            `sauce reclaim --chain ${input.chain.slug} closes it once it has.`),
-      error,
-    );
-  }
-  const landedAs =
-    cook.ok && before !== undefined
-      ? await accountsNow(prepared.rpc, tracked).catch(() => undefined)
-      : undefined;
-  const moved =
-    before === undefined || landedAs === undefined
-      ? undefined
-      : await movedBy(
-          prepared.rpc,
-          input.chain,
-          tracked,
-          before,
-          landedAs,
-          await accountLabels(input, prepared.pot, prepared.given),
-          input.owner,
-        );
-  const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
-  plan = { ...plan, cooked: { ok: cook.ok, signature: cook.signature } };
-  // The cook has landed (or failed) by now: whatever happens to the buffer, it is reported.
-  const closed = buffer === undefined ? undefined : await closePlanBuffer(plan, ctx);
-  const table = plan.table?.address;
+        const next = await nextStep(plan, ctx);
+        notes = next.notes;
 
-  return {
-    text: [
-      ...(created === undefined
-        ? []
-        : sentLines(input.chain, `created Pot ${prepared.pot} in`, created)),
-      ...(createInCook
-        ? [
-            cook.ok
-              ? `created Pot ${prepared.pot} in the cook's own transaction, ahead of the cook`
-              : `Pot ${prepared.pot} was to be created in the cook's transaction, which failed: it is not`,
-          ]
-        : []),
-      ...(accountsMade === undefined
-        ? []
-        : sentLines(input.chain, `created ${accountsMade.made.join("; ")} in`, accountsMade.sent)),
-      ...(staged.length === 0
-        ? []
-        : [`staged the ${prepared.bytecode.length}-byte program in ${staged.length} transactions`]),
-      ...(table === undefined || tabled.length === 0
-        ? []
-        : [
-            `created lookup table ${table} holding the cook's ${plan.table!.addresses.length} ` +
-              `accounts in ${tabled.length} transactions; a later cook naming them reuses it with ` +
-              `--lookup-table ${table}, and sauce reclaim closes it once none will`,
-          ]),
-      ...(prepared.stops === undefined ? [] : svmStopLines(prepared.stops)),
-      ...sentLines(input.chain, direct ? "cook (direct to the engine)" : "cook", cook),
-      ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),
-      ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
-      ...(moved === undefined ? [] : svmMovedLines(moved)),
-      ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
-      ...(closed?.sent === undefined || closed.open !== undefined
-        ? []
-        : sentLines(input.chain, "closed the code buffer in", closed.sent)),
-    ].join("\n"),
-    ...(closed?.open === undefined && stopNotes.length === 0 && notes.length === 0
-      ? {}
-      : {
-          notes: [
-            ...notes,
-            ...stopNotes,
-            ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`]),
-          ],
-        }),
-    json: {
-      ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
-      chain: input.chain.slug,
-      via: prepared.via,
-      owner: input.owner,
-      ...(direct ? {} : { pot: prepared.pot }),
-      fee: (step.fee ?? prepared.fee).toString(),
-      maxExecutionFee: (step.fee ?? prepared.fee).toString(),
-      ...(created === undefined ? {} : { createPot: sentJson(input.chain, created) }),
-      ...(createInCook
-        ? { createPot: { inCook: true, ...(cook.ok ? {} : { undone: true }) } }
-        : {}),
-      ...(accountsMade === undefined
+        return next;
+      } catch (error) {
+        throw stopped(`${(error as Error).message}${await closedAgain()}`, error);
+      }
+    };
+
+    let step = await after();
+    while (step.name === "setup") {
+      // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
+      // before anything is sent.
+      if (step.transactions.some((tx) => tx.kind === "pot")) {
+        await approveAll(input.approver, [potApproval(input, prepared.pot)]);
+      }
+      const accounts = step.transactions.find((tx) => tx.kind === "accounts")?.accounts;
+      const made = accounts === undefined ? undefined : await approveTokenAccounts(input, accounts);
+      plan = step.plan;
+      for (const tx of step.transactions) {
+        const staging = tx.kind === "buffer" || tx.kind === "write" || tx.kind === "finalize";
+        let sent: SvmSent;
+        try {
+          sent = await sendPlanTx(ctx, tx);
+        } catch (error) {
+          throw stopped(
+            `${staging ? "staging the program failed: " : ""}${(error as Error).message}${await closedAgain()}`,
+            error,
+          );
+        }
+        if (staging) staged.push(sent);
+        if (tx.kind === "table") tabled.push(sent);
+        if (!sent.ok) {
+          throw stopped(
+            tx.kind === "pot" || tx.kind === "accounts"
+              ? sentLine(tx.what, sent)
+              : `${staging ? "staging the program failed: " : ""}${tx.what} failed in ` +
+                  `${sent.signature}: ${sent.reason}${await closedAgain()}`,
+          );
+        }
+        if (tx.kind === "pot") {
+          created = sent;
+          await awaitAccount(prepared.rpc, input.rpcUrl, prepared.pot, "the Pot");
+        }
+        if (tx.kind === "accounts") accountsMade = { sent, made: made ?? [] };
+      }
+      step = await after();
+    }
+    // A lookup table the setup just extended is in use from the next slot: a run, the owner's own
+    // process, waits for it, a little.
+    for (let tries = 0; step.readyAt !== undefined && tries < TABLE_WARMUP.tries; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, TABLE_WARMUP.delayMs));
+      step = await after();
+    }
+    if (step.wait !== undefined) throw stopped(`${step.wait}${await closedAgain()}`);
+    if (step.fails !== undefined) {
+      const wallets = await walletHints(prepared, input);
+      throw stopped(
+        `the cook would fail, so it was not sent: ${step.fails.reason}` +
+          (step.fails.logs.length === 0
+            ? ""
+            : `\nProgram logs:\n${step.fails.logs.map((l) => `  ${l}`).join("\n")}`) +
+          wallets.map((hint) => `\n${hint}`).join("") +
+          (await closedAgain()),
+      );
+    }
+    const cookTx = step.transactions[0];
+    if (step.name !== "cook" || cookTx === undefined) {
+      throw stopped(
+        `the plan's step after its setup is ${step.name}, not the cook${await closedAgain()}`,
+      );
+    }
+    if (step.unrehearsed === true) {
+      throw stopped(
+        `the endpoint did not simulate the cook, so it was not sent${await closedAgain()}`,
+      );
+    }
+    plan = step.plan;
+    const createInCook = cookTx.createsPot === true;
+    const { value: latestBlockhash } = await ask(input.rpcUrl, "the latest blockhash", () =>
+      prepared.rpc.getLatestBlockhash().send(),
+    );
+    const built = buildPlanTx(cookTx, ctx, latestBlockhash);
+    // What the cook moves: every account it may write, read before it is sent and once it lands.
+    const tracked = writableAccounts(built.transaction, cookTx.lookupTables ?? {});
+    const before = await accountsNow(
+      prepared.rpc,
+      tracked,
+      AbortSignal.timeout(BEFORE_READ_MS),
+    ).catch(() => undefined);
+    let cook: SvmSent;
+    try {
+      cook = await sendAndConfirm(
+        prepared.rpc,
+        input.rpcUrl,
+        input.chain,
+        built.transaction,
+        built.sign,
+      );
+    } catch (error) {
+      // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
+      throw stopped(
+        `${(error as Error).message}` +
+          (buffer === undefined
+            ? ""
+            : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
+              `sauce reclaim --chain ${input.chain.slug} closes it once it has.`),
+        error,
+      );
+    }
+    const landedAs =
+      cook.ok && before !== undefined
+        ? await accountsNow(prepared.rpc, tracked).catch(() => undefined)
+        : undefined;
+    const moved =
+      before === undefined || landedAs === undefined
+        ? undefined
+        : await movedBy(
+            prepared.rpc,
+            input.chain,
+            tracked,
+            before,
+            landedAs,
+            await accountLabels(input, prepared.pot, prepared.given),
+            input.owner,
+          );
+    const left = moved === undefined || direct ? undefined : svmLeftInPot(moved, prepared.pot);
+    plan = { ...plan, cooked: { ok: cook.ok, signature: cook.signature } };
+    // The cook has landed (or failed) by now: whatever happens to the buffer, it is reported.
+    const closed = buffer === undefined ? undefined : await closePlanBuffer(plan, ctx);
+    const table = plan.table?.address;
+
+    return {
+      text: [
+        ...(created === undefined
+          ? []
+          : sentLines(input.chain, `created Pot ${prepared.pot} in`, created)),
+        ...(createInCook
+          ? [
+              cook.ok
+                ? `created Pot ${prepared.pot} in the cook's own transaction, ahead of the cook`
+                : `Pot ${prepared.pot} was to be created in the cook's transaction, which failed: it is not`,
+            ]
+          : []),
+        ...(accountsMade === undefined
+          ? []
+          : sentLines(
+              input.chain,
+              `created ${accountsMade.made.join("; ")} in`,
+              accountsMade.sent,
+            )),
+        ...(staged.length === 0
+          ? []
+          : [
+              `staged the ${prepared.bytecode.length}-byte program in ${staged.length} transactions`,
+            ]),
+        ...(table === undefined || tabled.length === 0
+          ? []
+          : [
+              `created lookup table ${table} holding the cook's ${plan.table!.addresses.length} ` +
+                `accounts in ${tabled.length} transactions; a later cook naming them reuses it with ` +
+                `--lookup-table ${table}, and sauce reclaim closes it once none will`,
+            ]),
+        ...(prepared.stops === undefined ? [] : svmStopLines(prepared.stops)),
+        ...sentLines(input.chain, direct ? "cook (direct to the engine)" : "cook", cook),
+        ...(cook.ok ? [`execution fee: ${step.fee ?? prepared.fee} lamports`] : []),
+        ...(left === undefined ? [] : svmLeftInPotLines(left, "your wallet")),
+        ...(moved === undefined ? [] : svmMovedLines(moved)),
+        ...(cook.ok ? [] : ["Program logs:", ...cook.logs.map((line) => `  ${line}`)]),
+        ...(closed?.sent === undefined || closed.open !== undefined
+          ? []
+          : sentLines(input.chain, "closed the code buffer in", closed.sent)),
+      ].join("\n"),
+      ...(closed?.open === undefined && stopNotes.length === 0 && notes.length === 0
         ? {}
         : {
-            createTokenAccounts: {
-              ...sentJson(input.chain, accountsMade.sent),
-              accounts: accountsMade.made,
-            },
+            notes: [
+              ...notes,
+              ...stopNotes,
+              ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`]),
+            ],
           }),
-      ...(buffer === undefined
-        ? {}
-        : {
-            staged: {
-              codeBuffer: buffer.codeBuffer,
-              sha256: bytesToHex(plan.staged!.sha256),
-              transactions: staged.map((one) => one.signature),
-            },
-          }),
-      ...(table === undefined || tabled.length === 0
-        ? {}
-        : {
-            lookupTable: {
-              address: table,
-              accounts: plan.table!.addresses.length,
-              transactions: tabled.map((one) => one.signature),
-            },
-          }),
-      ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
-      cook: { ...sentJson(input.chain, cook), ...(moved === undefined ? {} : svmMovedJson(moved)) },
-      ...(closed?.sent === undefined
-        ? {}
-        : { closeCodeBuffer: sentJson(input.chain, closed.sent) }),
-      ...(closed?.open === undefined ? {} : { warning: closed.open }),
-    },
-    ...(cook.ok ? {} : { exitCode: 1 }),
-  };
+      json: {
+        ...(prepared.stops === undefined ? {} : svmStopsJson(prepared.stops)),
+        chain: input.chain.slug,
+        via: prepared.via,
+        owner: input.owner,
+        ...(direct ? {} : { pot: prepared.pot }),
+        fee: (step.fee ?? prepared.fee).toString(),
+        maxExecutionFee: (step.fee ?? prepared.fee).toString(),
+        ...(created === undefined ? {} : { createPot: sentJson(input.chain, created) }),
+        ...(createInCook
+          ? { createPot: { inCook: true, ...(cook.ok ? {} : { undone: true }) } }
+          : {}),
+        ...(accountsMade === undefined
+          ? {}
+          : {
+              createTokenAccounts: {
+                ...sentJson(input.chain, accountsMade.sent),
+                accounts: accountsMade.made,
+              },
+            }),
+        ...(buffer === undefined
+          ? {}
+          : {
+              staged: {
+                codeBuffer: buffer.codeBuffer,
+                sha256: bytesToHex(plan.staged!.sha256),
+                transactions: staged.map((one) => one.signature),
+              },
+            }),
+        ...(table === undefined || tabled.length === 0
+          ? {}
+          : {
+              lookupTable: {
+                address: table,
+                accounts: plan.table!.addresses.length,
+                transactions: tabled.map((one) => one.signature),
+              },
+            }),
+        ...(left === undefined ? {} : { leftInPot: svmLeftInPotJson(left) }),
+        cook: {
+          ...sentJson(input.chain, cook),
+          ...(moved === undefined ? {} : svmMovedJson(moved)),
+        },
+        ...(closed?.sent === undefined
+          ? {}
+          : { closeCodeBuffer: sentJson(input.chain, closed.sent) }),
+        ...(closed?.open === undefined ? {} : { warning: closed.open }),
+      },
+      ...(cook.ok ? {} : { exitCode: 1 }),
+    };
+  } catch (error) {
+    throw withNotes(error, notes);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
