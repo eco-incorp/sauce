@@ -65,32 +65,32 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.2.1   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
-| 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
-| 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
-| None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.2.0      | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.1.0      | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| None       | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 **None** marks compiler 2.6.2, which no SDK release installs. Its row is the set SDK 1.1.0's
 network defaults used by mistake (see 1.2.0); it is kept because its engines still run Pots made
@@ -114,7 +114,7 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK 1.2.1 — 2026-11-24
+## Unreleased
 
 Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. Same compiler
 and engines as 1.2.0.
@@ -175,7 +175,7 @@ and engines as 1.2.0.
   in a cook with one swap, `crema` and `cremaStopped` cost 1,434 to 1,535 fewer and `cremaAtLimit`
   1,552 to 1,574 more. A program that mixes Crema with another concentrated-liquidity venue at a
   price is 632 bytes larger, and one that calls only Crema, or Crema with Phoenix, 29 bytes. A
-  program close to the cook's 1,400,000 compute units can land on 1.2.0 and fail on 1.2.1, so re-run
+  program close to the cook's 1,400,000 compute units can land on 1.2.0 and fail on 1.3.0, so re-run
   `sauce simulate` before sending it. `sauce simulate` and `sauce run` measure each cook's own
   units.
 
