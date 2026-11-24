@@ -4,15 +4,17 @@
 
 **How-to guide** · [Documentation](../README.md) · [Solana](solana.md)
 
-> The same order on Solana: buy a lot of a token, never paying more than a set price for any of it,
-> spread over the pools of several Solana exchanges. Each pool sells what it can below your price,
-> and what you have not spent moves on to the next, in one transaction.
+> The same order on Solana: buy a lot of a token, never paying more than a set price for any of it
+> (to within each pool's rounding), spread over the pools of several Solana exchanges. Each pool
+> sells what it can below your price, and what you have not spent moves on to the next, in one
+> transaction.
 
 The limit order of [the distributed swap](distributed-swap.md), on Solana: one price, the most the caller pays for any
-unit, fees included, and every pool trading until its own price reaches it. The method (the price
-does the splitting, no sorting, the two checks on the total) is explained there; what Solana changes
-is here: the program finds its pools by key, as an EVM program asks a factory for a pool, every
-account a pool takes is read from it as the cook is built, and what fits in one transaction.
+unit, fees included, to the rounding of the pool's square-root price (paying a pool's token A, a
+hair more can pass it), and every pool trading until its own price reaches it. The method (the
+price does the splitting, no sorting, the two checks on the total) is explained there; what Solana
+changes is here: the program finds its pools by key, as an EVM program asks a factory for a pool,
+every account a pool takes is read from it as the cook is built, and what fits in one transaction.
 
 ## How it works
 
