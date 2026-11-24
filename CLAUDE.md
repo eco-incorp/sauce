@@ -2224,7 +2224,10 @@ skip the publish, and tag that commit, which the tarball does not contain.
 `sdk/scripts/release-gate.mjs` proves against live chains that the package does by default what the
 release is for: the installed testing kit finds the live stack on all six supported EVM chains,
 `sauce pot`, `sauce run` and `sauce simulate` deploy, cook and swap on it, a kitchen-evm 1.3.0 Pot
-still cooks on its engine, a Solana cook names the package's engine, and (step 2b, read-only, on
+still cooks on its engine (step 6), and the installed compiler's authored decode (a word with bit 160
+set, read as an `"Address"`, is its low 160 bits: `decode.sauce.ts` returns 48879, where a 2.6.3
+build reverts) runs through that Pot and through the fresh Pot of step 3 (step 6b,
+`decodeProblem`), a Solana cook names the package's engine, and (step 2b, read-only, on
 every chain with the Kitchen proxy: `ROUTER_CHAINS`, 19 chains) the Router and engine have the
 release's code, the Kitchen hands out that Router and it answers `hyperswapV3SwapCallback`, with a
 coverage scan that fails a chain of the config whose Kitchen proxy has code but is not listed. It

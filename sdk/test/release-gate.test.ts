@@ -18,6 +18,7 @@ import {
 
 import {
   configKeyProblem,
+  decodeProblem,
   evmCookProblem,
   kitchenCoverage,
   revertOutcome,
@@ -321,6 +322,57 @@ describe("the release gate's probe of the Router's callbacks", () => {
       error: { code: -32005, message: "request limit reached", data: "0x" },
     });
     await expect(callThatFails(limited)).rejects.toThrow();
+  });
+});
+
+describe("the release gate's check of the installed compiler's authored decode (step 6b)", () => {
+  const E0 = "0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67";
+  const E2 = "0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a";
+  const run = {
+    result: { ok: true, returned: "48879" } as {
+      ok?: unknown;
+      returned?: unknown;
+      reason?: unknown;
+    },
+    engine: E0,
+    expectedEngine: E0,
+    notes: `the Pot runs on its own engine, ${E0}`,
+    notesNameEngine: true,
+  };
+
+  it("accepts the masked value through the engine of the Pot's release", () => {
+    expect(decodeProblem(run)).toBeUndefined();
+    // The current release's Pot: its notes need not name an engine.
+    expect(
+      decodeProblem({ ...run, engine: E2, expectedEngine: E2, notes: "", notesNameEngine: false }),
+    ).toBeUndefined();
+    // An address compares in either casing.
+    expect(decodeProblem({ ...run, engine: E0.toLowerCase() })).toBeUndefined();
+  });
+
+  it("refuses a revert: what a 2.6.3 build gives on a word with bit 160 set", () => {
+    expect(decodeProblem({ ...run, result: { ok: false, reason: "the cook reverted" } })).toBe(
+      "the decode does not simulate: the cook reverted",
+    );
+  });
+
+  it("refuses a wrong value, the unmasked word included", () => {
+    const unmasked = String((1n << 160n) + 0xbeefn);
+    for (const returned of [unmasked, "0", "48878", null]) {
+      expect(decodeProblem({ ...run, result: { ok: true, returned } })).toMatch(
+        /^the decode returned .+, not 48879/,
+      );
+    }
+  });
+
+  it("refuses the right value through the wrong engine", () => {
+    expect(decodeProblem({ ...run, engine: E2 })).toBe(`the cook names engine ${E2}, not ${E0}`);
+  });
+
+  it("refuses notes that do not name the earlier engine of an earlier release's Pot", () => {
+    expect(decodeProblem({ ...run, notes: "kitchen-evm 1.3.0" })).toBe(
+      `the command's notes do not name engine ${E0}`,
+    );
   });
 });
 

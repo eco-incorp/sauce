@@ -55,6 +55,9 @@
 //      arriving.
 //   6. The solver's kitchen-evm 1.3.0 Pot, on Ethereum, Base and Arc: simulated through engine
 //      1.3.0, by address and by its owner.
+//  6b. The installed compiler's authored decode, on the same three chains: a word with bit 160 set,
+//      decoded as an "Address", is its low 160 bits (0xbeef, 48879) through the solver's Pot (engine
+//      1.3.0) and through the Pot of step 3's owner (the package's engine). A 2.6.3 build reverts.
 //   7. Solana, through engine 1.4.1: `sauce simulate` of the manual's `pay.sauce.ts` names the
 //      package's engine program, and its own effects show 1 USDC leaving the Pot and reaching the
 //      recipient.
@@ -78,6 +81,8 @@ import {
   childEnvironment,
   confineEnvironment,
   configKeyProblem,
+  DECODED,
+  decodeProblem,
   endpointSecrets,
   evmCookProblem,
   GATE_ENVIRONMENT,
@@ -131,7 +136,7 @@ const ROUTER_CHAINS = [
   { slug: "sepolia", id: 11155111 },
 ];
 
-/** Where each step runs: step 2 to 4 on every EVM chain, 2b on every chain with the Kitchen, 5 on Base, 6 on three, 7 on Solana. */
+/** Where each step runs: step 2 to 4 on every EVM chain, 2b on every chain with the Kitchen, 5 on Base, 6 and 6b on three, 7 on Solana. */
 const STEPS = [
   { n: 2, name: "live stack", on: EVM.map((c) => c.slug) },
   { n: "2b", name: "Router and engine", on: ROUTER_CHAINS.map((c) => c.slug) },
@@ -139,6 +144,7 @@ const STEPS = [
   { n: 4, name: "cook", on: EVM.map((c) => c.slug) },
   { n: 5, name: "V3 swap", on: ["base"] },
   { n: 6, name: "solver's 1.3.0 Pot", on: ["ethereum", "base", "arc"] },
+  { n: "6b", name: "authored decode", on: ["ethereum", "base", "arc"] },
   { n: 7, name: "Solana engine", on: ["solana"] },
 ];
 
@@ -286,6 +292,14 @@ mkdirSync(home);
 writeFileSync(join(project, "package.json"), JSON.stringify({ private: true, type: "module" }));
 const seven = join(project, "seven.sauce.ts");
 writeFileSync(seven, "function main(): Uint256 {\n  return 7;\n}\n");
+// What the installed compiler makes of a decode: a word with bit 160 set, read as an "Address", is
+// its low 160 bits, where a 2.6.3 build reverts on it.
+const decode = join(project, "decode.sauce.ts");
+writeFileSync(
+  decode,
+  'function main(data: bytes): Uint256 {\n  const [a] = abi.decode(data, ["Address"]);\n  return a;\n}\n',
+);
+const DIRTY_WORD = "0x000000000000000000000001000000000000000000000000000000000000beef";
 
 const forks = [];
 async function stopForks() {
@@ -382,6 +396,16 @@ function jsonOf(ran, what) {
     return JSON.parse(ran.stdout);
   } catch {
     throw new Error(`${what} printed no JSON`);
+  }
+}
+/** The result's JSON whatever the exit status: a simulation that fails says why in its JSON. */
+function resultOf(ran, what) {
+  try {
+    return JSON.parse(ran.stdout);
+  } catch {
+    throw new Error(
+      `${what} printed no JSON (exit ${ran.status}): ${(ran.stderr.trim() || ran.stdout.trim()).split("\n").at(-1)}`,
+    );
   }
 }
 const lower = (address) => String(address).toLowerCase();
@@ -629,6 +653,35 @@ async function evmChain({ slug, id }, kit, dep, abis) {
         through("--owner", SOLVER_OWNER);
 
         return `Pot ${SOLVER_POT} returns 7 through engine ${SOLVER_ENGINE}, by address and by owner ${SOLVER_OWNER}`;
+      });
+
+      await step("6b", slug, async () => {
+        if (pot === undefined) throw new Error("step 3 did not deploy the Pot");
+        const through = (selector, expectedEngine, notesNameEngine) => {
+          const flags = [
+            ...selector,
+            ...["--chain", slug, "--rpc-url", chain.rpcUrl, "--args", DIRTY_WORD],
+          ];
+          const simulated = sauce(["simulate", decode, ...flags, "--json"]);
+          // The engine the cook names, read off the calldata `sauce tx` builds for it, as step 4
+          // reads a mined cook's. `tx` takes no --json: what it prints is the JSON.
+          const built = jsonOf(sauce(["tx", decode, ...flags]), `sauce tx ${selector[0]}`);
+          if (typeof built.data !== "string") {
+            throw new Error(`sauce tx ${selector[0]} builds no cook to read an engine from`);
+          }
+          const problem = decodeProblem({
+            result: resultOf(simulated, `sauce simulate ${selector[0]}`),
+            engine: decodeFunctionData({ abi: abis.v12PotAbi, data: built.data }).args[0],
+            expectedEngine,
+            notes: `${simulated.stdout}\n${simulated.stderr}`,
+            notesNameEngine,
+          });
+          if (problem !== undefined) throw new Error(`${selector[0]} ${selector[1]}: ${problem}`);
+        };
+        through(["--pot", SOLVER_POT], SOLVER_ENGINE, true);
+        through(["--owner", a3.address], dep.v12EngineAddress(), false);
+
+        return `the word ${DIRTY_WORD} decodes to ${DECODED} through engine ${SOLVER_ENGINE} (the solver's Pot) and through engine ${dep.v12EngineAddress()} (step 3's Pot)`;
       });
     }
   } finally {

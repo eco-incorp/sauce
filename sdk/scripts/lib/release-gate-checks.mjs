@@ -367,3 +367,33 @@ export function revertOutcome(error) {
 
   return { revertData: carried?.data ?? "0x" };
 }
+
+/** What step 6b's program must return: `0xbeef`, the low 160 bits of a word that has bit 160 set. */
+export const DECODED = "48879";
+
+/**
+ * Why a run of step 6b's decode is not what the installed compiler must give, or `undefined`.
+ * `result` is `sauce simulate`'s JSON, `engine` the engine the same command's cook names (read off
+ * `sauce tx`'s calldata), `expectedEngine` the engine the Pot's release runs on, and `notes`
+ * everything the command printed, which must name that engine where `notesNameEngine` says an
+ * earlier release's Pot does. A 2.6.3 build reverts on the word, so a revert is refused; the
+ * unmasked word, with bit 160 kept, is a wrong value; and the right value through another engine is
+ * the right answer for the wrong Pot.
+ */
+export function decodeProblem({ result, engine, expectedEngine, notes, notesNameEngine }) {
+  if (result.ok !== true) {
+    return `the decode does not simulate: ${result.reason ?? "ok is not true"}`;
+  }
+  if (String(result.returned) !== DECODED) {
+    return `the decode returned ${result.returned}, not ${DECODED}: the word's bit 160 was not cut`;
+  }
+  const wanted = String(expectedEngine).toLowerCase();
+  if (String(engine).toLowerCase() !== wanted) {
+    return `the cook names engine ${engine}, not ${expectedEngine}`;
+  }
+  if (notesNameEngine === true && !String(notes).toLowerCase().includes(wanted)) {
+    return `the command's notes do not name engine ${expectedEngine}`;
+  }
+
+  return undefined;
+}

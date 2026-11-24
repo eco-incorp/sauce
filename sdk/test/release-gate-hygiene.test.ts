@@ -352,6 +352,23 @@ describe("the release gate script", () => {
     expect(source).toMatch(/requireSigningEndpoint\(args\)/);
   });
 
+  it("runs the installed compiler's authored decode live on Ethereum, Base and Arc (step 6b), checked by decodeProblem", () => {
+    // The step is in the list the summary prints, on the three chains that hold the solver's Pot.
+    expect(source).toMatch(/\{ n: "6b", name: "[^"]+", on: \["ethereum", "base", "arc"\] \}/);
+    // It writes the program, and holds each of its two runs to the function the tests refuse a
+    // revert, a wrong value and a wrong engine with.
+    expect(source).toContain('abi.decode(data, ["Address"])');
+    expect(source).toMatch(/await step\("6b", slug,/);
+    expect(source).toMatch(/decodeProblem\(\{/);
+    // Through the solver's 1.3.0 Pot, and through the Pot of step 3's owner.
+    expect(source).toMatch(/through\(\["--pot", SOLVER_POT\]/);
+    expect(source).toMatch(/through\(\["--owner", a3\.address\]/);
+    // The engine is read off the calldata of `sauce tx`, which takes no --json (what it prints is
+    // the JSON): a gate that passed the flag would fail on every chain before it proved anything.
+    expect(source).toMatch(/sauce\(\["tx", decode, \.\.\.flags\]\)/);
+    expect(source).not.toMatch(/sauce\(\["tx"[^)]*"--json"/);
+  });
+
   it("an --rpc-config key that is not a chain id is refused, counted and never repeated", () => {
     const dir = mkdtempSync(join(tmpdir(), "sauce-release-gate-keys-"));
     try {

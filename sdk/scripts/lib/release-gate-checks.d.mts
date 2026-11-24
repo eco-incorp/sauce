@@ -134,3 +134,24 @@ export declare function kitchenCoverage(input: {
  * for a revert with none; anything that is no revert is thrown.
  */
 export declare function revertOutcome(error: unknown): { readonly revertData: string };
+
+/** What step 6b's program must return: `0xbeef`, the low 160 bits of a word that has bit 160 set. */
+export declare const DECODED: "48879";
+
+/**
+ * Why a run of step 6b's decode is not what the installed compiler must give, or `undefined`:
+ * `result` is `sauce simulate`'s JSON, `engine` the engine the same command's cook names,
+ * `expectedEngine` the engine the Pot's release runs on, and `notes` everything the command printed,
+ * which must name that engine where `notesNameEngine` says so.
+ */
+export declare function decodeProblem(run: {
+  readonly result: {
+    readonly ok?: unknown;
+    readonly returned?: unknown;
+    readonly reason?: unknown;
+  };
+  readonly engine: string;
+  readonly expectedEngine: string;
+  readonly notes: string;
+  readonly notesNameEngine?: boolean;
+}): string | undefined;
