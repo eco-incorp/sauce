@@ -1,6 +1,6 @@
 ---
 name: sauce-solana-distributed-swap
-description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, never paying more than a price limit for any unit, fees included, and never stranding input. A program for one request (tokens by symbol, venues by namespace, pools found by key, Raydium.CLMM.pool(USDC, SPCX_US, fee), in loops over the keys as an EVM program loops over fee tiers; a key with no pool skipped), its example buying SpaceX shares (SPCX_US, Token-2022) with USDC, every account derived as the cook is built, the venues whose swap stops at a price limit (Raydium CLMM and its forks, Orca, Cropper, DefiTuna, Crema, Phoenix) and those left out, priceLimit, minTokens and maxAvgPrice, choosing keys with sauce pools, what fits in one cook, and running it with --args alone. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", "buy SpaceX stock with USDC", a limit order, or one trade routed through several Solana pools.
+description: A Sauce program for Solana that spreads one exact-input swap over several price-limited pools as a limit order, paying at most a price limit a unit, fees included, to the sqrt price rounding, and never stranding input. A program for one request (tokens by symbol, venues by namespace, pools found by key, Raydium.CLMM.pool(USDC, SPCX_US, fee), in loops over the keys as an EVM program loops over fee tiers; a key with no pool skipped), its example buying SpaceX shares (SPCX_US, Token-2022) with USDC, every account derived as the cook is built, the venues whose swap stops at a price limit (Raydium CLMM and its forks, Orca, Cropper, DefiTuna, Crema, Phoenix) and those left out, priceLimit, minTokens and maxAvgPrice, choosing keys with sauce pools, what fits in one cook, and running it with --args. Use when asked for a distributed, split or multi-venue swap on Solana, "swap across Raydium and Orca", "buy SOL up to a price", "buy SpaceX stock with USDC", a limit order, or a trade routed through several Solana pools.
 ---
 
 # A distributed swap on Solana
@@ -225,10 +225,13 @@ function main(
   after its fee, and swaps everything offered up to it. Its price is the square root of the
   higher-key token per lower-key token, times 2^64 (the pair in the order of their 32-byte keys), so
   `priceLimit` as that price is `√(priceLimit × 2^128 ÷ 1e18)` paying the higher-key token and,
-  upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it; the
-  root is rounded down, so the pool stops a little sooner, never later. Crema's pair is in the pool's
-  own order, not the keys': its price is token B per token A, so the first root is for paying token
-  B and the second for paying token A.
+  upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it. The
+  roots are rounded down: paying the higher-key token (the price rises) that keeps the pool's limit
+  inside the exact one, so the pool stops a little sooner; paying the lower-key token (the price
+  falls) it moves the limit past the exact one by a few steps of the Q64.64 root, so there the last
+  unit can cost a hair more than `priceLimit`. Crema's pair is in the pool's own order, not the
+  keys': its price is token B per token A, so the first root is for paying token B and the second
+  for paying token A, and the rounding falls the same way.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
   the Pot to the recipient's SPCX_US account, and what is left of the budget to the recipient's USDC
   account; given the Pot's own address (`sauce pot --chain solana --owner <owner>` prints it), both

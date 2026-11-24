@@ -135,6 +135,30 @@ and engines as 1.2.0.
   so a Crema swap built from it failed at USDT/USDC whichever way it traded. A direction whose map
   marks no tick array is a slot of the System program in its three places, and its swap is skipped,
   returning `0` having moved nothing.
+- **Fixed (Solana): `cremaAtLimit` refuses a limit of `0` and a floor past 64 bits whatever its
+  window holds.** A limit of `0` reached Crema's program on a pool with tick arrays, which refuses
+  it and fails the whole transaction without a reason, and was skipped on a direction whose map
+  marks no array. It reverts `Crema takes no zero limit` itself now, and `minOut past 64 bits` for a
+  floor past its field, before it looks at the window, as it does a limit past 128 bits. What it
+  skips first, no input and a paused pool, is skipped as before.
+- **Fixed (Solana): `crema` and `cremaStopped` skip a pool whose slot the price has left.** Paying
+  a pool's token A, a slot whose last tick array starts above the pool's price (liquidity opened
+  below it, or a price that fell through the slot's arrays between building and landing) failed the
+  whole cook with the engine's `Overflow` (custom program error 51), where the other direction
+  returned `0`. It returns `0` having moved nothing.
+- **Changed (Solana): `crema` and `cremaStopped` read a pool's price, liquidity and fee before its
+  tick array.** A pool that cannot trade for what it alone shows (its price already at or past the
+  limit, no liquidity, an input too small to buy a unit) returns `0` before the router reads the
+  slot's last tick array, up to 64 reads of about 3,200 compute units each, and a pool that is not
+  the pair is refused even where its window has no room. A pool that can trade pays about 2,600
+  units more for the two steps. A Crema pool that cannot trade no longer meets the deep tick's
+  checks either.
+- **Fixed (Solana): paying a pool's token A, the last unit can cost a hair more than
+  `priceLimit`; the documentation said it never did.** The router rounds the roots of the limit
+  down, which keeps it inside the exact one paying token B and moves it past the exact one paying
+  token A, by a few steps of the pool's Q64.64 square-root price. It is the same on every
+  concentrated-liquidity venue. The reference, the guides and the skills now say where the limit can
+  be passed. No code changed.
 
 ### The `sauce` command and the MCP server
 
@@ -142,6 +166,13 @@ and engines as 1.2.0.
   higher key first.** They asked Crema's program for the pair in key order alone, so USDT/USDC was
   missing from the listing. They ask both orders now, price each side by the pool's own order, and
   give the pool's slot the tick arrays its map marks.
+- **Changed (Solana): `sauce tx`'s compute estimate reserves a Crema swap the router's scan of its
+  slot's last tick array.** Crema's router reads that array a position at a time, up to 64 reads
+  where the price lies when the cook lands, and the estimate reserved nothing for it, so a plan
+  with a Crema pool could be given more units than it had. It reserves 372,000 units for a Crema
+  swap that trades and 306,000 for one that does not (`SVM_CREMA_SWAP_FIXED` and
+  `SVM_CREMA_SWAP_IDLE`), in place of the 255,000 and 120,000 every other venue's swap is, which are
+  as they were. `sauce simulate` and `sauce run` measure each cook's own units.
 
 ## SDK 1.2.0 — 2026-11-24
 
