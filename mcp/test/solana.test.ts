@@ -10,7 +10,11 @@ import { after, before, describe, it } from "node:test";
 
 import { address } from "@solana/kit";
 
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import {
+  V12_RELEASE_SETS,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../../sdk/dist/deployments/index.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
@@ -22,6 +26,17 @@ const ZERO_SALT = new Uint8Array(32);
 const GENESIS: Readonly<Record<string, string>> = {
   "/devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
   "/mainnet": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+};
+/** A program that is no engine of any release: the SPL Token program. */
+const FOREIGN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+/** The program id of v12-svm `version`'s engine, as the release table holds it. */
+const engineOf = (version: string): string => {
+  const engine = V12_RELEASE_SETS.find((set) => set["v12-svm"].version === version)?.["v12-svm"]
+    .engine;
+  assert.ok(engine, `the release table holds an engine for v12-svm ${version}`);
+
+  return engine;
 };
 
 interface TokenAccount {
@@ -39,9 +54,10 @@ describe("sauce_pot on Solana", () => {
   let mcp: Connected;
   /** The accounts the endpoint holds, with each token account's balance. */
   const present = new Map<string, string | null>();
-  /** The Pot's address as the endpoint serves it: an engine's account with its storage, as
-   *  `create_pot` leaves it, or the System Program's holding lamports and no data. */
-  const pots = new Map<string, "engine" | "lamports">();
+  /** The Pot's address as the endpoint serves it: an account with its storage, as `create_pot`
+   *  leaves it, owned by the installed engine (`"engine"`) or by the program given, or the System
+   *  Program's holding lamports and no data. */
+  const pots = new Map<string, "engine" | "lamports" | { readonly owner: string }>();
   const asked: string[] = [];
 
   before(async () => {
@@ -53,6 +69,13 @@ describe("sauce_pot on Solana", () => {
         const account = call.params?.[0] ?? "";
         asked.push(`${call.method} ${account}`);
         const context = { slot: 1 };
+        const held = pots.get(account);
+        const programOwning =
+          held === "engine"
+            ? v12SvmEngineProgramId()
+            : typeof held === "object"
+              ? held.owner
+              : undefined;
         const result =
           call.method === "getGenesisHash"
             ? GENESIS[request.url ?? ""]
@@ -60,16 +83,16 @@ describe("sauce_pot on Solana", () => {
               ? {
                   context,
                   value:
-                    pots.get(account) === "engine"
+                    programOwning !== undefined
                       ? {
                           data: [Buffer.alloc(10_240).toString("base64"), "base64"],
                           executable: false,
                           lamports: 72_161_280,
-                          owner: v12SvmEngineProgramId(),
+                          owner: programOwning,
                           rentEpoch: 0,
                           space: 10_240,
                         }
-                      : pots.get(account) === "lamports" || present.has(account)
+                      : held === "lamports" || present.has(account)
                         ? {
                             data: ["", "base64"],
                             executable: false,
@@ -156,6 +179,61 @@ describe("sauce_pot on Solana", () => {
     // Not created, so its deployment is still there to sign, and create_pot tops up the rent.
     assert.deepEqual(funded.instruction, before.instruction);
   });
+
+  it("names the program that owns an existing Pot's account when it is no engine: deployed, with its owner and a note, and no engine of its own", async () => {
+    const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+    const before = ok(await mcp.call("sauce_pot", bare));
+    const pot = before.pot as string;
+    // An account at the Pot's address that a program this SDK does not know as an engine owns.
+    pots.set(pot, { owner: FOREIGN });
+    try {
+      const foreign = ok(await mcp.call("sauce_pot", bare));
+      assert.equal(foreign.deployed, true);
+      assert.equal(foreign.ownerProgram, FOREIGN);
+      // No engine owns it, so the engine is the installed one, as for a Pot not created yet.
+      assert.equal(foreign.engine, v12SvmEngineProgramId());
+      const notes = foreign.notes as string[];
+      assert.ok(
+        notes.some((note) =>
+          note.includes(`account is owned by ${FOREIGN}, which is not an engine this SDK knows`),
+        ),
+        notes.join("\n"),
+      );
+    } finally {
+      pots.set(pot, "lamports");
+    }
+  });
+
+  for (const [version, runsCompiler] of [
+    ["1.4.0", true],
+    ["1.3.0", false],
+  ] as const) {
+    it(`says which earlier engine owns a Pot of v12-svm ${version}, and where cooks on it run`, async () => {
+      const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+      const before = ok(await mcp.call("sauce_pot", bare));
+      const pot = before.pot as string;
+      const owning = engineOf(version);
+      pots.set(pot, { owner: owning });
+      try {
+        const owned = ok(await mcp.call("sauce_pot", bare));
+        assert.equal(owned.deployed, true);
+        // The owning engine, not the installed one, which a new Pot runs on.
+        assert.equal(owned.engine, owning);
+        assert.notEqual(owned.engine, v12SvmEngineProgramId());
+        assert.equal(owned.ownerProgram, undefined);
+        const notes = owned.notes as string[];
+        const said = runsCompiler
+          ? `is owned by engine ${owning} (v12-svm ${version}): cooks on it run there`
+          : `is owned by v12-svm ${version} (${owning}); it is cooked on v12-svm`;
+        assert.ok(
+          notes.some((note) => note.includes(said)),
+          notes.join("\n"),
+        );
+      } finally {
+        pots.set(pot, "lamports");
+      }
+    });
+  }
 
   it("predicts a Pot on solana-devnet through a devnet endpoint alone, with its create_pot", async () => {
     asked.length = 0;

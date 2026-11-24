@@ -107,9 +107,9 @@ import {
   supportedChainNames,
   svmAssumedBalances,
   type SvmCookInput,
-  svmLamportsOnlyNote,
   svmPoolsCommand,
   svmPotCommand,
+  svmPotFacts,
   svmPotState,
   svmPotTokenAccounts,
   svmSimulateCommand,
@@ -2265,6 +2265,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),
+        // The engine its cooks name, the Router a deployed Pot runs, and (Solana) the program that
+        // owns its account where that is no engine this SDK knows.
+        engine: z.string().optional(),
+        router: z.string().optional(),
+        ownerProgram: z.string().optional(),
         refused: REFUSED.optional(),
       },
       annotations: READS_CHAIN,
@@ -2282,21 +2287,25 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         const output = await svmPotCommand(target);
         const state = rpcUrl === undefined ? undefined : await svmPotState(target, rpcUrl);
         const deployed = state === undefined ? null : state.created;
+        const facts =
+          state === undefined ? undefined : svmPotFacts(String(output.json.pot), state.read);
         const tokenAccounts = reading ? await svmPotTokenAccounts(target, rpcUrl!) : undefined;
 
         return {
           json: {
             ...output.json,
+            // The engine that owns an existing Pot is the one its cooks run on, as for a Pot of the
+            // EVM chains; the installed engine otherwise, which a Pot not created yet runs on.
+            ...facts?.fields,
             deployed,
             ...(tokenAccounts === undefined ? {} : { tokenAccounts }),
           },
           notes: [
             ...(output.notes ?? []),
             ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
-            // An address that holds only lamports is not created, and cooks run on it as it is.
-            ...(state?.lamportsOnly === undefined
-              ? []
-              : [svmLamportsOnlyNote(String(output.json.pot), state.lamportsOnly)]),
+            // What owns the Pot's address, as `sauce pot` says it: lamports only, an unknown program,
+            // an earlier engine.
+            ...(facts?.notes ?? []),
           ],
         };
       }

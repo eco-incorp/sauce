@@ -137,7 +137,7 @@ export {
   parseAccounts,
   parsePubkey,
   svmPotCommand,
-  svmLamportsOnlyNote,
+  svmPotFacts,
   svmPotState,
   svmAssumedBalances,
   svmPotTokenAccounts,
