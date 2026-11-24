@@ -43,7 +43,7 @@ import { potRouterUpdate, potEngine, v12PotAbi } from "../../src/evm/engine.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
 import { hasLegacyArtifacts } from "../release-arm.js";
-import { startUpgradedChain, type UpgradedChain } from "./gated-engine.js";
+import { POT_SALT, startUpgradedChain, type UpgradedChain } from "./gated-engine.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -256,6 +256,39 @@ describeSwitched(
         const result = await called(row.from, row.pot, cookOf(SEVEN, row.pot, named));
         expect([row.name, "output" in result]).toEqual([row.name, true]);
       }
+    }, 120_000);
+
+    it("minting again at a salt a Pot holds: a fixed-Router or Shared Pot reverts OccupiedPotMismatch(), a dynamic one returns the Pot that is there", async () => {
+      // The Pots of the earlier release hold the legacy salt, each on the earlier Router. The
+      // Kitchen now hands out the new one, so a fixed-Router or Shared mint there would be a Pot
+      // with another Router at an occupied address: it refuses, and callers check for code first.
+      const kitchenAbi = parseAbi([
+        "function deployPot(address owner, bytes32 salt) returns (address)",
+        "function deployPot(address owner, bytes32 salt, bool routerFixed) returns (address)",
+        "function deploySharedPot(bytes32 salt) returns (address)",
+      ]);
+      const mismatch = toFunctionSelector("OccupiedPotMismatch()");
+      const fixed = encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "deployPot",
+        args: [OWNER.address, POT_SALT, true],
+      });
+      const shared = encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "deploySharedPot",
+        args: [POT_SALT],
+      });
+      const dynamic = encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "deployPot",
+        args: [OWNER.address, POT_SALT],
+      });
+
+      expect(await called(OWNER.address, chain.kitchen, fixed)).toEqual({ reverted: mismatch });
+      expect(await called(OWNER.address, chain.kitchen, shared)).toEqual({ reverted: mismatch });
+      expect(await called(OWNER.address, chain.kitchen, dynamic)).toEqual({
+        output: encodeAbiParameters([{ type: "address" }], [chain.legacy.pot]),
+      });
     }, 120_000);
 
     it("potRouterUpdate proposes setRouter for the dynamic Pot alone, and the owner's call moves it", async () => {
