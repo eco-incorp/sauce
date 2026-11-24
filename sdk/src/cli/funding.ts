@@ -650,8 +650,8 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
  * address could take them: a contract that answers `owner()` with the signer shows nothing. The
  * wallet's policy first (`SendGuard.authorizeFunding`), then the chain: the Pot the same run deploys
  * first is the signer's when its address is the signer's `v12PredictPot` at that salt, and any other
- * must show it is (`authenticatePot`: its owner the signer, and its address the CREATE2 of that
- * owner and its salt under a Kitchen a release records). Where that cannot be read, it is refused.
+ * must show it is (`authenticatePot`: its owner the signer, and its address its Kitchen's for that
+ * owner and salt under a release the SDK records). Where that cannot be read, it is refused.
  */
 async function requireOwnPot(input: FundingInput, signer: Address): Promise<void> {
   const pot = getAddress(input.pot);

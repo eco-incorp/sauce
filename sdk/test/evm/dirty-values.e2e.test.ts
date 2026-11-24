@@ -304,46 +304,64 @@ describeEvm("dirty bool, address, bytesN and function words, on the released eng
   });
 
   describe("§9: abi.decode", () => {
-    it("a bool other than 0 or 1 reverts rather than reading as true", async () => {
-      const source = `function main(data: bytes): Uint256 { const [b] = abi.decode(data, ["bool"]); return b ? 1 : 0; }`;
-      expect(await run(source, [words(1n)])).toBe(1n);
-      expect(await run(source, [words(2n)])).toBe("reverted");
-    }, 60_000);
-
-    it("an Address with a bit above its low 160 reverts rather than being cut to fit", async () => {
+    it("an Address field is its word's low 160 bits, cut rather than refused", async () => {
       const source = `function main(data: bytes): Uint256 { const [a] = abi.decode(data, ["Address"]); return a; }`;
       expect(await run(source, [words(BEEF)])).toBe(BEEF);
+      expect(await run(source, [words(DIRTY)])).toBe(BEEF);
+    }, 60_000);
+
+    it("reading a bool field gives 1 for any nonzero word", async () => {
+      const source = `function main(data: bytes): Uint256 { const [b] = abi.decode(data, ["bool"]); return b ? 1 : 0; }`;
+      expect(await run(source, [words(0n)])).toBe(0n);
+      expect(await run(source, [words(1n)])).toBe(1n);
+      expect(await run(source, [words(2n)])).toBe(1n);
+      const same = `function main(data: bytes): Uint256 { const [x, y] = abi.decode(data, ["bool", "bool"]); return x == y ? 1 : 0; }`;
+      expect(await run(same, [words(1n, 2n)])).toBe(1n);
+    }, 60_000);
+
+    it("a record's field at any depth, a record in an array and a bool[] element revert for neither, read or not", async () => {
+      const nested = `function main(data: bytes): Uint256 { const [r] = abi.decode(data, ["{Uint256, {Address, Uint256}}"]); return r[1][0]; }`;
+      expect(await run(nested, [words(5n, DIRTY, 6n)])).toBe(BEEF);
+      const other = `function main(data: bytes): Uint256 { const [r] = abi.decode(data, ["{Uint256, {Address, Uint256}}"]); return r[0]; }`;
+      expect(await run(other, [words(5n, DIRTY, 6n)])).toBe(5n);
+      const records = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["{Address}[]"]); return xs[0][0]; }`;
+      expect(await run(records, [words(32n, 1n, DIRTY)])).toBe(BEEF);
+      const bools = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["bool[]"]); return xs[1] ? xs.length : 0; }`;
+      expect(await run(bools, [words(32n, 2n, 1n, 2n)])).toBe(2n);
+      const unused = `function main(data: bytes): Uint256 { const unused = abi.decode(data, ["Address", "bool"]); return 7; }`;
+      expect(await run(unused, [words(DIRTY, 2n)])).toBe(7n);
+    }, 60_000);
+
+    it("an Address[] element keeps its word and is checked where the decode runs, whichever part is read", async () => {
+      const length = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["Address[]"]); return xs.length; }`;
+      expect(await run(length, [words(32n, 2n, BEEF, BEEF)])).toBe(2n);
+      expect(await run(length, [words(32n, 2n, BEEF, DIRTY)])).toBe("reverted");
+      const first = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["Address[]"]); return xs[0]; }`;
+      expect(await run(first, [words(32n, 2n, BEEF, DIRTY)])).toBe("reverted");
+      const inRecord = `function main(data: bytes): Uint256 { const [r] = abi.decode(data, ["{Address[]}"]); return r[0][0]; }`;
+      expect(await run(inRecord, [words(32n, 32n, 1n, BEEF)])).toBe(BEEF);
+      expect(await run(inRecord, [words(32n, 32n, 1n, DIRTY)])).toBe("reverted");
+      const masked = `function main(data: bytes): Uint256 { const [ws] = abi.decode(data, ["Uint256[]"]); return ws[0] & ((1 << 160) - 1); }`;
+      expect(await run(masked, [words(32n, 1n, DIRTY)])).toBe(BEEF);
+    }, 60_000);
+
+    it("a try block that runs the decode catches an Address[] element's revert", async () => {
+      const caught = `function main(data: bytes): Uint256 { let ok = 1; try { const [xs] = abi.decode(data, ["Address[]"]); ok = xs.length; } catch { ok = 0; } return ok; }`;
+      expect(await run(caught, [words(32n, 1n, BEEF)])).toBe(1n);
+      expect(await run(caught, [words(32n, 1n, DIRTY)])).toBe(0n);
+      const single = `function main(data: bytes): Uint256 { let ok = 1; try { const [a] = abi.decode(data, ["Address"]); ok = a + 1; } catch { ok = 0; } return ok; }`;
+      expect(await run(single, [words(DIRTY)])).toBe(BEEF + 1n);
+    }, 60_000);
+
+    it("a decoded value passed on whole carries each word as it arrived", async () => {
+      const source = `function main(data: bytes): Uint256 { const t = abi.decode(data, ["bool"]); const [w] = abi.decode(abi.encode(t), ["Uint256"]); return w; }`;
+      expect(await run(source, [words(2n)])).toBe(2n);
+    }, 60_000);
+
+    it("a dirty word is refused by decoding it as a Uint256 and checking it", async () => {
+      const source = `function main(data: bytes): Uint256 { const [word] = abi.decode(data, ["Uint256"]); require(word >> 160 == 0); return word; }`;
+      expect(await run(source, [words(BEEF)])).toBe(BEEF);
       expect(await run(source, [words(DIRTY)])).toBe("reverted");
-    }, 60_000);
-
-    it("a field of a record at any depth, and each element of a bool[] or Address[]", async () => {
-      const nested = `function main(data: bytes): Uint256 { const [r] = abi.decode(data, ["{Uint256, {Address, Uint256}}"]); return r[0]; }`;
-      expect(await run(nested, [words(5n, BEEF, 6n)])).toBe(5n);
-      expect(await run(nested, [words(5n, DIRTY, 6n)])).toBe("reverted");
-      const addresses = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["Address[]"]); return xs.length; }`;
-      expect(await run(addresses, [words(32n, 2n, BEEF, BEEF)])).toBe(2n);
-      expect(await run(addresses, [words(32n, 2n, BEEF, DIRTY)])).toBe("reverted");
-      const bools = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["bool[]"]); return xs.length; }`;
-      expect(await run(bools, [words(32n, 2n, 1n, 0n)])).toBe(2n);
-      expect(await run(bools, [words(32n, 2n, 1n, 2n)])).toBe("reverted");
-    }, 60_000);
-
-    it("the whole value is checked where it is decoded, whether or not any part is read", async () => {
-      const part = `function main(data: bytes): Uint256 { const t = abi.decode(data, ["Uint256", "Address"]); return t[0]; }`;
-      expect(await run(part, [words(5n, BEEF)])).toBe(5n);
-      expect(await run(part, [words(5n, DIRTY)])).toBe("reverted");
-      const unused = `function main(data: bytes): Uint256 { const unused = abi.decode(data, ["Address"]); return 7; }`;
-      expect(await run(unused, [words(BEEF)])).toBe(7n);
-      expect(await run(unused, [words(DIRTY)])).toBe("reverted");
-    }, 60_000);
-
-    it("a try block that runs the decode catches the revert", async () => {
-      const alone = `function main(data: bytes): Uint256 { let ok = 1; try { abi.decode(data, ["Address"]); } catch { ok = 0; } return ok; }`;
-      expect(await run(alone, [words(BEEF)])).toBe(1n);
-      expect(await run(alone, [words(DIRTY)])).toBe(0n);
-      const multi = `function main(data: bytes): Uint256 { let ok = 1; try { const [a] = abi.decode(data, ["Address"]); ok = a + 1; } catch { ok = 0; } return ok; }`;
-      expect(await run(multi, [words(BEEF)])).toBe(BEEF + 1n);
-      expect(await run(multi, [words(DIRTY)])).toBe(0n);
     }, 60_000);
 
     it("a statement .catch() on a decode keeps only the call and decodes nothing", async () => {

@@ -16,9 +16,57 @@ import type { CookVia } from "../svm/client.js";
 /** A mistyped invocation: an unknown or missing flag, or a value that is not what the flag takes. */
 export class UsageError extends Error {}
 
-/** A failure that is not the invocation's fault: a program that does not compile, a chain that
- *  disagrees. Exit 1, where a {@link UsageError} is exit 2. */
-export class CliError extends Error {}
+/**
+ * A failure that is not the invocation's fault: a program that does not compile, a chain that
+ * disagrees. Exit 1, where a {@link UsageError} is exit 2.
+ *
+ * `notes` are what the command knows of the failure's setting that its message does not say (what a
+ * Pot's state means for the cook that just failed): the command prints each on stderr after the
+ * message, and a tool returns each in its error result. Most failures carry none.
+ */
+export class CliError extends Error {
+  notes: readonly string[] = [];
+}
+
+/**
+ * `error` with `notes` said beside its message, when it is a {@link CliError}; any other error is
+ * not the command's to annotate and passes as it is. A note the failure carries already is not said
+ * twice. Returns `error` itself, so its class and stack stay.
+ */
+export function withNotes(error: unknown, notes: readonly string[]): unknown {
+  if (error instanceof CliError) {
+    error.notes = [...error.notes, ...notes.filter((note) => !error.notes.includes(note))];
+  }
+
+  return error;
+}
+
+/**
+ * The Pot as the step that failed read it, kept beside the error that failed it rather than on it:
+ * an error of any class carries it, a plain `Error` as a {@link CliError} does, its class and
+ * message unchanged. An error that is no object has nowhere to be keyed and carries none.
+ */
+const potNotesByError = new WeakMap<object, readonly string[]>();
+
+/**
+ * `error` told the Pot as the step that failed read it: `potNotes` are said beside its message
+ * ({@link withNotes}, which annotates a {@link CliError} alone) and kept for {@link potNotesOf},
+ * whatever the error's class. Returns `error` itself.
+ */
+export function withPotNotes(error: unknown, potNotes: readonly string[]): unknown {
+  if (typeof error === "object" && error !== null) potNotesByError.set(error, potNotes);
+
+  return withNotes(error, potNotes);
+}
+
+/**
+ * The Pot's notes as the step that failed read it ({@link withPotNotes}): none where it needs none,
+ * and `undefined` where the failure came before the Pot was read. A run that stops says these in
+ * place of what its earlier reads showed, which may no longer be so.
+ */
+export function potNotesOf(error: unknown): readonly string[] | undefined {
+  return typeof error === "object" && error !== null ? potNotesByError.get(error) : undefined;
+}
 
 /** A flag, as `parseArgs` takes it, plus the placeholder and sentence `--help` prints for it. */
 export interface FlagSpec {

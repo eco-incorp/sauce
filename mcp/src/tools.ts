@@ -37,6 +37,7 @@ import {
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
+  CliError,
   type CliFiles,
   type CommandOutput,
   compileCommand,
@@ -76,7 +77,9 @@ import {
   parseWei,
   plannedTransactions,
   poolsCommand,
+  cookPotOf,
   potCommand,
+  potRouterStatus,
   potState,
   POT_UNCHECKED,
   potTarget,
@@ -106,7 +109,9 @@ import {
   type SvmCookInput,
   svmPoolsCommand,
   svmPotCommand,
-  svmPotExists,
+  svmPotFacts,
+  svmPotState,
+  svmPotWithFacts,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -1281,13 +1286,23 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
           // A public endpoint's failure (a rate limit) is the one an endpoint of your own fixes.
           const said = reach.publicNotes();
+          // What the failure's setting adds (`CliError#notes`), as the command prints it after it.
+          const noted =
+            error instanceof CliError
+              ? error.notes.map((note) => errorText(note, reach.scrub))
+              : [];
 
           return {
             isError: true,
             content: [
               {
                 type: "text",
-                text: [errorText(error, reach.scrub), ...said, ...kept.map(reach.scrub)].join("\n"),
+                text: [
+                  errorText(error, reach.scrub),
+                  ...noted,
+                  ...said,
+                  ...kept.map(reach.scrub),
+                ].join("\n"),
               },
             ],
           };
@@ -2219,7 +2234,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       description:
         "A Pot is the owner's on-chain account that runs their programs and holds their " +
         "tokens. Its address is known before it exists: the released Kitchen derives it from " +
-        "(owner, salt). Returns `pot` and the unsigned deployment — on an EVM chain " +
+        "(owner, salt) — the current release's Pot, or an earlier release's Pot the owner already " +
+        "has there, which cooks keep using. Returns `pot` and the unsigned deployment — on an EVM chain " +
         "Kitchen.deployPot as { to, data, value }, which any account may send (the Pot is the " +
         "owner's either way); on Solana the Kitchen's create_pot `instruction`, which the owner " +
         "signs. With an endpoint it also says `deployed` (null without one) — when true, do not " +
@@ -2227,7 +2243,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
         "of every token the chain registers but its tokenized stocks; on Solana the Pot's " +
         "associated token account for each registered mint but the tokenized stocks, whether it " +
-        "exists, and its balance. On a preview chain the Pot " +
+        "exists, and its balance. Without an endpoint, where the Pot store records an earlier " +
+        "release's Pot for the owner and salt, nothing says which of the two is theirs: the result " +
+        "has `candidates` (this release's Pot and the earlier one, with the record's file, " +
+        "transaction and block hash), no `pot` and no deployment, and sauce_tx and " +
+        "sauce_signed_cook refuse until `pot` names one or an endpoint is given. On a preview chain the Pot " +
         "is predicted and read, and the deployment is left out: `refused` says why, and how to " +
         `request the chain. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
@@ -2242,10 +2262,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         rpcUrl: RPC_URL,
       },
       output: {
-        pot: z.string(),
+        pot: z.string().optional(),
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),
+        // The engine a cook on the Pot names, the Router a deployed Pot runs, and (Solana) the engine
+        // that owns an existing Pot's account (`ownerEngine`, which cooks name only where it runs this
+        // SDK's programs) or, where that is no engine this SDK knows, the program that does
+        // (`ownerProgram`: no cook is built on it, so it has no `engine`).
+        engine: z.string().optional(),
+        ownerEngine: z.string().optional(),
+        router: z.string().optional(),
+        ownerProgram: z.string().optional(),
         refused: REFUSED.optional(),
       },
       annotations: READS_CHAIN,
@@ -2261,30 +2289,47 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (chain.kind === "svm") {
         const target = { chain, owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
-        const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
+        const state = rpcUrl === undefined ? undefined : await svmPotState(target, rpcUrl);
+        const deployed = state === undefined ? null : state.created;
+        const facts =
+          state === undefined ? undefined : svmPotFacts(String(output.json.pot), state.read);
         const tokenAccounts = reading ? await svmPotTokenAccounts(target, rpcUrl!) : undefined;
 
         return {
           json: {
-            ...output.json,
+            // `engine` is the engine a cook on the Pot names, as for a Pot of the EVM chains: where
+            // an account exists its own facts say it (the owner where it runs this SDK's programs,
+            // the installed engine where it does not, none where no engine this SDK knows owns it),
+            // and the prediction's installed engine stands for a Pot not created yet.
+            ...(facts === undefined ? output.json : svmPotWithFacts(output.json, facts)),
             deployed,
             ...(tokenAccounts === undefined ? {} : { tokenAccounts }),
           },
           notes: [
             ...(output.notes ?? []),
             ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+            // What owns the Pot's address, as `sauce pot` says it: lamports only, an unknown program,
+            // an earlier engine.
+            ...(facts?.notes ?? []),
           ],
         };
       }
       const owner = parseAddress("owner", args.owner);
-      const output = potCommand({ chain, owner, ...salt });
-      const pot = output.json.pot as Address;
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
-      const state = client === undefined ? undefined : await potState(client, pot);
+      const at = await cookPotOf(chain, { owner, ...salt }, client);
+      const output = potCommand({ chain, owner, ...salt }, at);
+      const routerStatus = await potRouterStatus(client, at);
+      const pot = at.pot;
+      const state =
+        at.deployed === undefined
+          ? undefined
+          : { deployed: at.deployed, ...(at.owner === undefined ? {} : { owner: at.owner }) };
       const deployed = state === undefined ? null : state.deployed;
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
-      // The deployment returned is refused where the Kitchen would put the Pot elsewhere.
-      if (client !== undefined && state !== undefined) {
+      // The deployment returned is refused where the Kitchen would put the Pot elsewhere. An earlier
+      // release's Pot (its output names its `release`) has none, and `cookPotOf` has told it from
+      // the chain already.
+      if (client !== undefined && state !== undefined && output.json.release === undefined) {
         await requirePot(client, chain, { owner, ...salt, pot, deployed: state.deployed });
       }
       const held =
@@ -2296,6 +2341,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       return {
         json: {
           ...output.json,
+          ...(routerStatus.router === undefined ? {} : { router: routerStatus.router }),
           deployed,
           ...(fee === undefined
             ? {}
@@ -2323,6 +2369,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         },
         notes: [
           ...(output.notes ?? []),
+          ...routerStatus.notes,
           ...(deployed === null ? [unchecked, POT_UNCHECKED] : deployed ? [deployedNote] : []),
           ...(held === undefined || nativeToken === undefined
             ? []

@@ -42,7 +42,9 @@
  *
  * Signing a cook for anyone to submit (`sauce sign`, {@link SendGuard.authorizeSignedCook}) is held
  * to `chains` and `to` (the Pot) as written, and refused outright by a policy that sets `native` or
- * any `tokens` limit: what a signed cook moves is known only when its submitter sends it.
+ * any `tokens` limit: what a signed cook moves is known only when its submitter sends it. `sauce
+ * sign` checks what does not depend on the Pot before reading the chain
+ * ({@link SendGuard.preflightSignedCook}), and the Pot once it is resolved.
  *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
@@ -94,11 +96,7 @@ import {
 import { decimalPlaces, tokenAmount, type TokenAmount } from "../amounts.js";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import {
-  v12KitchenAddress,
-  v12SvmEngineProgramId,
-  v12SvmKitchenProgramId,
-} from "../deployments/index.js";
+import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
@@ -109,6 +107,7 @@ import {
   svmPublicKey,
   type SimulatedAccount,
 } from "../svm/index.js";
+import { svmEngineReleases } from "../svm/engine-release.js";
 import { CliError, UsageError } from "./args.js";
 import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
@@ -467,7 +466,7 @@ const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32
 /**
  * The Pot `call` deploys, when it is the released Kitchen's `deployPot` of `wallet`'s own Pot with
  * no value; `undefined` for any other call. The Pot is the one cooking on it would reach: the
- * CREATE2 address over (wallet, salt) that `v12PredictPot` gives, and the Kitchen derives.
+ * address `v12PredictPot` gives for (wallet, salt), where the Kitchen deploys it.
  */
 export function ownPotDeployed(call: TxRequest, wallet: Address): Address | undefined {
   if (call.value !== 0n || getAddress(call.to) !== getAddress(v12KitchenAddress()))
@@ -1354,7 +1353,8 @@ export async function measureSvm(
   // Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot, still
   // in the set.)
   const keys = [...ours];
-  const engine = v12SvmEngineProgramId();
+  // A Pot is an account any release's engine owns: the one that cooks it (`svm/engine-release.ts`).
+  const engines = svmEngineReleases();
   const held = (
     account: SvmAddress,
     state: SimulatedAccount | null,
@@ -1367,7 +1367,7 @@ export async function measureSvm(
       return commanded &&
         (program === undefined ||
           state.owner === program ||
-          (account !== wallet && state.owner === engine))
+          (account !== wallet && engines.has(state.owner)))
         ? state.lamports
         : 0n;
     }
@@ -1885,6 +1885,43 @@ export class SendGuard {
     });
   }
 
+  /** The `chains` refusal of a signed cook, as {@link authorizeSignedCook} words it. */
+  private signedCookChains(policy: Policy, chain: CanonicalChain): void {
+    const refuse = refuseBy(this.wallet.name, policy);
+    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
+      refuse(
+        "chains",
+        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this cook is on ${chain.slug}`,
+      );
+    }
+  }
+
+  /** The `native` and `tokens` refusals of a signed cook, as {@link authorizeSignedCook} words them. */
+  private signedCookLimits(policy: Policy): void {
+    const refuse = refuseBy(this.wallet.name, policy);
+    const unbounded =
+      "a signed cook runs when its submitter sends it, any time up to its deadline, on the " +
+      "chain's state then: what it moves cannot be measured when it is signed, nor counted in a " +
+      "day's total. Sign with a wallet whose policy limits only chains and to";
+    if (policy.native !== undefined) refuse("native", `native is limited, and ${unbounded}`);
+    const [token] = policy.tokens.keys();
+    if (token !== undefined)
+      refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
+  }
+
+  /**
+   * What {@link authorizeSignedCook} checks that does not depend on the Pot: the release's gate,
+   * then the policy's `chains`, `native` and `tokens`. `sauce sign` runs it before anything is read,
+   * so a wallet that may not sign at all is refused first; the Pot is held to `to` once it is known.
+   */
+  preflightSignedCook(chain: CanonicalChain): void {
+    this.gate(chain);
+    const policy = this.policy;
+    if (policy === undefined) return;
+    this.signedCookChains(policy, chain);
+    this.signedCookLimits(policy);
+  }
+
   /**
    * Authorizes this wallet to SIGN a cook on `pot`, on `chain`, for anyone to submit (`sauce sign`,
    * `sauce_sign`): the release's gate, then the policy's `chains` and `to` (the Pot), checked as
@@ -1900,24 +1937,12 @@ export class SendGuard {
     this.gate(chain);
     const policy = this.policy;
     if (policy === undefined) return;
-    const refuse = refuseBy(this.wallet.name, policy);
-    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
-      refuse(
-        "chains",
-        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this cook is on ${chain.slug}`,
-      );
-    }
+    this.signedCookChains(policy, chain);
     if (policy.to !== undefined && !policy.to.includes(pot.toLowerCase())) {
+      const refuse = refuseBy(this.wallet.name, policy);
       refuse("to", `to allows ${policy.to.length} address(es), and this cook runs on Pot ${pot}`);
     }
-    const unbounded =
-      "a signed cook runs when its submitter sends it, any time up to its deadline, on the " +
-      "chain's state then: what it moves cannot be measured when it is signed, nor counted in a " +
-      "day's total. Sign with a wallet whose policy limits only chains and to";
-    if (policy.native !== undefined) refuse("native", `native is limited, and ${unbounded}`);
-    const [token] = policy.tokens.keys();
-    if (token !== undefined)
-      refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
+    this.signedCookLimits(policy);
   }
 
   /**

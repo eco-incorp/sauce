@@ -22,7 +22,7 @@ import {
   v12KitchenAddress,
   v12KitchenImplementationAddress,
   v12PotDerivation,
-  v12DeployedReleaseSet,
+  v12ReleaseSet,
   v12RouterAddress,
   v12SvmEngineProgramId,
   v12SvmKitchenProgramId,
@@ -67,13 +67,24 @@ describeAddresses("v12 deployed addresses", () => {
   it("agrees with the engine gate anchors — Kitchen and Pot initCodeHash", () => {
     // V12EngineGate.json is the engine manifest's gate, re-verified by the harness against the live
     // potInitCodeHash(); if these disagree, the addresses name a different stack than the engine
-    // actually gates to. The Router is not an anchor: no Pot hash derives from it.
+    // actually gates to. From kitchen-evm 1.4.0 a Pot is CREATE3, so the gate also carries the
+    // proxy init-code hash, the profile hash and the fixed Router its derivation takes.
     const gate = JSON.parse(readFileSync(GATE, "utf8")) as Record<string, string>;
-    expect(Object.keys(gate).sort()).toEqual(["kitchen", "potInitCodeHash"]);
+    expect(Object.keys(gate).sort()).toEqual([
+      "fixedRouter",
+      "kitchen",
+      "potInitCodeHash",
+      "potProfileHash",
+      "potProxyInitCodeHash",
+      "scheme",
+    ]);
     expect(v12KitchenAddress()).toBe(gate.kitchen);
-    expect(v12PotDerivation().initCodeHash).toBe(gate.potInitCodeHash);
+    const derivation = v12PotDerivation();
+    expect(derivation.scheme).toBe("create3");
+    expect(derivation.initCodeHash).toBe(gate.potInitCodeHash);
+    expect(derivation.potProxyInitCodeHash).toBe(gate.potProxyInitCodeHash);
     // A Pot is deployed BY the Kitchen it is gated to.
-    expect(v12PotDerivation().deployer).toBe(gate.kitchen);
+    expect(derivation.deployer).toBe(gate.kitchen);
   });
 
   it("the SVM kitchen program id matches the packaged kitchen IDL", () => {
@@ -84,7 +95,7 @@ describeAddresses("v12 deployed addresses", () => {
 
   it("preserves independent engine and Kitchen provenance, from the pinned release set", () => {
     const releases = v12DeployedAddresses().releases;
-    const set = v12DeployedReleaseSet();
+    const set = v12ReleaseSet();
     for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const) {
       expect(releases[component]).toEqual({
         version: set[component].version,

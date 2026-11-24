@@ -16,6 +16,7 @@ import {
   hexToBytes,
   keccak256,
   numberToHex,
+  zeroAddress,
   type Address,
   type Hex,
 } from "viem";
@@ -24,7 +25,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
-import { v12Pot } from "../src/evm/engine.js";
+import { v12KitchenAbi, v12Pot } from "../src/evm/engine.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
@@ -555,6 +556,42 @@ describe("sauce inspect", () => {
       call: "ERC20.approve",
       args: { amount: "2000" },
     });
+  });
+
+  it("reads the Pot of a Kitchen.deployPot with its Router fixed, and of a deploySharedPot", async () => {
+    const salt = potSalt("treasury");
+    // The 3-argument deployPot places another Pot than the 2-argument one, and deploySharedPot the
+    // zero owner's: each is told as the Kitchen deploys it.
+    const fixed = encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deployPot",
+      args: [OWNER, salt, true],
+    });
+    const fixedPot = v12PredictPot(OWNER, salt, { routerFixed: true });
+    expect(fixedPot).not.toBe(v12PredictPot(OWNER, salt));
+    expect(json(await sauce("inspect", fixed, "--json"))).toEqual({
+      call: "Kitchen.deployPot",
+      owner: OWNER,
+      salt,
+      routerFixed: true,
+      pot: fixedPot,
+    });
+    expect((await sauce("inspect", fixed)).stdout).toContain(
+      `Kitchen.deployPot: the fixed-Router Pot ${fixedPot}, owner ${OWNER}, salt ${salt}`,
+    );
+    const shared = encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deploySharedPot",
+      args: [salt],
+    });
+    expect(json(await sauce("inspect", shared, "--json"))).toEqual({
+      call: "Kitchen.deploySharedPot",
+      salt,
+      pot: v12PredictPot(zeroAddress, salt),
+    });
+    expect((await sauce("inspect", shared)).stdout).toContain(
+      `Kitchen.deploySharedPot: the Shared Pot ${v12PredictPot(zeroAddress, salt)}, salt ${salt}`,
+    );
   });
 
   it("asks for an endpoint for a transaction hash, and reads a non-hex operand as a file", async () => {

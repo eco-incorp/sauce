@@ -1,11 +1,12 @@
 /**
  * The Pot a command cooks on, deploys or signs for is checked against the chain before anything is
- * simulated, built or sent. Compiler output pairs with an engine by exact version, so the Pot must
- * be one of the release this SDK pins:
+ * simulated, built or sent. Compiler output pairs with an engine by exact version (`alsoRunsOn`
+ * lists the earlier engines that run it), so the Pot must be one of a release whose engine runs
+ * this SDK's programs:
  *
  *   - a deployed Pot's release is told from the chain as `pots.ts` tells it (its owner, salt and
- *     Kitchen read off it, its address that Kitchen's CREATE2 under a release's Pot init-code hash),
- *     and a Pot of another release, or of none this SDK knows, is refused;
+ *     Kitchen read off it, its address the one that Kitchen's release gives for them), and a Pot of
+ *     a release whose engine does not run them, or of none this SDK knows, is refused;
  *   - for a Pot not deployed yet, the deployed Kitchen's own `predictPot(owner, salt)` must be where
  *     this SDK deploys it. An SDK that predicts a Pot address the live Kitchen does not, as 0.99.15
  *     did after the Kitchen's upgrade to kitchen-evm 1.3.0, sends its cook to an address with no
@@ -49,14 +50,10 @@ import {
 import { runCommand, type RunInput } from "../src/cli/commands.js";
 import { fundingFor } from "../src/cli/inputs.js";
 import { keeping } from "../src/cli/keep.js";
-import { PotStore, type PotKind, type PotRecord } from "../src/cli/pot-store.js";
+import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
 import { nodeIo, type CliIo } from "../src/cli/run.js";
-import {
-  v12DeployedReleaseSet,
-  v12EngineAddress,
-  v12KitchenAddress,
-} from "../src/deployments/index.js";
-import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
+import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
+import { potSalt, v12PredictPot, type PotKind } from "../src/deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi } from "../src/evm/engine.js";
 import {
   describeEvm,
@@ -96,7 +93,7 @@ const UPGRADE = /Upgrade @eco-incorp\/sauce \(sauce update\)/;
 const releaseOf = (set: typeof OLD_RELEASE): string =>
   `compiler ${set.compiler} (v12-evm ${set["v12-evm"].version}, kitchen-evm ${set["kitchen-evm"].version})`;
 /** The release this SDK pins. */
-const OWN = releaseOf(v12DeployedReleaseSet());
+const OWN = releaseOf(v12ReleaseSet());
 /** kitchen-evm 1.2.0's release, and the SDK releases that pinned it (`docs/changelog.md`). */
 const OLD = releaseOf(OLD_RELEASE);
 const OLD_SDKS = "@eco-incorp/sauce 0.99.9 to 0.99.15";
@@ -1173,10 +1170,14 @@ describeEvm("the Pot is checked against the chain", () => {
     const old = await mintOldReleasePot(local, fresh.address, potSalt("kinds old"));
     for (const implementation of [undefined, newer, older]) {
       const check = async () => {
-        for (const pot of [fresh.pot, ...pots]) {
+        for (const [pot, kind] of [
+          [fresh.pot, "private"],
+          [pots[0], "private-fixed-router"],
+          [pots[1], "shared"],
+        ] as const) {
           await expect(
             requireReleasePot(local.publicClient, local.chain, pot),
-          ).resolves.toBeUndefined();
+          ).resolves.toMatchObject({ kind });
         }
         await expect(requireReleasePot(local.publicClient, local.chain, old)).rejects.toThrow(
           `${old} on ethereum is a Pot of ${OLD}`,

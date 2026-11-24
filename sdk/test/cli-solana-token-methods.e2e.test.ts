@@ -47,6 +47,7 @@ import {
   getMintToCheckedInstruction,
 } from "@solana-program/token";
 
+import { solanaCookProblem } from "../scripts/lib/release-gate-checks.mjs";
 import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli } from "../src/cli/run.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
@@ -363,6 +364,24 @@ describeSvm("the token methods on Solana: every account derived by the command",
         }),
         expect.objectContaining({ account: toUsdc, delta: "1000000" }),
       ]),
+    );
+    // The release gate (`scripts/release-gate.mjs`, step 7) holds the same simulation, on mainnet-beta,
+    // to what it did: its check must accept the real output of the example it is written for, and
+    // refuse it for another recipient or another amount.
+    const gated = {
+      engine: ENGINE,
+      earlier: [],
+      recipient,
+      mint: usdc,
+      symbol: "USDC",
+      amount: 1_000_000n,
+    };
+    expect(solanaCookProblem(simulated, gated)).toBeUndefined();
+    expect(solanaCookProblem(simulated, { ...gated, recipient: randomAddress() })).toMatch(
+      /no USDC change for the recipient/,
+    );
+    expect(solanaCookProblem(simulated, { ...gated, amount: 999_999n })).toMatch(
+      /receives 1000000 USDC, not 999999/,
     );
     expect(harness.svm.getAccount(toUsdc).exists).toBe(false);
     expect(harness.svm.getAccount(mePot).exists).toBe(false);

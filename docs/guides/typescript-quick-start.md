@@ -69,7 +69,7 @@ the package's version.
 
 A cook is one transaction from the Pot's owner to the Pot, carrying the program and `main`'s
 arguments. This live step requires the release pinned by your SDK to be deployed and active on
-Base: the engine and Router must have code, and the Kitchen must predict the same Pot as the SDK.
+Base: the engine and Router must have code, and the Kitchen must predict the same Pot as the SDK and hand out that Router.
 The checks below refuse an incomplete rollout rather than treating a call to an empty address as
 a successful cook. Deterministic [release addresses](../reference/deployments.md) alone do not
 prove those prerequisites. For an offline run with the full released pair deployed locally, use
@@ -127,6 +127,12 @@ const kitchenPot = await client.readContract({
   args: [owner, salt],
 });
 if (kitchenPot.toLowerCase() !== pot.toLowerCase()) throw new Error(unavailable);
+const handedOut = await client.readContract({
+  address: getAddress(v12KitchenAddress()),
+  abi: v12KitchenAbi,
+  functionName: "router",
+});
+if (getAddress(handedOut) !== router) throw new Error(unavailable);
 const feeRead = kitchenExecutionFee();
 const answer = await client.call({ to: feeRead.to, data: feeRead.data });
 const fee = feeRead.decode(answer.data ?? "0x");

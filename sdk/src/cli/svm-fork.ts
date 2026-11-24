@@ -2,9 +2,11 @@
  * A local copy of what a Solana cook touches, for rehearsing one no cluster can simulate: a cook
  * whose program must be staged into a code buffer first. Staging takes transactions of its own,
  * which `simulateTransaction` cannot run ahead of the cook without sending them, so the rehearsal
- * runs in LiteSVM instead: the released engine and Kitchen the package ships, every account the
- * cook names read from the cluster as it is now (a program's code from its program data), and the
- * clock set to the cluster's. Nothing is signed: the copy checks no signature.
+ * runs in LiteSVM instead: the engine and the Kitchen the cook names, each loaded as the caller
+ * resolved it (`solana-release.ts#releasedProgramCode`: the package's release held to its digest,
+ * or an earlier release's engine as the cluster holds it, held to that release's digest), every
+ * account the cook names read from the cluster as it is now (a program's code from its program
+ * data), and the clock set to the cluster's. Nothing is signed: the copy checks no signature.
  *
  * LiteSVM is an optional peer dependency of the package, imported here only when a rehearsal needs
  * it, so no other command loads it and nothing outside the CLI reaches it: the user's own copy at
@@ -24,7 +26,6 @@ import type { Clock as ClockType, LiteSVM as LiteSVMType } from "litesvm";
 
 import type { SimulatedAccount } from "../svm/index.js";
 
-import { svmEnginePath, svmKitchenPath, type EngineCluster } from "../svm/engine-artifacts.js";
 import { CliError } from "./args.js";
 import { LITESVM_EXTRA, provide } from "./optional.js";
 
@@ -204,18 +205,23 @@ async function read(
   return keys.map((key) => snapshot.accounts.get(key) ?? null);
 }
 
+/** A program the copy runs: where it lives and the code it runs there. */
+export interface ForkProgram {
+  readonly id: Address;
+  readonly code: Uint8Array;
+}
+
 /**
- * Opens a local copy of `keys` as the cluster holds them, with the engine and the Kitchen at their
- * program ids. `build` selects the engine for the endpoint's cluster; devnet and testnet share a
- * build. `ask` makes each request, naming what it reads when it fails.
+ * Opens a local copy of `keys` as the cluster holds them, with `programs.engine` and
+ * `programs.kitchen` at their ids, running the code given: the caller resolves each
+ * (`solana-release.ts#releasedProgramCode`), so the copy never runs code its cluster is not shown to
+ * run. `ask` makes each request, naming what it reads when it fails.
  */
 export async function openFork(
   rpc: Rpc,
   ask: <T>(what: string, request: () => Promise<T>) => Promise<T>,
   keys: readonly Address[],
-  engine: Address,
-  kitchen: Address,
-  build: EngineCluster,
+  programs: { readonly engine: ForkProgram; readonly kitchen: ForkProgram },
   snapshot: ForkSnapshot = forkSnapshot(),
 ): Promise<Fork> {
   await provide(LITESVM_EXTRA);
@@ -241,12 +247,14 @@ export async function openFork(
     .withDefaultPrograms()
     .withSigverify(false)
     .withBlockhashCheck(false);
-  svm.addProgramFromFile(engine, svmEnginePath(build));
-  svm.addProgramFromFile(kitchen, svmKitchenPath());
+  svm.addProgram(programs.engine.id, programs.engine.code);
+  svm.addProgram(programs.kitchen.id, programs.kitchen.code);
 
   // The cluster's rent, which is not LiteSVM's default: an account the cluster holds rent-exempt
   // must stay so in the copy when the cook pays into it, as the Kitchen's fee config is paid.
-  const unique = [...new Set(keys)].filter((key) => key !== engine && key !== kitchen);
+  const unique = [...new Set(keys)].filter(
+    (key) => key !== programs.engine.id && key !== programs.kitchen.id,
+  );
   const [rent, ...accounts] = await read(rpc, ask, [RENT_SYSVAR, ...unique], snapshot);
   if (rent !== null && rent !== undefined && rent.data.length >= 17) {
     const view = new DataView(rent.data.buffer, rent.data.byteOffset, rent.data.byteLength);

@@ -761,14 +761,15 @@ describe("sauce compile", () => {
     expect(missing.stderr).toContain(
       "  authority (readonly_signer)  pot (the Pot, which the Kitchen",
     );
-    // That file, filled in, is taken as it is: the cook gets past its accounts to the endpoint.
+    // That file, filled in, is taken as it is: the cook gets past its accounts to the endpoint. The
+    // first thing it reads there is the Pot, to see which engine owns it (the Kitchen's fee follows).
     const filled = file(
       "accounts.json",
       skeleton.replace(/<token>/g, "USDC").replace('"dest":"pot:USDC"', '"dest":"owner:USDC"'),
     );
     const given = await sauce(...cook, "--accounts", filled, ...unreachable);
     expect(given.stderr).not.toContain("cannot derive");
-    expect(given.stderr).toContain("reading the Kitchen's fee config failed");
+    expect(given.stderr).toMatch(/reading the Pot \w+ failed/);
   });
 
   it("takes a Solana key as the 32 bytes of hex it prints one in, wherever it takes base58", async () => {

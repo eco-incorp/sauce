@@ -10,17 +10,33 @@ import { after, before, describe, it } from "node:test";
 
 import { address } from "@solana/kit";
 
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import {
+  V12_RELEASE_SETS,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../../sdk/dist/deployments/index.js";
 import { derivePotPda } from "../../sdk/dist/svm/index.js";
 import { connect, failed, ok, type Connected } from "./harness.js";
 
 const OWNER = "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin";
+const SYSTEM = "11111111111111111111111111111111";
 /** `sauce_pot`'s salt when none is given. */
 const ZERO_SALT = new Uint8Array(32);
 /** Each cluster's genesis hash, by the endpoint path that serves it. */
 const GENESIS: Readonly<Record<string, string>> = {
   "/devnet": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
   "/mainnet": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+};
+/** A program that is no engine of any release: the SPL Token program. */
+const FOREIGN = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+
+/** The program id of v12-svm `version`'s engine, as the release table holds it. */
+const engineOf = (version: string): string => {
+  const engine = V12_RELEASE_SETS.find((set) => set["v12-svm"].version === version)?.["v12-svm"]
+    .engine;
+  assert.ok(engine, `the release table holds an engine for v12-svm ${version}`);
+
+  return engine;
 };
 
 interface TokenAccount {
@@ -38,6 +54,10 @@ describe("sauce_pot on Solana", () => {
   let mcp: Connected;
   /** The accounts the endpoint holds, with each token account's balance. */
   const present = new Map<string, string | null>();
+  /** The Pot's address as the endpoint serves it: an account with its storage, as `create_pot`
+   *  leaves it, owned by the installed engine (`"engine"`) or by the program given, or the System
+   *  Program's holding lamports and no data. */
+  const pots = new Map<string, "engine" | "lamports" | { readonly owner: string }>();
   const asked: string[] = [];
 
   before(async () => {
@@ -49,22 +69,39 @@ describe("sauce_pot on Solana", () => {
         const account = call.params?.[0] ?? "";
         asked.push(`${call.method} ${account}`);
         const context = { slot: 1 };
+        const held = pots.get(account);
+        const programOwning =
+          held === "engine"
+            ? v12SvmEngineProgramId()
+            : typeof held === "object"
+              ? held.owner
+              : undefined;
         const result =
           call.method === "getGenesisHash"
             ? GENESIS[request.url ?? ""]
             : call.method === "getAccountInfo"
               ? {
                   context,
-                  value: present.has(account)
-                    ? {
-                        data: ["", "base64"],
-                        executable: false,
-                        lamports: 2_039_280,
-                        owner: "11111111111111111111111111111111",
-                        rentEpoch: 0,
-                        space: 0,
-                      }
-                    : null,
+                  value:
+                    programOwning !== undefined
+                      ? {
+                          data: [Buffer.alloc(10_240).toString("base64"), "base64"],
+                          executable: false,
+                          lamports: 72_161_280,
+                          owner: programOwning,
+                          rentEpoch: 0,
+                          space: 10_240,
+                        }
+                      : held === "lamports" || present.has(account)
+                        ? {
+                            data: ["", "base64"],
+                            executable: false,
+                            lamports: 2_039_280,
+                            owner: SYSTEM,
+                            rentEpoch: 0,
+                            space: 0,
+                          }
+                        : null,
                 }
               : {
                   context,
@@ -99,7 +136,7 @@ describe("sauce_pot on Solana", () => {
     assert.ok(accounts.every((each) => !each.exists && each.balance === null));
 
     // The Pot, and its USDC account holding 2.5 USDC.
-    present.set(empty.pot as string, null);
+    pots.set(empty.pot as string, "engine");
     present.set(usdc.account, "2500000");
     const held = ok(await mcp.call("sauce_pot", { chain: "solana", owner: OWNER, rpcUrl: url }));
     assert.equal(held.deployed, true);
@@ -121,6 +158,86 @@ describe("sauce_pot on Solana", () => {
     assert.equal(bare.tokenAccounts, undefined);
     assert.deepEqual(asked, [`getAccountInfo ${String(empty.pot)}`]);
   });
+
+  it("does not call a Pot address that holds only lamports deployed: no engine owns it, and cooks run on it as it is", async () => {
+    const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+    const before = ok(await mcp.call("sauce_pot", bare));
+    // What anyone can do to an owner's Pot address: send it lamports. The Kitchen cooks it as it is.
+    pots.set(before.pot as string, "lamports");
+    const funded = ok(await mcp.call("sauce_pot", bare));
+    assert.equal(funded.deployed, false);
+    const notes = funded.notes as string[];
+    assert.ok(
+      notes.some(
+        (note) =>
+          note.includes("holds 2039280 lamports and no engine owns it") &&
+          note.includes("cooks run on it as it is"),
+      ),
+      notes.join("\n"),
+    );
+    assert.ok(!notes.some((note) => /deployed already/.test(note)));
+    // Not created, so its deployment is still there to sign, and create_pot tops up the rent.
+    assert.deepEqual(funded.instruction, before.instruction);
+  });
+
+  it("names the program that owns an existing Pot's account when it is no engine: deployed, with its owner and a note, and no engine, since no cook is built on it", async () => {
+    const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+    const before = ok(await mcp.call("sauce_pot", bare));
+    const pot = before.pot as string;
+    // An account at the Pot's address that a program this SDK does not know as an engine owns.
+    pots.set(pot, { owner: FOREIGN });
+    try {
+      const foreign = ok(await mcp.call("sauce_pot", bare));
+      assert.equal(foreign.deployed, true);
+      assert.equal(foreign.ownerProgram, FOREIGN);
+      // No engine this SDK knows owns it, so no cook is built on it: no engine is named, and the
+      // installed engine a Pot not created yet would name is not left in its place.
+      assert.equal(foreign.engine, undefined);
+      assert.equal(foreign.ownerEngine, undefined);
+      const notes = foreign.notes as string[];
+      assert.ok(
+        notes.some((note) =>
+          note.includes(`account is owned by ${FOREIGN}, which is not an engine this SDK knows`),
+        ),
+        notes.join("\n"),
+      );
+    } finally {
+      pots.set(pot, "lamports");
+    }
+  });
+
+  for (const [version, runsCompiler] of [
+    ["1.4.0", true],
+    ["1.3.0", false],
+  ] as const) {
+    it(`says which earlier engine owns a Pot of v12-svm ${version}, and which engine a cook on it names`, async () => {
+      const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
+      const before = ok(await mcp.call("sauce_pot", bare));
+      const pot = before.pot as string;
+      const owning = engineOf(version);
+      pots.set(pot, { owner: owning });
+      try {
+        const owned = ok(await mcp.call("sauce_pot", bare));
+        assert.equal(owned.deployed, true);
+        // `engine` is the engine a cook on the Pot names, as on the EVM chains: the owner where it
+        // runs this SDK's programs, the installed engine where it does not. The owner is
+        // `ownerEngine` either way.
+        assert.equal(owned.engine, runsCompiler ? owning : v12SvmEngineProgramId());
+        assert.equal(owned.ownerEngine, owning);
+        assert.equal(owned.ownerProgram, undefined);
+        const notes = owned.notes as string[];
+        const said = runsCompiler
+          ? `is owned by engine ${owning} (v12-svm ${version}): cooks on it run there`
+          : `is owned by v12-svm ${version} (${owning}); it is cooked on v12-svm`;
+        assert.ok(
+          notes.some((note) => note.includes(said)),
+          notes.join("\n"),
+        );
+      } finally {
+        pots.set(pot, "lamports");
+      }
+    });
+  }
 
   it("predicts a Pot on solana-devnet through a devnet endpoint alone, with its create_pot", async () => {
     asked.length = 0;

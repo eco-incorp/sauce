@@ -26,6 +26,23 @@
 // engine's own deploy uses, from the commit the published compiler's tag is cut from, so it is both
 // cheaper to obtain and the correct lineage.
 //
+// The installed row's raw assets also ship, under `dist/artifacts/releases/<first compiler naming
+// them>/` (SDK 1.1.0's opt-in path, `releases/2.6.3/`, kept): they are the same release as the
+// top-level artifacts, which are derived from them. SDK 1.1.0's documented `releases/2.6.3/` keeps
+// shipping that release (`KEPT_ASSET_FOLDERS`), read from the public package that row pins.
+//
+// The engines the installed compiler's output also runs on (`alsoRunsOn` in its row) mint Pots the
+// SDK still cooks, each on its own engine. Their artifacts do not ship: the suites that cook such a
+// Pot read them from `src/artifacts/legacy/<compiler>/`, taken from the public package of the
+// newest row pinning that engine (integrity-pinned in `releases.json`, no credential) and held to
+// that row's digests (`readLegacyArtifacts`, below). A CREATE3 row's legacy files are derived from
+// its raw assets, which the public package ships under `releases/<compiler>/`.
+//
+// A run reads and checks everything before it writes anything: the raw assets, what the default
+// artifacts are made of and the earlier releases' artifacts. It then writes them all together
+// (`flush`): the derived artifacts, the SVM binaries, the raw assets, the earlier releases'. A
+// refusal, whichever check makes it, leaves sdk/{src,dist}/artifacts as it was.
+//
 // Run: `pnpm --filter './sdk' sync-engine-artifacts` (after `pnpm install`).
 // `--fetch-v12-engines` additionally downloads the SVM engine binary and prints every cached path as
 // `NAME=<path>` lines — how CI gets SAUCE_RUST_ENGINE_SO / the runtime creation code.
@@ -35,6 +52,7 @@
 // packages are the only source, and a failure there never switches to the public one.
 // NOTE: a `rm -rf sdk/dist` clean build drops these (tsc emits no JSON) — re-run this after such a
 // build. The normal `tsc` build leaves them in place.
+// `src/artifacts/legacy/` is written for the suites only; nothing copies it into `dist`.
 import {
   existsSync,
   mkdirSync,
@@ -77,7 +95,10 @@ const REPO_ROOT = resolve(SDK_DIR, "..");
 // ONE ROW PER COMPILER. Compiler output and engines pair by exact package version in both
 // directions as recorded (several compilers may share an engine). This syncs the row of the installed
 // compiler. `deployments/releases.ts` refuses an engine unless a row explicitly pairs it with that
-// compiler; historical rows preserve the compatibility checks for older releases.
+// compiler; historical rows preserve the compatibility checks for older releases. The installed row
+// is the SDK's defaults. A row's `alsoRunsOn` (an earlier engine its compiler's output runs on) is
+// read by `deployments/releases.ts`; the suites that cook an earlier Pot read that release's
+// artifacts from `src/artifacts/legacy/` (below).
 //
 // There is deliberately no commit pin. The components release INDEPENDENTLY, so a shared commit is
 // not a property this can rely on. Requiring one shared commit made a
@@ -116,12 +137,19 @@ const REPORT = process.argv.includes("--report")
   : undefined;
 const COMPILER = REPORT ?? installedCompilerVersion();
 const CURRENT = RELEASE_SETS.find((row) => row.compiler === COMPILER);
-const SET = RELEASE_SETS.find((row) => row.compiler === (CURRENT?.deployedCompiler ?? COMPILER));
-if (!CURRENT || !SET) {
+const SET = CURRENT;
+if (!CURRENT) {
   console.error(
     `[sync-engine-artifacts] the installed compiler is ${COMPILER}, and releases.json pairs no ` +
       `engines with it — it has rows for ${RELEASE_SETS.map((row) => row.compiler).join(", ")}. ` +
       "Add the row for this compiler rather than syncing engines it cannot run on.",
+  );
+  process.exit(1);
+}
+if (CURRENT.deployedCompiler !== undefined) {
+  console.error(
+    `[sync-engine-artifacts] releases.json's ${COMPILER} row sets deployedCompiler, which nothing ` +
+      "reads since SDK 1.2.0: remove it — a row's own releases are the defaults",
   );
   process.exit(1);
 }
@@ -194,6 +222,22 @@ const QUOTE_ROUTER_ABIS = {
   digest: RELEASE_TABLE.quoteRouter.assets["abis.json"],
   ...ASSET_FORMATS["abis.json"],
 };
+// The quote Router's release addresses (`addresses.json`: its address and salt), pinned like every
+// asset of the row's own releases, so a cached copy cannot stand in for it: `releases.json`'s
+// `quoteRouter.assets` holds both digests.
+const QUOTE_ROUTER_ADDRESSES = {
+  tag: QUOTE_ROUTER_ABIS.tag,
+  asset: "addresses.json",
+  digest: RELEASE_TABLE.quoteRouter.assets["addresses.json"],
+  ...ASSET_FORMATS["addresses.json"],
+};
+if (!/^[0-9a-f]{64}$/.test(QUOTE_ROUTER_ADDRESSES.digest ?? "")) {
+  console.error(
+    `[sync-engine-artifacts] releases.json's quoteRouter pins no sha256 for ` +
+      `${QUOTE_ROUTER_ADDRESSES.tag}/addresses.json: a file nothing pins is not read.`,
+  );
+  process.exit(1);
+}
 
 // The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
 // a released binary is already pinned by tag + digest, so a second copy in the tree would be a
@@ -211,6 +255,19 @@ const V12_ENGINE_WIRE = pin("v12-svm", "engine-wire-devnet.json");
 // hand-copying that let BYTECODE_FORMAT_EPOCH rot. Pinned so the drift test can compare against it.
 const V12_KITCHEN_IDL = pin("kitchen-svm", "kitchen-idl.json");
 
+// A row from kitchen-evm 1.4.0 on also pins each release's addresses.json and the Pot profile: the
+// defaults' identities are read from them, so they are held to their digests like every asset.
+const OPTIONAL_PINS = [
+  ["v12-evm", "addresses.json"],
+  ["kitchen-evm", "addresses.json"],
+  ["v12-svm", "addresses.json"],
+  ["kitchen-svm", "addresses.json"],
+  ["v12-evm", "pot-profile.json"],
+  ["kitchen-evm", "pot-profile.json"],
+]
+  .filter(([component, asset]) => SET[component].assets[asset] !== undefined)
+  .map(([component, asset]) => pin(component, asset));
+
 const PINS = [
   V12_EVM,
   V12_EVM_ABIS,
@@ -220,6 +277,7 @@ const PINS = [
   V12_ENGINE_WIRE_MAINNET,
   V12_KITCHEN,
   V12_KITCHEN_IDL,
+  ...OPTIONAL_PINS,
 ];
 
 // Every asset the row names must be one this script fetches, and the other way round: a digest
@@ -443,16 +501,20 @@ function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
   return dest;
 }
 
-/** A release's `addresses.json`, cached beside its assets. */
+/** A release's `addresses.json`, cached beside its assets and held to its digest on EVERY read
+ *  (`fetchReleaseAsset` hashes the cached file each time): the row's own, or the quote Router's
+ *  (`QUOTE_ROUTER_ADDRESSES`). A file no digest pins is not read: there is no unverified branch. */
 function releaseAddresses(tag) {
-  const dir = resolve(CACHE_ROOT, tag);
-  const path = resolve(dir, "addresses.json");
-  if (!existsSync(path)) {
-    mkdirSync(dir, { recursive: true });
-    download(tag, "addresses.json", path);
+  const pinned = [...PINS, QUOTE_ROUTER_ADDRESSES].find(
+    (p) => p.tag === tag && p.asset === "addresses.json",
+  );
+  if (pinned === undefined) {
+    throw new Error(
+      `no digest in releases.json pins ${tag}/addresses.json: it is not read unverified`,
+    );
   }
 
-  return JSON.parse(readFileSync(path, "utf8"));
+  return JSON.parse(readFileSync(fetchReleaseAsset(pinned), "utf8"));
 }
 
 /** Each engine's own identity as its release records it: the EVM address, the SVM program id. */
@@ -461,12 +523,22 @@ const ENGINE_IDENTITY = {
   "v12-svm": (addresses) => addresses.programs?.engine?.programId,
 };
 
-/** What the EVM Kitchen's release says every Pot it mints is CREATE2 under: the Kitchen proxy and
- *  the Pot's init-code hash. The `sauce` command tells which release minted a Pot from them. */
-const POT_FAMILY = {
+/** What the EVM Kitchen's release says every Pot it mints is placed by: the Kitchen proxy and the
+ *  Pot's identity — its init-code hash (CREATE2, up to kitchen-evm 1.3.0), or its proxy's hash, the
+ *  Pot profile and the fixed Router (CREATE3, from 1.4.0). The `sauce` command tells which release
+ *  minted a Pot from them. */
+const POT_FAMILY_CREATE2 = {
   kitchen: (addresses) => addresses.contracts?.kitchen?.address,
   potInitCodeHash: (addresses) => addresses.pot?.initCodeHash,
 };
+const POT_FAMILY_CREATE3 = {
+  kitchen: (addresses) => addresses.contracts?.kitchen?.address,
+  potProxyInitCodeHash: (addresses) => addresses.pot?.potProxyInitCodeHash,
+  potProfileHash: (addresses) => addresses.pot?.potProfileHash,
+  fixedRouter: (addresses) => addresses.pot?.fixedRouter,
+};
+const POT_FAMILY =
+  SET["kitchen-evm"].potProxyInitCodeHash !== undefined ? POT_FAMILY_CREATE3 : POT_FAMILY_CREATE2;
 
 // ---------------------------------------------------------------------------
 // A ROW THAT IS NOT RELEASED YET: report what to paste, and write nothing. An unpinned engine is not
@@ -654,7 +726,24 @@ const IUNISWAP_V3_POOL = resolve(
 // Committed + shipped location first; the gitignored src copy is kept coherent for local dev (the
 // drift tests read it).
 const DESTS = [resolve(SDK_DIR, "dist", "artifacts"), resolve(SDK_DIR, "src", "artifacts")];
-for (const d of DESTS) mkdirSync(d, { recursive: true });
+
+// NOTHING IS WRITTEN UNTIL EVERYTHING IS CHECKED. Every artifact write of a run waits here while the
+// run reads and checks its inputs, and `flush` then makes them all, in the order they were queued.
+const pending = [];
+const later = (action) => pending.push(action);
+/** Write `bytes` at `path`, making its folder. */
+const put = (path, bytes) => {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, bytes);
+};
+function flush() {
+  try {
+    for (const action of pending.splice(0)) action();
+  } catch (e) {
+    console.error(`[sync-engine-artifacts] writing the artifacts failed: ${e.message}`);
+    process.exit(1);
+  }
+}
 
 // The SVM engine binaries the SDK SHIPS. Unlike the JSON above (rewritten every build), the `.so`
 // are large release binaries and land here only under `--fetch-v12-engines` (see the tail): the
@@ -668,14 +757,16 @@ const SVM_DESTS = DESTS.map((d) => resolve(d, "svm"));
 // Copy one fetched binary into every shipped SVM dir under `name`.
 const shipSvmBinary = (srcPath, name) => {
   for (const d of SVM_DESTS) {
-    mkdirSync(d, { recursive: true });
-    copyFileSync(srcPath, resolve(d, name));
+    later(() => {
+      mkdirSync(d, { recursive: true });
+      copyFileSync(srcPath, resolve(d, name));
+    });
   }
 };
 
 const write = (name, artifact) => {
   const json = JSON.stringify(artifact);
-  for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, `${name}.json`), json));
 };
 
 // ---------------------------------------------------------------------------
@@ -696,10 +787,13 @@ const write = (name, artifact) => {
 //   - every release asset it carries matches this row's digest, exactly as the private path checks
 //     it: both SVM engines, both wire files, the Kitchen and its IDL, the EVM creation code;
 //   - what it carries DERIVED rather than as the release asset — the ABIs out of the two abis.json
-//     and the addresses assembled from each addresses.json, neither of which the private path pins
-//     by digest either — is held by the integrity pin, and corroborated as the private path
-//     corroborates it: the compiler, each component's version, both engine identities, the Kitchen
-//     and the Pot init-code hash against the row and the gate, the generation-3 quote Router.
+//     and the addresses assembled from each addresses.json — is rebuilt from the raw abis.json and
+//     addresses.json the same tarball carries under releases/<folder>/ (each held to the row's
+//     digest by `readReleaseAssets`) and must be the files it carries; it is also corroborated as
+//     the private path corroborates it: the compiler, each component's version, both engine
+//     identities, the Kitchen, the Pot init-code hash and, for a CREATE3 row, the Router, the scheme
+//     and the deployer, against the row and the gate, and the generation-3 quote Router (whose
+//     addresses.json the tarball carries no raw copy of, so that entry stands as corroborated).
 // What it cannot repeat is the cross-check against each release's manifest, which the tarball does
 // not carry; the private path calls that corroboration, never the guarantee. Any mismatch stops
 // here with nothing written.
@@ -712,7 +806,7 @@ function publicPackage(row = SET) {
   const { version, integrity } = row.npm ?? {};
   if (!version || !integrity) {
     throw new Error(
-      `releases.json's ${COMPILER} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
+      `releases.json's ${row.compiler} row names no public ${PUBLIC_PACKAGE} version carrying its ` +
         "artifacts (`npm`: { version, integrity }) — commit a published version built from " +
         "this row, or read the private release packages (unset SAUCE_ARTIFACT_SOURCE)",
     );
@@ -766,6 +860,73 @@ function publicPackage(row = SET) {
   };
 }
 
+// Only the historical quote service has a fixed-address generation. The current execution Router
+// is content-addressed and keeps its release metadata verbatim rather than inventing a generation.
+const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
+const routerGeneration = (router) => {
+  const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
+  const generation = match ? Number.parseInt(match.groups.generation, 16) : 0;
+  if (router?.saltName !== "Router" || generation < 1) {
+    throw new Error(`the Router's salt ${router?.rawSalt} is not a fixed-generation Router salt`);
+  }
+
+  return generation;
+};
+
+/**
+ * V12Deployments.json, made of the `addresses.json` each of the four releases publishes and the quote
+ * Router's: the one place it is assembled. The private path writes what it returns, and the public
+ * source holds the file its tarball carries to what it returns for the raw addresses.json that
+ * tarball carries too. `potCreationHash` is keccak256 of the Pot's creation code: a CREATE3
+ * release's addresses.json records no `initCodeHash`, and the one the Kitchen's `potInitCodeHash()`
+ * reports is that.
+ */
+function assembleDeployments({
+  compiler,
+  evm,
+  kitchenEvm,
+  svm,
+  kitchenSvm,
+  quoteRouter,
+  potCreationHash,
+}) {
+  return {
+    compiler,
+    version: kitchenEvm.version,
+    commit: kitchenEvm.commit,
+    releases: Object.fromEntries(
+      Object.entries({
+        "v12-evm": evm,
+        "kitchen-evm": kitchenEvm,
+        "v12-svm": svm,
+        "kitchen-svm": kitchenSvm,
+      }).map(([component, { version, commit }]) => [component, { version, commit }]),
+    ),
+    evm: {
+      chainIndependent: true,
+      factory: kitchenEvm.factory,
+      deployer: kitchenEvm.deployer,
+      contracts: {
+        engine: evm.contracts.engine,
+        router: kitchenEvm.contracts.router,
+        ...(quoteRouter === undefined
+          ? {}
+          : { quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) } }),
+        kitchen: kitchenEvm.contracts.kitchen,
+        kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
+      },
+      pot:
+        kitchenEvm.pot.scheme === "create3"
+          ? { ...kitchenEvm.pot, initCodeHash: potCreationHash }
+          : kitchenEvm.pot,
+    },
+    svm: {
+      clusterIndependent: true,
+      programs: { engine: svm.programs.engine, kitchen: kitchenSvm.programs.kitchen },
+    },
+  };
+}
+
 function syncFromPublicPackage() {
   const read = publicPackage();
   const where = `${PUBLIC_PACKAGE}@${SET.npm.version}`;
@@ -812,7 +973,10 @@ function syncFromPublicPackage() {
       V12_KITCHEN_IDL,
     ].map((p) => [p, artifact(`svm/${p.asset}`)]),
   ]);
-  for (const p of PINS.filter((pin) => pin !== V12_EVM_ABIS)) {
+  // The raw abis.json, addresses.json and pot-profile.json are held to their digests by
+  // `readReleaseAssets`; what the first two say is held below, by rebuilding the derived files from
+  // them, and through the identities of the derived V12Deployments.json and V12EngineGate.json.
+  for (const p of PINS.filter((pin) => pin !== V12_EVM_ABIS && !OPTIONAL_PINS.includes(pin))) {
     if (!carried.has(p)) refuse(`is not read for ${p.tag}/${p.asset}: this script needs updating`);
     const actual = p.hash(carried.get(p));
     if (actual !== p.digest) {
@@ -849,14 +1013,43 @@ function syncFromPublicPackage() {
     Kitchen:
       same(contracts.kitchen?.address, kitchenPin.kitchen) &&
       same(gate.kitchen, kitchenPin.kitchen),
-    "Pot init-code hash":
-      same(deployments.evm?.pot?.initCodeHash, kitchenPin.potInitCodeHash) &&
-      same(gate.potInitCodeHash, kitchenPin.potInitCodeHash),
+    ...(kitchenPin.potProxyInitCodeHash === undefined
+      ? {
+          "Pot init-code hash":
+            same(deployments.evm?.pot?.initCodeHash, kitchenPin.potInitCodeHash) &&
+            same(gate.potInitCodeHash, kitchenPin.potInitCodeHash),
+        }
+      : {
+          // CREATE3: the proxy and profile hashes and the fixed Router, as the deployments and the
+          // gate carry them; `initCodeHash` is the Pot creation code's own hash, which the Kitchen
+          // reports from `potInitCodeHash()`.
+          "Pot identity":
+            same(deployments.evm?.pot?.potProxyInitCodeHash, kitchenPin.potProxyInitCodeHash) &&
+            same(gate.potProxyInitCodeHash, kitchenPin.potProxyInitCodeHash) &&
+            same(deployments.evm?.pot?.potProfileHash, kitchenPin.potProfileHash) &&
+            same(gate.potProfileHash, kitchenPin.potProfileHash) &&
+            same(deployments.evm?.pot?.fixedRouter, kitchenPin.fixedRouter) &&
+            same(deployments.evm?.pot?.initCodeHash, gate.potInitCodeHash) &&
+            same(gate.potInitCodeHash, keccak256(parse(derived.V12Pot).bytecode)),
+          // …and what the private path holds a CREATE3 row's whole stack to: the Router the Kitchen
+          // names and the engine's gate carries, the scheme of both, and who deploys the Pot.
+          Router:
+            same(contracts.router?.address, kitchenPin.fixedRouter) &&
+            same(gate.fixedRouter, kitchenPin.fixedRouter),
+          "CREATE3 scheme":
+            gate.scheme === "create3" &&
+            deployments.evm?.pot?.scheme === "create3" &&
+            same(deployments.evm?.pot?.deployer, kitchenPin.kitchen),
+        }),
     "Router, Kitchen implementation, SVM Kitchen": Boolean(
       contracts.router?.address &&
       contracts.kitchenImplementation?.address &&
       deployments.svm?.programs?.kitchen?.programId,
     ),
+    // From the public tarball the quote Router's addresses.json cannot be held to its digest: it is a
+    // historical release's and the tarball carries no raw copy of it (the private path pins it, see
+    // QUOTE_ROUTER_ADDRESSES). Here the guarantee is the tarball's committed integrity, and these two
+    // derived files agreeing on one address and on generation 3.
     "quote Router":
       contracts.quoteRouter?.generation === 3 &&
       same(quote.address, contracts.quoteRouter?.address) &&
@@ -869,6 +1062,47 @@ function syncFromPublicPackage() {
     refuse(`disagrees with releases.json's ${COMPILER} row on: ${disagree.join(", ")}`);
   }
 
+  // The tarball carries the raw abis.json and addresses.json too, each held to the row's digest, so
+  // what it carries derived from them is held to them as well as to what the row records: the ABIs
+  // and V12Deployments.json are made again here as the private path makes them, and must be the
+  // files it carries. The quote Router's addresses.json has no raw copy in it, so that entry is the
+  // file's own, as `held` checked it.
+  const raw = (component, asset) => {
+    const found = available.find((entry) => entry.component === component && entry.asset === asset);
+    if (found === undefined) {
+      refuse(`carries no raw ${asset} of ${component} to hold the files it derives from it to`);
+    }
+
+    return parse(found.bytes);
+  };
+  const roundTrip = (value) => JSON.parse(JSON.stringify(value));
+  const rawAbis = raw("kitchen-evm", "abis.json").contracts ?? {};
+  const unlike = Object.entries(RELEASE_ABIS)
+    .filter(
+      ([name, contract]) =>
+        !isDeepStrictEqual(
+          parse(derived[name]),
+          roundTrip({ abi: rawAbis[contract]?.abi, bytecode: rawAbis[contract]?.bytecode }),
+        ),
+    )
+    .map(([name]) => `${name}.json`);
+  const rebuilt = assembleDeployments({
+    compiler: sourceCompiler,
+    evm: raw("v12-evm", "addresses.json"),
+    kitchenEvm: raw("kitchen-evm", "addresses.json"),
+    svm: raw("v12-svm", "addresses.json"),
+    kitchenSvm: raw("kitchen-svm", "addresses.json"),
+    quoteRouter: contracts.quoteRouter,
+    potCreationHash: keccak256(rawAbis.Pot?.bytecode ?? "0x"),
+  });
+  if (!isDeepStrictEqual(deployments, roundTrip(rebuilt))) unlike.push("V12Deployments.json");
+  if (unlike.length > 0) {
+    refuse(
+      `carries ${unlike.join(", ")} that the raw, digest-pinned abis.json and addresses.json it ` +
+        "also carries do not make",
+    );
+  }
+
   // Only compiler compatibility metadata changes; verified release artifacts remain byte-for-byte.
   if (sourceCompiler !== COMPILER) {
     derived.V12Deployments = Buffer.from(
@@ -876,13 +1110,15 @@ function syncFromPublicPackage() {
     );
   }
   for (const [name, bytes] of Object.entries(derived)) {
-    for (const dest of DESTS) writeFileSync(resolve(dest, `${name}.json`), bytes);
+    for (const dest of DESTS) later(() => put(resolve(dest, `${name}.json`), bytes));
   }
   writeLocalAbis();
-  console.log(
-    `[sync-engine-artifacts] wrote ${names.length} release artifacts from ${where} ` +
-      `(SAUCE_ARTIFACT_SOURCE=npm), each held to releases.json's ${COMPILER} row, plus IERC20 ` +
-      "(declared) and IUniswapV3Pool (@uniswap/v3-core)",
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote ${names.length} release artifacts from ${where} ` +
+        `(SAUCE_ARTIFACT_SOURCE=npm), each held to releases.json's ${COMPILER} row, plus IERC20 ` +
+        "(declared) and IUniswapV3Pool (@uniswap/v3-core)",
+    ),
   );
 
   if (process.argv.includes("--fetch-v12-engines")) {
@@ -904,11 +1140,21 @@ function syncFromPublicPackage() {
   }
 }
 
-// New release artifacts are opt-in until a separate change qualifies deployed bindings. Keep
-// their original names and bytes so callers can verify them against the independently pinned row.
-function readAvailableReleaseSet() {
+// The release's raw assets ship in the folder of the FIRST row naming these four releases, so a
+// compiler-only release keeps the path: SDK 1.1.0 shipped the 1.4.0 set at releases/2.6.3/.
+const ASSETS_FOLDER = RELEASE_SETS.find((row) =>
+  ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].every(
+    (c) => row[c].version === CURRENT[c].version,
+  ),
+).compiler;
+
+// The release's raw assets, each held to the row's digest and kept under its original name and
+// bytes (`releases/<folder>/<tag>/<asset>`), so callers can verify them against the
+// independently pinned row. `shipAvailable` ships them; the identities they carry are held where
+// the defaults are assembled.
+function readReleaseAssets() {
   const read = SOURCE === "npm" ? publicPackage(CURRENT) : undefined;
-  const root = `releases/${CURRENT.compiler}`;
+  const root = `releases/${ASSETS_FOLDER}`;
   const components = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
   const fetched = components.flatMap((component) => {
     const { version, assets } = CURRENT[component];
@@ -926,61 +1172,78 @@ function readAvailableReleaseSet() {
       return { component, asset, path, bytes };
     });
   });
-  const addresses = (component) =>
-    JSON.parse(
-      fetched.find((f) => f.component === component && f.asset === "addresses.json").bytes,
-    );
-  const engine = addresses("v12-evm");
-  const kitchen = addresses("kitchen-evm");
-  const pin = CURRENT["kitchen-evm"];
-  if (
-    engine.contracts.engine.address !== CURRENT["v12-evm"].engine ||
-    addresses("v12-svm").programs.engine.programId !== CURRENT["v12-svm"].engine ||
-    kitchen.contracts.kitchen.address !== pin.kitchen ||
-    kitchen.contracts.router.address !== pin.fixedRouter ||
-    kitchen.pot.scheme !== "create3" ||
-    kitchen.pot.deployer !== pin.kitchen ||
-    kitchen.pot.fixedRouter !== pin.fixedRouter ||
-    kitchen.pot.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
-    kitchen.pot.potProfileHash !== pin.potProfileHash ||
-    CURRENT["v12-evm"].assets["pot-profile.json"] !== pin.assets["pot-profile.json"]
-  ) {
-    throw new Error("released CREATE3 stack identities do not match releases.json");
-  }
 
-  if (!read) {
-    const manifest = JSON.parse(
-      readFileSync(
-        resolve(CACHE_ROOT, `v12-evm-v${CURRENT["v12-evm"].version}`, "manifest.json"),
-        "utf8",
-      ),
-    );
-    if (
-      manifest.gate?.scheme !== kitchen.pot.scheme ||
-      manifest.gate.kitchen !== pin.kitchen ||
-      manifest.gate.fixedRouter !== pin.fixedRouter ||
-      manifest.gate.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
-      manifest.gate.potProfileHash !== pin.potProfileHash
-    ) {
-      throw new Error("released engine gate does not match the Kitchen's CREATE3 profile");
-    }
-  }
-
-  console.log(
-    `[sync-engine-artifacts] verified ${fetched.length} assets for ${root} (not deployed defaults)`,
-  );
+  console.log(`[sync-engine-artifacts] verified ${fetched.length} assets for ${root}`);
   return fetched;
 }
 
 let available = [];
-if (CURRENT !== SET) {
-  try {
-    available = readAvailableReleaseSet();
-  } catch (e) {
-    console.error(`[sync-engine-artifacts] available release set: ${e.message}`);
-    process.exit(1);
-  }
-  if (REPORT) process.exit(0);
+try {
+  available = readReleaseAssets();
+} catch (e) {
+  console.error(`[sync-engine-artifacts] the release's raw assets: ${e.message}`);
+  process.exit(1);
+}
+if (REPORT) process.exit(0);
+
+// SDK 1.1.0 documented releases/2.6.3/ (its opt-in path). It keeps shipping the release it named,
+// byte for byte: that row's raw assets, read from the public package that row pins (no credential,
+// both artifact-source modes) and held to that row's digests.
+const KEPT_ASSET_FOLDERS = ["2.6.3"];
+function readKeptReleaseAssets() {
+  const components = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
+
+  return KEPT_ASSET_FOLDERS.filter((folder) => folder !== ASSETS_FOLDER).flatMap((folder) => {
+    const row = RELEASE_SETS.find((candidate) => candidate.compiler === folder);
+    if (row === undefined) {
+      throw new Error(
+        `releases.json has no ${folder} row, whose raw assets ship under releases/${folder}/`,
+      );
+    }
+    const read = publicPackage(row);
+
+    return components.flatMap((component) => {
+      const { version, assets } = row[component];
+      const tag = `${component}-v${version}`;
+
+      return Object.entries(assets).map(([asset, digest]) => {
+        const path = `releases/${folder}/${tag}/${asset}`;
+        const { hash } = ASSET_FORMATS[asset] ?? DEFAULT_FORMAT;
+        const bytes = read(`sdk/dist/artifacts/${path}`);
+        const actual = hash(bytes);
+        if (actual !== digest) {
+          throw new Error(
+            `${PUBLIC_PACKAGE}@${row.npm.version} carries ${path} hashing to ${actual}, not the ` +
+              `${folder} row's ${digest}`,
+          );
+        }
+
+        return { component, asset, path, bytes };
+      });
+    });
+  });
+}
+
+let kept = [];
+try {
+  kept = readKeptReleaseAssets();
+} catch (e) {
+  console.error(
+    `[sync-engine-artifacts] the kept release assets: ${e.message} — refused, nothing written.`,
+  );
+  process.exit(1);
+}
+
+// The earlier releases' artifacts are read and held to their rows now, before anything is written:
+// a refusal here leaves sdk/{src,dist}/artifacts as it was. Their files are written last.
+let legacy = [];
+try {
+  legacy = readLegacyArtifacts();
+} catch (e) {
+  console.error(
+    `[sync-engine-artifacts] the legacy artifacts: ${e.message} — refused, nothing written.`,
+  );
+  process.exit(1);
 }
 
 if (SOURCE === "npm") {
@@ -991,6 +1254,8 @@ if (SOURCE === "npm") {
     console.error(`[sync-engine-artifacts] ${e.message} — refused, nothing written.`);
     process.exit(1);
   }
+  writeLegacyArtifacts(legacy);
+  flush();
   process.exit(0);
 }
 
@@ -1033,6 +1298,11 @@ for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
   write(name, { abi: found.abi, bytecode: found.bytecode });
 }
 
+// keccak256 of the Pot's creation code (abis.json's bytecode is a hex string): what the Kitchen's
+// `potInitCodeHash()` reports, and the `initCodeHash` a CREATE3 release's Pot is recorded with
+// (its addresses.json has none; the Pot's address does not derive from it).
+const POT_CREATION_HASH = keccak256(releaseAbis.Pot.bytecode);
+
 writeLocalAbis();
 
 /** The two ABIs no release publishes, written the same way whichever source the rest came from. */
@@ -1065,7 +1335,7 @@ try {
   runtimeCreationPath = fetchReleaseAsset(V12_EVM);
   const creationCode = readFileSync(runtimeCreationPath, "utf8").trim();
   const json = `${JSON.stringify({ runtimeCreationCode: creationCode }, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, RUNTIME_DEST), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, RUNTIME_DEST), json));
 } catch (e) {
   stop("V12RuntimeBytecode", e);
 }
@@ -1086,15 +1356,27 @@ try {
   const manifest = JSON.parse(
     readFileSync(resolve(CACHE_ROOT, V12_EVM.tag, "manifest.json"), "utf8"),
   );
-  const gate = {
-    kitchen: manifest.gate?.kitchen,
-    potInitCodeHash: manifest.gate?.potInitCodeHash,
-  };
+  // From v12-evm 1.4.0 the engine gates on the CREATE3 profile; `potInitCodeHash` stays, and is what
+  // the Kitchen's `potInitCodeHash()` reports: keccak256 of the Pot's creation code.
+  const gate =
+    manifest.gate?.scheme === "create3"
+      ? {
+          kitchen: manifest.gate.kitchen,
+          potInitCodeHash: POT_CREATION_HASH,
+          scheme: "create3",
+          fixedRouter: manifest.gate.fixedRouter,
+          potProxyInitCodeHash: manifest.gate.potProxyInitCodeHash,
+          potProfileHash: manifest.gate.potProfileHash,
+        }
+      : {
+          kitchen: manifest.gate?.kitchen,
+          potInitCodeHash: manifest.gate?.potInitCodeHash,
+        };
   if (Object.values(gate).some((value) => value === undefined)) {
     throw new Error(`incomplete gate anchors: ${JSON.stringify(gate)}`);
   }
   const json = `${JSON.stringify(gate, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, GATE_DEST), json);
+  for (const dest of DESTS) later(() => put(resolve(dest, GATE_DEST), json));
 } catch (e) {
   stop("V12EngineGate", e);
 }
@@ -1117,18 +1399,6 @@ try {
 const DEPLOYMENTS_DEST = "V12Deployments.json";
 const tagVersion = (tag) => tag.replace(/^.*-v(?=\d)/, "");
 
-// Only the historical quote service has a fixed-address generation. The current execution Router
-// is content-addressed and keeps its release metadata verbatim rather than inventing a generation.
-const ROUTER_SALT = /^0x[0-9a-f]{40}00526f7574657200000000(?<generation>[0-9a-f]{2})$/;
-const routerGeneration = (router) => {
-  const match = ROUTER_SALT.exec(String(router?.rawSalt).toLowerCase());
-  const generation = match ? Number.parseInt(match.groups.generation, 16) : 0;
-  if (router?.saltName !== "Router" || generation < 1) {
-    throw new Error(`the Router's salt ${router?.rawSalt} is not a fixed-generation Router salt`);
-  }
-
-  return generation;
-};
 const addressesFor = (tag) => {
   const parsed = releaseAddresses(tag);
   if (parsed.version !== tagVersion(tag)) {
@@ -1138,50 +1408,33 @@ const addressesFor = (tag) => {
   }
   return parsed;
 };
-const quoteRouter = addressesFor(QUOTE_ROUTER_ABIS.tag).contracts.router;
-{
+let quoteRouter;
+try {
+  quoteRouter = addressesFor(QUOTE_ROUTER_ABIS.tag).contracts.router;
   const released = JSON.parse(readFileSync(fetchReleaseAsset(QUOTE_ROUTER_ABIS), "utf8"));
   const { abi, bytecode } = released.contracts.Router;
   if (routerGeneration(quoteRouter) !== 3 || !abi.some((item) => item.name === "quote")) {
     throw new Error("the quote service must be the generation-3 Router with quote(QuoteParams)");
   }
   write("V12QuoteRouter", { abi, bytecode, address: quoteRouter.address });
+} catch (e) {
+  stop("the quote Router", e);
 }
 try {
   const evm = addressesFor(V12_EVM.tag); // engine
   const kitchenEvm = addressesFor(V12_EVM_ABIS.tag); // router + kitchen + kitchenImplementation + pot
   const svm = addressesFor(V12_SVM.tag); // engine program
   const kitchenSvm = addressesFor(V12_KITCHEN.tag); // kitchen program
-  const deployments = {
+  const create3 = SET["kitchen-evm"].potProxyInitCodeHash !== undefined;
+  const deployments = assembleDeployments({
     compiler: COMPILER,
-    version: kitchenEvm.version,
-    commit: kitchenEvm.commit,
-    releases: Object.fromEntries(
-      Object.entries({
-        "v12-evm": evm,
-        "kitchen-evm": kitchenEvm,
-        "v12-svm": svm,
-        "kitchen-svm": kitchenSvm,
-      }).map(([component, { version, commit }]) => [component, { version, commit }]),
-    ),
-    evm: {
-      chainIndependent: true,
-      factory: kitchenEvm.factory,
-      deployer: kitchenEvm.deployer,
-      contracts: {
-        engine: evm.contracts.engine,
-        router: kitchenEvm.contracts.router,
-        quoteRouter: { ...quoteRouter, generation: routerGeneration(quoteRouter) },
-        kitchen: kitchenEvm.contracts.kitchen,
-        kitchenImplementation: kitchenEvm.contracts.kitchenImplementation,
-      },
-      pot: kitchenEvm.pot,
-    },
-    svm: {
-      clusterIndependent: true,
-      programs: { engine: svm.programs.engine, kitchen: kitchenSvm.programs.kitchen },
-    },
-  };
+    evm,
+    kitchenEvm,
+    svm,
+    kitchenSvm,
+    quoteRouter,
+    potCreationHash: POT_CREATION_HASH,
+  });
   // A partial address set is the 0.7.0 failure shape — refuse to write one.
   const required = {
     "evm.contracts.engine": deployments.evm.contracts.engine?.address,
@@ -1207,13 +1460,24 @@ try {
       `kitchen-evm Kitchen ${deployments.evm.contracts.kitchen.address} != engine gate Kitchen ${gateKitchen}`,
     );
   }
-  // …and the Pot init-code hash the kitchen release mints under must be the one the engine gates on:
-  // a Kitchen upgrade that moves it orphans every Pot it mints from this engine.
-  const gateHash = engineManifest.gate?.potInitCodeHash;
-  if (gateHash && deployments.evm.pot.initCodeHash !== gateHash) {
-    throw new Error(
-      `kitchen-evm Pot initCodeHash ${deployments.evm.pot.initCodeHash} != engine gate hash ${gateHash}`,
-    );
+  // …and the Pot identity the kitchen release mints under must be the one the engine gates on: a
+  // Kitchen upgrade that moves it orphans every Pot it mints from this engine.
+  if (create3) {
+    for (const field of ["potProxyInitCodeHash", "potProfileHash"]) {
+      const gated = engineManifest.gate?.[field];
+      if (gated !== deployments.evm.pot[field]) {
+        throw new Error(
+          `kitchen-evm Pot ${field} ${deployments.evm.pot[field]} != engine gate ${field} ${gated}`,
+        );
+      }
+    }
+  } else {
+    const gateHash = engineManifest.gate?.potInitCodeHash;
+    if (gateHash && deployments.evm.pot.initCodeHash !== gateHash) {
+      throw new Error(
+        `kitchen-evm Pot initCodeHash ${deployments.evm.pot.initCodeHash} != engine gate hash ${gateHash}`,
+      );
+    }
   }
   // The engine identities releases.json records are what `deployments/releases.ts` refuses other
   // compilers' programs on, so they must be the ones these releases actually publish.
@@ -1244,18 +1508,63 @@ try {
       );
     }
   }
+  // A CREATE3 row holds the release's whole stack to the row: the Router, the Pot scheme and
+  // profile, the engine's gate, and both pot-profile.json files (each pinned by digest).
+  if (create3) {
+    const pin = SET["kitchen-evm"];
+    if (
+      kitchenEvm.contracts.router.address !== pin.fixedRouter ||
+      kitchenEvm.pot.scheme !== "create3" ||
+      kitchenEvm.pot.deployer !== pin.kitchen ||
+      kitchenEvm.pot.fixedRouter !== pin.fixedRouter ||
+      kitchenEvm.pot.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
+      kitchenEvm.pot.potProfileHash !== pin.potProfileHash ||
+      SET["v12-evm"].assets["pot-profile.json"] !== pin.assets["pot-profile.json"]
+    ) {
+      throw new Error("released CREATE3 stack identities do not match releases.json");
+    }
+    const gated = engineManifest.gate;
+    if (
+      gated?.scheme !== kitchenEvm.pot.scheme ||
+      gated.kitchen !== pin.kitchen ||
+      gated.fixedRouter !== pin.fixedRouter ||
+      gated.potProxyInitCodeHash !== pin.potProxyInitCodeHash ||
+      gated.potProfileHash !== pin.potProfileHash
+    ) {
+      throw new Error("released engine gate does not match the Kitchen's CREATE3 profile");
+    }
+    for (const component of ["v12-evm", "kitchen-evm"]) {
+      const tag = `${component}-v${SET[component].version}`;
+      const profile = JSON.parse(
+        readFileSync(
+          fetchReleaseAsset(PINS.find((p) => p.tag === tag && p.asset === "pot-profile.json")),
+          "utf8",
+        ),
+      );
+      if (
+        profile.profileHash !== pin.potProfileHash ||
+        profile.potProxyInitCodeHash !== pin.potProxyInitCodeHash
+      ) {
+        throw new Error(`${tag}/pot-profile.json does not carry the Kitchen's CREATE3 Pot profile`);
+      }
+    }
+  }
   const json = `${JSON.stringify(deployments, null, 2)}\n`;
-  for (const dest of DESTS) writeFileSync(resolve(dest, DEPLOYMENTS_DEST), json);
-  console.log(
-    `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
+  for (const dest of DESTS) later(() => put(resolve(dest, DEPLOYMENTS_DEST), json));
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote ${DEPLOYMENTS_DEST} — compiler ${COMPILER}: engines ${evm.version}/${svm.version}, kitchens ${kitchenEvm.version}/${kitchenSvm.version}`,
+    ),
   );
 } catch (e) {
   stop("V12Deployments", e);
 }
 
-console.log(
-  `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
-    `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
+later(() =>
+  console.log(
+    `[sync-engine-artifacts] wrote ${Object.keys(RELEASE_ABIS).length} ABIs from ` +
+      `${V12_EVM_ABIS.tag}/abis.json, plus IERC20 (declared) and IUniswapV3Pool (@uniswap/v3-core)`,
+  ),
 );
 
 // `--fetch-v12-engines`: also place the SVM engine binary in the cache, and print every cached path
@@ -1275,14 +1584,241 @@ if (process.argv.includes("--fetch-v12-engines")) {
 }
 
 shipAvailable();
+writeLegacyArtifacts(legacy);
+flush();
 
+// The release's raw assets, digest-pinned, ship under `dist/artifacts/releases/<folder>/`, named for
+// the first row of the release set (`ASSETS_FOLDER`): SDK 1.1.0 shipped them there as opt-in
+// artifacts, and they stay for whoever reads them by path. They are the same release as the
+// top-level artifacts, which are derived from them. Dist only: nothing reads them from `src`.
 function shipAvailable() {
-  for (const { path, bytes } of available) {
-    for (const dest of DESTS) {
-      const out = resolve(dest, path);
-      mkdirSync(dirname(out), { recursive: true });
-      writeFileSync(out, bytes);
+  const dist = resolve(SDK_DIR, "dist", "artifacts");
+  for (const { path, bytes } of [...available, ...kept]) {
+    later(() => put(resolve(dist, path), bytes));
+  }
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote the release's raw assets to dist/artifacts/releases/${ASSETS_FOLDER}` +
+        (kept.length === 0
+          ? ""
+          : `, and the kept ${KEPT_ASSET_FOLDERS.map((folder) => `releases/${folder}`).join(", ")}`),
+    ),
+  );
+}
+
+// The engines the installed compiler's output also runs on mint Pots the SDK still cooks, each on
+// its own engine. Their artifacts do not ship: the suites that cook such a Pot read them from
+// src/artifacts/legacy/<compiler>/, taken from the public package of the newest row pinning that
+// engine (integrity-pinned in releases.json; no credential), and held to that row's digests.
+//
+// Read and checked before the run writes anything (every file is read here, so a package that lacks
+// one refuses here too), then written with everything else.
+function readLegacyArtifacts() {
+  const wanted = new Map();
+  for (const [component, versions] of Object.entries(CURRENT.alsoRunsOn ?? {})) {
+    for (const version of versions) {
+      const row = [...RELEASE_SETS]
+        .reverse()
+        .find((r) => r[component].version === version && r.npm);
+      if (!row) throw new Error(`no row with a public package pins ${component} ${version}`);
+      wanted.set(row.compiler, row);
     }
+  }
+
+  return [...wanted.values()].map((row) =>
+    row["kitchen-evm"].potProxyInitCodeHash === undefined
+      ? legacyFromTopLevelFiles(row)
+      : legacyFromRawAssets(row),
+  );
+}
+
+/**
+ * A CREATE2 row's artifacts, as its public package carries them at the top level, each held to the
+ * row's identities and digests.
+ */
+function legacyFromTopLevelFiles(row) {
+  const read = publicPackage(row);
+  const at = (path) => read(`sdk/dist/artifacts/${path}`);
+  const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
+  const deployments = parse(at("V12Deployments.json"));
+  const gate = parse(at("V12EngineGate.json"));
+  const runtime = parse(at("V12RuntimeBytecode.json")).runtimeCreationCode;
+  const pot = parse(at("V12Pot.json")).bytecode;
+  const checks = {
+    "runtime creation code": keccak256(runtime) === row["v12-evm"].assets["runtime.creation.hex"],
+    "EVM engine":
+      deployments.evm.contracts.engine.address.toLowerCase() ===
+      row["v12-evm"].engine.toLowerCase(),
+    Kitchen:
+      deployments.evm.contracts.kitchen.address.toLowerCase() ===
+        row["kitchen-evm"].kitchen.toLowerCase() &&
+      gate.kitchen.toLowerCase() === row["kitchen-evm"].kitchen.toLowerCase(),
+    "Pot init-code hash": [
+      deployments.evm.pot.initCodeHash,
+      gate.potInitCodeHash,
+      keccak256(pot),
+    ].every((h) => h.toLowerCase() === row["kitchen-evm"].potInitCodeHash.toLowerCase()),
+    "SVM engine": deployments.svm.programs.engine.programId === row["v12-svm"].engine,
+    ...Object.fromEntries(
+      ["engine-devnet.so", "engine-mainnet.so"].map((so) => [
+        so,
+        sha256(at(`svm/${so}`)) === row["v12-svm"].assets[so],
+      ]),
+    ),
+    "kitchen.so": sha256(at("svm/kitchen.so")) === row["kitchen-svm"].assets["kitchen.so"],
+    ...Object.fromEntries(
+      ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].map((c) => [
+        `${c} version`,
+        deployments.releases[c].version === row[c].version,
+      ]),
+    ),
+  };
+  const wrong = Object.keys(checks).filter((what) => !checks[what]);
+  if (wrong.length) {
+    throw new Error(
+      `${PUBLIC_PACKAGE}@${row.npm.version} disagrees with releases.json's ${row.compiler} row ` +
+        `on: ${wrong.join(", ")}`,
+    );
+  }
+  const files = new Map();
+  for (const name of [
+    "V12Deployments",
+    "V12EngineGate",
+    "V12RuntimeBytecode",
+    "V12Pot",
+    "V12Kitchen",
+    "V12KitchenProxy",
+    "Router",
+    "ISauceRouter",
+  ]) {
+    files.set(`${name}.json`, at(`${name}.json`));
+  }
+  for (const so of ["engine-devnet.so", "engine-mainnet.so", "kitchen.so"]) {
+    files.set(`svm/${so}`, at(`svm/${so}`));
+  }
+
+  return { row, files, from: `${PUBLIC_PACKAGE}@${row.npm.version}` };
+}
+
+/**
+ * A CREATE3 row's artifacts (EVM only), DERIVED from its raw assets as the default path derives the
+ * installed row's: the public package that row pins ships them under `releases/<compiler>/`, each
+ * held to the row's digest. The package's top-level files are not used: SDK 1.1.0's tarball carries
+ * the 1.3.0 set there. What is derived is held to the row's identities.
+ */
+function legacyFromRawAssets(row) {
+  const read = publicPackage(row);
+  const parse = (bytes) => JSON.parse(bytes.toString("utf8"));
+  const raw = (component, asset) => {
+    const tag = `${component}-v${row[component].version}`;
+    const path = `releases/${row.compiler}/${tag}/${asset}`;
+    const bytes = read(`sdk/dist/artifacts/${path}`);
+    const { hash } = ASSET_FORMATS[asset] ?? DEFAULT_FORMAT;
+    const actual = hash(bytes);
+    if (actual !== row[component].assets[asset]) {
+      throw new Error(
+        `${PUBLIC_PACKAGE}@${row.npm.version} carries ${path} hashing to ${actual}, not the ` +
+          `${row.compiler} row's ${row[component].assets[asset]}`,
+      );
+    }
+
+    return bytes;
+  };
+  const runtime = raw("v12-evm", "runtime.creation.hex").toString("utf8").trim();
+  const evm = parse(raw("v12-evm", "addresses.json"));
+  const kitchenEvm = parse(raw("kitchen-evm", "addresses.json"));
+  const svm = parse(raw("v12-svm", "addresses.json"));
+  const kitchenSvm = parse(raw("kitchen-svm", "addresses.json"));
+  const abis = parse(raw("kitchen-evm", "abis.json")).contracts ?? {};
+  const profiles = ["v12-evm", "kitchen-evm"].map((c) => parse(raw(c, "pot-profile.json")));
+  const pin = row["kitchen-evm"];
+  const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+  const potCreationHash = keccak256(abis.Pot?.bytecode ?? "0x");
+  const checks = {
+    ...Object.fromEntries(
+      [
+        ["v12-evm", evm],
+        ["kitchen-evm", kitchenEvm],
+        ["v12-svm", svm],
+        ["kitchen-svm", kitchenSvm],
+      ].map(([c, addresses]) => [`${c} version`, addresses.version === row[c].version]),
+    ),
+    "EVM engine":
+      same(evm.contracts?.engine?.address, row["v12-evm"].engine) &&
+      same(evm.contracts?.engine?.initCodeHash, keccak256(runtime)),
+    Kitchen:
+      same(kitchenEvm.contracts?.kitchen?.address, pin.kitchen) &&
+      same(kitchenEvm.pot?.deployer, pin.kitchen),
+    Router:
+      same(kitchenEvm.contracts?.router?.address, kitchenEvm.pot?.fixedRouter) &&
+      same(kitchenEvm.pot?.fixedRouter, pin.fixedRouter) &&
+      same(kitchenEvm.contracts?.router?.initCodeHash, keccak256(abis.Router?.bytecode ?? "0x")),
+    "Pot identity":
+      same(kitchenEvm.pot?.potProxyInitCodeHash, pin.potProxyInitCodeHash) &&
+      same(kitchenEvm.pot?.potProfileHash, pin.potProfileHash),
+    "Pot profiles": profiles.every((profile) => same(profile.profileHash, pin.potProfileHash)),
+  };
+  const wrong = Object.keys(checks).filter((what) => !checks[what]);
+  if (wrong.length) {
+    throw new Error(
+      `${PUBLIC_PACKAGE}@${row.npm.version} disagrees with releases.json's ${row.compiler} row ` +
+        `on: ${wrong.join(", ")}`,
+    );
+  }
+
+  const pretty = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
+  const files = new Map();
+  for (const [name, contract] of Object.entries(RELEASE_ABIS)) {
+    files.set(
+      `${name}.json`,
+      Buffer.from(JSON.stringify({ abi: abis[contract].abi, bytecode: abis[contract].bytecode })),
+    );
+  }
+  files.set("V12RuntimeBytecode.json", pretty({ runtimeCreationCode: runtime }));
+  files.set(
+    "V12EngineGate.json",
+    pretty({
+      kitchen: pin.kitchen,
+      potInitCodeHash: potCreationHash,
+      scheme: "create3",
+      fixedRouter: pin.fixedRouter,
+      potProxyInitCodeHash: pin.potProxyInitCodeHash,
+      potProfileHash: pin.potProfileHash,
+    }),
+  );
+  files.set(
+    "V12Deployments.json",
+    pretty(
+      assembleDeployments({
+        compiler: row.compiler,
+        evm,
+        kitchenEvm,
+        svm,
+        kitchenSvm,
+        potCreationHash,
+      }),
+    ),
+  );
+
+  return {
+    row,
+    files,
+    from: `${PUBLIC_PACKAGE}@${row.npm.version}'s releases/${row.compiler}`,
+  };
+}
+
+/** Queue each earlier release's folder, replaced whole, behind everything else the run writes. */
+function writeLegacyArtifacts(prepared) {
+  for (const { row, files, from } of prepared) {
+    const dir = resolve(SDK_DIR, "src", "artifacts", "legacy", row.compiler);
+    later(() => {
+      rmSync(dir, { recursive: true, force: true });
+      for (const [path, bytes] of files) put(resolve(dir, path), bytes);
+      console.log(
+        `[sync-engine-artifacts] wrote the compiler ${row.compiler} release's artifacts to ` +
+          `src/artifacts/legacy/${row.compiler} (suites only; not shipped), from ${from}`,
+      );
+    });
   }
 }
 
@@ -1304,13 +1840,15 @@ function shipEngines({
   shipSvmBinary(wire, "engine-wire-devnet.json");
   shipSvmBinary(wireMainnet, "engine-wire-mainnet.json");
   shipSvmBinary(kitchenIdl, "kitchen-idl.json");
-  console.log(`[sync-engine-artifacts] shipped SVM engine binaries into ${SVM_DESTS[0]}`);
+  later(() => {
+    console.log(`[sync-engine-artifacts] shipped SVM engine binaries into ${SVM_DESTS[0]}`);
 
-  console.log(`SAUCE_RUST_ENGINE_SO=${engine}`);
-  console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnet}`);
-  console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnet}`);
-  console.log(`SAUCE_KITCHEN_SO=${kitchen}`);
-  console.log(`SAUCE_ENGINE_WIRE_JSON=${wire}`);
-  console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdl}`);
-  console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreation}`);
+    console.log(`SAUCE_RUST_ENGINE_SO=${engine}`);
+    console.log(`SAUCE_RUST_ENGINE_MAINNET_SO=${engineMainnet}`);
+    console.log(`SAUCE_ENGINE_WIRE_MAINNET_JSON=${wireMainnet}`);
+    console.log(`SAUCE_KITCHEN_SO=${kitchen}`);
+    console.log(`SAUCE_ENGINE_WIRE_JSON=${wire}`);
+    console.log(`SAUCE_KITCHEN_IDL_JSON=${kitchenIdl}`);
+    console.log(`SAUCE_V12_RUNTIME_CREATION_HEX=${runtimeCreation}`);
+  });
 }

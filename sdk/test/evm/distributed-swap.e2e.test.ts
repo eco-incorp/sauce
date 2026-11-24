@@ -80,9 +80,10 @@ import { sqrtPriceX96FromPrice } from "../../src/price.js";
 import { encodeEntryArguments } from "../../src/routes/entry.js";
 import { compileSauceProgram } from "../../src/routes/sauce-route.js";
 import { Base } from "../../src/index.js";
-import { startGatedEngine } from "./gated-engine.js";
+import { POT_SALT, startGatedEngine } from "./gated-engine.js";
 import type { GatedEngine } from "./gated-engine.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
+import { releaseArm } from "../release-arm.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -642,6 +643,9 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
         "base",
         "--owner",
         OWNER.address,
+        // The legacy arm's chain holds the harness's earlier release's Pot at the harness's salt,
+        // which is where the command is to cook (A1).
+        ...(releaseArm("evm") !== "default" ? ["--salt-hex", POT_SALT] : []),
         "--rpc-url",
         RPC_URL,
         "--assume-balance",
@@ -655,7 +659,14 @@ describeEvm("the sauce-distributed-swap program, on real Uniswap V3 and V4 pools
       ],
       io,
     );
-    expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
+    // A new Pot of the installed release needs no word; an earlier release's (the legacy arm) is
+    // cooked on its own engine, which the command says (A2).
+    if (releaseArm("evm") !== "default") {
+      expect(code).toBe(0);
+      expect(stderr).toContain(`it runs on its own engine, ${sauce.engine}`);
+    } else {
+      expect({ code, stderr }).toEqual({ code: 0, stderr: "" });
+    }
     // The cook's gas: after the Pot's deploy, when the rehearsal deploys it first.
     expect(stdout).toMatch(
       /^The cook succeeds from 0x[0-9a-fA-F]{40}: gas used \d+( for the cook, after the Pot's deploy \(1\. below\))?, returns 0x/,

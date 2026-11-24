@@ -14,7 +14,14 @@ import {
   type SolanaChange,
   type SolanaTestChain,
 } from "../../src/testing/index.js";
-import { deriveCodeBufferPda } from "../../src/testing/sdk.js";
+import { Bank } from "../../src/testing/solana-bank.js";
+import { SolanaTestChain as StartedChain } from "../../src/testing/solana.js";
+import {
+  deriveCodeBufferPda,
+  requireChain,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../../src/testing/sdk.js";
 import { program } from "./support.js";
 import { solanaMissing } from "./solana-support.js";
 
@@ -145,6 +152,50 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     assert.equal((await chain.getAccount(other.pot))?.owner, chain.engine);
   });
 
+  it("cooks from an address that holds only lamports as it is, and deployPot creates it on request", async () => {
+    const account = chain.account(8);
+    const system = address("11111111111111111111111111111111");
+    // Lamports sent to a Pot's address before its first cook: no engine owns it yet. The Kitchen
+    // cooks it as it is (its Pot "need not exist for a program that keeps no storage"), and so
+    // does `sauce run`: nothing creates it, so it stays the System Program's.
+    await chain.setAccount(account.pot, {
+      lamports: 1_000_000n,
+      owner: system,
+      data: new Uint8Array(),
+      executable: false,
+    });
+    const result = await chain.run(program("multiply"), { from: 8, args: [3n, 4n, 100n] });
+    assert.equal(result.returned, 12n);
+    assert.equal(result.engine, chain.engine);
+    const held = await chain.getAccount(account.pot);
+    assert.deepEqual([held?.owner, held?.lamports, held?.data.length], [system, 1_000_000n, 0]);
+    // Creating it is a choice, which `deployPot` makes: the engine's, with its storage, the
+    // lamports already there kept.
+    await chain.deployPot(8);
+    const made = await chain.getAccount(account.pot);
+    assert.equal(made?.owner, chain.engine);
+    assert.equal(made?.data.length, 10_240);
+    assert.ok(made!.lamports >= 1_000_000n);
+  });
+
+  it("cooks a Pot of an engine this package's programs do not run on through the installed engine, as sauce does", async () => {
+    const account = chain.account(1);
+    // v12-svm 1.3.0's engine, which none of this compiler's output runs on: its Pot (10,240 bytes,
+    // as `create_pot` leaves one) is cooked on the installed engine, as earlier SDKs cooked every
+    // Pot. The program itself need not be on the chain.
+    const old = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+    await chain.setAccount(account.pot, {
+      lamports: 72_161_280n,
+      owner: old,
+      data: new Uint8Array(10_240),
+      executable: false,
+    });
+    const result = await chain.run(program("multiply"), { from: 1, args: [3n, 5n, 100n] });
+    assert.equal(result.returned, 15n);
+    assert.equal(result.engine, chain.engine);
+    assert.equal((await chain.getAccount(account.pot))?.owner, old);
+  });
+
   it("asks for the accounts nothing derives, and refuses one the program does not take", async () => {
     const source =
       "function main(destination: Account<Writable>, amount: Uint256): Uint256 {\n" +
@@ -251,3 +302,63 @@ describe('local({ chain: "solana" })', { skip: solanaMissing() }, () => {
     });
   });
 });
+
+describe(
+  "a Solana chain opened over an address that holds only lamports",
+  { skip: solanaMissing() },
+  () => {
+    it("leaves account 0's Pot as it is, so a SOL payout through the System Program still works", async () => {
+      const system = address("11111111111111111111111111111111");
+      // Account 0's Pot address, from a chain opened only to read it.
+      const probe = await local({ chain: "solana" });
+      const pot = probe.account(0).pot;
+      await probe.stop();
+      // A bank that holds lamports there BEFORE the chain opens, as a fork or a replay does of a
+      // cluster where someone sent them: the kit creates a Pot only where nothing is, never over
+      // an address that holds only lamports, whose owner may pay SOL out of it (the System
+      // Program's transfer takes no `from` that carries data).
+      const unixTimestamp = BigInt(Math.floor(Date.now() / 1000));
+      const bank = await Bank.open({
+        mode: "local",
+        header: {
+          clock: {
+            slot: 0n,
+            epochStartTimestamp: unixTimestamp,
+            epoch: 0n,
+            leaderScheduleEpoch: 0n,
+            unixTimestamp,
+          },
+        },
+        engine: address(v12SvmEngineProgramId()),
+        kitchen: address(v12SvmKitchenProgramId()),
+      });
+      bank.moveClock(1_000n, unixTimestamp);
+      await bank.ensure([pot]);
+      bank.set(pot, {
+        lamports: 5_000_000n,
+        owner: system,
+        data: new Uint8Array(),
+        executable: false,
+      });
+      const chain = await StartedChain.start(requireChain("solana"), bank, { zeroFee: true });
+      try {
+        const held = await chain.getAccount(pot);
+        assert.deepEqual([held?.owner, held?.lamports, held?.data.length], [system, 5_000_000n, 0]);
+        const to = chain.account(5).address;
+        const source =
+          "function main(system: Account, pot: Account<Writable, Signer>, to: Account<Writable>) {\n" +
+          "  let native = hex`02000000`;\n" +
+          "  svm.call(system, [pot, to], native.concat(1000000n.toBytesLe(8)));\n}\n";
+        const result = await chain.run(
+          { source },
+          { accounts: { system: "system", pot: "pot", to } },
+        );
+        assert.equal(result.delta(to, "SOL"), 1_000_000n);
+        const after = await chain.getAccount(pot);
+        assert.deepEqual([after?.owner, after?.lamports], [system, 4_000_000n]);
+      } finally {
+        await chain.stop();
+      }
+    });
+  },
+);

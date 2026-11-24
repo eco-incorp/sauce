@@ -679,6 +679,11 @@ of each token into the Pot after its deployment and before the cook; ETH:<amount
 as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one
 approval, or nothing happens.
 
+Offline (--offline, or no endpoint) --owner means this release's Pot, and an earlier release's
+cannot be seen. The Pot store also keeps Pots that landed on a fork, so where it records an
+earlier release's Pot for the owner and salt, nothing is built, naming the record, until
+--pot <address> names a Pot or an endpoint lets the chain say.
+
 On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },
 the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via
 engine, the engine's own paid cook, with no Pot. A Pot not created yet is created by the
@@ -770,7 +775,10 @@ With an endpoint it reads the Pot first. One with no code that --owner (or the s
 the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any
 account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot
 and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the
-Pot's balance, and warns when they do not cover the fee. --offline reads nothing.
+Pot's balance, and warns when they do not cover the fee. --offline reads nothing: --owner
+then means this release's Pot, and where the Pot store records an earlier release's Pot for
+the owner and salt (it also keeps Pots that landed on a fork) nothing is signed or built
+until --pot <address> names a Pot or an endpoint lets the chain say.
 
 --cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce
 word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a
@@ -971,7 +979,7 @@ EVM chains only:
 Solana only:
       --keypair <path>  Sign with a keypair file (a JSON array of 64 bytes)
 
-A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known
+A Pot's address is the released Kitchen's for (owner, salt), so it is known
 before it exists. You need not deploy it yourself: sauce run deploys it when it first
 needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by
 hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with
@@ -984,6 +992,12 @@ your Pot (the keystore's own address field is read, with no password, where it h
 Without --deploy it also reads
 the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and
 whether the Pot is deployed and whose it is (under `deployment`, and on stderr).
+
+With --offline (or no endpoint) it only predicts: this release's Pot. The Pot store also
+keeps Pots that landed on a fork or another network with the chain's id, so where it
+records an earlier release's Pot for the owner and salt, nothing says which is the owner's:
+both are printed under `candidates`, each with where it came from (the record's file,
+transaction and block hash), with no `pot` and no deployment to send.
 
 On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot
 instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so

@@ -19,15 +19,14 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
-  encodeAbiParameters,
-  getCreate2Address,
+  getAddress,
   http,
-  keccak256,
   type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 import { DEFAULT_POT_SALT } from "../src/testing/chain.js";
+import { v12PredictPot } from "../src/testing/sdk.js";
 import { setUpStack } from "../src/testing/stack.js";
 
 /** Anvil's first dev account: the Pot's owner. */
@@ -81,14 +80,9 @@ export async function deploy(
       : `chain ${chainId} did not run the release: deployed it at its addresses`,
   );
 
-  // The owner's Pot under the default salt, which `sauce` finds with no --salt.
-  const pot = getCreate2Address({
-    bytecodeHash: stack.potInitCodeHash,
-    from: stack.kitchen,
-    salt: keccak256(
-      encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, DEFAULT_POT_SALT]),
-    ),
-  });
+  // The owner's Pot under the default salt, which `sauce` finds with no --salt: the release's
+  // address for it (CREATE3 since kitchen-evm 1.4.0).
+  const pot = getAddress(v12PredictPot(owner, DEFAULT_POT_SALT));
   if (((await publicClient.getCode({ address: pot })) ?? "0x") === "0x") {
     const hash = await walletClient.writeContract({
       abi: stack.kitchenAbi,

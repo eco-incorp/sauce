@@ -666,6 +666,15 @@ is not deployed on <chain>`: there is no Pot to cook on there. The checks trust 
   every read does: a contract at a Pot's address that answers as a Pot would needs a dishonest
   endpoint (a fork, or an RPC that lies). Offline the deployed release cannot be checked, and the
   notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+- **A Pot only the store records** (exit 1, EVM, offline). `the Pot store records … Pot for this
+owner and salt…`: the command read no chain, and the Pot store, which also keeps Pots that
+  landed on a fork or another network with the chain's id, holds a Pot of another Kitchen release
+  for the owner and salt, so nothing offline says which of it and this package's Pot is theirs.
+  Nothing was built, signed or funded (`sauce tx` with `--fund` or `--value` too, `sauce sign` and
+  `--cancel`). Pass an RPC endpoint and the chain decides, or name the Pot with `--pot <address>`:
+  its engine then comes from the record when the record is that Pot's own. `sauce pot --offline`
+  prints both Pots under `candidates`, with the record's file, transaction and block hash, and
+  builds nothing.
 - **A Pot with no owner** (exit 2, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
   given is the zero address, and no Kitchen call deploys a private Pot for it, so nothing was built,
   online or offline. Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may

@@ -37,6 +37,7 @@ export {
   compileProgram,
   expectingRevert,
   potCommand,
+  potRouterStatus,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -44,6 +45,7 @@ export {
   type CookInput,
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";
+export { cookPotOf } from "../../sdk/dist/cli/cook-pot.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,
@@ -135,7 +137,9 @@ export {
   parseAccounts,
   parsePubkey,
   svmPotCommand,
-  svmPotExists,
+  svmPotFacts,
+  svmPotState,
+  svmPotWithFacts,
   svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,

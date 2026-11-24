@@ -78,7 +78,7 @@ import {
   svmReader,
   type SvmSent,
 } from "./solana.js";
-import { releasedProgramsCalled } from "./solana-release.js";
+import { programsCalled } from "./solana-release.js";
 import { requireSupported } from "./support.js";
 import {
   decodeCursor,
@@ -86,6 +86,7 @@ import {
   isCook,
   isPlanCook,
   nextStep,
+  planEngine,
   planPrograms,
   readPlanTx,
   signableStep,
@@ -303,6 +304,7 @@ async function nextOf(input: SendInput, plan: SvmPlan): Promise<NextStep> {
     ctx.url,
     ctx.chain,
     planPrograms(input.close === true ? { ...plan, closing: true } : plan),
+    [planEngine(plan)],
   );
   const step = await nextStep(plan, ctx, { close: input.close === true });
   if (step.name === "done") {
@@ -810,14 +812,13 @@ async function sendSvm(
   // The endpoint serves the cluster the chain names, before anything is read from it.
   await requireCluster(rpc, input.rpcUrl, input.chain);
   // What goes to the engine or the Kitchen goes only to a cluster running the release's: checked
-  // before any of it is sent.
+  // before any of it is sent. A signed transaction was built elsewhere, so the engines it names are
+  // held to their release's digest and not to this SDK's compiler, which did not compile it.
   for (const tx of signed) {
-    await requireReleased(
-      rpc,
-      input.rpcUrl,
-      input.chain,
-      releasedProgramsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction)),
-    );
+    const called = programsCalled(await transactionAddresses(rpc, input.rpcUrl, tx.transaction));
+    await requireReleased(rpc, input.rpcUrl, input.chain, called.needs, called.engines, {
+      paired: false,
+    });
   }
   const read = svmReader(input.rpcUrl);
   const { address: feeConfig } = await deriveExecutionFeeConfigPda(

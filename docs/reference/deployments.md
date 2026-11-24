@@ -22,51 +22,82 @@ engine build, so a program compiled for either reads chain id 1399811150; `solan
 own id, 1399811151, is the SDK's key for the chain. Engine deployment does not establish venue
 deployments: the SDK's Solana venues remain mainnet-only.
 
-## Deployed defaults
+## The release
 
-The compiler the SDK pins and the engine and Kitchen versions it uses by default. Opt-in
-release artifacts can differ from these deployments; see the
-[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program).
+The compiler the SDK pins and the engine and Kitchen versions it uses by default; the
+[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program)
+say what each release changed and which engines run a compiler's programs.
 
 | Component | Version |
 | --- | --- |
-| Compiler, `@eco-incorp/sauce-compiler` | 2.6.3 |
-| EVM engine, `v12-evm` | 1.3.0 |
-| EVM Kitchen, `kitchen-evm` | 1.3.0 |
-| Solana engine, `v12-svm` | 1.4.0 |
+| Compiler, `@eco-incorp/sauce-compiler` | 2.6.4 |
+| EVM engine, `v12-evm` | 1.5.0 |
+| EVM Kitchen, `kitchen-evm` | 1.5.0 |
+| Solana engine, `v12-svm` | 1.4.1 |
 | Solana Kitchen, `kitchen-svm` | 1.1.0 |
 
 ## EVM chains
 
 | Contract | Address | What it is | In TypeScript |
 | --- | --- | --- | --- |
-| Engine | `0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67` | the interpreter that runs a program: a cook is the Pot's `cook(engine, program)` | `v12EngineAddress()` |
+| Engine | `0x8c3DF550295f0F9975C5F0f3B017fF9982456c4a` | the interpreter that runs a program: a cook is the Pot's `cook(engine, program)` | `v12EngineAddress()` |
 | Kitchen | `0x19845b22989150E6B09dE55a661295Dd9188506b` | creates Pots (`deployPot(owner, salt)`) and sets the fee every cook pays (`executionFee()`) | `v12KitchenAddress()` |
-| Kitchen implementation | `0xDDAEf9AFa92F86Bd89132F18FCA79B10Ed25e99c` | behind the Kitchen, an upgradeable proxy: call the Kitchen | `v12KitchenImplementationAddress()` |
-| Router | `0x4dF3b7C7d63261368489b330C36913cEee5D0044` | the Router a new Pot starts on, through which the swaps a pool calls back for run | `v12RouterAddress()` |
+| Kitchen implementation | `0x961Bb7e8C5304961e0E5F92B2BB3cdbE6e936a3c` | behind the Kitchen, an upgradeable proxy: call the Kitchen | `v12KitchenImplementationAddress()` |
+| Router | `0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6` | the Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to; the swaps a pool calls back for run through it | `v12RouterAddress()` |
 | Quote Router | `0x9201aF06536Cb4819cf1F08aE7063c5997D87459` | generation 3: quotes Uniswap V3 and V4 swaps through `eth_call`, holding no tokens; no Pot's Router | `v12QuoteRouterAddress()` |
 
 ### Pots
 
-The Kitchen deploys an owner's Pot under a 32-byte salt, zero unless another is chosen, at
-`CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`, with the Pot init-code
-hash:
+The Kitchen places an owner's Pot under a 32-byte salt, zero unless another is chosen, by CREATE3:
+a proxy is created at `CREATE2(kitchen, gateSalt, potProxyInitCodeHash)`, and the Pot is the
+contract that proxy creates first, `CREATE(proxy, 1)`. `gateSalt` is
+`keccak256(abi.encode(owner, salt))`, and `keccak256(abi.encode(owner, salt, true))` for a Pot with
+a fixed Router or a Shared Pot (the zero address as owner), so the three differ for one owner and
+salt.
 
-`0xe8e1f54a0a3c700fedc0e0019c5a7dc7ca08e676862db576b864e744186cd7f2`
+| What | Value |
+| --- | --- |
+| Pot proxy init-code hash | `0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f` |
+| Pot profile hash | `0x1ca6981b8c987e444f750b8c3c7224aee18696dfb2ceea3bbee2c086edbc9167` |
+| Fixed Router | `0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6` |
+| Pot creation code hash, which the Kitchen's `potInitCodeHash()` reports | `0x127f4d767a3585b9d2bb1a4d6ef3b46289cfa0452ac8323baf91fc8ffbcb03dc` |
 
 `v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula
-and the hash, and `sauce pot --owner <address>` prints an owner's Pot.
-For opt-in releases, see [CREATE3 Pot prediction](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
+and the hashes, and `sauce pot --owner <address>` prints an owner's Pot.
+
+### Pots of earlier releases
+
+Every Pot keeps its address when a release changes the Router or the engine. The engine a
+cook on it names depends on the Pot:
+
+- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 (kitchen-evm 1.3.0's), and
+  a fixed-Router or Shared Pot minted with an earlier Router, keep the engine of their release.
+  The SDK cooks each on the engine this table names.
+- A Pot of a Kitchen release before that one (kitchen-evm 1.0.0 to 1.2.0), placed by CREATE2
+  too, is not in the table: its engine does not run this SDK's programs, and the SDK refuses
+  to cook it.
+- Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,
+  cooks on the installed engine, whichever Router it runs.
+
+| Engine | Version | Address | Its Pots |
+| --- | --- | --- | --- |
+| EVM engine, `v12-evm` | 1.4.0 | `0x983C102aa6321187877530723dDF6921AB4861a6` | fixed-Router and Shared Pots whose Router is 0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759 |
+| EVM engine, `v12-evm` | 1.3.0 | `0x0F50E5dB8d30c102f1da1301a1C8A06E06Fa0f67` | kitchen-evm 1.3.0 Pots |
+| Solana engine, `v12-svm` | 1.4.0 | `53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW` | Solana Pots whose owner program is this engine |
 
 ## Solana
 
 | Program | Program id | Key, the value a program holds | In TypeScript |
 | --- | --- | --- | --- |
-| Engine | `53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW` | `0x3c1c3c1e1b25a58a15a88145bcc823446ec88fec133af645d0621bacfcdb0303` | `v12SvmEngineProgramId()` |
+| Engine | `8ukALvkKyJcyf5aEAUwTbLwSr9iMYktnRZL5if8vYBhg` | `0x7584d01e59afbe682c8faba4c2ff0695f16b2e8cdce42c07504e2e7e152ce127` | `v12SvmEngineProgramId()` |
 | Kitchen | `SauceYLdWyabKFwtevSAgsSDoMjCoTKtx1HTb63eJot` | `0x068ddbf2073c779081c9b11a48aea267e5545cb7f387144de6b7ff8c7138818b` | `v12SvmKitchenProgramId()` |
 
-The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the
-Kitchen's program address for the seeds `"pot"`, the owner and the 32-byte salt.
+A Pot is owned by the engine that created it. The SDK creates new Pots under the engine above and
+cooks a Pot on the engine that owns it where that engine runs this SDK's programs (the Solana
+engine listed under the earlier releases); a Pot of an engine that does not run them is cooked on
+the engine above. The Kitchen binds no engine to a Pot, so that choice is the SDK's, and a program on
+Solana reads the engine running the cook as `ctx.self()`. A Pot's address does not depend on the
+engine: it is the Kitchen's program address for the seeds `"pot"`, the owner and the 32-byte salt.
 
 ## Next
 

@@ -199,6 +199,12 @@ It holds every account the test's transactions named, as the cluster held it whe
 each program's code included. An account the recording does not hold reads as missing, and the
 error says so.
 
+The Sauce engine has two builds, one for mainnet-beta and one for devnet and testnet, and a program
+reads a different chain id on each. The file names the build the recording ran on and its digest,
+and a replay runs exactly that build. A package whose build has another digest refuses the replay:
+record it again. A file from before recordings named a build was made on mainnet's, and replays on
+it.
+
 ## `SolanaTestChain`
 
 What `fork` and `local` return when the chain is Solana.

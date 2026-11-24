@@ -156,15 +156,15 @@ Kitchen call the engine requires. Build Solana execution with the Kitchen client
 An EVM Pot address depends on the Kitchen's derivation mode, the owner and the salt.
 Prediction reads no chain and does not confirm a deployment.
 
-| Export                                                    | From           | Does                                                                                                    |
-| --------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
-| `v12PredictPot(owner, salt?, kitchenOrOptions?)`          | `.`            | Predicts a CREATE2 Pot by default. Pass `{ compiler, routerFixed? }` to select a pinned CREATE3 Kitchen |
-| `DEFAULT_POT_SALT`                                        | `.`            | Every owner's default Pot salt: zero bytes32, `0x00…00`                                                 |
-| `potSalt(label)`                                          | `.`            | The salt of the Pot an owner names `label`: `keccak256` of its UTF-8 bytes. An empty label throws       |
-| `routes.sauceEvmDeployPotCall({ owner, salt, kitchen? })` | `.`            | The Kitchen's `deployPot(owner, salt)` call, by default through the released Kitchen                    |
-| `v12EngineAddress()`                                      | `/deployments` | The released engine's address                                                                           |
-| `v12KitchenAddress()`                                     | `/deployments` | The released Kitchen's address                                                                          |
-| `kitchenExecutionFee(kitchen?)`                           | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                             |
+| Export                                                    | From           | Does                                                                                                                                                                                       |
+| --------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v12PredictPot(owner, salt?, kitchenOrOptions?)`          | `.`            | Predicts the current release's Pot (CREATE3 since kitchen-evm 1.4.0). `{ routerFixed: true }` for a fixed Router, the zero owner for a Shared Pot, `{ compiler }` for an earlier release's |
+| `DEFAULT_POT_SALT`                                        | `.`            | Every owner's default Pot salt: zero bytes32, `0x00…00`                                                                                                                                    |
+| `potSalt(label)`                                          | `.`            | The salt of the Pot an owner names `label`: `keccak256` of its UTF-8 bytes. An empty label throws                                                                                          |
+| `routes.sauceEvmDeployPotCall({ owner, salt, kitchen? })` | `.`            | The Kitchen's `deployPot(owner, salt)` call, by default through the released Kitchen                                                                                                       |
+| `v12EngineAddress()`                                      | `/deployments` | The released engine's address                                                                                                                                                              |
+| `v12KitchenAddress()`                                     | `/deployments` | The released Kitchen's address                                                                                                                                                             |
+| `kitchenExecutionFee(kitchen?)`                           | `.`            | A request and decoder for the Kitchen's `executionFee()`; it reads no chain                                                                                                                |
 
 The default Kitchen has one Pot per owner and salt. The zero salt is the convention for the default Pot,
 and a label names any other: `v12PredictPot(owner, potSalt("treasury"))`. To use an exact salt,
@@ -190,32 +190,34 @@ chain, so it cannot say whether code is there. Check the chain before trusting a
 [prepare-pot.ts](../examples/prepare-pot.ts) shows prediction, deployment and the owner and
 Kitchen checks. A legacy CREATE2 address includes the Pot init-code hash.
 
-### Predict a Pot for the opt-in CREATE3 Kitchen
+### Fixed-Router, Shared and earlier releases' Pots
 
-Pass the release's compiler version to select its Kitchen and CREATE3 proxy init-code hash.
-Omit `routerFixed` to predict a private Pot with a mutable Router; pass `true` for a
-private Pot with a fixed Router. Those two Pots have different addresses for the same owner
-and salt. Pass the zero address as the owner for a shared Pot, which always has a fixed Router.
+`v12PredictPot(owner, salt)` is the current release's private Pot with a mutable Router. Pass
+`{ routerFixed: true }` for a private Pot with a fixed Router, and the zero address as the owner
+for a Shared Pot, which always has a fixed Router. The three have different addresses for the same
+owner and salt. `{ compiler }` names an earlier release's row and predicts the Pot that release's
+Kitchen made: a kitchen-evm 1.3.0 Pot is CREATE2 under its Pot init-code hash.
 
 ```ts
-const release = { compiler: "2.6.3" };
-const mutable = v12PredictPot(owner, salt, release);
-const fixed = v12PredictPot(owner, salt, { ...release, routerFixed: true });
-const shared = v12PredictPot("0x0000000000000000000000000000000000000000", salt, release);
+const mutable = v12PredictPot(owner, salt);
+const fixed = v12PredictPot(owner, salt, { routerFixed: true });
+const shared = v12PredictPot("0x0000000000000000000000000000000000000000", salt);
+const earlier = v12PredictPot(owner, salt, { compiler: "2.6.2" }); // a kitchen-evm 1.3.0 Pot
 ```
 
-A compiler pin without a recorded CREATE3 Kitchen is rejected. To create a Pot on a verified
-CREATE3 Kitchen, use its `deployPot(owner, salt, routerFixed)` or `deploySharedPot(salt)` call.
-By default the two-argument deploy helper and the CLI still target the deployed Kitchen.
-A CREATE3 prediction alone does not verify the Pot's code, profile, or Router.
+To create a fixed-Router or Shared Pot, use the Kitchen's `deployPot(owner, salt, routerFixed)` or
+`deploySharedPot(salt)` call. The two-argument deploy helper and the CLI deploy the private Pot
+with a mutable Router. A prediction alone does not verify the Pot's code, profile or Router.
 
-Before you fund a predicted CREATE3 address, check the chain: call its Kitchen's
-`predictPot(owner, salt)` (`predictPot(owner, salt, true)` for a fixed Router,
-`predictSharedPot(salt)` for a shared Pot) and fund the address only if it returns the same one, or
-confirm that its Kitchen is the 1.4.0 release. The deployed 1.3.0 Kitchen deploys CREATE2 Pots at
-other addresses, so on a chain still running it a CREATE3 prediction is an address no Pot will be
-deployed at. A legacy CREATE2 Pot that was funded but never deployed cannot be deployed once its
-chain's Kitchen moves to 1.4.0, so deploy it first.
+A fixed-Router or Shared Pot keeps the Router it was minted with, and an engine runs it only if it
+was built for that Router. `v12PredictPot` says where a Pot is; `potEngine(client, pot)` from
+`/evm/engine` says which engine a cook on it names, and `v12ReleaseSet(compiler)["kitchen-evm"].fixedRouter`
+is the Router of each release's fixed-Router and Shared Pots.
+
+Before you fund a predicted address, check the chain: call its Kitchen's `predictPot(owner, salt)`
+(`predictPot(owner, salt, true)` for a fixed Router, `predictSharedPot(salt)` for a shared Pot) and
+fund the address only if it returns the same one. A Kitchen of another release puts the Pot
+elsewhere, and what is sent to an address that no Pot is deployed at stays there.
 
 On Arc, native value is USDC at 18 decimals, drawn from the same balance as the USDC ERC-20; see
 [Arc: USDC is the native coin](../reference/chains/arc.md#notes).

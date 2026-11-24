@@ -16,6 +16,10 @@
  * (1.0.0 and earlier), and set with `setRouter` — the way a fresh deploy sets it — for one that keeps
  * it in storage.
  *
+ * `upgradeReleaseStack` takes such a stack to a later release, as a release's own rollout does. A
+ * Router-only release keeps the Kitchen's implementation and sends `setRouter` alone, as v12's
+ * Kitchen deploy does.
+ *
  * It reads no file: the caller passes the synced artifacts (`sdk/{src,dist}/artifacts`). Used by the
  * SDK's own suites (`test/evm/gated-engine.ts`) and by `@eco-incorp/sauce/testing`; not exported.
  */
@@ -72,82 +76,130 @@ export interface ReleaseStack {
 const PROXY_CHILD_INITCODE = "0x67363d3d37363d34f03d5260086018f3" as Hex;
 const PROXY_CHILD_RUNTIME = "0x363d3d37363d34f0" as Hex;
 
+/** EIP-1967's implementation slot, which the Kitchen's UUPS proxy delegates through. */
+const IMPLEMENTATION_SLOT =
+  "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc" as Hex;
+
+type Clients = { publicClient: PublicClient; walletClient: WalletClient; testClient: TestClient };
+
+/** Sends `data` to `to` from `owner`, an account the node signs for. */
+async function send(clients: Clients, owner: Address, to: Address, data: Hex): Promise<void> {
+  const hash = await clients.walletClient.sendTransaction({
+    account: owner,
+    chain: null,
+    data,
+    gas: 30_000_000n,
+    to,
+  });
+  const receipt = await clients.publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success")
+    throw new Error(`deploying the stack: a call to ${to} reverted`);
+}
+
+/**
+ * CREATE3 at `ref.address`: install CreateX's proxy child at the salt's CREATE2 address and let it
+ * CREATE `initCode` at its nonce 1.
+ */
+async function create3(
+  clients: Clients,
+  owner: Address,
+  factory: Address,
+  ref: ContractRef,
+  initCode: Hex,
+): Promise<Address> {
+  const { publicClient, testClient } = clients;
+  const child = getCreate2Address({
+    bytecodeHash: keccak256(PROXY_CHILD_INITCODE),
+    from: factory,
+    salt: ref.guardedSalt,
+  });
+  const at = getContractAddress({ from: child, nonce: 1n });
+  if (at !== getAddress(ref.address)) {
+    throw new Error(`the release's salt derives ${at}, not the recorded ${ref.address}`);
+  }
+  if (ref.initCodeHash !== undefined && keccak256(initCode) !== ref.initCodeHash) {
+    throw new Error(`the initcode for ${ref.address} does not hash to its recorded address`);
+  }
+  await testClient.setCode({ address: at, bytecode: "0x" });
+  await testClient.setNonce({ address: at, nonce: 0 });
+  await testClient.setCode({ address: child, bytecode: PROXY_CHILD_RUNTIME });
+  await testClient.setNonce({ address: child, nonce: 1 });
+  await send(clients, owner, child, initCode);
+  if (!(await publicClient.getCode({ address: at }))) {
+    throw new Error(`nothing was created at ${at}`);
+  }
+
+  return at;
+}
+
+/**
+ * CREATE3 at `ref.address` only where nothing is there yet: an address derived from a contract's
+ * content only ever holds that content, so code already there is the release's own, and `create3`
+ * would clear it first.
+ */
+async function ensure(
+  clients: Clients,
+  owner: Address,
+  factory: Address,
+  ref: ContractRef,
+  initCode: Hex,
+): Promise<Address> {
+  const code = await clients.publicClient.getCode({ address: getAddress(ref.address) });
+  if (code !== undefined && code !== "0x") return getAddress(ref.address);
+
+  return create3(clients, owner, factory, ref, initCode);
+}
+
+/**
+ * Which Kitchen era a release is, read off its ABI the way v12's own deploy tooling does
+ * (`release-artifacts.mjs#initCode`): kitchen-evm up to 1.0.0 took the Router as its constructor
+ * argument and held it immutably; later releases take nothing and keep the Router in storage, set
+ * with `setRouter`.
+ */
+const takesRouter = (kitchenAbi: Abi): boolean =>
+  (
+    kitchenAbi.find((entry) => entry.type === "constructor") as
+      { inputs: readonly unknown[] } | undefined
+  )?.inputs.length === 1;
+
 /**
  * Deploys the stack at its release addresses, owned by `owner`, which must be an account the node
  * signs for (an anvil dev account): every deployment and setting is sent from it.
  */
 export async function deployReleaseStack(
-  clients: { publicClient: PublicClient; walletClient: WalletClient; testClient: TestClient },
+  clients: Clients,
   owner: Address,
   artifacts: ReleaseStackArtifacts,
 ): Promise<ReleaseStack> {
-  const { publicClient, walletClient, testClient } = clients;
   const { factory, contracts } = artifacts.deployments;
   const kitchenAbi = artifacts.kitchen.abi;
 
-  const send = async (to: Address, data: Hex): Promise<void> => {
-    const hash = await walletClient.sendTransaction({
-      account: owner,
-      chain: null,
-      data,
-      gas: 30_000_000n,
-      to,
-    });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success")
-      throw new Error(`deploying the stack: a call to ${to} reverted`);
-  };
-
-  /** CREATE3 at `ref.address`: install CreateX's proxy child at the salt's CREATE2 address and let
-   *  it CREATE `initCode` at its nonce 1. */
-  const create3 = async (ref: ContractRef, initCode: Hex): Promise<Address> => {
-    const child = getCreate2Address({
-      bytecodeHash: keccak256(PROXY_CHILD_INITCODE),
-      from: factory,
-      salt: ref.guardedSalt,
-    });
-    const at = getContractAddress({ from: child, nonce: 1n });
-    if (at !== getAddress(ref.address)) {
-      throw new Error(`the release's salt derives ${at}, not the recorded ${ref.address}`);
-    }
-    if (ref.initCodeHash !== undefined && keccak256(initCode) !== ref.initCodeHash) {
-      throw new Error(`the initcode for ${ref.address} does not hash to its recorded address`);
-    }
-    await testClient.setCode({ address: at, bytecode: "0x" });
-    await testClient.setNonce({ address: at, nonce: 0 });
-    await testClient.setCode({ address: child, bytecode: PROXY_CHILD_RUNTIME });
-    await testClient.setNonce({ address: child, nonce: 1 });
-    await send(child, initCode);
-    if (!(await publicClient.getCode({ address: at }))) {
-      throw new Error(`nothing was created at ${at}`);
-    }
-
-    return at;
-  };
-
-  const engine = await create3(contracts.engine, artifacts.runtimeCreationCode);
-  const router = await create3(contracts.router, artifacts.routerBytecode);
-  // Which Kitchen era this release is, read off its ABI the way v12's own deploy tooling does
-  // (`release-artifacts.mjs#initCode`): kitchen-evm up to 1.0.0 took the Router as its constructor
-  // argument and held it immutably; later releases take nothing and keep the Router in storage,
-  // set with `setRouter`.
-  const takesRouter =
-    (
-      kitchenAbi.find((entry) => entry.type === "constructor") as
-        { inputs: readonly unknown[] } | undefined
-    )?.inputs.length === 1;
+  const engine = await create3(
+    clients,
+    owner,
+    factory,
+    contracts.engine,
+    artifacts.runtimeCreationCode,
+  );
+  const router = await create3(clients, owner, factory, contracts.router, artifacts.routerBytecode);
   const settable = kitchenAbi.some(
     (entry) => entry.type === "function" && entry.name === "setRouter",
   );
   const kitchenImplementation = await create3(
+    clients,
+    owner,
+    factory,
     contracts.kitchenImplementation,
-    takesRouter
+    takesRouter(kitchenAbi)
       ? concat([artifacts.kitchen.bytecode, encodeAbiParameters([{ type: "address" }], [router])])
       : artifacts.kitchen.bytecode,
   );
   // KitchenProxy(logic, initialOwner, initialExecutionFee): initialization refuses a zero fee, so it
   // is priced at one wei here and made free below — the same order a Kitchen deploy follows.
   const kitchen = await create3(
+    clients,
+    owner,
+    factory,
     contracts.kitchen,
     concat([
       artifacts.kitchenProxyBytecode,
@@ -159,13 +211,92 @@ export async function deployReleaseStack(
   );
   if (settable) {
     await send(
+      clients,
+      owner,
       kitchen,
       encodeFunctionData({ abi: kitchenAbi, functionName: "setRouter", args: [router] }),
     );
   }
   await send(
+    clients,
+    owner,
     kitchen,
     encodeFunctionData({ abi: kitchenAbi, functionName: "setExecutionFee", args: [0n] }),
+  );
+
+  return { engine, router, kitchenImplementation, kitchen };
+}
+
+/**
+ * Upgrades a stack `deployReleaseStack` stood up to the release `artifacts` describes, as the
+ * release's own rollout does: its engine, Router and Kitchen implementation deployed at their
+ * release addresses (CREATE3), then the Kitchen proxy, which stays where it is, upgraded to the new
+ * implementation (`upgradeToAndCall(implementation, 0x)`) and given the new Router (`setRouter`).
+ * Pots already minted keep their code, their Router and their engine.
+ *
+ * A Router-only release keeps the Kitchen's implementation: where the proxy already runs it, only
+ * the engine and the Router are new, and `setRouter` is all that is sent to the Kitchen, as v12's
+ * Kitchen deploy does. The engine and the Router are deployed only where nothing is there: a content
+ * address only ever holds that content.
+ */
+export async function upgradeReleaseStack(
+  clients: Clients,
+  owner: Address,
+  artifacts: ReleaseStackArtifacts,
+): Promise<ReleaseStack> {
+  const { factory, contracts } = artifacts.deployments;
+  const kitchenAbi = artifacts.kitchen.abi;
+  const kitchen = getAddress(contracts.kitchen.address);
+  if (!(await clients.publicClient.getCode({ address: kitchen }))) {
+    throw new Error(
+      `there is no Kitchen at ${kitchen} to upgrade: upgrade a stack deployReleaseStack deployed`,
+    );
+  }
+  if (takesRouter(kitchenAbi)) {
+    throw new Error(
+      "upgrading to a Kitchen that takes its Router in its constructor is not supported",
+    );
+  }
+
+  const engine = await ensure(
+    clients,
+    owner,
+    factory,
+    contracts.engine,
+    artifacts.runtimeCreationCode,
+  );
+  const router = await ensure(clients, owner, factory, contracts.router, artifacts.routerBytecode);
+  const implementation = getAddress(contracts.kitchenImplementation.address);
+  const slot = await clients.publicClient.getStorageAt({
+    address: kitchen,
+    slot: IMPLEMENTATION_SLOT,
+  });
+  const running = slot === undefined ? undefined : getAddress(`0x${slot.slice(-40)}`);
+  let kitchenImplementation = implementation;
+  if (running !== implementation) {
+    kitchenImplementation = await create3(
+      clients,
+      owner,
+      factory,
+      contracts.kitchenImplementation,
+      artifacts.kitchen.bytecode,
+    );
+    await send(
+      clients,
+      owner,
+      kitchen,
+      encodeFunctionData({
+        abi: kitchenAbi,
+        functionName: "upgradeToAndCall",
+        args: [kitchenImplementation, "0x"],
+      }),
+    );
+  }
+  await send(
+    clients,
+    owner,
+    kitchen,
+    encodeFunctionData({ abi: kitchenAbi, functionName: "setRouter", args: [router] }),
   );
 
   return { engine, router, kitchenImplementation, kitchen };

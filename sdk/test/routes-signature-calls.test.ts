@@ -110,7 +110,7 @@ describe("a function the ABI leaves out by arity, called by its signature", () =
     // The bytes this program compiled to before a function could be called by its signature (the
     // pinned compiler's; a compiler release that changes them changes this digest with them).
     // Compiler 2.6.1 compiled it to 15e4ed43885b378810247c05dba1f1efd8a8d6753c854e890e5bb0908866192f;
-    // 2.6.3's entry and address checks give the digest below, which origin/main compiles it to too.
+    // 2.6.3's and 2.6.4's entry and address checks give the digest below, which origin/main compiles it to too.
     expect(createHash("sha256").update(Buffer.from(bytecode, "hex")).digest("hex")).toBe(
       "935b22e61c1466bc1b96f396bf8b46fb4c9fc5f03838adf6f4d46e464e5fe726",
     );

@@ -4,9 +4,9 @@
  *
  * Every piece is the SDK's own: `compileSauceProgram` compiles the file as a standalone program with
  * the chain's ambient names, `encodeEntryArguments` encodes `main`'s arguments, `buildSauceEvmCall`
- * (`v12Pot.encodeCook`) is the cook, `v12PredictPot`, `potSalt` and `sauceEvmDeployPotCall` are the
- * Pot, and `kitchenExecutionFee` is the Kitchen's fee. Nothing is reimplemented here; `chain.ts`
- * reads and sends, and `signer.ts` holds the key.
+ * (`v12Pot.encodeCook`) is the cook, on the engine `cook-pot.ts` picks for its Pot, `v12PredictPot`,
+ * `potSalt` and `sauceEvmDeployPotCall` are the Pot, and `kitchenExecutionFee` is the Kitchen's fee.
+ * Nothing is reimplemented here; `chain.ts` reads and sends, and `signer.ts` holds the key.
  */
 import { createRequire } from "node:module";
 import { dirname, resolve as resolvePath } from "node:path";
@@ -28,10 +28,12 @@ import {
   v12DeployedAddresses,
   v12EngineAddress,
   v12KitchenAddress,
+  v12RouterAddress,
   v12SvmEngineProgramId,
 } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { nativeSymbol } from "../evm/effects.js";
+import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 
 /** The released Kitchen, which deploys every Pot (`V12Deployments.json`). */
 export const kitchenAddress = (): Address => getAddress(v12KitchenAddress());
@@ -45,6 +47,7 @@ import {
   type SauceCompileOptions,
 } from "../routes/sauce-route.js";
 import { CliError, UsageError, type DefineValue, type SaltChoice } from "./args.js";
+import { cookPotOf, refuseUnchosen, type CookPot } from "./cook-pot.js";
 import {
   awaitPot,
   connect,
@@ -53,7 +56,6 @@ import {
   requirePot,
   requirePotOwner,
   POT_UNCHECKED,
-  potState,
   releasedContracts,
   sendAndWait,
   type PlanStep,
@@ -61,6 +63,7 @@ import {
   type Sent,
   type TxRequest,
 } from "./chain.js";
+import { familyRelease } from "./pots.js";
 import { describeCompileError } from "./diagnostics.js";
 import {
   approveAll,
@@ -564,23 +567,30 @@ export interface Cook {
   readonly program: CompiledSauceProgram;
 }
 
-/** Compiles the file and builds the cook on its Pot — what `tx`, `simulate` and `run` all send. A
- *  Pot named by owner and salt must have an owner: no Kitchen call deploys one of the zero address
- *  (`chain.ts#requirePotOwner`), so it is refused before anything is built, offline as well. */
-export function cookOf(input: CookInput, files: CliFiles): Cook {
+/**
+ * The program a cook runs, compiled with `main`'s arguments appended. Reads no chain, so a program
+ * that does not compile is refused before anything is read. A Pot named by owner and salt must have
+ * an owner (`chain.ts#requirePotOwner`): no Kitchen call deploys one of the zero address, so it is
+ * refused before anything is built, offline as well.
+ */
+export function cookProgram(
+  input: CookInput,
+  files: CliFiles,
+): { readonly program: CompiledSauceProgram; readonly payload: Hex } {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s cook is built by solana.ts`);
   }
-  const target = input.target;
-  if ("owner" in target) requirePotOwner(target.owner);
-  const pot = "pot" in target ? target.pot : (v12PredictPot(target.owner, target.salt) as Address);
-  const engine = getAddress(v12EngineAddress());
+  if ("owner" in input.target) requirePotOwner(input.target.owner);
   const program = compileProgram(input, files);
-  // The cook `compileSauceRoute` would build, over the program with its arguments appended.
-  const data = buildSauceEvmCall({ pot, engine, program: payloadOf(program, input.args) }).data;
 
-  return { pot, engine, data, program };
+  return { program, payload: payloadOf(program, input.args) };
 }
+
+/** The cook on `at.pot` through `at.engine`: what `tx`, `simulate` and `run` send. */
+export const cookOn = (
+  at: { readonly pot: Address; readonly engine: Address },
+  payload: Hex,
+): Hex => buildSauceEvmCall({ pot: at.pot, engine: at.engine, program: payload }).data;
 
 /** What a run says of a Pot it cooks on that has no code yet. */
 export const potMissing = (pot: string, chain: CanonicalChain): string =>
@@ -852,13 +862,27 @@ export interface TxInput extends CookInput {
 
 /** `sauce tx`: the unsigned cook transaction, for any wallet to sign. */
 export async function txCommand(input: TxInput, files: CliFiles): Promise<CommandOutput> {
-  if (input.value === undefined && input.rpcUrl === undefined)
+  if (input.value === undefined && input.rpcUrl === undefined) {
+    // Offline the Kitchen's fee cannot be read, so a value must be given, and that is a usage error
+    // said before the program compiles. An owner whose earlier release's Pot only the Pot store
+    // records is told that first, since no value makes the cook buildable (`cook-pot.ts`).
+    refuseUnchosen(input.chain, await cookPotOf(input.chain, input.target));
     valueOf(undefined, undefined, input.chain);
-  const cook = cookOf(input, files);
+  }
+  const { program, payload } = cookProgram(input, files);
   requireSupported("building the cook transaction", [input.chain]);
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, input.chain);
-  const fee = client === undefined ? undefined : await requireCookContracts(client, input.chain);
-  const state = client === undefined ? undefined : await potState(client, cook.pot);
+  const at = await cookPotOf(input.chain, input.target, client);
+  // Nothing is built, funded or deployed before this: an owner's earlier release's Pot that only the
+  // Pot store records is not chosen offline until the user names a Pot (`cook-pot.ts`).
+  refuseUnchosen(input.chain, at);
+  const fee =
+    client === undefined ? undefined : await requireCookContracts(client, input.chain, at.engine);
+  const state =
+    at.deployed === undefined
+      ? undefined
+      : { deployed: at.deployed, ...(at.owner === undefined ? {} : { owner: at.owner }) };
+  const cook: Cook = { pot: at.pot, engine: at.engine, data: cookOn(at, payload), program };
   if (state !== undefined && !state.deployed && "pot" in input.target) {
     throw new CliError(
       `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it ` +
@@ -973,6 +997,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
       ].join("\n"),
       notes: [
         head,
+        ...at.notes,
         ...(deployFirst
           ? [
               `${potMissing(cook.pot, input.chain)}: the first transaction deploys it (any account ` +
@@ -1004,6 +1029,7 @@ export async function txCommand(input: TxInput, files: CliFiles): Promise<Comman
   }
   const notes = [
     head,
+    ...at.notes,
     state === undefined
       ? `It must be deployed (${deployHint(input.chain, target)}) and funded with what the ` +
         "program spends; pass an RPC endpoint to check."
@@ -1078,11 +1104,13 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
         "run cooks on must be the signer's. Leave --owner out to use the signer's own.",
     );
   }
-  const cook = cookOf(input, files);
+  const { program, payload } = cookProgram(input, files);
   requireSupported("sending the cook", [input.chain]);
   const client = await connect(input.rpcUrl, input.chain);
-  const fee = await requireCookContracts(client, input.chain);
-  const state = await potState(client, cook.pot);
+  const at = await cookPotOf(input.chain, input.target, client);
+  const fee = await requireCookContracts(client, input.chain, at.engine);
+  const state = { deployed: at.deployed!, ...(at.owner === undefined ? {} : { owner: at.owner }) };
+  const cook: Cook = { pot: at.pot, engine: at.engine, data: cookOn(at, payload), program };
   // What the cook needs sent first, approved together in one question: the Pot, when it has no
   // code, then whatever else the caller sets up.
   if (!state.deployed && !("owner" in target)) {
@@ -1163,12 +1191,18 @@ export async function runCommand(input: RunInput, files: CliFiles): Promise<Comm
   // Funding, once the Pot is there: approvals and transfers it needs first, the signatures the pulls
   // carry, and the program wrapped to pull, run and sweep.
   const funding = fund === undefined ? undefined : await fund({ deploySalt, beforeSend: holdPlan });
+  const wrapped =
+    funding === undefined
+      ? undefined
+      : cookProgram({ ...input, text: funding.wrap(input.text) }, files);
   const funded =
-    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+    wrapped === undefined
+      ? cook
+      : { ...cook, data: cookOn(at, wrapped.payload), program: wrapped.program };
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
   const request: TxRequest = { to: cook.pot, data: funded.data, value };
   const sent = await sendAndWait(client, input.rpcUrl, input.account, request);
-  const notes = [...(funding?.notes ?? [])];
+  const notes = [...at.notes, ...(funding?.notes ?? [])];
   // What the cook cost, and what it moved, from its receipt.
   const cost = sent.receipt === undefined ? undefined : costOf(sent.receipt, value);
   const report =
@@ -1255,20 +1289,68 @@ export const POT_DEPLOYMENT = "building the Pot's deployment";
  * `sauce pot`: the Pot an owner and salt give, and the unsigned Kitchen call that deploys it. On a
  * preview chain only the prediction: the deployment is left out, and `refused` says why. An owner of
  * the zero address is refused first, as no Kitchen call deploys its Pot (`chain.ts#requirePotOwner`).
+ * `at` (`cook-pot.ts`) is the Pot the owner has there: an earlier release's, where they have one,
+ * is printed as it is, with its engine and release and no deployment (it is not this release's
+ * `deployPot`).
  */
-export function potCommand(input: PotCommandInput): CommandOutput {
+export function potCommand(input: PotCommandInput, at?: CookPot): CommandOutput {
   if (input.chain.kind !== "evm") {
     throw new Error(`internal: ${input.chain.slug}'s Pot is predicted by solana.ts`);
   }
   requirePotOwner(input.owner);
   const kitchen = kitchenAddress();
+  if (at?.stored !== undefined) {
+    // Two Pots, neither the owner's as far as anything offline can tell: both are shown with where
+    // the record came from, and nothing is built to send to either.
+    const { stored } = at;
+    const json = {
+      chainId: input.chain.id,
+      owner: input.owner,
+      salt: input.salt,
+      kitchen,
+      candidates: [
+        { pot: at.pot, release: familyRelease(at.family!), engine: at.engine },
+        {
+          pot: stored.pot,
+          release: familyRelease(stored.family),
+          engine: stored.engine,
+          record: {
+            path: stored.path,
+            ...stored.deployment,
+            sdk: stored.sdk,
+            recordedAt: stored.recordedAt,
+          },
+        },
+      ],
+    };
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [...at.notes] };
+  }
   const pot = v12PredictPot(input.owner, input.salt) as Address;
+  if (at !== undefined && at.pot !== getAddress(pot)) {
+    const json = {
+      chainId: input.chain.id,
+      pot: at.pot,
+      owner: input.owner,
+      salt: input.salt,
+      kitchen,
+      engine: at.engine,
+      release: familyRelease(at.family!),
+      ...(at.deployed === undefined ? {} : { deployed: at.deployed }),
+    };
+
+    return { text: JSON.stringify(json, null, 2), json, notes: [...at.notes] };
+  }
   const predicted = { chainId: input.chain.id, pot, owner: input.owner, salt: input.salt, kitchen };
   const refused: PreviewChainRefusal | undefined = previewRefusal(POT_DEPLOYMENT, [input.chain]);
   if (refused !== undefined) {
     const json = { ...predicted, refused };
 
-    return { text: JSON.stringify(json, null, 2), json, notes: [refused.message] };
+    return {
+      text: JSON.stringify(json, null, 2),
+      json,
+      notes: [...(at?.notes ?? []), refused.message],
+    };
   }
   const call = sauceEvmDeployPotCall({ kitchen, owner: input.owner, salt: input.salt });
   const json = { ...predicted, to: kitchen, data: call.data, value: hexQuantity(0n) };
@@ -1278,6 +1360,7 @@ export function potCommand(input: PotCommandInput): CommandOutput {
     json,
     cast: castSend(kitchen, call.data),
     notes: [
+      ...(at?.notes ?? []),
       `This is Kitchen.deployPot on the released Kitchen. Any account may send it: the Pot is ` +
         `${input.owner}'s either way, and it deploys once.`,
       ...feeFloorNotes(input.chain),
@@ -1291,6 +1374,7 @@ function deploymentLines(
   released: Released,
   pot: Address,
   state: { readonly deployed: boolean; readonly owner?: Address },
+  potEngine?: Address,
 ): { json: Record<string, unknown>; notes: string[] } {
   const there = (deployed: boolean) => (deployed ? "deployed" : "NOT deployed");
   const { engine, kitchen } = released;
@@ -1309,6 +1393,7 @@ function deploymentLines(
         address: pot,
         deployed: state.deployed,
         ...(state.owner === undefined ? {} : { owner: state.owner }),
+        ...(potEngine === undefined ? {} : { engine: potEngine }),
       },
     },
     notes: [
@@ -1334,17 +1419,55 @@ function deploymentLines(
   };
 }
 
+/**
+ * What `sauce pot` and the MCP server's `sauce_pot` say of the Router a deployed Pot runs: its
+ * `router()`, and, where it is not the Router this chain's Kitchen now gives new Pots (this
+ * release's), why a pool that calls back a name only the newer Router answers cannot pay it. Online
+ * and for a deployed Pot only; nothing otherwise. No note suggests moving the Pot.
+ */
+export async function potRouterStatus(
+  client: PublicClient | undefined,
+  at: CookPot,
+): Promise<{ readonly router?: Address; readonly notes: string[] }> {
+  if (client === undefined || at.deployed !== true) return { notes: [] };
+  const read = await client
+    .readContract({ address: at.pot, abi: v12PotAbi, functionName: "router" })
+    .catch(() => undefined);
+  if (read === undefined) return { notes: [] };
+  const router = getAddress(read);
+  const handedOut = await client
+    .readContract({ address: kitchenAddress(), abi: v12KitchenAbi, functionName: "router" })
+    .then(getAddress, () => undefined);
+  const current = getAddress(v12RouterAddress());
+
+  return {
+    router,
+    notes:
+      router !== current && handedOut === current
+        ? [
+            `Pot ${at.pot} runs the Router ${router}, not the one this chain's Kitchen now gives new ` +
+              `Pots, ${current}: a pool that calls back a name only ${current} answers cannot pay ` +
+              "this Pot (HyperSwap V3's hyperswapV3SwapCallback is one).",
+          ]
+        : [],
+  };
+}
+
 /** `sauce pot` with an endpoint: the prediction, and what is deployed on the chain. */
 export async function potStatusCommand(
   input: PotCommandInput & ChainAccess,
 ): Promise<CommandOutput> {
-  const predicted = potCommand(input);
-  const pot = predicted.json.pot as Address;
+  requirePotOwner(input.owner);
   const client = await connect(input.rpcUrl, input.chain);
-  const [released, state] = await Promise.all([releasedContracts(client), potState(client, pot)]);
+  const at = await cookPotOf(input.chain, { owner: input.owner, salt: input.salt }, client);
+  const predicted = potCommand(input, at);
+  const pot = at.pot;
+  const released = await releasedContracts(client);
+  const state = { deployed: at.deployed!, ...(at.owner === undefined ? {} : { owner: at.owner }) };
   // The deployment it prints is refused where the Kitchen would put the Pot elsewhere; where the
-  // Kitchen has no code, the lines below say so.
-  if (released.kitchen.deployed) {
+  // Kitchen has no code, the lines below say so. An earlier release's Pot has no deployment to
+  // print, and `cookPotOf` has told it from the chain already.
+  if (released.kitchen.deployed && at.pot === getAddress(v12PredictPot(input.owner, input.salt))) {
     await requirePot(client, input.chain, {
       owner: input.owner,
       salt: input.salt,
@@ -1352,8 +1475,13 @@ export async function potStatusCommand(
       deployed: state.deployed,
     });
   }
-  const deployment = deploymentLines(input.chain, released, pot, state);
-  const json = { ...predicted.json, deployment: deployment.json };
+  const deployment = deploymentLines(input.chain, released, pot, state, at.engine);
+  const routerStatus = await potRouterStatus(client, at);
+  const json = {
+    ...predicted.json,
+    deployment: deployment.json,
+    ...(routerStatus.router === undefined ? {} : { router: routerStatus.router }),
+  };
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -1361,6 +1489,7 @@ export async function potStatusCommand(
     ...(predicted.cast === undefined ? {} : { cast: predicted.cast }),
     notes: [
       ...deployment.notes,
+      ...routerStatus.notes,
       ...(state.deployed && predicted.cast !== undefined ? [] : (predicted.notes ?? [])),
     ],
   };
@@ -1382,18 +1511,24 @@ export async function potDeployCommand(
         "can be deployed there, so nothing was sent",
     );
   }
-  const state = await potState(client, pot);
-  await requirePot(client, input.chain, {
-    owner: input.owner,
-    salt: input.salt,
-    pot,
-    deployed: state.deployed,
-  });
+  // The Pot the owner has at this salt: this release's (deployed or not), or an earlier release's
+  // that is deployed already, which leaves nothing to deploy.
+  const at = await cookPotOf(input.chain, { owner: input.owner, salt: input.salt }, client);
+  const state = { deployed: at.deployed!, ...(at.owner === undefined ? {} : { owner: at.owner }) };
+  if (at.pot === getAddress(pot)) {
+    await requirePot(client, input.chain, {
+      owner: input.owner,
+      salt: input.salt,
+      pot,
+      deployed: state.deployed,
+    });
+  }
   if (state.deployed) {
-    const json = { ...predicted.json, deployed: true, owner: state.owner };
-    const note = `Pot ${pot} is already deployed on ${input.chain.slug}, owned by ${state.owner}.`;
+    const shown = potCommand(input, at);
+    const json = { ...shown.json, deployed: true, owner: state.owner };
+    const note = `Pot ${at.pot} is already deployed on ${input.chain.slug}, owned by ${state.owner}.`;
 
-    return { text: JSON.stringify(json, null, 2), json, notes: [note] };
+    return { text: JSON.stringify(json, null, 2), json, notes: [note, ...at.notes] };
   }
   const sent = await sendAndWait(client, input.rpcUrl, input.account, {
     to: predicted.json.to as Address,

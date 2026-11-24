@@ -60,7 +60,11 @@ import {
 import { bytesToHex, hexToBytes, type Hex } from "viem";
 
 import { chainBySlug, requireChain, type CanonicalChain } from "../chains/canonical.js";
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../deployments/index.js";
+import {
+  engineRunsCompiler,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../deployments/index.js";
 import {
   buildCloseCodeBufferInstruction,
   buildComputeBudgetPrepend,
@@ -97,12 +101,20 @@ import {
   recommendedComputeUnitLimit,
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
-import { CliError, UsageError } from "./args.js";
-import { failureReason, requireReleased, svmTokenAccountsToCreate } from "./solana.js";
+import { potAccountState, potCookEngine, svmEngineReleases } from "../svm/engine-release.js";
+import { CliError, UsageError, withNotes, withPotNotes } from "./args.js";
+import {
+  failureReason,
+  potAccountOf,
+  requireReleased,
+  svmPotNotes,
+  svmTokenAccountsToCreate,
+} from "./solana.js";
 import { messageAccounts, unsignedWire } from "./svm-effects.js";
 import {
+  engineMismatch,
   instructionAddresses,
-  releasedProgramsCalled,
+  programsCalled,
   type ProgramName,
 } from "./solana-release.js";
 
@@ -138,6 +150,11 @@ export interface SvmPlan {
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
+  /**
+   * The engine the plan's cook names: the Pot's owner program, or the installed release's for a Pot
+   * the plan creates. A cursor carries it only where it is not the installed release's.
+   */
+  readonly engine?: Address;
   /** The most the cook may pay in execution fee (`--max-execution-fee`). */
   readonly maxExecutionFee?: bigint;
   readonly tail: readonly PlanAccount[];
@@ -194,6 +211,9 @@ export function planPrograms(plan: SvmPlan): ProgramName[] {
   ];
 }
 
+/** The engine the plan's cook names (`SvmPlan.engine`): the installed release's unless it says. */
+export const planEngine = (plan: SvmPlan): Address => plan.engine ?? engine();
+
 /** A cook handed out to a signer, as the plan remembers it. */
 export interface CookHandedOut {
   readonly blockhash: string;
@@ -243,6 +263,11 @@ export interface PlanStep {
   readonly fee?: bigint;
   /** The endpoint did not simulate the cook: it is built at the most compute, unrehearsed. */
   readonly unrehearsed?: true;
+  /** The Pot's address holds only lamports now: no engine owns it, and the cook runs on it as it
+   *  is. What a step says of the Pot is this read's, not an earlier one's. */
+  readonly lamportsOnly?: true;
+  /** No account is at the Pot's address now: a setup step, or the cook, creates it. */
+  readonly potMissing?: true;
 }
 
 /** Where a step is built: the cluster, and the signer each transaction is built for. */
@@ -311,6 +336,8 @@ export function encodeCursor(plan: SvmPlan): string {
     owner: plan.owner,
     salt: plan.salt,
     via: plan.via,
+    // The installed release's engine is the cursor's own: a Pot of an earlier release names its.
+    ...(plan.engine === undefined || plan.engine === engine() ? {} : { engine: plan.engine }),
     // Solana's is the cursor's own: every cursor made before another SVM chain names none.
     ...(plan.chain.id === requireChain("solana").id ? {} : { chain: plan.chain.slug }),
     ...(plan.maxExecutionFee === undefined ? {} : { maxExecutionFee: `${plan.maxExecutionFee}` }),
@@ -377,6 +404,19 @@ export function decodeCursor(text: string): SvmPlan {
     if (typeof value !== "string" || !isAddress(value)) throw bad(`${what} is not an address`);
 
     return value;
+  };
+  // The engine a cook names signs for the Pot into whatever program it is, and a cursor carries it in
+  // from outside: only an engine the release table names whose programs this SDK's run passes (the
+  // installed release's, and an earlier one the installed row's `alsoRunsOn` lists). Whether that
+  // engine is the Pot's to cook on is held where the plan is used (`potNow`), against the Pot.
+  const engineKey = (value: unknown): Address => {
+    const program = key(value, "engine");
+    if (!svmEngineReleases().has(program)) {
+      throw bad(`engine ${program} is not an engine release this SDK knows`);
+    }
+    if (engineRunsCompiler("svm", program) !== true) throw bad(`engine ${engineMismatch(program)}`);
+
+    return program;
   };
   const integer = (value: unknown, what: string): bigint => {
     if (typeof value !== "string" || !/^\d{1,20}$/.test(value) || BigInt(value) > U64_MAX) {
@@ -498,6 +538,7 @@ export function decodeCursor(text: string): SvmPlan {
     owner: key(raw.owner, "owner"),
     salt: raw.salt as Hex,
     via,
+    ...(raw.engine === undefined ? {} : { engine: engineKey(raw.engine) }),
     ...(raw.maxExecutionFee === undefined
       ? {}
       : { maxExecutionFee: integer(raw.maxExecutionFee, "maxExecutionFee") }),
@@ -565,7 +606,8 @@ export async function isPlanCook(
   return plan.via === "engine" || read.pot === undefined || read.pot === (await potOf(plan));
 }
 
-/** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. */
+/** The Kitchen's `create_pot` for the plan's Pot, the owner paying its rent. A Pot the plan creates
+ *  is new, so it is the installed release's: always `engine()`, never the plan's engine. */
 async function createPotInstruction(plan: SvmPlan): Promise<Instruction> {
   return buildCreatePotInstruction({
     kitchen: kitchen(),
@@ -606,7 +648,7 @@ async function cookInstruction(
   if (buffer !== undefined) {
     return plan.via === "engine"
       ? buildCookAndPayFromAccountPinnedInstruction({
-          engineProgram: engine(),
+          engineProgram: planEngine(plan),
           code: buffer.code,
           expectedSha256: plan.staged!.sha256,
           feeConfig,
@@ -619,7 +661,7 @@ async function cookInstruction(
           owner: plan.owner,
           codeBuffer: buffer.codeBuffer,
           code: buffer.code,
-          engineProgram: engine(),
+          engineProgram: planEngine(plan),
           potSalt: hexToBytes(plan.salt),
           pot: await potOf(plan),
           feeConfig,
@@ -631,7 +673,7 @@ async function cookInstruction(
 
   return plan.via === "engine"
     ? buildCookAndPayInstruction({
-        engineProgram: engine(),
+        engineProgram: planEngine(plan),
         feeConfig,
         feePayer: plan.owner,
         maxExecutionFee: fee,
@@ -641,7 +683,7 @@ async function cookInstruction(
     : buildCookInstruction({
         kitchen: kitchen(),
         owner: plan.owner,
-        engineProgram: engine(),
+        engineProgram: planEngine(plan),
         potSalt: hexToBytes(plan.salt),
         pot: await potOf(plan),
         feeConfig,
@@ -690,6 +732,8 @@ export interface NewPlanInput {
   readonly owner: Address;
   readonly salt: Hex;
   readonly via: CookVia;
+  /** The engine the cook names: the Pot's owner program, or the installed release's for a Pot to create. */
+  readonly engine: Address;
   readonly maxExecutionFee?: bigint;
   /** The program with its arguments appended: what the cook runs. */
   readonly payload: Uint8Array;
@@ -715,6 +759,7 @@ export async function newSvmPlan(input: NewPlanInput): Promise<SvmPlan> {
     owner: input.owner,
     salt: input.salt,
     via: input.via,
+    ...(input.engine === engine() ? {} : { engine: input.engine }),
     ...(input.maxExecutionFee === undefined ? {} : { maxExecutionFee: input.maxExecutionFee }),
     tail: input.tail,
     lookupTables: Object.keys(input.lookupTables) as Address[],
@@ -842,6 +887,64 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
   return value !== null;
 }
 
+/** What the cluster shows of the plan's Pot now. */
+interface PotNow {
+  /** No account at its address: the plan's setup (or its cook) is to create it. */
+  readonly missing: boolean;
+  /** An account is there, and it holds only lamports (no data, the System Program's): no engine
+   *  owns it yet. */
+  readonly lamportsOnly: boolean;
+  /** What its state means for the cook, as the command that made the plan said it (`svmPotNotes`):
+   *  none for a plan with no cook left to build. */
+  readonly notes: readonly string[];
+}
+
+/**
+ * What the cluster shows of the plan's Pot now: whether it is still to be created (no account at
+ * its address), and what its state means for the cook. An address that holds only lamports is not
+ * missing: the Kitchen cooks it as it is (a Pot "need not exist for a program that keeps no
+ * storage"), no engine owns it, and a `create_pot` would give it data, which a program that pays
+ * SOL out of the Pot through the System Program cannot have. Where the plan was to create the Pot,
+ * its note says that step is dropped. A Pot there that a Kitchen cook is to be built on must be one
+ * the engine the plan was made for (`planEngine`) cooks: the cook names that engine, which is the
+ * Pot's owner where that engine runs this SDK's programs and the installed engine for a Pot of one
+ * that does not (`potCookEngine`). Any other engine refuses the step. A plan with no cook left to
+ * build (its cook landed, or it is given up: `cooking` false) is not held to it: what is left of it
+ * is the code buffer's close, which no Pot's owner changes. A Pot no engine owns yet (no account,
+ * or only lamports) is held to it too: it is created under and cooked on the installed engine, so a
+ * plan made for another engine, the earlier one included, is refused there as it is for a Pot
+ * another engine owns.
+ */
+async function potNow(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<PotNow> {
+  const pot = await potOf(plan);
+  const { value } = await ask(ctx.url, "the Pot", () =>
+    ctx.rpc.getAccountInfo(pot, { encoding: "base64" }).send(),
+  );
+  const state = potAccountState(potAccountOf(value));
+  if (cooking && plan.via === "kitchen" && potCookEngine(state, engine()) !== planEngine(plan)) {
+    // The Pot was read and is not what this plan was made for: the refusal is all there is to say of
+    // it, so no note of an earlier read sits beside it (`withPotNotes`).
+    throw withPotNotes(
+      new CliError(
+        state.kind === "unallocated"
+          ? `the Pot ${pot} is owned by no engine yet, and this plan was made for engine ` +
+              `${planEngine(plan)}: a Pot no engine owns is created under and cooked on ${engine()}, ` +
+              "so make the plan again (sauce tx)"
+          : `the Pot ${pot} is owned by ${value?.owner}, and this plan was made for engine ` +
+              `${planEngine(plan)}: make the plan again (sauce tx)`,
+      ),
+      [],
+    );
+  }
+  const lamports = value === null ? undefined : BigInt(value.lamports);
+
+  return {
+    missing: value === null,
+    lamportsOnly: state.kind === "unallocated" && lamports !== undefined,
+    notes: cooking ? svmPotNotes(pot, { state, lamports }, plan.pot !== "there") : [],
+  };
+}
+
 /** A write's chunk: what a write transaction carries besides its signature, header and accounts. */
 const CHUNK = 900;
 /** Grow instructions in one transaction, well inside its size. */
@@ -936,18 +1039,40 @@ export async function nextStep(
         "closed it (sauce reclaim?). Make a new plan",
     );
   }
-  const setup = await setupTransactions(current, ctx, state, finalized);
+  // The Pot, read here for a plan whose cook is built on it. A plan whose setup creates it reads it
+  // there (`setupTransactions`): what the step says of the Pot is that read's, whichever it is.
+  const read =
+    current.via === "kitchen" && current.pot !== "setup" ? await potNow(current, ctx) : undefined;
+  // A failure past the Pot's read is told the Pot as that read showed it, as the step it would have
+  // been is: the error carries the notes worked out so far (`CliError#notes`), which the command
+  // prints and the tools return, and the Pot's own are kept beside it for a run to say in place of
+  // what its earlier reads showed (`potNotesOf`), whatever the error's class.
+  const setup = await setupTransactions(current, ctx, state, finalized).catch((error: unknown) => {
+    throw read === undefined ? error : withPotNotes(error, read.notes);
+  });
+  const pot = read ?? setup.pot;
+  const potNotes = read?.notes ?? [];
+  const said = {
+    ...(pot.lamportsOnly ? { lamportsOnly: true as const } : {}),
+    ...(pot.missing ? { potMissing: true as const } : {}),
+  };
   if (setup.transactions.length > 0) {
     return {
       name: "setup",
       transactions: setup.transactions,
       plan: setup.plan,
       overview: overview(setup.plan, "setup"),
-      notes: setup.notes,
+      notes: [...potNotes, ...setup.notes],
+      ...said,
     };
   }
+  // The cook's step says what the Pot's state means for it as the setup's would: a cursor resumed
+  // later, or a send that builds the next step, tells it as the command that made the plan did.
+  const cook = await cookStep(setup.plan, ctx, pot.missing).catch((error: unknown) => {
+    throw withNotes(withPotNotes(error, pot.notes), setup.notes);
+  });
 
-  return cookStep(setup.plan, ctx);
+  return { ...cook, notes: [...potNotes, ...setup.notes, ...cook.notes], ...said };
 }
 
 /**
@@ -956,6 +1081,9 @@ export async function nextStep(
  * alone, for what they cost to be counted before any is sent (a wallet's policy).
  */
 export async function transactionsAhead(plan: SvmPlan, ctx: StepContext): Promise<PlanTx[]> {
+  if (plan.cooked === undefined && plan.closing !== true && plan.via === "kitchen") {
+    if (plan.pot !== "setup") await potNow(plan, ctx);
+  }
   const buffer = await planBuffer(plan);
   const state = buffer === undefined ? undefined : await bufferState(ctx, plan);
   const finalized =
@@ -1002,136 +1130,148 @@ async function setupTransactions(
   state: BufferState | undefined,
   finalized: boolean,
   most = STEP_MOST,
-): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[] }> {
+): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[]; pot: PotNow }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
-  // The Pot, where the setup creates it, and the token accounts the cook names that the cluster
-  // does not hold, found and made as `sauce run` makes them (`svmTokenAccountsToCreate`).
-  const [potMissing, made] = await Promise.all([
+  // The Pot, where the setup creates it, is read first: a failure of the read after it still says
+  // what this read showed, which a read made in the same breath would have lost.
+  const pot: PotNow =
     plan.pot === "setup"
-      ? potOf(plan).then(async (pot) => !(await exists(ctx, pot, "the Pot")))
-      : false,
-    svmTokenAccountsToCreate(
-      ctx.rpc,
-      ctx.url,
-      new Map(
-        plan.tokenAccounts.map((account) => [
-          account.address,
-          {
-            address: account.address,
-            label: account.label,
-            kind: "account" as const,
-            account: { mint: account.mint, holder: account.holder, program: account.program },
-          },
-        ]),
-      ),
-      ctx.signer,
+      ? await potNow(plan, ctx, plan.cooked === undefined && plan.closing !== true)
+      : { missing: false, lamportsOnly: false, notes: [] };
+  // The token accounts the cook names that the cluster does not hold, found and made as `sauce run`
+  // makes them (`svmTokenAccountsToCreate`).
+  const made = await svmTokenAccountsToCreate(
+    ctx.rpc,
+    ctx.url,
+    new Map(
+      plan.tokenAccounts.map((account) => [
+        account.address,
+        {
+          address: account.address,
+          label: account.label,
+          kind: "account" as const,
+          account: { mint: account.mint, holder: account.holder, program: account.program },
+        },
+      ]),
     ),
-  ]);
-  if (potMissing) {
-    transactions.push({
-      what: "creating the Pot",
-      kind: "pot",
-      instructions: [await createPotInstruction(plan)],
-    });
-  }
-  if (made.accounts.length > 0) {
-    const byAddress = new Map(plan.tokenAccounts.map((account) => [account.address, account]));
-    transactions.push({
-      what: "creating the token accounts",
-      kind: "accounts",
-      accounts: made.accounts.map((one) => byAddress.get(one.address)!),
-      instructions: [...made.instructions],
-    });
-  }
-  const buffer = await planBuffer(plan);
-  if (buffer !== undefined && !finalized) {
-    if (plan.payload === undefined) {
-      throw new CliError(
-        `the code buffer ${buffer.codeBuffer} is not finalized, and the plan no longer carries ` +
-          "the program: make a new plan",
-      );
-    }
-    const accounts = { kitchen: kitchen(), owner: plan.owner, ...buffer };
-    const payload = plan.payload;
-    const growths = Math.ceil(payload.length / GROWTH_STEP) - 1;
-    if (state === undefined) {
-      const grows = Array.from({ length: growths }, () => buildGrowCodeBufferInstruction(accounts));
+    ctx.signer,
+  ).catch((error: unknown) => {
+    throw plan.pot === "setup" ? withPotNotes(error, pot.notes) : error;
+  });
+  notes.push(...pot.notes);
+  let next = plan;
+  try {
+    if (pot.missing) {
       transactions.push({
-        what: "creating the code buffer",
-        kind: "buffer",
+        what: "creating the Pot",
+        kind: "pot",
+        instructions: [await createPotInstruction(plan)],
+      });
+    }
+    if (made.accounts.length > 0) {
+      const byAddress = new Map(plan.tokenAccounts.map((account) => [account.address, account]));
+      transactions.push({
+        what: "creating the token accounts",
+        kind: "accounts",
+        accounts: made.accounts.map((one) => byAddress.get(one.address)!),
+        instructions: [...made.instructions],
+      });
+    }
+    const buffer = await planBuffer(plan);
+    if (buffer !== undefined && !finalized) {
+      if (plan.payload === undefined) {
+        throw new CliError(
+          `the code buffer ${buffer.codeBuffer} is not finalized, and the plan no longer carries ` +
+            "the program: make a new plan",
+        );
+      }
+      const accounts = { kitchen: kitchen(), owner: plan.owner, ...buffer };
+      const payload = plan.payload;
+      const growths = Math.ceil(payload.length / GROWTH_STEP) - 1;
+      if (state === undefined) {
+        const grows = Array.from({ length: growths }, () =>
+          buildGrowCodeBufferInstruction(accounts),
+        );
+        transactions.push({
+          what: "creating the code buffer",
+          kind: "buffer",
+          instructions: [
+            buildCreateCodeBufferInstruction({
+              ...accounts,
+              nonce: plan.staged!.nonce,
+              capacity: payload.length,
+            }),
+            ...grows.slice(0, GROWS_PER_TRANSACTION),
+          ],
+        });
+        for (let at = GROWS_PER_TRANSACTION; at < grows.length; at += GROWS_PER_TRANSACTION) {
+          transactions.push({
+            what: "growing the code buffer",
+            kind: "buffer",
+            instructions: grows.slice(at, at + GROWS_PER_TRANSACTION),
+          });
+        }
+      } else if (state.code.length < payload.length) {
+        // Created and not fully grown: the grows left.
+        const left = Math.ceil((payload.length - state.code.length) / GROWTH_STEP);
+        for (let at = 0; at < left; at += GROWS_PER_TRANSACTION) {
+          transactions.push({
+            what: "growing the code buffer",
+            kind: "buffer",
+            instructions: Array.from({ length: Math.min(GROWS_PER_TRANSACTION, left - at) }, () =>
+              buildGrowCodeBufferInstruction(accounts),
+            ),
+          });
+        }
+      }
+      for (let offset = 0; offset < payload.length; offset += CHUNK) {
+        const chunk = payload.subarray(offset, offset + CHUNK);
+        // A chunk the code account holds already is not written again.
+        if (
+          state !== undefined &&
+          sameBytes(state.code.subarray(offset, offset + chunk.length), chunk)
+        ) {
+          continue;
+        }
+        transactions.push({
+          what: `writing bytes ${offset}… of the program`,
+          kind: "write",
+          instructions: [buildWriteCodeBufferInstruction({ ...accounts, offset, chunk })],
+        });
+      }
+      transactions.push({
+        what: "finalizing the code buffer",
+        kind: "finalize",
         instructions: [
-          buildCreateCodeBufferInstruction({
+          buildFinalizeCodeBufferInstruction({
             ...accounts,
-            nonce: plan.staged!.nonce,
-            capacity: payload.length,
+            len: payload.length,
+            expectedSha256: plan.staged!.sha256,
           }),
-          ...grows.slice(0, GROWS_PER_TRANSACTION),
         ],
       });
-      for (let at = GROWS_PER_TRANSACTION; at < grows.length; at += GROWS_PER_TRANSACTION) {
-        transactions.push({
-          what: "growing the code buffer",
-          kind: "buffer",
-          instructions: grows.slice(at, at + GROWS_PER_TRANSACTION),
-        });
-      }
-    } else if (state.code.length < payload.length) {
-      // Created and not fully grown: the grows left.
-      const left = Math.ceil((payload.length - state.code.length) / GROWTH_STEP);
-      for (let at = 0; at < left; at += GROWS_PER_TRANSACTION) {
-        transactions.push({
-          what: "growing the code buffer",
-          kind: "buffer",
-          instructions: Array.from({ length: Math.min(GROWS_PER_TRANSACTION, left - at) }, () =>
-            buildGrowCodeBufferInstruction(accounts),
-          ),
-        });
-      }
     }
-    for (let offset = 0; offset < payload.length; offset += CHUNK) {
-      const chunk = payload.subarray(offset, offset + CHUNK);
-      // A chunk the code account holds already is not written again.
-      if (
-        state !== undefined &&
-        sameBytes(state.code.subarray(offset, offset + chunk.length), chunk)
-      ) {
-        continue;
-      }
-      transactions.push({
-        what: `writing bytes ${offset}… of the program`,
-        kind: "write",
-        instructions: [buildWriteCodeBufferInstruction({ ...accounts, offset, chunk })],
-      });
+    if (plan.table !== undefined) {
+      const made = await tableTransactions(plan, ctx);
+      transactions.push(...made.transactions);
+      next = made.plan;
     }
-    transactions.push({
-      what: "finalizing the code buffer",
-      kind: "finalize",
-      instructions: [
-        buildFinalizeCodeBufferInstruction({
-          ...accounts,
-          len: payload.length,
-          expectedSha256: plan.staged!.sha256,
-        }),
-      ],
-    });
-  }
-  let next = plan;
-  if (plan.table !== undefined) {
-    const made = await tableTransactions(plan, ctx);
-    transactions.push(...made.transactions);
-    next = made.plan;
-  }
-  // A step a signer can sign before its blockhash expires: what is past it comes in the next,
-  // built from what the cluster shows then (the finalize after every write, the table after it).
-  if (transactions.length > most) {
-    notes.push(
-      `the setup is ${transactions.length} transactions: this step is the first ${most}, and ` +
-        "the next step has the rest",
-    );
+    // A step a signer can sign before its blockhash expires: what is past it comes in the next,
+    // built from what the cluster shows then (the finalize after every write, the table after it).
+    if (transactions.length > most) {
+      notes.push(
+        `the setup is ${transactions.length} transactions: this step is the first ${most}, and ` +
+          "the next step has the rest",
+      );
+    }
+  } catch (error) {
+    // The Pot's state, as the setup read it, is told with a failure past that read; and where the
+    // setup is what read it, that read is the snapshot a run says (`potNotesOf`).
+    throw withNotes(plan.pot === "setup" ? withPotNotes(error, pot.notes) : error, notes);
   }
 
-  return { transactions: transactions.slice(0, most), plan: next, notes };
+  return { transactions: transactions.slice(0, most), plan: next, notes, pot };
 }
 
 /** The most transactions one step holds, all on one blockhash: what a signer and the sends that
@@ -1198,9 +1338,11 @@ async function tableTransactions(
  * The cook, rehearsed for its compute: built at the most where its rehearsal fails. Through a
  * lookup table extended so recently that the cluster is not past that slot yet, nothing is built:
  * the step says from which slot it is (`readyAt`), at once, and the caller asks again — a signer's
- * call is never held up waiting for a slot.
+ * call is never held up waiting for a slot. `potMissing` is the step's one read of the Pot: a plan
+ * that creates the Pot in the cook does so only where that read found no account, so the cook and
+ * what the step says of the Pot are one story.
  */
-async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
+async function cookStep(plan: SvmPlan, ctx: StepContext, potMissing: boolean): Promise<PlanStep> {
   const tables: AddressesByLookupTableAddress = {};
   const through = [
     ...plan.lookupTables,
@@ -1253,7 +1395,7 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
         "nothing was built",
     );
   }
-  const withPot = plan.pot === "inline" && !(await exists(ctx, await potOf(plan), "the Pot"));
+  const withPot = plan.pot === "inline" && potMissing;
   const lookupTables = Object.keys(tables).length === 0 ? undefined : tables;
   const build = async (unitLimit: number, latestBlockhash: typeof PLACEHOLDER_BLOCKHASH) =>
     prepareExecuteTransaction({
@@ -1613,7 +1755,8 @@ function readInstructions(
         read.push({ what: KITCHEN_STEPS[name](data), cook: false });
       }
     } else if (
-      program === engine() &&
+      program !== undefined &&
+      svmEngineReleases().has(program) &&
       (starts(data, COOK_AND_PAY_DISCRIMINATOR) ||
         starts(data, COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR))
     ) {
@@ -1731,12 +1874,8 @@ export async function signableTransactions(
   if (txs.length === 0) return { transactions: [] };
   // The cluster they are built against, checked now: a cursor made against one endpoint, or before
   // an upgrade, can be carried on against another.
-  await requireReleased(
-    ctx.rpc,
-    ctx.url,
-    ctx.chain,
-    releasedProgramsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions))),
-  );
+  const called = programsCalled(instructionAddresses(txs.flatMap((tx) => tx.instructions)));
+  await requireReleased(ctx.rpc, ctx.url, ctx.chain, called.needs, called.engines);
   const { value: latest, context } = await ask(ctx.url, "the latest blockhash", () =>
     ctx.rpc.getLatestBlockhash().send(),
   );

@@ -18,6 +18,7 @@
  * LiteSVM is an optional peer dependency of the package: a project that tests on Solana installs
  * it, at the version the package pins, as one that tests on an EVM chain installs Foundry.
  */
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
@@ -37,9 +38,22 @@ import {
 } from "@solana/kit";
 import type { LiteSVM } from "litesvm";
 
-import { RUNTIME_MANIFEST, svmEnginePath, svmKitchenPath } from "./sdk.js";
+import {
+  elfLength,
+  isPinnedProgram,
+  RUNTIME_MANIFEST,
+  svmEngineReleases,
+  svmEnginePath,
+  svmKitchenPath,
+  v12ReleaseSet,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "./sdk.js";
 
 type LiteSvmModule = typeof import("litesvm");
+
+/** Lowercase hex, as `releases.json` pins a digest. */
+const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111" as Address;
 const CLOCK = "SysvarC1ock11111111111111111111111111111111" as Address;
@@ -107,7 +121,7 @@ export interface BankAccount {
 }
 
 /** An account read from a cluster or a recording, with a program's code where it is one. */
-interface ReadAccount extends BankAccount {
+export interface ReadAccount extends BankAccount {
   /** A program's code: from its program data under the upgradeable loader. */
   readonly code?: Uint8Array;
 }
@@ -286,10 +300,32 @@ interface StoredAccount {
   readonly data: string;
 }
 
+/**
+ * The installed engine has two builds, which compile in different chain ids (`ctx.chainId()`): the
+ * one a bank loads is the one its cluster serves.
+ */
+export type EngineBuild = "mainnet" | "devnet";
+
+/**
+ * The engine build a recording was made on. `sha256` is the packaged build's digest, which a replay
+ * holds the package's build to; a version 1 recording, from before a recording named a build, has
+ * none.
+ */
+export interface RecordedEngine {
+  readonly build: EngineBuild;
+  readonly sha256?: string;
+}
+
 interface SolanaStateFile {
   readonly sauce: {
-    readonly version: 1;
+    /**
+     * 1: written before a recording named its engine build, by banks that always ran the engine's
+     * mainnet build. 2: names the build it was made on (`engine`).
+     */
+    readonly version: 1 | 2;
     readonly chain: string;
+    /** Version 2: the build the recording ran on and its digest, as the file spells them. */
+    readonly engine?: { readonly build?: string; readonly sha256?: string };
     readonly clock: Record<keyof ClusterHeader["clock"], string>;
     readonly rent?: {
       readonly lamportsPerByteYear: string;
@@ -313,10 +349,36 @@ interface SolanaStateFile {
 const base64 = (bytes: Uint8Array): string => getBase64Decoder().decode(bytes);
 const bytesOf = (text: string): Uint8Array => new Uint8Array(getBase64Encoder().encode(text));
 
+/**
+ * The engine build `sauce` says the recording ran on. Version 1 was written by banks that always ran
+ * the engine's mainnet build, so that is what it replays on: by its version, with no digest to hold
+ * the package's build to. From version 2 the file names its build and the build's digest, and one
+ * that names neither is refused, never read as mainnet's.
+ */
+function recordedEngine(path: string, sauce: SolanaStateFile["sauce"]): RecordedEngine {
+  if (sauce.version === 1) return { build: "mainnet" };
+  const { engine } = sauce;
+  if (engine === undefined || engine === null || typeof engine !== "object") {
+    throw new Error(`${path} is a version 2 recording that names no engine build`);
+  }
+  if (engine.build !== "mainnet" && engine.build !== "devnet") {
+    throw new Error(
+      `${path} names the engine build "${String(engine.build)}", which is neither mainnet nor devnet`,
+    );
+  }
+  if (typeof engine.sha256 !== "string" || engine.sha256 === "") {
+    throw new Error(`${path} names the engine build ${engine.build} but no digest of it`);
+  }
+
+  return { build: engine.build, sha256: engine.sha256 };
+}
+
 /** A recorded state file: its header, and its accounts as a source that knows what it lacks. */
 export function stateSource(path: string): AccountSource & {
   readonly chain: string;
   readonly header: ClusterHeader;
+  /** The engine build the recording was made on: the one a replay loads. */
+  readonly engine: RecordedEngine;
   /** The keys asked for that the recording does not hold: read as missing. */
   readonly unrecorded: Set<Address>;
 } {
@@ -328,14 +390,16 @@ export function stateSource(path: string): AccountSource & {
       cause: error,
     });
   }
-  if (file.sauce?.version !== 1 || file.accounts === undefined) {
+  if ((file.sauce?.version !== 1 && file.sauce?.version !== 2) || file.accounts === undefined) {
     throw new Error(`${path} is not a recorded Solana state file`);
   }
   const { clock, rent, epochSchedule } = file.sauce;
+  const engine = recordedEngine(path, file.sauce);
   const unrecorded = new Set<Address>();
 
   return {
     chain: file.sauce.chain,
+    engine,
     header: {
       clock: {
         slot: BigInt(clock.slot),
@@ -389,12 +453,15 @@ function writeState(
   header: ClusterHeader,
   accounts: ReadonlyMap<Address, ReadAccount | null>,
   rpcUrl: string,
+  engine: { readonly build: EngineBuild; readonly sha256: string },
 ): void {
   const text = (value: bigint) => value.toString();
   const file: SolanaStateFile = {
     sauce: {
-      version: 1,
+      version: 2,
       chain,
+      // The build the bank ran, so a replay runs the same engine, not whichever it defaults to.
+      engine: { build: engine.build, sha256: engine.sha256 },
       clock: {
         slot: text(header.clock.slot),
         epochStartTimestamp: text(header.clock.epochStartTimestamp),
@@ -643,11 +710,20 @@ export class Bank {
     readonly header: ClusterHeader,
     /** Replay: the keys the recording did not hold, read as missing. */
     readonly unrecorded: ReadonlySet<Address>,
+    /** The installed release's engine: the one the bank's own copy is at. */
+    private readonly engine: Address,
+    /** Which of the engine's two builds the bank loaded, and its digest: what a recording names. */
+    readonly engineBuild: { readonly build: EngineBuild; readonly sha256: string },
   ) {}
 
   /**
    * Opens a bank at `header`'s clock (the cluster's rent and epoch schedule, where it has them), the
    * engine and the Kitchen at `engine` and `kitchen`, reading what it does not hold from `source`.
+   * The two programs are this package's release, held to the digests the installed row pins. The
+   * engine has two builds, and the bank loads one: a fork, the one its cluster serves, which must be
+   * one of the package's (a fork never runs code other than its cluster's); a replay, the one its
+   * recording was made on (`engineBuild`), whose digest the package's build must match; an empty
+   * chain, or a cluster that serves no engine, the mainnet build.
    */
   static async open(options: {
     readonly mode: BankMode;
@@ -656,6 +732,8 @@ export class Bank {
     readonly engine: Address;
     readonly kitchen: Address;
     readonly unrecorded?: ReadonlySet<Address>;
+    /** Replay: the engine build the recording was made on, which the bank loads. */
+    readonly engineBuild?: RecordedEngine;
   }): Promise<Bank> {
     const lite = await liteSvm();
     const features = lite.FeatureSet.allEnabled();
@@ -671,8 +749,89 @@ export class Bank {
       .withBlockhashCheck(false);
     // An empty chain has the native mints a cluster is born with; a fork reads the cluster's.
     if (options.mode === "local") svm = svm.withNativeMints();
-    svm.addProgramFromFile(options.engine, svmEnginePath("mainnet"));
-    svm.addProgramFromFile(options.kitchen, svmKitchenPath());
+    const release = v12ReleaseSet();
+    const engineBuilds = {
+      mainnet: new Uint8Array(readFileSync(svmEnginePath("mainnet"))),
+      devnet: new Uint8Array(readFileSync(svmEnginePath("devnet"))),
+    } as const;
+    const kitchenSo = new Uint8Array(readFileSync(svmKitchenPath()));
+    for (const [bytes, pin, name] of [
+      [engineBuilds.mainnet, release["v12-svm"].assets["engine-mainnet.so"], "engine-mainnet.so"],
+      [engineBuilds.devnet, release["v12-svm"].assets["engine-devnet.so"], "engine-devnet.so"],
+      [kitchenSo, release["kitchen-svm"].assets["kitchen.so"], "kitchen.so"],
+    ] as const) {
+      if (sha256(bytes) !== pin) {
+        throw new Error(
+          `the kit runs this package's release: the packaged ${name} is not the one it pins ` +
+            `(sha256 ${sha256(bytes)}): reinstall the package`,
+        );
+      }
+    }
+    if (
+      options.engine !== v12SvmEngineProgramId() ||
+      options.kitchen !== v12SvmKitchenProgramId()
+    ) {
+      throw new Error(
+        `the kit runs this package's release: its engine is ${v12SvmEngineProgramId()} and its ` +
+          `Kitchen ${v12SvmKitchenProgramId()}, not ${options.engine} and ${options.kitchen}`,
+      );
+    }
+    const anotherBuild = (id: Address, component: string, version: string): Error =>
+      new Error(
+        `the cluster runs another build at ${id} than this package's ${component} ${version}: a ` +
+          "cook here would run other code, so the fork refuses",
+      );
+    // Which build the engine is: where the cluster has no such program, the package's mainnet build,
+    // as ever; a cluster that serves one must serve one of the package's builds, which is loaded.
+    let build: EngineBuild = "mainnet";
+    if (options.mode === "replay") {
+      const recorded = options.engineBuild;
+      if (recorded === undefined) {
+        throw new Error("a replay needs the engine build its recording was made on");
+      }
+      build = recorded.build;
+      const actual = sha256(engineBuilds[build]);
+      // A version 1 recording named no digest; it replays on the build its version says.
+      if (recorded.sha256 !== undefined && recorded.sha256 !== actual) {
+        throw new Error(
+          `the recording was made on the engine's ${build} build, sha256 ${recorded.sha256}, and ` +
+            `this package's is ${actual}: it would replay on other code, so record it again`,
+        );
+      }
+    }
+    if (options.mode === "record" || options.mode === "live") {
+      const [engineHeld, kitchenHeld] = (await options.source?.read([
+        options.engine,
+        options.kitchen,
+      ])) ?? [null, null];
+      // Neither read is recorded: the release's programs are the package's, not the recording's.
+      if (engineHeld !== null && engineHeld !== undefined) {
+        const found = (["mainnet", "devnet"] as const).find(
+          (kind) =>
+            engineHeld.executable &&
+            engineHeld.code !== undefined &&
+            isPinnedProgram(engineHeld.code, [sha256(engineBuilds[kind])]),
+        );
+        if (found === undefined) {
+          throw anotherBuild(options.engine, "v12-svm", release["v12-svm"].version);
+        }
+        build = found;
+      }
+      if (
+        kitchenHeld !== null &&
+        kitchenHeld !== undefined &&
+        !(
+          kitchenHeld.executable &&
+          kitchenHeld.code !== undefined &&
+          isPinnedProgram(kitchenHeld.code, [sha256(kitchenSo)])
+        )
+      ) {
+        throw anotherBuild(options.kitchen, "kitchen-svm", release["kitchen-svm"].version);
+      }
+    }
+    const engineCode = engineBuilds[build];
+    svm.addProgram(options.engine, engineCode);
+    svm.addProgram(options.kitchen, kitchenSo);
     const { rent, epochSchedule } = options.header;
     if (rent !== undefined) {
       svm.setRent(
@@ -697,6 +856,8 @@ export class Bank {
       options.source,
       options.header,
       options.unrecorded ?? new Set(),
+      options.engine,
+      { build, sha256: sha256(engineCode) },
     );
     bank.setClock(options.header.clock);
 
@@ -782,7 +943,21 @@ export class Bank {
       if (this.mode === "record") this.read.set(key, account);
       if (account?.executable === true && account.code !== undefined) {
         // A program: its code, at its id. Programs never change in a test, so it is the bank's own.
-        this.svm.addProgram(key, account.code);
+        // An engine of an earlier release than the installed one is held to that release's digests
+        // first (its account's code is its program data, possibly zero-padded) and loaded as its
+        // release built it: never code other than the release's.
+        const earlier = key === this.engine ? undefined : svmEngineReleases().get(key);
+        if (earlier !== undefined) {
+          if (!isPinnedProgram(account.code, earlier.digests)) {
+            throw new Error(
+              `the source holds ${key}, engine v12-svm ${earlier.version}, as another build: a ` +
+                "cook on it would run other code",
+            );
+          }
+          this.svm.addProgram(key, account.code.subarray(0, elfLength(account.code)));
+        } else {
+          this.svm.addProgram(key, account.code);
+        }
         this.own.add(key);
         return;
       }
@@ -946,6 +1121,6 @@ export class Bank {
 
   /** Writes what the bank read from the cluster, and its header, to `path` (record mode). */
   writeRecording(path: string, chain: string, rpcUrl: string): void {
-    writeState(path, chain, this.header, this.read, rpcUrl);
+    writeState(path, chain, this.header, this.read, rpcUrl, this.engineBuild);
   }
 }

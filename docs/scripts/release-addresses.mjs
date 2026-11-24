@@ -7,7 +7,7 @@
 // or `skills/`. `docs:check` and `skills:check` apply this rule.
 //
 // The addresses are the SDK's own, so there is no second list: the release's EVM contracts, its Pot
-// init-code hash, its Solana programs in base58 and as the 32-byte key a program holds, and the
+// init-code hashes, its Solana programs in base58 and as the 32-byte key a program holds, and the
 // engine of every compiler `V12_RELEASE_SETS` pairs, so an address a release replaced is caught too.
 import { getAddressEncoder } from "@solana/kit";
 
@@ -37,9 +37,14 @@ export function releaseAddresses({ deployments }) {
   for (const [name, contract] of Object.entries(release.evm.contracts))
     evm(contract.address, `the EVM ${name}`);
   evm(release.evm.pot.initCodeHash, "the Pot init-code hash");
+  if (release.evm.pot.potProxyInitCodeHash)
+    evm(release.evm.pot.potProxyInitCodeHash, "the Pot proxy init-code hash");
+  if (release.evm.pot.potProfileHash) evm(release.evm.pot.potProfileHash, "the Pot profile hash");
   for (const [name, program] of Object.entries(release.svm.programs))
     svm(program.programId, `the Solana ${name}`);
   for (const set of deployments.V12_RELEASE_SETS) {
+    if (set["kitchen-evm"]?.fixedRouter)
+      evm(set["kitchen-evm"].fixedRouter, `the fixed Router for compiler ${set.compiler}`);
     if (set["v12-evm"]?.engine)
       evm(set["v12-evm"].engine, `the EVM engine for compiler ${set.compiler}`);
     if (set["v12-svm"]?.engine)

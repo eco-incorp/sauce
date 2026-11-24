@@ -99,7 +99,7 @@ recipient, clean address words, and no trailing data. Some alternate encodings
 execute on an engine but are deliberately rejected here, so a successful decode
 has a unique byte representation.
 
-The settlement program compiled by 2.6.2 and by 2.6.3 (the same bytes) also rejects dirty token and recipient address words before
+The settlement program compiled by 2.6.2, 2.6.3 or 2.6.4 (the same bytes) also rejects dirty token and recipient address words before
 calling a token. Historical 410-byte programs did not perform those entry checks; verifier strictness
 does not depend on them.
 
@@ -184,7 +184,7 @@ two predate the sweep following `SafeERC20`:
 Each one's `{ hash, bytes }` record is in the documentation comment of `SETTLE_WIRE`, which your
 editor shows on hover. The current pin is
 `{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: SETTLE_WIRE.PROGRAM_BYTES }`: the 426-byte program
-produced by compiler 2.6.2 or 2.6.3 (the same bytes and hash). An explicit list replaces
+produced by compiler 2.6.2, 2.6.3 or 2.6.4 (the same bytes and hash). An explicit list replaces
 the default, so include the current pin
 alongside any historical ones you accept. On the command line, `sauce verify --pin <hash:bytes>`
 adds one.
@@ -205,7 +205,7 @@ A bare hash in an accepted-pin list uses the **current** program length. After t
 **Roll out verifiers before producers.** Upgrade observers and validators to accept both the current
 `{ hash: SETTLE_WIRE.PROGRAM_HASH, bytes: 426 }` pin and the explicit historical 410-byte pin, or add
 the new 426-byte pin to existing verifiers. Confirm both payload versions are recognized before
-moving producers to compiler 2.6.2 or 2.6.3. Keep the historical pin while old payloads still need recognition.
+moving producers to compiler 2.6.2 or later. Keep the historical pin while old payloads still need recognition.
 
 A compiler change can change program bytes without changing a line of the source. So an SDK or
 compiler upgrade is the moment to check two separate things: which program version your application

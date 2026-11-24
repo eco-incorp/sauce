@@ -44,8 +44,8 @@ documented builtins with one example program per target.
 
 - Accounts are `main` parameters with roles: `Account` in §1, account properties in §12, and the
   `svm` calls in §11, which only SVM has.
-- `ctx` (§6): `ctx.self()` is the engine's program id (it owns every Pot account, and not only
-  Pot accounts),
+- `ctx` (§6): `ctx.self()` is the program id of the engine running the cook (the engine that
+  created a Pot owns its account),
   `ctx.msgSender()` the first signer among the accounts the engine receives, and
   `ctx.msgValue`, `gasLeft`, `codeSize`, `codeHash`, `isContract`, `isEOA` and the block and
   transaction reads (`txOrigin`, `baseFee`, `blockHash`, …) do not exist.
@@ -330,9 +330,11 @@ Every read is a call: `ctx.self()`, not `ctx.self` (which gives "`ctx` is not a 
 - `ctx.self()` → number, **Both**
   - On EVM: the executing contract: the Pot, which holds the program's balances and allowances; a
     program compiled for a chain names it `pot`
-  - On SVM: the engine's program id, which owns every Pot account:
-    `Account(pot.address).owner == ctx.self()` holds for a Pot, and for any other account assigned
-    to the engine, so it does not prove an account is the Pot; re-deriving the Pot's address does
+  - On SVM: the program id of the engine running the cook. The engine that created a Pot owns its
+    account; a Pot an engine this SDK pairs with the compiler created is cooked by that engine, and
+    one an older engine created by the installed one, so `Account(pot.address).owner == ctx.self()`
+    holds only for a Pot the cooking engine created, and for any other account assigned to that
+    engine: it does not prove an account is the Pot; re-deriving the Pot's address does
   - Example: `log(ctx.self().toBytesBe(32));`
 - `ctx.chainId()` → number, **Both**
   - On EVM: the chain id
@@ -527,13 +529,22 @@ work on SVM; they are decoded separately.
   - Example: `const [amount, to] = abi.decode(data, ["Uint256", "Address"]);`
 
 A `"bool"` field decodes as bool and `"Int256"` as a signed word; `"Address"` and the other
-single-value fields decode as unsigned numbers. A word that is not a value of its field reverts
-rather than being narrowed or cut to fit: a `"bool"` other than `0` or `1`, or an `"Address"` with
-a bit set above its low 160. That holds for a single field, a field of a `{…}` record at any depth
-and each element of a `"bool[]"` or `"Address[]"`, and the whole value is checked where it is
-decoded, whether or not any part of it is read. A `try` block that runs the decode catches that
-revert. A statement `.catch()` on a decode, `abi.decode(evm.call(…), […]).catch(() => { … });`,
-keeps only the call and decodes nothing.
+single-value fields decode as unsigned numbers. An `"Address"` field is its word's low 160 bits:
+bits above them are dropped, not refused, so `0xbeef` with bit 160 also set reads as `0xbeef`.
+Reading a `"bool"` field gives `1` for any nonzero word, so two fields that both mean true compare
+equal. Neither reverts, read or not, whether it is a single field, a field of a `{…}` record at any
+depth (a record that is an array's element included) or an element of a `"bool[]"`. An element of
+an `"Address[]"` (also nested: `"Address[][]"`, `"{Address[]}"`) keeps its whole word and is
+checked instead: a word with a bit set above its low 160 reverts where the decode runs, whichever
+part of the array is read, its `.length` included, and a `try` block that runs the decode catches
+that revert. To take such elements without a revert, decode `"{Address}[]"`, whose records are cut
+to 160 bits, or `"Uint256[]"` and mask each element. A decoded value passed on whole
+(`abi.encode(decoded)`, `return decoded;`, a decoded `bool[]` or record given whole to a contract
+call, a decoded record a closure captures in its `parcel.args`, or a hash of such an encoding)
+carries each word as it arrived: read the fields you mean to forward. To refuse a dirty word,
+decode it as `"Uint256"` and check it: `require(word >> 160 == 0)`. Data too short for its shape
+still reverts. A statement `.catch()` on a decode,
+`abi.decode(evm.call(…), […]).catch(() => { … });`, keeps only the call and decodes nothing.
 
 ## 10. `evm` (EVM)
 

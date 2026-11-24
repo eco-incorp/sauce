@@ -126,9 +126,10 @@ is out ([A newer version](mcp.md#a-newer-version)).
 A Sauce program is compiled by one compiler version and run by an **engine**, the on-chain code
 that carries it out. Compiler output and engines pair by exact version, in both directions: a
 compiler's programs run only on the engine releases paired with it, and an engine runs only the
-output of the compiler paired with it. A new compiler can emit different instructions for the same
-source, so an older engine can misread its programs, and an older compiler's programs can fail on a
-newer engine.
+output of the compiler paired with it. A compiler's row can also name earlier engines its programs
+run on; the SDK then cooks a Pot of that release on its own engine. A new compiler can emit
+different instructions for the same source, so an older engine can misread its programs, and an
+older compiler's programs can fail on a newer engine.
 
 The package pins one compiler and ships the engines that compiler pairs with
 ([Deployments](../reference/deployments.md) lists them). This is what it means for you:
@@ -140,28 +141,74 @@ The package pins one compiler and ships the engines that compiler pairs with
   engine. Build it again with the new version.
 - **Know which release made each Pot.** `sauce pot list` shows the release each recorded Pot was
   created under. The changelog entry for the SDK release that ships a new Kitchen or engine says,
-  under **Compiler and engines**, what changes for existing Pots.
+  under **Compiler and engines**, what changes for existing Pots. A Pot of an earlier release whose
+  engine runs your compiler's programs keeps cooking, on that engine.
 - **In TypeScript**, every SDK builder that names an engine checks the pairing first and throws for
   an engine paired with another compiler, naming the one it needs
   ([Which engine runs a program](../api/compiler.md#which-engine-runs-a-program)).
 
-## Moving to SDK 1.1.0
+## Moving to SDK 1.2.0
 
-The SDK pins compiler **2.6.3** from the 2.6 maintenance line. It makes EVM engine and
-Kitchen/Router **1.4.0** and SVM engine **1.4.1** available for opt-in use. SVM Kitchen
-stays at **1.1.0**. The network defaults remain EVM engine and Kitchen **1.3.0** and
-SVM engine **1.4.0**. Availability in the package does not mean any of the new contracts
-or programs have been deployed to a network.
+SDK 1.2.0 pins compiler **2.6.4** (1.1.0 pinned 2.6.3), EVM engine and Kitchen **1.5.0** (1.1.0
+pinned 1.4.0), SVM engine **1.4.1** and SVM Kitchen **1.1.0**. For the Kitchen's Pots and the
+Solana engine, what moved is that it uses them. SDK 1.1.0 kept every default on the releases before (engine 1.3.0, CREATE2 Pot
+addresses, Solana engine 1.4.0), and on 2026-11-20, before it was published, every observed EVM
+chain with the Kitchen switched to kitchen-evm 1.4.0. So with 1.1.0 or 1.0.0, a new owner's Pot
+address is one no Kitchen of that release deploys to.
 
-- **Keep existing Pot bindings.** Legacy EVM Pots and their addresses do not move.
-  The opt-in EVM Kitchen uses a [separate CREATE3 derivation](../api/routes.md#predict-a-pot-for-the-opt-in-create3-kitchen).
-  Do not switch addresses just because you updated the SDK. Solana Pot seeds do not change.
-- **Check the Kitchen before you fund a CREATE3 address.** Call the chain's Kitchen `predictPot`
-  (or confirm that it is the 1.4.0 release) and fund the address only if it returns the same one:
-  the deployed 1.3.0 Kitchen deploys CREATE2 Pots at other addresses, so on a chain still running
-  it a CREATE3 prediction is an address no Pot will be deployed at. A legacy CREATE2 Pot that was
-  funded but never deployed cannot be deployed once its chain's Kitchen moves to 1.4.0, so deploy
-  it first.
+- **New Pots are CREATE3, and new Solana Pots use engine 1.4.1.** `v12PredictPot(owner)`,
+  `sauce pot` and `sauce tx` give the address the Kitchen places a new Pot at
+  ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
+- **Recompiled programs read a dirty `abi.decode` word instead of reverting (EVM).** The SDK pins
+  compiler **2.6.4**; 1.1.0 pinned 2.6.3. A program compiled with 1.1.0 runs on engine 1.4.0, as
+  before; 2.6.4's output runs on engine 1.5.0, and on 1.4.0 and 1.3.0 for Pots of those releases.
+  Recompiled, an `abi.decode` field spelled `"Address"` is its word's
+  low 160 bits, and a `"bool"` field reads as true for any nonzero word, where 2.6.3 reverted; an
+  element of an `"Address[]"` is still checked. If a program relies on that revert, decode the
+  word as `"Uint256"` and check it ([`abi` in the reference](../reference/saucescript.md#9-abi-evm)).
+- **Pots you already have keep their address and keep working.** A kitchen-evm 1.3.0 Pot cooks on
+  engine 1.3.0, which runs compiler 2.6.4's programs, with engine 1.3.0's behaviour. Engine 1.4.0
+  hardened two things: signature checks require a complete `ecrecover` reply and the exact ERC-1271
+  return word, and newly allocated memory is cleared after reuse, so a fresh array does not expose
+  values from an earlier caught call. A program that relies on either should run on a Pot of the
+  current release, which needs another salt (`--salt <label>`). A Solana Pot of v12-svm 1.4.0
+  cooks on 1.4.0,
+  a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 cooks on the installed engine, as earlier
+  SDKs did: inside the program `ctx.self()` is that engine, so a check that the Pot's owner is
+  `ctx.self()` fails, and so does a write to the Pot's storage, which only its owner's engine may
+  make. `sauce simulate` and `sauce tx` send nothing; `sauce run` does not send a cook that fails
+  its simulation, but for a staged program the setup transactions (the code buffer, token
+  accounts) may already have landed and can be closed. Do not move funds just because you updated
+  the SDK.
+- **A new Router, and which Pots get it.** The EVM Kitchen now hands out a Router that also answers
+  `hyperswapV3SwapCallback`. A Pot minted before your chain's switch keeps the Router it has, so to
+  swap at HyperSwap V3, use a Pot minted after the switch, under a fresh salt (`--salt <label>`).
+  A fixed-Router or Shared Pot keeps its Router for good, and runs only on the engine built for it:
+  library code that cooks one names `potEngine(client, pot)` from `/evm/engine`, never
+  `v12EngineAddress()`. `sauce pot` and `sauce_pot` say which Router a deployed Pot runs.
+- **Which Pot `--owner` and `--wallet` mean.** Online, an owner who already has a deployed Pot at
+  that salt from an earlier release whose engine runs this SDK's programs (kitchen-evm 1.3.0's)
+  cooks on that Pot, through its own engine. The command says it is an earlier release's Pot, and
+  that a Pot of the current release needs another salt (`--salt`). When several are deployed, the
+  oldest wins. With none, the owner's Pot is the current release's, CREATE3.
+- **Offline, a record in the Pot store is not a Pot.** The store keeps what landed on a fork or
+  another network with the chain's id beside what landed on the chain, and a command that reads
+  no chain cannot tell them apart. With `--owner` or `--wallet` the Pot is the current release's,
+  CREATE3, and the command says an earlier Pot cannot be seen offline. Where the store records an
+  earlier release's Pot for that owner and salt, `sauce tx` (with `--fund` or `--value` too),
+  `sauce sign` (`--cancel` too), `sauce_tx` and `sauce_signed_cook` refuse before they build
+  anything: the message names the record's file, its transaction and block hash, and both
+  addresses. Name the Pot you mean with `--pot <address>`, or pass an RPC endpoint and the chain
+  decides. `sauce pot --offline` and `sauce_pot` show both Pots and build nothing. With `--pot`,
+  the engine comes from the store's record of that Pot when the record is its own (its chain and
+  Pot are the ones named, and it is filed under its Pot's name), else it is the installed engine, with a
+  note: on an EVM chain a cook built for an earlier release's Pot on the installed engine reverts whole and strands no
+  funds (a Solana Kitchen pins no engine to a Pot, so there the SDK picks the engine from the Pot's
+  owner program), so pass an RPC endpoint, or import the Pot first.
+- **An address 1.0.0 or 1.1.0 predicted that you funded and never deployed.** No Pot can be
+  deployed there now: a kitchen-evm 1.4.0 Kitchen places a Pot elsewhere. What was sent to that
+  address cannot be recovered with a Pot. Check the address against the Kitchen's `predictPot`
+  before you fund any address.
 - **Coordinate settlement producer and verifier upgrades.** If you still use the historical
   410-byte program, prepare verifiers for both explicit pins before recompiling producers.
   See [compiler upgrades and historical pins](verification.md#compiler-upgrades-and-historical-pins).
@@ -205,8 +252,9 @@ SVM engine **1.4.0**, SVM Kitchen **1.1.0**.
    Error bytes may be empty/truncated (256-byte cap); validate before decoding them. SVM has no
    catch support.
 5. **Keep old funds on their old pairing until you move them.** New EVM Pots have new addresses;
-   the new engine refuses old Pots. Use the earlier SDK/compiler/engine to manage an old Pot,
-   and review the destination before moving funds. An upgrade never migrates balances.
+   the new engine refuses old Pots. An SDK whose compiler's programs that Pot's engine runs keeps
+   cooking it; for older Pots use the SDK the refusal names, and review the destination before
+   moving funds. An upgrade never migrates balances.
    Signed cooks are new, and only newly created Pots take them; old Pots do not acquire them.
    The owner signs with `sauce sign`, `sauce_sign` or `signedCookTypedData` from
    `@eco-incorp/sauce/evm/engine`, and any account sends the result
@@ -327,7 +375,8 @@ decided to accept (`sauce verify --pin <hash:bytes>` on the command line).
 historical pins.
 
 Compiler 2.6.0 and 2.6.1 produced the historical 410-byte program. Compiler 2.6.2 produces the
-current 426-byte program with a new hash; default verifiers accept only their own version's pin.
+current 426-byte program with a new hash, and 2.6.3 and 2.6.4 produce the same bytes; default
+verifiers accept only their own version's pin.
 Upgrade verifiers to accept both explicit `{ hash, bytes }` records before upgrading producers.
 Observers can otherwise return `null` silently, while validation fails with `TOKENS_OFFSET`.
 Keep the explicit 410-byte pin for old payloads, or the 435-byte pin for 2.4/2.5 payloads, while

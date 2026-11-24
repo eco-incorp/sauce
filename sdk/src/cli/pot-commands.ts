@@ -10,25 +10,35 @@ import type { CanonicalChain } from "../chains/canonical.js";
 import { connect } from "./chain.js";
 import type { CommandOutput } from "./commands.js";
 import type { PotImportTarget } from "./inputs.js";
-import { MAINNET_CLUSTER, type PotRecord, type PotStore } from "./pot-store.js";
-import { importEvmOwnerPots, importEvmPot, importSvmPot, recordOn, releaseText } from "./pots.js";
+import { MAINNET_CLUSTER, recordText, type PotRecord, type PotStore } from "./pot-store.js";
+import {
+  importEvmOwnerPots,
+  importEvmPot,
+  importSvmPot,
+  recordFacts,
+  recordOn,
+  releaseText,
+  unreadableNote,
+  type RecordFacts,
+} from "./pots.js";
 import { genesisOf } from "./solana.js";
 
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
 const onChain = (record: PotRecord): string =>
   record.cluster === undefined || record.cluster === MAINNET_CLUSTER
-    ? record.chain
-    : `${record.chain} (${record.cluster})`;
+    ? recordText(record.chain)
+    : `${recordText(record.chain)} (${recordText(record.cluster)})`;
 
-/** One Pot, as `sauce pot list` prints it. */
-const potLines = (record: PotRecord): string[] => [
-  `${onChain(record)}  ${record.pot}  ${record.kind}`,
-  `  owner ${record.owner}, salt ${record.salt}`,
-  `  ${releaseText(record.release)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
+/** One Pot, as `sauce pot list` prints it: its kind and release as `facts` tell them. */
+const potLines = (record: PotRecord, facts: RecordFacts): string[] => [
+  `${onChain(record)}  ${recordText(record.pot)}  ${recordText(facts.kind)}`,
+  `  owner ${recordText(record.owner)}, salt ${recordText(record.salt)}`,
+  `  ${releaseText(facts.release)}${record.engine === undefined ? "" : `, engine ${recordText(record.engine)}`}`,
   record.deployment === undefined
-    ? `  ${record.origin} ${record.recordedAt}`
-    : `  ${record.origin} in ${record.deployment.tx} (${record.chain === "solana" ? "slot" : "block"} ` +
-      `${record.deployment.block}) from ${record.deployment.from}`,
+    ? `  ${recordText(record.origin)} ${recordText(record.recordedAt)}`
+    : `  ${recordText(record.origin)} in ${recordText(record.deployment.tx)} ` +
+      `(${record.chain === "solana" ? "slot" : "block"} ${recordText(record.deployment.block)}) ` +
+      `from ${recordText(record.deployment.from)}`,
 ];
 
 /** The same address, as its chain compares them: an EVM one in any case, a base58 one exactly. */
@@ -42,24 +52,44 @@ export function potListCommand(
   store: PotStore,
   filter: { readonly chain?: CanonicalChain; readonly owner?: string },
 ): CommandOutput {
-  const listing = store.list();
-  const pots = listing.pots.filter(
-    (record) =>
-      (filter.chain === undefined || recordOn(record, filter.chain)) &&
-      (filter.owner === undefined || sameAddress(record.owner, filter.owner)),
-  );
+  const listing = store.listFiles();
+  const told = listing.files
+    .filter(
+      ({ record }) =>
+        (filter.chain === undefined || recordOn(record, filter.chain)) &&
+        (filter.owner === undefined || sameAddress(record.owner, filter.owner)),
+    )
+    .map((one) => ({ ...one, facts: recordFacts(one.record) }));
+  const pots = told.map(({ record }) => record);
   const which = [
     filter.chain === undefined ? undefined : `on ${filter.chain.slug}`,
     filter.owner === undefined ? undefined : `of ${filter.owner}`,
   ].filter((part) => part !== undefined);
+  // The JSON is the records as written. What the text and the notes say of a record is what its
+  // address says: a record that cannot be told from its address is warned of, and a kind a record
+  // stores that its address contradicts is noted, so a reader of the JSON and the notes alone (the
+  // MCP server's `sauce_pot_list`) is not left with a kind that is wrong.
+  const notes = [
+    ...listing.warnings,
+    ...told.flatMap(({ record, path, facts }) =>
+      facts.unreadable !== undefined
+        ? [unreadableNote(path, facts)]
+        : facts.kind === record.kind
+          ? []
+          : [
+              `${recordText(record.pot)}: the record says ${recordText(record.kind)}; ` +
+                `its address makes it a ${facts.kind} Pot`,
+            ],
+    ),
+  ];
 
   return {
     text:
       pots.length === 0
         ? `No Pots${which.length === 0 ? "" : ` ${which.join(" ")}`} in ${store.dir}.`
-        : pots.flatMap(potLines).join("\n"),
+        : told.flatMap(({ record, facts }) => potLines(record, facts)).join("\n"),
     json: { store: store.dir, pots },
-    ...(listing.warnings.length === 0 ? {} : { notes: listing.warnings }),
+    ...(notes.length === 0 ? {} : { notes }),
   };
 }
 
@@ -113,7 +143,7 @@ export async function potImportCommand(input: PotImportInput): Promise<CommandOu
   );
 
   return {
-    text: pots.flatMap(potLines).join("\n"),
+    text: pots.flatMap((record) => potLines(record, recordFacts(record))).join("\n"),
     json: { store: input.store.dir, pots },
     notes: saved.map(({ record, saved }) =>
       saved === "created"

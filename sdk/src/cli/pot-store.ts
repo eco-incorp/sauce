@@ -19,6 +19,11 @@
  * fork or another network with the same chain id, or the Pot was closed and created again (on
  * Solana), and neither is the store's to drop. Nothing is ever read, changed and written back.
  *
+ * A record says what its file says only where it is that file's own: `filesOf` and `listFiles` give
+ * each record with its path and whether it is `bound` (in its chain's directory, under its Pot's
+ * name). One filed under any other name was moved or edited, and a reader that takes a Pot's
+ * release or engine from the store takes it from a bound record alone (`cook-pot.ts`).
+ *
  * A record holds only public chain data: no key, password or endpoint. What a Pot holds, and
  * whether it is still there, is read from the chain every time. NODE-ONLY (the filesystem), and it
  * imports nothing at run time but Node's own modules, so a test runs it in processes of its own;
@@ -28,13 +33,10 @@ import { linkSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSy
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { PotKind } from "../deployments/pot.js";
+
 /** The record schema this store reads and writes. */
 export const POT_SCHEMA = "sauce.pot/1" as const;
-
-/** How the Kitchen minted the Pot: a Private Pot its owner cooks (`deployPot(owner, salt)`), one
- *  whose Router is fixed at mint (`deployPot(owner, salt, true)`), or a Shared Pot anyone cooks
- *  (`deploySharedPot(salt)`, no owner). A Solana Pot is always its owner's. */
-export type PotKind = "private" | "private-fixed-router" | "shared";
 
 /** One Pot, as the store keeps it. Addresses as the chain spells them (EIP-55, or base58). */
 export interface PotRecord {
@@ -52,8 +54,12 @@ export interface PotRecord {
   readonly cluster?: string;
   /** The Kitchen that minted it: the proxy on an EVM chain, the program on Solana. */
   readonly kitchen: string;
-  /** EVM: the init-code hash its address is CREATE2 under, which the engine that cooks it gates on. */
+  /** EVM, up to kitchen-evm 1.3.0: the init-code hash its address is CREATE2 under. */
   readonly potInitCodeHash?: string;
+  /** EVM, from kitchen-evm 1.4.0: the hash its proxy is CREATE2 under (the Pot is CREATE3). */
+  readonly potProxyInitCodeHash?: string;
+  /** EVM, from kitchen-evm 1.4.0: the Pot profile its engine authenticates. */
+  readonly potProfileHash?: string;
   /** The engine its cooks run on: its release's (EVM), or the program its creation named (Solana). */
   readonly engine?: string;
   /**
@@ -132,6 +138,47 @@ const besideOf = (stem: string, tx: string): string => {
   return `${stem}@${name}.json`;
 };
 
+// ---------------------------------------------------------------------------------------------
+// How a note says what a record or a path says
+// ---------------------------------------------------------------------------------------------
+
+/** What a record's fields hold when they are what they should be: a version, a hash, an address, a date, a kind. */
+const FIELD_TEXT = /^[\w.:+-]{1,200}$/;
+
+/** What the name of a file of the store is made of when it holds nothing a terminal needs protecting from. */
+const PATH_TEXT = /^[\w.:@/\\+-]{1,1000}$/;
+
+/** `value` as `plain` says a token, and otherwise quoted, cut at `limit` characters. */
+function said(value: unknown, plain: RegExp, limit: number): string {
+  let text: string;
+  try {
+    text = typeof value === "string" ? value : String(JSON.stringify(value));
+  } catch {
+    text = Object.prototype.toString.call(value);
+  }
+
+  return plain.test(text)
+    ? text
+    : JSON.stringify(text.slice(0, limit)).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, "?");
+}
+
+/**
+ * A string a record supplies, as a note says it. A record is a file anyone can edit, and so is the
+ * name it is filed under; a note reaches a terminal and the MCP server's tool results, which read
+ * their notes as the server's own, so what a record says is never a line of a note's own. A plain
+ * token (letters, digits and `.:+_-`: a version, a hash, an address, a date, a kind) is said as it is,
+ * so a valid record reads as it is written; anything else is quoted, at most `limit` characters, on
+ * one line, with what a terminal cannot be trusted to print replaced. What is not a string is said
+ * as JSON says it, and nothing a record can hold makes this throw.
+ */
+export const recordText = (value: unknown, limit = 80): string => said(value, FIELD_TEXT, limit);
+
+/**
+ * The path of a file of the store, as a note says it: as it is where it is made of letters, digits
+ * and `.:@/\+_-` (a Windows path too), otherwise quoted, at most 1000 characters, on one line.
+ */
+export const pathText = (path: string): string => said(path, PATH_TEXT, 1000);
+
 /** The fields every record has, and their type. */
 const FIELDS = {
   chain: "string",
@@ -146,21 +193,100 @@ const FIELDS = {
   recordedAt: "string",
 } as const;
 
-/** `parsed`, read from `path`, as a record: refused unless it has every field a record has. */
-function asRecord(path: string, parsed: unknown): PotRecord {
+/**
+ * Whether `value` is a record's `deployment`: an object of the strings `tx`, `block` and `from`, and
+ * `blockHash` where it has one.
+ */
+function isDeployment(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  const given = value as Record<string, unknown>;
+
+  return (
+    ["tx", "block", "from"].every((field) => typeof given[field] === "string") &&
+    (given.blockHash === undefined || typeof given.blockHash === "string")
+  );
+}
+
+/**
+ * Whether `value` is a record's `release`: an object of strings that names its compiler, then each
+ * component's version (`v12-evm` and `kitchen-evm` on an EVM chain, `v12-svm` and `kitchen-svm` on
+ * Solana). What reads a release takes it for that, and trips on `null` or a string.
+ */
+function isRelease(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const given: Record<string, unknown> = Object.fromEntries(Object.entries(value));
+
+  return (
+    typeof given.compiler === "string" &&
+    Object.values(given).every((one) => typeof one === "string")
+  );
+}
+
+/**
+ * `parsed`, read from the file `where` says (a path said as a note says it, or what the caller calls
+ * the record), as a record: refused unless it has every field a record has.
+ */
+function asRecord(where: string, parsed: unknown): PotRecord {
   const record = parsed as Record<string, unknown> | null;
   if (record === null || typeof record !== "object" || record.schema !== POT_SCHEMA) {
-    throw new Error(`${path}: schema ${JSON.stringify(record?.schema)} is not ${POT_SCHEMA}`);
+    throw new Error(`${where}: schema ${recordText(record?.schema)} is not ${POT_SCHEMA}`);
   }
   const missing = Object.entries(FIELDS)
     .filter(([field, type]) => typeof record[field] !== type)
     .map(([field]) => field);
   if (missing.length > 0) {
-    throw new Error(`${path} is not a Pot record: it has no ${missing.join(", ")}`);
+    throw new Error(`${where} is not a Pot record: it has no ${missing.join(", ")}`);
+  }
+  if (record.deployment !== undefined && !isDeployment(record.deployment)) {
+    throw new Error(
+      `${where} is not a Pot record: its deployment is not an object of the strings tx, block and ` +
+        "from (and blockHash, where it has one)",
+    );
+  }
+  if (record.release !== undefined && !isRelease(record.release)) {
+    throw new Error(
+      `${where} is not a Pot record: its release is not an object of strings that names its compiler`,
+    );
+  }
+  if (record.cluster !== undefined && typeof record.cluster !== "string") {
+    throw new Error(`${where} is not a Pot record: its cluster is not a string`);
   }
 
   return record as unknown as PotRecord;
 }
+
+/** A record, with the file it was read from. */
+export interface StoredPot {
+  readonly record: PotRecord;
+  /** The file's path. */
+  readonly path: string;
+  /**
+   * Whether the file is the record's own: in its chain's directory (a cluster's after the chain id
+   * on Solana), named for its Pot's address, or for another deployment of it by that address and
+   * the deployment's transaction. A record filed under any other name was moved or edited, and says
+   * nothing of the Pot its file names.
+   */
+  readonly bound: boolean;
+}
+
+/** Whether `record`, read from the file `name` of the directory `folder`, is bound to it. */
+function filedAs(folder: string, name: string, record: PotRecord): boolean {
+  try {
+    if (folder !== chainDir(record.chainId, record.cluster)) return false;
+    const stem = stemOf(record.pot);
+
+    return (
+      name === `${stem}.json` ||
+      (record.deployment !== undefined && name === besideOf(stem, record.deployment.tx))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** What `list()` and `filesOf` say of a file they cannot read, which they leave out. */
+const unreadable = (error: unknown): string =>
+  `warning: ${error instanceof Error ? error.message : String(error)}; that Pot is left out`;
 
 export class PotStore {
   readonly dir: string;
@@ -219,14 +345,15 @@ export class PotStore {
   }
 
   private read(path: string): PotRecord {
+    const where = pathText(path);
     let parsed: unknown;
     try {
       parsed = JSON.parse(readFileSync(path, "utf8"));
     } catch (error) {
-      throw new Error(`${path} is not JSON`, { cause: error });
+      throw new Error(`${where} is not JSON`, { cause: error });
     }
 
-    return asRecord(path, parsed);
+    return asRecord(where, parsed);
   }
 
   /**
@@ -253,33 +380,92 @@ export class PotStore {
   }
 
   /**
-   * Every record the store holds, oldest first, and a warning for each file it cannot read (not
-   * JSON, another schema, a field missing), which is left out.
+   * `recordsOf`, each record with the file it was read from and whether that is its own file
+   * ({@link StoredPot.bound}); a file it cannot read is a warning, not a throw, so a caller that
+   * only asks what a Pot is does not fail on a damaged one. The Pot's first file first, then each
+   * other deployment kept beside it, oldest first.
    */
-  list(): { readonly pots: PotRecord[]; readonly warnings: string[] } {
+  filesOf(
+    chainId: number,
+    pot: string,
+    cluster?: string,
+  ): { readonly files: StoredPot[]; readonly warnings: string[] } {
+    const folder = chainDir(chainId, cluster);
+    const stem = stemOf(pot);
+    let names: string[];
+    try {
+      names = readdirSync(join(this.dir, folder));
+    } catch (error) {
+      if ((error as { code?: string }).code === "ENOENT") return { files: [], warnings: [] };
+      throw error;
+    }
+    const warnings: string[] = [];
+    const read = (name: string): StoredPot | undefined => {
+      try {
+        return this.stored(folder, name);
+      } catch (error) {
+        warnings.push(unreadable(error));
+
+        return undefined;
+      }
+    };
+    const first = names.includes(`${stem}.json`) ? [read(`${stem}.json`)] : [];
+    const beside = names
+      .filter((name) => name.startsWith(`${stem}@`) && name.endsWith(".json"))
+      .map(read)
+      .filter((one): one is StoredPot => one !== undefined)
+      .sort((a, b) => a.record.recordedAt.localeCompare(b.record.recordedAt));
+
+    return {
+      files: [...first.filter((one): one is StoredPot => one !== undefined), ...beside],
+      warnings,
+    };
+  }
+
+  /** The record of the file `name` in the directory `folder`, with its path and whether it is bound. */
+  private stored(folder: string, name: string): StoredPot {
+    const path = join(this.dir, folder, name);
+    const record = this.read(path);
+
+    return { record, path, bound: filedAs(folder, name, record) };
+  }
+
+  /**
+   * Every file the store holds, each with its record, oldest first, and a warning for each file it
+   * cannot read (not JSON, another schema, a field missing), which is left out.
+   */
+  listFiles(): { readonly files: StoredPot[]; readonly warnings: string[] } {
     let chains: string[];
     try {
       chains = readdirSync(this.dir);
     } catch (error) {
-      if ((error as { code?: string }).code === "ENOENT") return { pots: [], warnings: [] };
+      if ((error as { code?: string }).code === "ENOENT") return { files: [], warnings: [] };
       throw error;
     }
-    const pots: PotRecord[] = [];
+    const files: StoredPot[] = [];
     const warnings: string[] = [];
     for (const chain of chains.filter((name) => CHAIN_DIR.test(name))) {
       for (const name of readdirSync(join(this.dir, chain))) {
         if (name.startsWith(".") || !name.endsWith(".json")) continue;
         try {
-          pots.push(this.read(join(this.dir, chain, name)));
+          files.push(this.stored(chain, name));
         } catch (error) {
-          warnings.push(
-            `warning: ${error instanceof Error ? error.message : String(error)}; that Pot is left out`,
-          );
+          warnings.push(unreadable(error));
         }
       }
     }
-    pots.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+    files.sort((a, b) => a.record.recordedAt.localeCompare(b.record.recordedAt));
 
-    return { pots, warnings };
+    return { files, warnings };
+  }
+
+  /**
+   * Every record the store holds, oldest first, and a warning for each file it cannot read (not
+   * JSON, another schema, a field missing), which is left out.
+   */
+  list(): { readonly pots: PotRecord[]; readonly warnings: string[] } {
+    const { files, warnings } = this.listFiles();
+
+    return { pots: files.map((one) => one.record), warnings };
   }
 }

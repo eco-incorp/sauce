@@ -40,10 +40,26 @@ import {
   type Address as SvmAddress,
   type KeyPairSigner,
 } from "@solana/kit";
-import { bytesToHex, hexToBigInt, type Address, type Hex } from "viem";
+import {
+  bytesToHex,
+  decodeFunctionData,
+  encodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  hexToBigInt,
+  parseAbi,
+  type Address,
+  type Hex,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
-import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../../sdk/dist/deployments/index.js";
+import {
+  v12EngineAddress,
+  v12RouterAddress,
+  v12SvmEngineProgramId,
+  v12SvmKitchenProgramId,
+} from "../../sdk/dist/deployments/index.js";
+import { v12PotAbi } from "../../sdk/dist/evm/engine.js";
 import { decodeCursor, encodeCursor, isCook } from "../../sdk/dist/cli/svm-plan.js";
 import { deriveProgramDataPda, derivePotPda } from "../../sdk/dist/svm/index.js";
 import {
@@ -53,6 +69,7 @@ import {
   startChain,
   type LocalChain,
 } from "../../sdk/test/cli-anvil.js";
+import { releaseArm } from "../../sdk/test/release-arm.js";
 import {
   ENGINE_SO,
   fabricateAlt,
@@ -111,12 +128,15 @@ describe(
     });
 
     /** The external signer: signs each transaction sauce_tx built with consecutive nonces. */
-    const evmSigner = async (gasOf: (tx: Unsigned, index: number) => bigint): Promise<Sign> => {
-      const nonce = await local.publicClient.getTransactionCount({ address: signer.address });
+    const evmSigner = async (
+      gasOf: (tx: Unsigned, index: number) => bigint,
+      from: typeof signer = signer,
+    ): Promise<Sign> => {
+      const nonce = await local.publicClient.getTransactionCount({ address: from.address });
       const fees = await local.publicClient.estimateFeesPerGas();
 
       return (tx, index) =>
-        signer.signTransaction({
+        from.signTransaction({
           chainId: 1,
           type: "eip1559",
           to: tx.to as Address,
@@ -220,6 +240,103 @@ describe(
         stopped.notes.some((note) => /nothing after it was sent \(1 of 2 sent\)/.test(note)),
       );
     });
+
+    it(
+      "swaps at a HyperSwap-style pool through a fresh Pot's Router: sauce_tx built, signed elsewhere, sent by sauce_send",
+      {
+        skip:
+          releaseArm("evm") !== "default" &&
+          "only the installed release's Router answers the HyperSwap callback",
+      },
+      async () => {
+        // A V3 pool that calls back `hyperswapV3SwapCallback`, as HyperSwap's do: token0 -> token1 at
+        // 2x, funded with token1. Set up as sdk/test/evm/router.e2e.test.ts sets its pools.
+        const fixtures = new URL("../../sdk/test/evm/fixtures/", import.meta.url).pathname;
+        const [a, b] = [
+          await local.plant(fixture("MockERC20")),
+          await local.plant(fixture("MockERC20")),
+        ];
+        const [token0, token1] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+        const pool = await local.plant(
+          `${fixture("MockV3Pool", fixtures)}${encodeAbiParameters(
+            [{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "uint256" }],
+            [token0, token1, 3000, 2n * 10n ** 18n],
+          ).slice(2)}` as Hex,
+        );
+        await local.send(
+          local.owner,
+          pool,
+          encodeFunctionData({
+            abi: parseAbi(["function setCallbackSelector(bytes4 selector)"]),
+            functionName: "setCallbackSelector",
+            args: ["0xfa85398b"],
+          }),
+        );
+        await local.mint(token1, pool, 10n ** 24n);
+
+        // A fresh owner, so the Pot is new: planned, deployed and cooked on through the tools alone.
+        const swapper = privateKeyToAccount(generatePrivateKey());
+        await local.deployer.sendTransaction({
+          account: local.deployer.account!,
+          chain: null,
+          to: swapper.address,
+          value: 10n ** 18n,
+        });
+        const swap = {
+          source: [
+            'import { uniswapV3 } from "@sauce/router";',
+            "function main(pool: Address, tokenIn: Address, tokenOut: Address, amountIn: Uint256) {",
+            "  uniswapV3(pool, tokenIn, tokenOut, amountIn, 0, 0, pot);",
+            "}",
+            "",
+          ].join("\n"),
+          chain: "ethereum",
+          owner: swapper.address,
+          args: [pool, token0, token1, "1000"],
+        };
+        const planned = ok(await mcp.call("sauce_tx", swap)) as {
+          pot: Address;
+          transactions: Unsigned[];
+        };
+        await local.mint(token0, planned.pot, 10n ** 24n);
+
+        const sent = (await cookWithYourSigner(
+          async (name, args) => ok(await mcp.call(name, args)),
+          await evmSigner((tx) => {
+            assert.ok(tx.gas !== undefined, `${tx.what} comes with its gas`);
+
+            return BigInt(tx.gas);
+          }, swapper),
+          swap,
+        )) as { ok: boolean; sent: Array<Record<string, unknown>> };
+
+        assert.equal(sent.ok, true);
+        assert.deepEqual(
+          sent.sent.map((each) => each.status),
+          ["success", "success"],
+        );
+        assert.match(String(sent.sent[0]!.what), /deployPot/);
+        // The cook names the installed engine, and the Pot it deployed is on the installed Router.
+        const cook = decodeFunctionData({
+          abi: v12PotAbi,
+          data: planned.transactions[1]!.data as Hex,
+        });
+        assert.equal(cook.functionName, "cook");
+        assert.equal(getAddress(String(cook.args![0])), getAddress(v12EngineAddress()));
+        assert.equal(
+          await local.publicClient.readContract({
+            address: planned.pot,
+            abi: v12PotAbi,
+            functionName: "router",
+          }),
+          getAddress(v12RouterAddress()),
+        );
+        // The pool was paid 1000 of token0 from the Pot, which received 2000 of token1.
+        assert.equal(await local.balanceOf(token0, pool), 1000n);
+        assert.equal(await local.balanceOf(token0, planned.pot), 10n ** 24n - 1000n);
+        assert.equal(await local.balanceOf(token1, planned.pot), 2000n);
+      },
+    );
   },
 );
 

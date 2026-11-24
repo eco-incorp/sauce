@@ -11,7 +11,7 @@
 import { decodeFunctionData, getAddress, type Address, type Hex } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js";
+import { V12_RELEASE_SETS, v12EngineAddress, v12ReleaseSet } from "../deployments/index.js";
 import { v12PotAbi } from "../evm/engine.js";
 import {
   SettleDecodeError,
@@ -88,7 +88,26 @@ function findSettle(data: Hex, accepted: readonly ProgramPin[]): Found {
   return { settle: validate(data) };
 }
 
-const released = (): Address => getAddress(v12EngineAddress());
+/**
+ * The engines a settle cook may name without `--engine`: the release's own, and the earlier
+ * releases' that run this SDK's programs (`alsoRunsOn`).
+ */
+const released = (): Address[] => {
+  const earlier = (v12ReleaseSet().alsoRunsOn?.["v12-evm"] ?? []).flatMap((version) => {
+    const engine = V12_RELEASE_SETS.find((row) => row["v12-evm"].version === version)?.["v12-evm"]
+      .engine;
+
+    return engine === undefined || engine === null ? [] : [getAddress(engine)];
+  });
+
+  return [...new Set([getAddress(v12EngineAddress()), ...earlier])];
+};
+
+/** The v12-evm version of the release that names `engine`. */
+const releasedVersion = (engine: Address): string | undefined =>
+  V12_RELEASE_SETS.find((row) => row["v12-evm"].engine?.toLowerCase() === engine.toLowerCase())?.[
+    "v12-evm"
+  ].version;
 
 /** `sauce verify`: the settle's parameters, or the code it is rejected with (exit 1). */
 export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> {
@@ -127,15 +146,16 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
     { hash: SETTLE_WIRE.PROGRAM_HASH as Hex, bytes: SETTLE_WIRE.PROGRAM_BYTES },
     ...input.pins,
   ];
-  const engines = [released(), ...input.engines.map((engine) => getAddress(engine))];
+  const engines = [...released(), ...input.engines.map((engine) => getAddress(engine))];
   try {
     if (landed !== undefined) throw landed;
     const found = findSettle(data, accepted);
     if (found.engine !== undefined && !engines.includes(found.engine)) {
       throw new Rejected(
         "UNKNOWN_ENGINE",
-        `the cook runs the settle program on ${found.engine}, which is not the released engine ` +
-          `(${released()}): the right bytes on another interpreter are another computation. ` +
+        `the cook runs the settle program on ${found.engine}, which is not an engine that runs ` +
+          `this SDK's programs (${released().join(", ")}): the right bytes on another interpreter ` +
+          "are another computation. " +
           "Pass --engine <address> if you trust it.",
       );
     }
@@ -145,8 +165,8 @@ export async function verifyCommand(input: VerifyInput): Promise<CommandOutput> 
         ? []
         : [
             `  engine     ${found.engine} (${
-              found.engine === released()
-                ? `the released v12 engine ${v12DeployedAddresses().releases["v12-evm"].version}`
+              released().includes(found.engine)
+                ? `the released v12 engine ${releasedVersion(found.engine)}`
                 : "accepted with --engine"
             })`,
           ];

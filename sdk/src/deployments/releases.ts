@@ -10,7 +10,12 @@
  * The same rows drive `sync-engine-artifacts`, which fetches the row of the installed compiler, so
  * the artifacts on disk pair with the compiler that runs. What this module adds is the refusal at
  * call-build time: every SDK builder that names an engine — `v12Pot.encodeCook`, the SVM engine and
- * Kitchen cook instructions — calls {@link assertEngineRunsCompiler} first.
+ * Kitchen cook instructions — calls {@link assertEngineRunsCompiler} first, which refuses an
+ * engine that does not run the program's compiler ({@link engineRunsCompiler}).
+ *
+ * An engine can also run a later compiler's output where that compiler's row lists the engine's
+ * version in `alsoRunsOn`, an evidenced fact: compiler 2.6.4's output runs on v12-evm 1.3.0 and
+ * v12-svm 1.4.0, so Pots of those releases still cook (each on its own engine).
  *
  * An engine no row names (a local deployment, a fork's own) is not refused: the SDK cannot tell
  * what it is. A row's engine is known from its release's `addresses.json`; current engines are
@@ -43,8 +48,22 @@ export interface V12KitchenEvmPin extends V12ReleasePin {
 /** One compiler version and the four releases its output pairs with. */
 export interface V12ReleaseSet {
   readonly compiler: string;
-  /** A separately qualified release set kept as the network default. */
+  /**
+   * Earlier engine releases this compiler's output also runs on, besides the row's own engines, by
+   * version: `{ "v12-evm": ["1.3.0"] }`. Each is an evidenced fact; an ISA label never is one.
+   */
+  readonly alsoRunsOn?: Readonly<Partial<Record<"v12-evm" | "v12-svm", readonly string[]>>>;
+  /** No row sets it since SDK 1.2.0: a row's own releases are the defaults. Kept so code reading
+   *  it still compiles. */
   readonly deployedCompiler?: string;
+  /** The public `@eco-incorp/sauce` version whose tarball carries this row's artifacts, held to
+   *  its integrity (`sync-engine-artifacts`' public source); `compiler` names the row it was built
+   *  from when that is another. Always in the JSON; typed now so the suites can read it. */
+  readonly npm?: {
+    readonly version: string;
+    readonly integrity: string;
+    readonly compiler?: string;
+  };
   readonly "v12-evm": V12ReleasePin & { readonly engine: string | null };
   readonly "kitchen-evm": V12KitchenEvmPin;
   readonly "v12-svm": V12ReleasePin & { readonly engine: string | null };
@@ -74,26 +93,28 @@ function releaseRow(compiler: string): V12ReleaseSet {
 
 /**
  * The release set for `compiler`, or a throw naming the known ones. With no argument it is the
- * release this SDK's network defaults come from ({@link v12DeployedReleaseSet}), as it was before
- * opt-in artifacts shipped: the engine, Kitchen and Pot init-code hash it names are deployed. The
- * installed compiler's own, possibly undeployed, row is {@link v12OptInReleaseSet} or
- * `v12ReleaseSet(sdkCompilerVersion())`.
+ * installed compiler's own row (`sdkCompilerVersion()`): the release every default of this SDK
+ * comes from — `v12EngineAddress()`, `v12KitchenAddress()`, the Pot derivation and
+ * `v12SvmEngineProgramId()`.
  */
 export function v12ReleaseSet(compiler?: string): V12ReleaseSet {
-  return compiler === undefined ? v12DeployedReleaseSet() : releaseRow(compiler);
+  return releaseRow(compiler ?? sdkCompilerVersion());
 }
 
-/** The installed compiler's own row: its releases may not be deployed, and no default uses them. */
+/**
+ * The installed compiler's own row, the same as `v12ReleaseSet()`. Kept for compatibility: in SDK
+ * 1.1.0 it named this row while the network defaults came from an earlier one.
+ */
 export function v12OptInReleaseSet(): V12ReleaseSet {
   return releaseRow(sdkCompilerVersion());
 }
 
-/** The release that supplies the network defaults, with the installed compiler's provenance. */
+/**
+ * The release the SDK's network defaults come from: the installed compiler's own row, the same as
+ * `v12ReleaseSet()`. Kept for compatibility.
+ */
 export function v12DeployedReleaseSet(): V12ReleaseSet {
-  const available = v12OptInReleaseSet();
-  return available.deployedCompiler === undefined
-    ? available
-    : { ...releaseRow(available.deployedCompiler), compiler: available.compiler };
+  return releaseRow(sdkCompilerVersion());
 }
 
 const ENGINE: Record<"evm" | "svm", "v12-evm" | "v12-svm"> = { evm: "v12-evm", svm: "v12-svm" };
@@ -102,9 +123,39 @@ const ENGINE: Record<"evm" | "svm", "v12-evm" | "v12-svm"> = { evm: "v12-evm", s
 const sameEngine = (target: "evm" | "svm", a: string, b: string): boolean =>
   target === "evm" ? a.toLowerCase() === b.toLowerCase() : a === b;
 
+/** Every row naming `engine` as its engine. */
+const rowsNaming = (target: "evm" | "svm", engine: string): V12ReleaseSet[] =>
+  V12_RELEASE_SETS.filter((row) => {
+    const known = row[ENGINE[target]].engine;
+
+    return known !== null && sameEngine(target, known, engine);
+  });
+
 /**
- * Throws if `engine` is an engine a release set names for a compiler other than `compiler`
- * (default: this SDK's). An engine no set names passes — there is nothing to check it against.
+ * Whether `engine` runs `compiler`'s output (default: this SDK's): a row for `compiler` names it,
+ * or that row's `alsoRunsOn` lists its version. `undefined` for an engine no row names — a local
+ * deployment — which the SDK cannot tell.
+ *
+ * @param target `"evm"` for an engine address, `"svm"` for an engine program id.
+ */
+export function engineRunsCompiler(
+  target: "evm" | "svm",
+  engine: string,
+  compiler: string = sdkCompilerVersion(),
+): boolean | undefined {
+  const component = ENGINE[target];
+  const naming = rowsNaming(target, engine);
+  if (naming.length === 0) return undefined;
+  if (naming.some((row) => row.compiler === compiler)) return true;
+  const own = V12_RELEASE_SETS.find((row) => row.compiler === compiler);
+
+  return own?.alsoRunsOn?.[component]?.includes(naming[0]![component].version) ?? false;
+}
+
+/**
+ * Throws if `engine` is an engine a release set names that does not run `compiler`'s output
+ * ({@link engineRunsCompiler}; default compiler: this SDK's). An engine no set names passes —
+ * there is nothing to check it against.
  *
  * @param target `"evm"` for an engine address, `"svm"` for an engine program id.
  */
@@ -113,21 +164,16 @@ export function assertEngineRunsCompiler(
   engine: string,
   compiler: string = sdkCompilerVersion(),
 ): void {
+  if (engineRunsCompiler(target, engine, compiler) !== false) return;
   const component = ENGINE[target];
-  const naming = V12_RELEASE_SETS.filter((row) => {
-    const known = row[component].engine;
-
-    return known !== null && sameEngine(target, known, engine);
-  });
-  if (naming.length === 0) return;
-  const compatible = V12_RELEASE_SETS.filter(
+  const { version } = rowsNaming(target, engine)[0]![component];
+  const runs = V12_RELEASE_SETS.filter(
     (row) =>
-      naming.includes(row) || naming.some((named) => named.compiler === row.deployedCompiler),
-  );
-  if (compatible.some((row) => row.compiler === compiler)) return;
-
-  const { version } = naming[0]![component];
-  const runs = compatible.map((row) => row.compiler).join(", ");
+      (row[component].engine !== null && sameEngine(target, row[component].engine!, engine)) ||
+      row.alsoRunsOn?.[component]?.includes(version) === true,
+  )
+    .map((row) => row.compiler)
+    .join(", ");
   const own = V12_RELEASE_SETS.find((row) => row.compiler === compiler)?.[component];
   const instead =
     own === undefined

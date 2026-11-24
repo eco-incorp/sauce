@@ -13,8 +13,9 @@ import {
 } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress, v12KitchenAddress } from "../deployments/index.js";
+import { v12KitchenAddress } from "../deployments/index.js";
 import { balanceReader } from "./chain.js";
+import { releaseEngines } from "./pots.js";
 import {
   addressLabels,
   effectLines,
@@ -90,7 +91,7 @@ export async function receiptEffects(
 ): Promise<Effects> {
   const labels = addressLabels(chain, [
     [getAddress(v12KitchenAddress()), "Kitchen"],
-    [getAddress(v12EngineAddress()), "engine"],
+    ...releaseEngines().map((engine) => [engine, "engine"] as const),
     ...known,
   ]);
 
