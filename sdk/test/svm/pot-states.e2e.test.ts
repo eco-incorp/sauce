@@ -196,8 +196,9 @@ interface Sent {
   readonly ok: boolean;
   readonly next: Planned;
 }
-/** What `sauce pot --json` says of the cluster. */
+/** What `sauce pot --json` says of the cluster: the engine a cook on the Pot names, at the top. */
 interface PotStatus {
+  readonly engine?: string;
   readonly deployment: { readonly pot: Record<string, unknown> };
 }
 const read = <T>(run: Run): T => jsonOf(run) as unknown as T;
@@ -567,6 +568,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         address: pot,
         deployed: true,
         engine: INSTALLED,
+        ownerEngine: INSTALLED,
       });
       const again = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
       expect(again.stderr).toContain(`Pot ${pot} is already created on solana.`);
@@ -1221,18 +1223,43 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       }, 180_000);
     });
 
-    it("is created, on its own engine, and `sauce pot` says it is cooked on the installed one", async () => {
+    it("is created, on its own engine, and `sauce pot` says a cook on it names the installed one", async () => {
       const owner = await keypair("old-status");
       const pot = await plantOld(owner.signer.address, "old-status");
       const status = await sauce("pot", ...named(owner.signer.address, "old-status"));
+      // `engine` is the engine a cook on the Pot names; the owner is `ownerEngine`.
       expect(read<PotStatus>(status).deployment.pot).toEqual({
         address: pot,
         deployed: true,
-        engine: OLD,
+        engine: INSTALLED,
+        ownerEngine: OLD,
       });
+      expect(read<PotStatus>(status).engine).toBe(INSTALLED);
       expect(status.stderr).toContain(`${told(pot)}.`);
       expect(status.stderr).not.toContain("cooks on it run there");
     });
+  });
+
+  describe("a Pot of v12-svm 1.4.0, whose engine runs this compiler's programs", () => {
+    it("names its own engine as the one a cook on it names, in `sauce pot` and `sauce pot --deploy`", async () => {
+      const owner = await keypair("earlier-status");
+      const pot = await plantOld(owner.signer.address, "earlier-status", EARLIER);
+
+      const status = await sauce("pot", ...named(owner.signer.address, "earlier-status"));
+      expect(read<PotStatus>(status).deployment.pot).toEqual({
+        address: pot,
+        deployed: true,
+        engine: EARLIER,
+        ownerEngine: EARLIER,
+      });
+      expect(read<PotStatus>(status).engine).toBe(EARLIER);
+
+      const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "earlier-status"));
+      expect(deployed.code).toBe(0);
+      expect(
+        read<{ deployed: boolean; engine?: string; ownerEngine?: string }>(deployed),
+      ).toMatchObject({ deployed: true, engine: EARLIER, ownerEngine: EARLIER });
+    }, 180_000);
   });
 
   describe("an address a program this SDK does not know as an engine owns", () => {
@@ -1306,6 +1333,9 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         deployed: true,
         ownerProgram: unknown,
       });
+      // No cook is built on it, so no engine is named: the installed engine a new Pot would name is
+      // not left in its place.
+      expect(read<PotStatus>(status).engine).toBeUndefined();
 
       const deployed = await sauce("pot", "--deploy", ...signedAs(owner.path, "unknown-status"));
       expect(deployed.code).toBe(0);
@@ -1314,6 +1344,7 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         deployed: true,
         ownerProgram: unknown,
       });
+      expect(read<{ engine?: string }>(deployed).engine).toBeUndefined();
       expect(shim.sent.length).toBe(sent);
     }, 180_000);
   });

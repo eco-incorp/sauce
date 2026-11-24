@@ -60,7 +60,12 @@ import {
 import { svmTokenRows } from "../routes/token-registry.js";
 import type { CompiledSauceProgram, SourcePosition } from "../routes/sauce-route.js";
 import { svmKitchenIdlPath } from "../svm/engine-artifacts.js";
-import { potAccountState, svmEngineReleases, type PotAccountState } from "../svm/engine-release.js";
+import {
+  potAccountState,
+  potCookEngine,
+  svmEngineReleases,
+  type PotAccountState,
+} from "../svm/engine-release.js";
 import {
   instructionAddresses,
   programsCalled,
@@ -1467,18 +1472,28 @@ const svmUnknownOwnerNote = (owner: string): string =>
 
 /**
  * What `sauce pot` and the MCP server's `sauce_pot` say of a Pot from one reading of its account, so
- * the two cannot disagree. The fields: `engine`, the release's engine that owns the account (the one
- * its cooks run on where it runs this SDK's programs), and `ownerProgram`, the program that owns it
- * where that is no engine this SDK knows. The notes: an address that holds only lamports, an unknown
- * owner, an engine other than the installed one.
+ * the two cannot disagree: {@link svmPotFacts}.
  */
-export function svmPotFacts(
-  pot: string,
-  read: PotRead,
-): {
-  readonly fields: { readonly engine?: string; readonly ownerProgram?: string };
+export interface SvmPotFacts {
+  /**
+   * Fields for the Pot's JSON. `engine` is the engine a cook on the Pot names, as on an EVM chain:
+   * the engine that owns the account where it runs this SDK's programs, the installed one where it
+   * does not. `ownerEngine` is the engine this SDK knows that owns the account, whether or not cooks
+   * name it. `ownerProgram` is the program that owns it where that is no engine this SDK knows: no
+   * cook is built on such a Pot, so it has no `engine`. An address no engine owns yet has none of
+   * the three, and the prediction's installed engine stands for it.
+   */
+  readonly fields: {
+    readonly engine?: string;
+    readonly ownerEngine?: string;
+    readonly ownerProgram?: string;
+  };
+  /** What the account means: only lamports, an unknown owner, an engine other than the installed one. */
   readonly notes: string[];
-} {
+}
+
+/** What the account of `pot`, as `read`, says of it, for `sauce pot` and the MCP `sauce_pot` alike. */
+export function svmPotFacts(pot: string, read: PotRead): SvmPotFacts {
   const { state, lamports } = read;
   if (state.kind === "other") {
     return { fields: { ownerProgram: state.owner }, notes: [svmUnknownOwnerNote(state.owner)] };
@@ -1491,7 +1506,8 @@ export function svmPotFacts(
   }
 
   return {
-    fields: { engine: state.engine },
+    // An account an engine owns always has an engine a cook names.
+    fields: { engine: potCookEngine(state, engine())!, ownerEngine: state.engine },
     notes:
       state.engine === engine()
         ? []
@@ -1503,6 +1519,23 @@ export function svmPotFacts(
             ]
           : [svmOlderPotNote(pot, state, false)],
   };
+}
+
+/**
+ * `prediction`, a Pot's JSON that names the installed engine for a Pot not created yet, with `facts`
+ * laid over it. Where a program this SDK does not know owns the account, no cook is built on it, so
+ * the prediction's engine goes rather than stand for it.
+ */
+export function svmPotWithFacts(
+  prediction: Record<string, unknown>,
+  facts: SvmPotFacts,
+): Record<string, unknown> {
+  const kept =
+    facts.fields.ownerProgram === undefined
+      ? prediction
+      : Object.fromEntries(Object.entries(prediction).filter(([key]) => key !== "engine"));
+
+  return { ...kept, ...facts.fields };
 }
 
 /** What the cluster says of `target`'s Pot, for a tool that tells whether to deploy it. */
@@ -3926,7 +3959,7 @@ async function deployment(
   rpc: Rpc,
   url: string,
   pot: Address,
-): Promise<{ json: Record<string, unknown>; notes: string[] }> {
+): Promise<{ json: Record<string, unknown>; notes: string[]; facts: SvmPotFacts }> {
   const program = async (at: Address, what: string): Promise<boolean> => {
     const { value } = await ask(url, what, () =>
       rpc.getAccountInfo(at, { encoding: "base64" }).send(),
@@ -3973,6 +4006,7 @@ async function deployment(
         : []),
       ...potFacts.notes,
     ],
+    facts: potFacts,
   };
 }
 
@@ -3987,7 +4021,11 @@ export async function svmPotStatusCommand(
   const pot = predicted.json.pot as Address;
   const found = await deployment(rpc, target.rpcUrl, pot);
   const tokenAccounts = await svmPotTokenAccounts(target, target.rpcUrl);
-  const json = { ...predicted.json, deployment: found.json, tokenAccounts };
+  const json = {
+    ...svmPotWithFacts(predicted.json, found.facts),
+    deployment: found.json,
+    tokenAccounts,
+  };
   const accountNotes = tokenAccounts.map(
     (one) =>
       `The Pot's ${one.symbol} account, --account NAME=pot:${one.symbol}: ${one.account}, ` +
@@ -4022,21 +4060,18 @@ export async function svmPotDeployCommand(
   const pot = predicted.json.pot as Address;
   const rpc = createSolanaRpc(target.rpcUrl);
   await requireReleased(rpc, target.rpcUrl, chain, ["engine", "Kitchen"]);
-  const { state, lamports } = await readPot(rpc, target.rpcUrl, pot);
+  const read = await readPot(rpc, target.rpcUrl, pot);
+  const { state, lamports } = read;
   if (state.kind !== "unallocated") {
-    const json = {
-      ...predicted.json,
-      deployed: true,
-      ...(state.kind === "other" ? { ownerProgram: state.owner } : {}),
-    };
+    // What the account is, as `sauce pot` and the MCP `sauce_pot` say it: the engine a cook names,
+    // its owner, and what that means for a cook.
+    const facts = svmPotFacts(pot, read);
+    const json = { ...svmPotWithFacts(predicted.json, facts), deployed: true };
 
     return {
       text: JSON.stringify(json, null, 2),
       json,
-      notes: [
-        `Pot ${pot} is already created on ${chain.slug}.`,
-        ...(state.kind === "other" ? [svmUnknownOwnerNote(state.owner)] : []),
-      ],
+      notes: [`Pot ${pot} is already created on ${chain.slug}.`, ...facts.notes],
     };
   }
   const sent = await sendInstructions(

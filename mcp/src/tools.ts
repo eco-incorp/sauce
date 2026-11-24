@@ -111,6 +111,7 @@ import {
   svmPotCommand,
   svmPotFacts,
   svmPotState,
+  svmPotWithFacts,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
@@ -2265,9 +2266,12 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),
-        // The engine its cooks name, the Router a deployed Pot runs, and (Solana) the program that
-        // owns its account where that is no engine this SDK knows.
+        // The engine a cook on the Pot names, the Router a deployed Pot runs, and (Solana) the engine
+        // that owns an existing Pot's account (`ownerEngine`, which cooks name only where it runs this
+        // SDK's programs) or, where that is no engine this SDK knows, the program that does
+        // (`ownerProgram`: no cook is built on it, so it has no `engine`).
         engine: z.string().optional(),
+        ownerEngine: z.string().optional(),
         router: z.string().optional(),
         ownerProgram: z.string().optional(),
         refused: REFUSED.optional(),
@@ -2293,10 +2297,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
         return {
           json: {
-            ...output.json,
-            // The engine that owns an existing Pot is the one its cooks run on, as for a Pot of the
-            // EVM chains; the installed engine otherwise, which a Pot not created yet runs on.
-            ...facts?.fields,
+            // `engine` is the engine a cook on the Pot names, as for a Pot of the EVM chains: where
+            // an account exists its own facts say it (the owner where it runs this SDK's programs,
+            // the installed engine where it does not, none where no engine this SDK knows owns it),
+            // and the prediction's installed engine stands for a Pot not created yet.
+            ...(facts === undefined ? output.json : svmPotWithFacts(output.json, facts)),
             deployed,
             ...(tokenAccounts === undefined ? {} : { tokenAccounts }),
           },

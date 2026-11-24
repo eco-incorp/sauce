@@ -139,6 +139,7 @@ export {
   svmPotCommand,
   svmPotFacts,
   svmPotState,
+  svmPotWithFacts,
   svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,

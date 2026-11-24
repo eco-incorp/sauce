@@ -180,7 +180,7 @@ describe("sauce_pot on Solana", () => {
     assert.deepEqual(funded.instruction, before.instruction);
   });
 
-  it("names the program that owns an existing Pot's account when it is no engine: deployed, with its owner and a note, and no engine of its own", async () => {
+  it("names the program that owns an existing Pot's account when it is no engine: deployed, with its owner and a note, and no engine, since no cook is built on it", async () => {
     const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
     const before = ok(await mcp.call("sauce_pot", bare));
     const pot = before.pot as string;
@@ -190,8 +190,10 @@ describe("sauce_pot on Solana", () => {
       const foreign = ok(await mcp.call("sauce_pot", bare));
       assert.equal(foreign.deployed, true);
       assert.equal(foreign.ownerProgram, FOREIGN);
-      // No engine owns it, so the engine is the installed one, as for a Pot not created yet.
-      assert.equal(foreign.engine, v12SvmEngineProgramId());
+      // No engine this SDK knows owns it, so no cook is built on it: no engine is named, and the
+      // installed engine a Pot not created yet would name is not left in its place.
+      assert.equal(foreign.engine, undefined);
+      assert.equal(foreign.ownerEngine, undefined);
       const notes = foreign.notes as string[];
       assert.ok(
         notes.some((note) =>
@@ -208,7 +210,7 @@ describe("sauce_pot on Solana", () => {
     ["1.4.0", true],
     ["1.3.0", false],
   ] as const) {
-    it(`says which earlier engine owns a Pot of v12-svm ${version}, and where cooks on it run`, async () => {
+    it(`says which earlier engine owns a Pot of v12-svm ${version}, and which engine a cook on it names`, async () => {
       const bare = { chain: "solana", owner: OWNER, rpcUrl: url, balances: false };
       const before = ok(await mcp.call("sauce_pot", bare));
       const pot = before.pot as string;
@@ -217,9 +219,11 @@ describe("sauce_pot on Solana", () => {
       try {
         const owned = ok(await mcp.call("sauce_pot", bare));
         assert.equal(owned.deployed, true);
-        // The owning engine, not the installed one, which a new Pot runs on.
-        assert.equal(owned.engine, owning);
-        assert.notEqual(owned.engine, v12SvmEngineProgramId());
+        // `engine` is the engine a cook on the Pot names, as on the EVM chains: the owner where it
+        // runs this SDK's programs, the installed engine where it does not. The owner is
+        // `ownerEngine` either way.
+        assert.equal(owned.engine, runsCompiler ? owning : v12SvmEngineProgramId());
+        assert.equal(owned.ownerEngine, owning);
         assert.equal(owned.ownerProgram, undefined);
         const notes = owned.notes as string[];
         const said = runsCompiler
