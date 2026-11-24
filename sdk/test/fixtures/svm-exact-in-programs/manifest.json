@@ -140,14 +140,14 @@
       "name": "pumpswap",
       "programId": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
       "file": "pumpswap.so.gz",
-      "sha256": "b66918d6b1300c8698acd1b92ad1d76ddc2832c7cd2ca3231f450f7f203ab5f1",
-      "redeploySlot": 469811067
+      "sha256": "c75b6c042e6111965915ebafaba02fd4b241ff508326f6d7c83873910bba1722",
+      "redeploySlot": 471854493
     },
     {
       "name": "pump-fee",
       "programId": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
       "file": "pump-fee.so.gz",
-      "sha256": "4f2955d0f6b40cc9ff7daa18ccad7d19119ba1249759f4e7e3bb691beee6b35e"
+      "sha256": "303fd7a4540bcd42e9ce715cb7ee5bcde9a1dae27605955d6a45228ed9503e73"
     },
     {
       "name": "bonkswap",
@@ -201,7 +201,7 @@
       "name": "hadron",
       "programId": "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
       "file": "hadron.so.gz",
-      "sha256": "d08a1a5993212f5b858a371460a8b804896d139d47b6bb57f3755fb53a1d977a"
+      "sha256": "d5221aa673dc29fb57463d41f4fb401e2010247f7d3b9710366b913cd6d5e425"
     },
     {
       "name": "taurusfi",
@@ -246,8 +246,8 @@
       "name": "deriverse",
       "programId": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
       "file": "deriverse.so.gz",
-      "sha256": "246f2233393b9051bcf56e12c90a9ab434ba3663ebbdadb1cd276cbaf639979a",
-      "redeploySlot": 469803586
+      "sha256": "53b1164108a5504b73ee59a68326635b4c64b20747ca587f487d29ba49537fd3",
+      "redeploySlot": 472997121
     },
     {
       "name": "goonfi-v2",
@@ -400,7 +400,7 @@
       "name": "m0-ext",
       "programId": "mextzNVPUbLbvyBwqBqnC5J1SSwjDLjjR4yppf6EBzc",
       "file": "m0-ext.so.gz",
-      "sha256": "f8e897033981090c20762e7515591524be22d513f1ea7342e6452271c8fff88f"
+      "sha256": "2a48d6c1cbdb71bc590c4f06be9f04fdb698013040e7472813c4f60c9f53201a"
     },
     {
       "name": "sanctum-infinity",
