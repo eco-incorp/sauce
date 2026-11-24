@@ -130,7 +130,7 @@ import {
   associatedTokenAccountLength,
 } from "../svm/index.js";
 import { createSauceSvmClient } from "../svm/client.js";
-import { CliError, UsageError, type SaltChoice } from "./args.js";
+import { CliError, UsageError, withNotes, type SaltChoice } from "./args.js";
 import {
   type Approver,
   argumentValues,
@@ -1491,8 +1491,6 @@ export function svmPotNotes(pot: string, read: PotRead, creates = false): string
 export interface SvmPotCooking {
   /** The engine every cook of this Pot names. */
   readonly engine: Address;
-  /** The address holds only lamports: no engine owns it, and it is cooked as it is. */
-  readonly lamportsOnly: boolean;
   /** What the Pot's state means for the cook, said with its result. */
   readonly notes: readonly string[];
 }
@@ -1511,13 +1509,11 @@ export async function svmPotEngine(rpc: Rpc, url: string, pot: Address): Promise
     case "unallocated":
       return {
         engine: engine(),
-        lamportsOnly: read.lamports !== undefined,
         notes: svmPotNotes(pot, read),
       };
     case "engine":
       return {
         engine: state.runsCompiler ? address(state.engine) : engine(),
-        lamportsOnly: false,
         notes: svmPotNotes(pot, read),
       };
     case "other":
@@ -1948,8 +1944,6 @@ interface Prepared {
    * for a cook straight to the engine.
    */
   readonly engine: Address;
-  /** The address holds only lamports: no engine owns it, and it is cooked as it is. */
-  readonly lamportsOnly: boolean;
   /** What the Pot's state means for the cook, said with every result of the command. */
   readonly notes: readonly string[];
   readonly fee: bigint;
@@ -2026,9 +2020,7 @@ async function prepare(
   await requireCluster(rpc, input.rpcUrl, input.chain);
   const pot = await potOf(input);
   const cooking: SvmPotCooking =
-    via === "engine"
-      ? { engine: engine(), lamportsOnly: false, notes: [] }
-      : await svmPotEngine(rpc, input.rpcUrl, pot);
+    via === "engine" ? { engine: engine(), notes: [] } : await svmPotEngine(rpc, input.rpcUrl, pot);
   const potEngine = cooking.engine;
   // The slots the token methods added that no `--account` gave: the command derives each.
   const derived = new Set(
@@ -2129,7 +2121,6 @@ async function prepare(
     via,
     pot,
     engine: potEngine,
-    lamportsOnly: cooking.lamportsOnly,
     notes: cooking.notes,
     fee,
     program,
@@ -3128,7 +3119,8 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
       "the program acts with, so the accounts it spends from are the signer's own."
     : `Pot ${prepared.pot} belongs to ${input.owner} (salt ${input.salt}). ` +
       (plan.pot === "there"
-        ? prepared.lamportsOnly
+        ? // What the step read, which the cook is built on: the Pot's first read may be a slot older.
+          step.lamportsOnly === true
           ? "Fund its accounts with what the program spends."
           : "It is created. Fund its accounts with what the program spends."
         : plan.pot === "inline"
@@ -3413,20 +3405,34 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     signer: input.signer,
     fee: prepared.fee,
   };
-  let plan = await planOf(prepared, input);
-  await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan), [
-    planEngine(plan),
-  ]);
+  // What the Pot's state means for the cook, as the plan last read it: it starts as the first read's
+  // (`Prepared.notes`) and is each step's own as the plan advances, since the plan reads the Pot
+  // again and builds from that read, which may differ from the first.
+  let notes: readonly string[] = prepared.notes;
+  let plan: SvmPlan;
+  try {
+    plan = await planOf(prepared, input);
+    await requireReleased(prepared.rpc, input.rpcUrl, input.chain, planPrograms(plan), [
+      planEngine(plan),
+    ]);
+  } catch (error) {
+    throw withNotes(error, notes);
+  }
   const buffer = await planBuffer(plan);
   let created: SvmSent | undefined;
   let accountsMade: { sent: SvmSent; made: string[] } | undefined;
   const staged: SvmSent[] = [];
   const tabled: SvmSent[] = [];
   // A run that stops before its cook is sent says what the Pot's state means for the cook beside its
-  // message (`Prepared.notes`): a cook that fails for what they explain is told so. One that was
-  // sent says them in its result, whatever happened to it.
-  const stopped = (message: string): CliError =>
-    Object.assign(new CliError(message), { notes: prepared.notes });
+  // message: a cook that fails for what they explain is told so. `caught` is the failure the stop
+  // is made of, whose own notes (a plan's step build carries them) are kept. One that was sent says
+  // them in its result, whatever happened to it.
+  const stopped = (message: string, caught?: unknown): CliError => {
+    const error = new CliError(message);
+    if (caught instanceof CliError) error.notes = caught.notes;
+
+    return withNotes(error, notes) as CliError;
+  };
   // Once the buffer is there, a run that stops closes it again, and says whether it did; a lookup
   // table it created stays, and is named.
   const closedAgain = async (): Promise<string> =>
@@ -3439,13 +3445,16 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   // The step after, read from the cluster: a failure to read it is a stop like any other.
   const after = async (): Promise<PlanStep> => {
     try {
-      return await nextStep(plan, ctx);
+      const next = await nextStep(plan, ctx);
+      notes = next.notes;
+
+      return next;
     } catch (error) {
-      throw stopped(`${(error as Error).message}${await closedAgain()}`);
+      throw stopped(`${(error as Error).message}${await closedAgain()}`, error);
     }
   };
 
-  let step = await nextStep(plan, ctx);
+  let step = await after();
   while (step.name === "setup") {
     // Asked as every step a command sends first is (`approvals.ts`): with no one to ask, named
     // before anything is sent.
@@ -3463,6 +3472,7 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
       } catch (error) {
         throw stopped(
           `${staging ? "staging the program failed: " : ""}${(error as Error).message}${await closedAgain()}`,
+          error,
         );
       }
       if (staging) staged.push(sent);
@@ -3516,7 +3526,9 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
   const createInCook = cookTx.createsPot === true;
   const { value: latestBlockhash } = await ask(input.rpcUrl, "the latest blockhash", () =>
     prepared.rpc.getLatestBlockhash().send(),
-  );
+  ).catch((error: unknown) => {
+    throw withNotes(error, notes);
+  });
   const built = buildPlanTx(cookTx, ctx, latestBlockhash);
   // What the cook moves: every account it may write, read before it is sent and once it lands.
   const tracked = writableAccounts(built.transaction, cookTx.lookupTables ?? {});
@@ -3536,12 +3548,13 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
     );
   } catch (error) {
     // Sent, perhaps: the cook may still land, so the buffer it runs from stays.
-    throw new CliError(
+    throw stopped(
       `${(error as Error).message}` +
         (buffer === undefined
           ? ""
           : `\nThe code buffer ${buffer.codeBuffer} stays open, as the cook may still land: ` +
             `sauce reclaim --chain ${input.chain.slug} closes it once it has.`),
+      error,
     );
   }
   const landedAs =
@@ -3601,11 +3614,11 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         ? []
         : sentLines(input.chain, "closed the code buffer in", closed.sent)),
     ].join("\n"),
-    ...(closed?.open === undefined && stopNotes.length === 0 && prepared.notes.length === 0
+    ...(closed?.open === undefined && stopNotes.length === 0 && notes.length === 0
       ? {}
       : {
           notes: [
-            ...prepared.notes,
+            ...notes,
             ...stopNotes,
             ...(closed?.open === undefined ? [] : [`warning: ${closed.open}`]),
           ],

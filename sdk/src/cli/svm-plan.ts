@@ -102,7 +102,7 @@ import {
   TRANSACTION_SIZE_LIMIT,
 } from "../svm/index.js";
 import { potAccountState, potCookEngine, svmEngineReleases } from "../svm/engine-release.js";
-import { CliError, UsageError } from "./args.js";
+import { CliError, UsageError, withNotes } from "./args.js";
 import {
   failureReason,
   potAccountOf,
@@ -263,6 +263,9 @@ export interface PlanStep {
   readonly fee?: bigint;
   /** The endpoint did not simulate the cook: it is built at the most compute, unrehearsed. */
   readonly unrehearsed?: true;
+  /** The Pot's address holds only lamports now: no engine owns it, and the cook runs on it as it
+   *  is. What a step says of the Pot is this read's, not an earlier one's. */
+  readonly lamportsOnly?: true;
 }
 
 /** Where a step is built: the cluster, and the signer each transaction is built for. */
@@ -886,6 +889,9 @@ async function exists(ctx: StepContext, account: Address, what: string): Promise
 interface PotNow {
   /** No account at its address: the plan's setup (or its cook) is to create it. */
   readonly missing: boolean;
+  /** An account is there, and it holds only lamports (no data, the System Program's): no engine
+   *  owns it yet. */
+  readonly lamportsOnly: boolean;
   /** What its state means for the cook, as the command that made the plan said it (`svmPotNotes`):
    *  none for a plan with no cook left to build. */
   readonly notes: readonly string[];
@@ -927,6 +933,7 @@ async function potNow(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<
 
   return {
     missing: value === null,
+    lamportsOnly: state.kind === "unallocated" && lamports !== undefined,
     notes: cooking ? svmPotNotes(pot, { state, lamports }, plan.pot !== "there") : [],
   };
 }
@@ -1026,10 +1033,19 @@ export async function nextStep(
     );
   }
   let potNotes: readonly string[] = [];
+  let lamportsOnly = false;
   if (current.via === "kitchen" && current.pot !== "setup") {
-    potNotes = (await potNow(current, ctx)).notes;
+    const now = await potNow(current, ctx);
+    potNotes = now.notes;
+    lamportsOnly = now.lamportsOnly;
   }
-  const setup = await setupTransactions(current, ctx, state, finalized);
+  const said = lamportsOnly ? { lamportsOnly: true as const } : {};
+  // A failure past the Pot's read is told what its state means for the cook, as the step it would
+  // have been is: the error carries the notes worked out so far (`CliError#notes`), which the
+  // command prints and the tools return, so every front end of a plan says them from here.
+  const setup = await setupTransactions(current, ctx, state, finalized).catch((error: unknown) => {
+    throw withNotes(error, potNotes);
+  });
   if (setup.transactions.length > 0) {
     return {
       name: "setup",
@@ -1037,13 +1053,16 @@ export async function nextStep(
       plan: setup.plan,
       overview: overview(setup.plan, "setup"),
       notes: [...potNotes, ...setup.notes],
+      ...said,
     };
   }
   // The cook's step says what the Pot's state means for it as the setup's would: a cursor resumed
   // later, or a send that builds the next step, tells it as the command that made the plan did.
-  const cook = await cookStep(setup.plan, ctx);
+  const cook = await cookStep(setup.plan, ctx).catch((error: unknown) => {
+    throw withNotes(error, [...potNotes, ...setup.notes]);
+  });
 
-  return { ...cook, notes: [...potNotes, ...setup.notes, ...cook.notes] };
+  return { ...cook, notes: [...potNotes, ...setup.notes, ...cook.notes], ...said };
 }
 
 /**
@@ -1109,7 +1128,7 @@ async function setupTransactions(
   const [pot, made] = await Promise.all([
     plan.pot === "setup"
       ? potNow(plan, ctx, plan.cooked === undefined && plan.closing !== true)
-      : { missing: false, notes: [] },
+      : { missing: false, lamportsOnly: false, notes: [] },
     svmTokenAccountsToCreate(
       ctx.rpc,
       ctx.url,
@@ -1128,107 +1147,114 @@ async function setupTransactions(
     ),
   ]);
   notes.push(...pot.notes);
-  if (pot.missing) {
-    transactions.push({
-      what: "creating the Pot",
-      kind: "pot",
-      instructions: [await createPotInstruction(plan)],
-    });
-  }
-  if (made.accounts.length > 0) {
-    const byAddress = new Map(plan.tokenAccounts.map((account) => [account.address, account]));
-    transactions.push({
-      what: "creating the token accounts",
-      kind: "accounts",
-      accounts: made.accounts.map((one) => byAddress.get(one.address)!),
-      instructions: [...made.instructions],
-    });
-  }
-  const buffer = await planBuffer(plan);
-  if (buffer !== undefined && !finalized) {
-    if (plan.payload === undefined) {
-      throw new CliError(
-        `the code buffer ${buffer.codeBuffer} is not finalized, and the plan no longer carries ` +
-          "the program: make a new plan",
-      );
-    }
-    const accounts = { kitchen: kitchen(), owner: plan.owner, ...buffer };
-    const payload = plan.payload;
-    const growths = Math.ceil(payload.length / GROWTH_STEP) - 1;
-    if (state === undefined) {
-      const grows = Array.from({ length: growths }, () => buildGrowCodeBufferInstruction(accounts));
+  let next = plan;
+  try {
+    if (pot.missing) {
       transactions.push({
-        what: "creating the code buffer",
-        kind: "buffer",
+        what: "creating the Pot",
+        kind: "pot",
+        instructions: [await createPotInstruction(plan)],
+      });
+    }
+    if (made.accounts.length > 0) {
+      const byAddress = new Map(plan.tokenAccounts.map((account) => [account.address, account]));
+      transactions.push({
+        what: "creating the token accounts",
+        kind: "accounts",
+        accounts: made.accounts.map((one) => byAddress.get(one.address)!),
+        instructions: [...made.instructions],
+      });
+    }
+    const buffer = await planBuffer(plan);
+    if (buffer !== undefined && !finalized) {
+      if (plan.payload === undefined) {
+        throw new CliError(
+          `the code buffer ${buffer.codeBuffer} is not finalized, and the plan no longer carries ` +
+            "the program: make a new plan",
+        );
+      }
+      const accounts = { kitchen: kitchen(), owner: plan.owner, ...buffer };
+      const payload = plan.payload;
+      const growths = Math.ceil(payload.length / GROWTH_STEP) - 1;
+      if (state === undefined) {
+        const grows = Array.from({ length: growths }, () =>
+          buildGrowCodeBufferInstruction(accounts),
+        );
+        transactions.push({
+          what: "creating the code buffer",
+          kind: "buffer",
+          instructions: [
+            buildCreateCodeBufferInstruction({
+              ...accounts,
+              nonce: plan.staged!.nonce,
+              capacity: payload.length,
+            }),
+            ...grows.slice(0, GROWS_PER_TRANSACTION),
+          ],
+        });
+        for (let at = GROWS_PER_TRANSACTION; at < grows.length; at += GROWS_PER_TRANSACTION) {
+          transactions.push({
+            what: "growing the code buffer",
+            kind: "buffer",
+            instructions: grows.slice(at, at + GROWS_PER_TRANSACTION),
+          });
+        }
+      } else if (state.code.length < payload.length) {
+        // Created and not fully grown: the grows left.
+        const left = Math.ceil((payload.length - state.code.length) / GROWTH_STEP);
+        for (let at = 0; at < left; at += GROWS_PER_TRANSACTION) {
+          transactions.push({
+            what: "growing the code buffer",
+            kind: "buffer",
+            instructions: Array.from({ length: Math.min(GROWS_PER_TRANSACTION, left - at) }, () =>
+              buildGrowCodeBufferInstruction(accounts),
+            ),
+          });
+        }
+      }
+      for (let offset = 0; offset < payload.length; offset += CHUNK) {
+        const chunk = payload.subarray(offset, offset + CHUNK);
+        // A chunk the code account holds already is not written again.
+        if (
+          state !== undefined &&
+          sameBytes(state.code.subarray(offset, offset + chunk.length), chunk)
+        ) {
+          continue;
+        }
+        transactions.push({
+          what: `writing bytes ${offset}… of the program`,
+          kind: "write",
+          instructions: [buildWriteCodeBufferInstruction({ ...accounts, offset, chunk })],
+        });
+      }
+      transactions.push({
+        what: "finalizing the code buffer",
+        kind: "finalize",
         instructions: [
-          buildCreateCodeBufferInstruction({
+          buildFinalizeCodeBufferInstruction({
             ...accounts,
-            nonce: plan.staged!.nonce,
-            capacity: payload.length,
+            len: payload.length,
+            expectedSha256: plan.staged!.sha256,
           }),
-          ...grows.slice(0, GROWS_PER_TRANSACTION),
         ],
       });
-      for (let at = GROWS_PER_TRANSACTION; at < grows.length; at += GROWS_PER_TRANSACTION) {
-        transactions.push({
-          what: "growing the code buffer",
-          kind: "buffer",
-          instructions: grows.slice(at, at + GROWS_PER_TRANSACTION),
-        });
-      }
-    } else if (state.code.length < payload.length) {
-      // Created and not fully grown: the grows left.
-      const left = Math.ceil((payload.length - state.code.length) / GROWTH_STEP);
-      for (let at = 0; at < left; at += GROWS_PER_TRANSACTION) {
-        transactions.push({
-          what: "growing the code buffer",
-          kind: "buffer",
-          instructions: Array.from({ length: Math.min(GROWS_PER_TRANSACTION, left - at) }, () =>
-            buildGrowCodeBufferInstruction(accounts),
-          ),
-        });
-      }
     }
-    for (let offset = 0; offset < payload.length; offset += CHUNK) {
-      const chunk = payload.subarray(offset, offset + CHUNK);
-      // A chunk the code account holds already is not written again.
-      if (
-        state !== undefined &&
-        sameBytes(state.code.subarray(offset, offset + chunk.length), chunk)
-      ) {
-        continue;
-      }
-      transactions.push({
-        what: `writing bytes ${offset}… of the program`,
-        kind: "write",
-        instructions: [buildWriteCodeBufferInstruction({ ...accounts, offset, chunk })],
-      });
+    if (plan.table !== undefined) {
+      const made = await tableTransactions(plan, ctx);
+      transactions.push(...made.transactions);
+      next = made.plan;
     }
-    transactions.push({
-      what: "finalizing the code buffer",
-      kind: "finalize",
-      instructions: [
-        buildFinalizeCodeBufferInstruction({
-          ...accounts,
-          len: payload.length,
-          expectedSha256: plan.staged!.sha256,
-        }),
-      ],
-    });
-  }
-  let next = plan;
-  if (plan.table !== undefined) {
-    const made = await tableTransactions(plan, ctx);
-    transactions.push(...made.transactions);
-    next = made.plan;
-  }
-  // A step a signer can sign before its blockhash expires: what is past it comes in the next,
-  // built from what the cluster shows then (the finalize after every write, the table after it).
-  if (transactions.length > most) {
-    notes.push(
-      `the setup is ${transactions.length} transactions: this step is the first ${most}, and ` +
-        "the next step has the rest",
-    );
+    // A step a signer can sign before its blockhash expires: what is past it comes in the next,
+    // built from what the cluster shows then (the finalize after every write, the table after it).
+    if (transactions.length > most) {
+      notes.push(
+        `the setup is ${transactions.length} transactions: this step is the first ${most}, and ` +
+          "the next step has the rest",
+      );
+    }
+  } catch (error) {
+    // The Pot's state, as the setup read it, is told with a failure past that read.
+    throw withNotes(error, notes);
   }
 
   return { transactions: transactions.slice(0, most), plan: next, notes };

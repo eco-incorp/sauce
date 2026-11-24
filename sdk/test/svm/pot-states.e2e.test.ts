@@ -43,7 +43,9 @@ import {
   buildCookInstruction,
   buildCreatePotInstruction,
   buildExecuteTransaction,
+  buildSetExecutionFeeInstruction,
   derivePotPda,
+  deriveProgramDataPda,
   KITCHEN_DISCRIMINATORS,
   MAX_POT_LEN,
 } from "../../src/svm/index.js";
@@ -52,6 +54,7 @@ import {
   describeSvm,
   ENGINE_SO,
   randomAddress,
+  sendInstructions,
   sendSigned,
   setMint,
   setTokenAccount,
@@ -235,6 +238,59 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
     const held = harness.svm.getAccount(key);
 
     return held.exists ? held.data.length : undefined;
+  };
+  /** One JSON-RPC request the command makes, as the endpoint is asked it. */
+  interface RpcRequest {
+    readonly id: unknown;
+    readonly method: string;
+    readonly params?: readonly unknown[];
+  }
+  /**
+   * Runs `command` with `hook` seeing each JSON-RPC request it makes, in order: a response from the
+   * hook is the endpoint's answer, and `undefined` leaves the request to the bank.
+   */
+  const through = async <T>(
+    hook: (request: RpcRequest) => Response | undefined,
+    command: () => Promise<T>,
+  ): Promise<T> => {
+    const bank = globalThis.fetch;
+    globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
+      hook(JSON.parse(String(init?.body ?? "{}")) as RpcRequest) ??
+      bank(input, init)) as typeof fetch;
+    try {
+      return await command();
+    } finally {
+      globalThis.fetch = bank;
+    }
+  };
+  /** An endpoint's error answer to `request`. */
+  const failing = (request: RpcRequest, message: string): Response =>
+    Response.json({ id: request.id, jsonrpc: "2.0", error: { code: -32099, message } });
+  /** A hook that puts 1,000,000 lamports on `pot` as the command's second read of it is answered. */
+  const fundedAtSecondRead = (pot: Address) => {
+    let reads = 0;
+
+    return (request: RpcRequest): undefined => {
+      if (request.method === "getAccountInfo" && request.params?.[0] === pot && ++reads === 2) {
+        harness.svm.airdrop(pot, lamports(1_000_000n));
+      }
+
+      return undefined;
+    };
+  };
+  /** The Kitchen's execution fee, set by the authority that initialized it. */
+  const setFee = async (fee: bigint): Promise<void> => {
+    const { address: programData } = await deriveProgramDataPda(KITCHEN);
+    const set = await sendInstructions(harness, [
+      buildSetExecutionFeeInstruction({
+        kitchen: KITCHEN,
+        authority: harness.payer.address,
+        programData,
+        feeConfig: harness.feeConfig,
+        fee,
+      }),
+    ]);
+    if (!set.ok) throw new Error(`set_execution_fee failed: ${set.err}`);
   };
 
   beforeAll(async () => {
@@ -446,6 +502,65 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       const again = await sauce("pot", "--deploy", ...signedAs(owner.path, "deployed"));
       expect(again.stderr).toContain(`Pot ${pot} is already created on solana.`);
     }, 180_000);
+
+    describe("when it comes to hold lamports between the command's first read of it and its second", () => {
+      // A node a slot behind answers the first read, and the owner funds the address right after: the
+      // plan reads it again and builds from that. What it says of the Pot is the plan's, not the first
+      // read's.
+      const note = (pot: Address): string =>
+        `Pot ${pot} holds 1000000 lamports and no engine owns it yet`;
+
+      it("says so on a run that stops because its cook would fail, and sends nothing", async () => {
+        const owner = await keypair("changed-fail");
+        const pot = await potOf(owner.signer.address, "changed-fail");
+        const program = join(work, "changed-check.sauce.ts");
+        writeFileSync(program, LAMPORTS_CHECK);
+        const sent = shim.sent.length;
+
+        const ran = await through(fundedAtSecondRead(pot), () =>
+          sauce(
+            "run",
+            program,
+            ...signedAs(owner.path, "changed-fail"),
+            ...["--account", `p=${pot}`, "--yes"],
+          ),
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain("the cook would fail, so it was not sent");
+        expect(ran.stderr).toContain("lamport-owner-check");
+        expect(ran.stderr).toContain(note(pot));
+        expect(shim.sent.length).toBe(sent);
+        expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+      }, 180_000);
+
+      it("says so with the result of a run whose cook was sent", async () => {
+        const owner = await keypair("changed-run");
+        const pot = await potOf(owner.signer.address, "changed-run");
+        const sent = shim.sent.length;
+
+        const ran = await through(fundedAtSecondRead(pot), () =>
+          sauce("run", seven, ...signedAs(owner.path, "changed-run"), "--yes", "--json"),
+        );
+        expect(ran.code).toBe(0);
+        expect(read<Ran>(ran).cook).toMatchObject({ status: "success" });
+        expect(shim.sent.length).toBeGreaterThan(sent);
+        expect(ran.stderr).toContain(note(pot));
+        expect(account(pot)).toMatchObject({ programAddress: SYSTEM });
+      }, 180_000);
+
+      it("says so on `sauce tx`, which does not claim the Pot is created", async () => {
+        const owner = await keypair("changed-tx");
+        const pot = await potOf(owner.signer.address, "changed-tx");
+
+        const planned = await through(fundedAtSecondRead(pot), () =>
+          sauce("tx", seven, ...named(owner.signer.address, "changed-tx")),
+        );
+        expect(planned.code).toBe(0);
+        expect(planned.stderr).toContain(note(pot));
+        expect(planned.stderr).toContain("Fund its accounts with what the program spends.");
+        expect(planned.stderr).not.toContain("It is created.");
+      }, 180_000);
+    });
   });
 
   describe("a Pot of v12-svm 1.3.0, which no release of this compiler's output runs on", () => {
@@ -741,6 +856,101 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
       expect(run.stderr).not.toContain("which runs compiler");
       expect(shim.sent.length).toBe(sent);
     }, 180_000);
+
+    describe("a cook that is not sent says what the Pot is whichever step stops it", () => {
+      it("says it when the endpoint fails the read that builds the run's first step", async () => {
+        const owner = await keypair("old-first");
+        const pot = await plantOld(owner.signer.address, "old-first");
+        const sent = shim.sent.length;
+
+        const ran = await through(
+          (request) =>
+            request.method === "getLatestBlockhash" ? failing(request, "first-step") : undefined,
+          () => sauce("run", seven, ...signedAs(owner.path, "old-first"), "--yes"),
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain("reading the latest blockhash failed");
+        expect(ran.stderr).toContain(cookTold(pot));
+        expect(shim.sent.length).toBe(sent);
+      }, 180_000);
+
+      it("says it when the endpoint fails the blockhash read made just before the cook is sent", async () => {
+        const owner = await keypair("old-before-send");
+        const pot = await plantOld(owner.signer.address, "old-before-send");
+        const sent = shim.sent.length;
+        const seen: string[] = [];
+
+        const ran = await through(
+          (request) => {
+            seen.push(request.method);
+            // The plan's cook step reads one to simulate the cook on; the run reads the second.
+            return request.method === "getLatestBlockhash" &&
+              seen.filter((method) => method === "getLatestBlockhash").length === 2
+              ? failing(request, "before-send")
+              : undefined;
+          },
+          () => sauce("run", seven, ...signedAs(owner.path, "old-before-send"), "--yes"),
+        );
+        // The failing read is the one after the cook's simulation: the plan's step was built.
+        expect(seen.indexOf("simulateTransaction")).toBeGreaterThan(-1);
+        expect(seen.lastIndexOf("getLatestBlockhash")).toBeGreaterThan(
+          seen.indexOf("simulateTransaction"),
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain("reading the latest blockhash failed");
+        expect(ran.stderr).toContain(cookTold(pot));
+        expect(shim.sent.length).toBe(sent);
+      }, 180_000);
+
+      // A plan whose cook fails its simulation hands out no cook, so a cursor resumed later builds it
+      // again from the cluster: the step these two cases make fail.
+      const planFailing = async (owner: KeyPairSigner, salt: string, extra: string[] = []) => {
+        const planned = await sauce(
+          ...["tx", ownerCheck, ...named(owner.address, salt), "--account", "pot=pot", ...extra],
+        );
+        expect(planned.code).toBe(1);
+        expect(planned.stderr).toContain("the engine does not own the Pot");
+
+        return (JSON.parse(planned.stdout) as Planned).cursor;
+      };
+
+      it("says it when a plan resumed from its cursor cannot build its cook", async () => {
+        const owner = await keypair("old-cursor");
+        const pot = await plantOld(owner.signer.address, "old-cursor");
+        const cursor = await planFailing(owner.signer, "old-cursor");
+        const sent = shim.sent.length;
+
+        const resumed = await through(
+          (request) =>
+            request.method === "getLatestBlockhash" ? failing(request, "cursor") : undefined,
+          () => sauce("send", "--cursor", cursor, "--rpc-url", RPC_URL, "--json"),
+        );
+        expect(resumed.code).toBe(1);
+        expect(resumed.stderr).toContain("reading the latest blockhash failed");
+        expect(resumed.stderr).toContain(cookTold(pot));
+        expect(shim.sent.length).toBe(sent);
+      }, 180_000);
+
+      it("says it when a plan resumed from its cursor is refused for the execution fee", async () => {
+        const owner = await keypair("old-fee");
+        const pot = await plantOld(owner.signer.address, "old-fee");
+        // Made while the fee is free, so under the cap; the Kitchen's fee rises before it is resumed.
+        const cursor = await planFailing(owner.signer, "old-fee", ["--max-execution-fee", "100"]);
+        const sent = shim.sent.length;
+        await setFee(5_000n);
+        try {
+          const resumed = await sauce("send", "--cursor", cursor, "--rpc-url", RPC_URL);
+          expect(resumed.code).toBe(1);
+          expect(resumed.stderr).toContain(
+            "the execution fee is 5000 lamports, above --max-execution-fee 100: nothing was built",
+          );
+          expect(resumed.stderr).toContain(cookTold(pot));
+          expect(shim.sent.length).toBe(sent);
+        } finally {
+          await setFee(0n);
+        }
+      }, 180_000);
+    });
 
     it("is created, on its own engine, and `sauce pot` says it is cooked on the installed one", async () => {
       const owner = await keypair("old-status");
