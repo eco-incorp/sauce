@@ -161,8 +161,9 @@ itself as the pool is a missing slot, which is skipped.
 A pool that cannot trade for its own state is skipped before its pair is looked at: no input
 (before even the pool's owner), a paused pool or one whose swaps are off, and a Stopped form's
 start bound its price has passed return `0` whatever pair they were given. Crema's pair is checked
-before its price, its liquidity and its tick arrays are read, so a pool that is not the pair is
-refused even where it is idle or its window has no room. `cremaAtLimit` refuses a limit of `0`
+before its price or its liquidity can skip the swap, and before its tick arrays are scanned, so a
+pool that is not the pair is refused even where it is idle or its window has no room.
+`cremaAtLimit` refuses a limit of `0`
 (`Crema takes no zero limit`) and a floor past 64 bits (`minOut past 64 bits`) whatever the window
 holds, as it refuses a limit past 128 bits; only what it skips first (no input, a paused pool)
 escapes them.
