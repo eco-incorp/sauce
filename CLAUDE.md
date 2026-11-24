@@ -2127,6 +2127,13 @@ synced from the private kitchen-evm 1.1.0 package into `V12QuoteRouter.json`. Ac
 `QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (the execution Router).
 The quote service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
 engine or execution Router. Captured-mainnet tests compare its quotes against execution Router swaps.
+`quoteRouter.assets` pins both `abis.json` and `addresses.json` (the quote Router's address and salt), each
+by sha256, and moving the quote Router updates both digests. The sync stops at once, before `--report`
+prints anything, while `addresses.json` has no digest there, so that digest is hashed by hand (the sha256
+of the release's file in the cache). From the public package the quote Router's `addresses.json` has no
+raw copy to hash, so that entry is held by the package's committed integrity, by its `quoteRouter` pins
+equalling the committed ones, and by the two derived files (`V12Deployments.json` and
+`V12QuoteRouter.json`) agreeing on one address and on generation 3.
 No chain deployment is implied by these release addresses.
 
 ## Publishing
