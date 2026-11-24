@@ -1,0 +1,6 @@
+{
+  "note": "Canonical Permit2, pinned by the keccak256 of its runtime code on Ethereum (chain 1). The code is not committed: `pnpm --filter './sdk' fetch-contract-code` reads it with eth_getCode, holds it to codeHash and writes Permit2.json beside this file (gitignored), this pin plus its `runtime`. Its immutables cache chain 1's EIP-712 domain for this address; on another chain id Permit2 rebuilds the domain from block.chainid and address(this), so installed at this address it signs and verifies as the real one does on any chain.",
+  "chainId": 1,
+  "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+  "codeHash": "0xc67d1657868aa5146eaf24fb879fb1fdec3d2d493b3683a61c9c2f4fb2851131"
+}

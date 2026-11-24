@@ -46,6 +46,8 @@ import {
   engineFaultName,
   GROWTH_STEP,
   LOOKUP_TABLE_MAX_ADDRESSES,
+  potAccountState,
+  potCookEngine,
   resolveAccounts,
   resolveSvmAccountName,
   resolveTokenProgramByOwner,
@@ -99,6 +101,8 @@ export interface Cooked {
   readonly lookupTable: boolean;
   /** What each account the cook names is, for a person. */
   readonly labels: ReadonlyMap<Address, string>;
+  /** The engine the cook named: the one that owns the Pot (`potEngine`). */
+  readonly engine: Address;
 }
 
 /** A transaction of `instructions` from `payer`, on a blockhash of its own. */
@@ -317,6 +321,44 @@ function tableAddresses(transaction: Transaction): Address[] {
 }
 
 /**
+ * The engine a cook on `pot` names (`potCookEngine`, as `sauce` takes it): the program that owns
+ * the Pot's account, where it is a release engine that runs this package's programs (an earlier
+ * release's Pot cooks on its own engine); `chain.engine` where no Pot is there yet, where the
+ * address holds only lamports (the Kitchen cooks it as it is), and for a Pot of an engine that does
+ * not run them (v12-svm 1.3.0's), as earlier SDKs cooked every Pot. Refuses an account no engine
+ * owns, and an engine whose code this chain does not hold: never another engine's code in its
+ * place.
+ */
+export async function potEngine(chain: CookChain, pot: Address): Promise<Address> {
+  await chain.bank.ensure([pot]);
+  const held = chain.bank.account(pot);
+  const state = potAccountState(
+    held === null ? null : { owner: held.owner, dataLength: held.data.length },
+  );
+  if (state.kind === "other") {
+    throw new Error(
+      `the account at ${pot}, a Pot's address, is owned by ${state.owner}, which is not an engine ` +
+        "this SDK knows",
+    );
+  }
+  const cooks = potCookEngine(state, chain.engine);
+  if (cooks === chain.engine) return chain.engine;
+  // An earlier release's engine, which runs this package's programs: its own code, which the bank
+  // holds to that release's digest where it reads it from its source (`Bank.ensure`).
+  await chain.bank.ensure([held!.owner]);
+  if (chain.bank.account(held!.owner)?.executable !== true) {
+    throw new Error(
+      `the Pot ${pot} is owned by engine ${held!.owner}` +
+        (state.kind === "engine" ? ` (v12-svm ${state.version})` : "") +
+        ", whose code this chain does not hold: a local chain and a replay hold only this " +
+        "package's engine; fork a cluster that runs it",
+    );
+  }
+
+  return held!.owner;
+}
+
+/**
  * Sends `input`'s program as a cook from the owner's Pot, with what it needs first: the token
  * accounts it names that the chain does not hold, and, for a program too large for one
  * transaction, its code buffer. Returns the cook's transaction, whether it succeeded or not; a
@@ -350,7 +392,9 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
       : input.program.held(stops.binding);
   const payload = hexToBytes(program.payload(input.args, svmStopValues(stops, program)));
   const tail = resolveAccounts(manifest, resolution, input.owner.address);
-  const { bank, kitchen, engine, feeConfig } = chain;
+  const { bank, kitchen, feeConfig } = chain;
+  // The engine that owns the Pot cooks it: an earlier release's Pot runs on its own engine.
+  const engine = await potEngine(chain, input.pot);
   const owner = input.owner;
 
   // The token accounts the cook names that the chain does not hold, created first, a few to a
@@ -407,7 +451,7 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
     ),
   );
   if (getTransactionSize(inline) <= TRANSACTION_SIZE_LIMIT) {
-    return { sent: await bank.send(inline), staged: false, lookupTable: false, labels };
+    return { sent: await bank.send(inline), staged: false, lookupTable: false, labels, engine };
   }
 
   // Staged: the program written into a code buffer of the owner's, the first nonce free.
@@ -502,7 +546,7 @@ export async function cook(chain: CookChain, input: CookInput): Promise<Cooked> 
     "closing the code buffer",
   );
 
-  return { sent, staged: true, lookupTable, labels };
+  return { sent, staged: true, lookupTable, labels, engine };
 }
 
 // ---- Why a transaction failed -----------------------------------------------------------------

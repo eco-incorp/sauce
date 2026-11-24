@@ -303,7 +303,8 @@ export function createRpcGuard(options: RpcGuardOptions): RpcGuard {
   };
 
   const start = (): Promise<{ server: Server; port: number }> => {
-    listening ??= new Promise((ready, fail) => {
+    if (listening !== undefined) return listening;
+    const started = new Promise<{ server: Server; port: number }>((ready, fail) => {
       const server = createServer((req, res) => {
         forward(req, res).catch(() => refuse(res, 502, "the endpoint could not be reached"));
       });
@@ -314,8 +315,15 @@ export function createRpcGuard(options: RpcGuardOptions): RpcGuard {
         ready({ server, port: (server.address() as AddressInfo).port });
       });
     });
+    // A start that fails must not be remembered as the guard's answer: drop it, so the next route
+    // starts again instead of failing for as long as the guard lives. Only this start's own entry:
+    // a newer one may have replaced it.
+    listening = started;
+    started.catch(() => {
+      if (listening === started) listening = undefined;
+    });
 
-    return listening;
+    return started;
   };
 
   return {

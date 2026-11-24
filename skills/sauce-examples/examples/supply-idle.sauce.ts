@@ -1,9 +1,8 @@
 // Keeps `reserve` USDC liquid in the Pot and the rest earning in Aave V3, to run on a schedule:
 // supplies what the Pot holds above `reserve`, and when it holds less, withdraws the shortfall
 // from the Pot's Aave position, as much as there is. A move smaller than `minMove` is not worth
-// its gas and is skipped. The aToken's address is read from the pool, through the reads the
-// registry's Aave V3 ABI does not declare, in AaveV3Reads.json beside this file. Returns what it
-// supplied or withdrew, and the USDC liquid and supplied after.
+// its gas and is skipped. The aToken's address is read from the pool. Returns what it supplied or
+// withdrew, and the USDC liquid and supplied after.
 // The Aave position is the Pot's on purpose (supplied for the Pot): a later run withdraws from it,
 // which it could not if the aTokens were in the wallet.
 //
@@ -19,13 +18,12 @@
 //
 //   sauce run supply-idle.sauce.ts --chain ethereum --keystore <keystore> \
 //     --args 500000000 50000000
-import AaveV3Reads from "./AaveV3Reads.json";
 
 function main(
   reserve: Uint256,
   minMove: Uint256,
 ): { supplied: Uint256; withdrawn: Uint256; liquid: Uint256; deposited: Uint256 } {
-  const aToken = AaveV3Reads.at(AaveV3.Pool).getReserveAToken(USDC);
+  const aToken = AaveV3.Pool.getReserveAToken(USDC);
   require(aToken != 0, "USDC is not listed on this Aave V3 pool");
   const liquid = pot.USDC;
   const deposited = Token(aToken).balanceOf(pot); // the Pot's supplied USDC, interest included

@@ -24,6 +24,7 @@ them. Arc Testnet is a test network: its coin and tokens have no value.
 | Native coin | USDC (USDC), 18 decimals; also the ERC-20 `USDC` (6 decimals), one balance |
 | Minimum base fee | 20 gwei: a transaction with a lower `maxFeePerGas` is never included |
 | Sauce | the engine, Kitchen and Routers, at the same addresses on every EVM chain: [Deployments](../deployments.md) |
+| CCTP domain | 26 |
 
 ## Notes
 
@@ -31,6 +32,11 @@ Arc Testnet is Arc's model exactly: USDC is the native coin at 18 decimals and t
 `0x3600000000000000000000000000000000000000` at 6, one balance, with the same minimum base fee.
 Every note on the [Arc](arc.md) page holds here too. Its USDC and EURC come from Circle's
 faucet.
+
+Arc Testnet has no DEX, lending market or oracle in the registry: it is for USDC and EURC
+moves, CCTP and Circle Gateway. For a pool, a swap, Morpho, Aave or Aerodrome, compile and
+simulate on `arc`. `USDC` has the same address on both; `EURC` differs, and `WETH` and `USYC`
+exist only on `arc`.
 
 ## In a program
 
@@ -44,6 +50,10 @@ function main() {
   const held = EURC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(EURC).balanceOf(pot) == held);
+  // `Cctp.TokenMessenger` is Arc Testnet's tokenMessenger: `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`.
+  require(Cctp.TokenMessenger != 0);
+  // The same contract, qualified by the chain's name, from a program on any chain.
+  require(ArcTestnet.Cctp.TokenMessenger == Cctp.TokenMessenger);
 }
 ```
 
@@ -56,7 +66,15 @@ function main() {
 
 ## Protocols
 
-The registry records no protocol deployment on this chain.
+Every protocol the registry records here, each contract with how a program names it: its
+namespace contract, or its ABI imported from `./protocols/<slug>/<Export>.json` and bound to the
+address.
+
+| Protocol | Contract | Address | In a program |
+| --- | --- | --- | --- |
+| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | `Cctp.TokenMessenger`; not on this deployment: `initialize` |
+| [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B` | `CircleGateway.GatewayMinter` |
+| [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` | `CircleGateway.GatewayWallet` |
 
 ## Next
 

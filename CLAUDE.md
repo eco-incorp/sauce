@@ -6,6 +6,12 @@ The current consumer manual starts at [docs/README.md](docs/README.md). Compiler
 [docs/api/compiler.md](docs/api/compiler.md). Keep that manual focused on external SDK users;
 repository maintenance instructions belong here.
 
+**The SDK's major version is only for changes SDK users would notice.** An engine, compiler or Kitchen
+major that the SDK absorbs with no change to SauceScript or to the exports, commands and tools users call
+is a `feat` or a `fix` here, never `!` or a `BREAKING CHANGE:` footer. The commit message sets the
+release version, and the release pipeline refuses a major unless a person confirms it. Read
+[What a major means](#what-a-major-means) before writing a commit or a PR title.
+
 The manual is written for people and the skills for agents. It is in four parts, Diátaxis's:
 **Tutorials** (learn by doing), **How-to guides** (one task a page), **Concepts** (explanation: what
 a Pot is, why atomic) and **Reference** (flags, API, the generated pages, the changelog).
@@ -81,7 +87,7 @@ install into or load from a folder, or one above it up to `~/.sauce` (symlinks r
 another user owns or anyone else can write, and a version folder that is not 0700, because the
 process may hold a wallet password. The packages then load from the
 folder through a `module.registerHooks` resolve hook, limited to the package's own modules' imports.
-Only `main.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
+Only `start.ts` gives the process the installer (`useRuntime`), so an in-process `runCli` (every
 test, the skills checker) never runs npm and refuses with `sauce runtime install` instead. In this
 repository the workspaces' own copies are the pins, so nothing installs. `sauce runtime
 [status|install]` reports and installs; `sauce mcp setup` installs up front; and `sauce update` has
@@ -195,6 +201,7 @@ pnpm --filter './actions' test:unit      # no mainnet state
 pnpm --filter './actions' test:mainnet   # real mainnet contracts, replayed locally
 pnpm --filter './sdk' gen-route-globals  # regenerate the per-chain named exports
 pnpm --filter './sdk' gen-source-globals # regenerate the contract table and both languages' types
+pnpm --filter './sdk' gen-registry-abis  # regenerate the registry ABIs, their twins and omitted.json
 ```
 
 Single test file: jest (sdk) → `pnpm --filter './sdk' test -- routes-void-main.test.ts`.
@@ -237,6 +244,21 @@ build's output does not move.
 skill's own cookbook through `sauce simulate` and `sauce run` on Ethereum and Base state, its
 results held to Uniswap's QuoterV2, the feed, Aave's account data and the recipients' balances.
 The cookbook's Solana program runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
+`examples.mainnet` (`test:mainnet`) runs the `sauce-swaps` and `sauce-protocols` examples on
+Ethereum state through `sauce simulate` and `sauce run`, in three groups it imports: Uniswap V3
+(`examples-uniswap-v3.mainnet.ts`: exact output and a path held to QuoterV2, a full-range position
+held to the position manager's reads and to its calls replayed from the Pot), Balancer V2 and
+Pendle (`examples-pendle-balancer.mainnet.ts`: batch swaps and the cycle held to the Vault's
+`queryBatchSwap`, Pendle trades to the balances they moved, mints and redeems to the SY's previews
+and the YT's index), and lending (`examples-lending.mainnet.ts`: Aave V3 credit delegation held to
+the debt token's allowance, Compound III to Comet's own reads and its refusal of a borrow past what
+the Pot may borrow, Morpho Blue to its position, market and oracle). It OWNS the
+`official-ethereum` blob: a capture rewrites a blob whole from what its one fork read, so the groups
+run on ONE anvil it starts, each reverting its changes, and a capture writes the union. A group is a
+module exporting `register(anvil)`, never a suite of its own; the entry's last test, which needs no
+engine, fails a module that reads the blob without being registered, one that starts its own anvil
+on it, and a script that names a group alone. `executed.json` names the group that runs each
+example, which `example-programs.mjs` accepts because a listed suite imports it.
 After changing an action's fields in `actions/src/spec.ts`, run `pnpm --filter './actions'
 gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.json` is stale.
 
@@ -254,11 +276,18 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.6.1 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
-  An ISA label is not a compatibility check. `sync-engine-artifacts.mjs` syncs the row of the INSTALLED compiler and records it as
-  `V12Deployments.json`'s `compiler`; `deployments/releases.ts#assertEngineRunsCompiler` reads the
-  same rows, and every SDK builder that names an engine (`v12Pot.encodeCook`, the SVM engine and
-  Kitchen cook instructions) refuses an engine no row explicitly pairs with that compiler. To bump: edit the row's versions,
+  package version (2.6.4 uses v12-evm 1.5.0 / v12-svm 1.4.1, and its `alsoRunsOn` adds v12-evm 1.4.0,
+  v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  An ISA label is not a compatibility check. **The installed compiler's row is the SDK's defaults**
+  (`v12ReleaseSet()`, `v12EngineAddress()`, the Pot a prediction gives): a row has no
+  `deployedCompiler`, and the sync refuses one that sets it. A row's `alsoRunsOn` lists the earlier
+  engines its compiler's output also runs on (`{ "v12-evm": ["1.4.0", "1.3.0"], "v12-svm": ["1.4.0"] }` for
+  2.6.4), so the SDK cooks a Pot of that release on its own engine:
+  `deployments/releases.ts#engineRunsCompiler` reads it, `assertEngineRunsCompiler` reads that, and
+  the legacy arm (below) is the evidence for it. `sync-engine-artifacts.mjs` syncs the row of the
+  INSTALLED compiler and records it as `V12Deployments.json`'s `compiler`; every SDK builder that
+  names an engine (`v12Pot.encodeCook`, the SVM engine and Kitchen cook instructions) refuses an
+  engine whose row does not run that compiler's output. To bump: edit the row's versions,
   run the sync, paste the digests, engine ids and the kitchen-evm pin's `kitchen` and
   `potInitCodeHash` it reports — a row with a `null` digest, engine id, Kitchen or hash is a release
   not out yet, and the sync refuses it and writes nothing. The Kitchen and hash are what the `sauce`
@@ -267,7 +296,25 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   release's addresses are written in docs and skills ONLY in the generated
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
-  diff.
+  diff. A compiler-only release gets a row of its own that copies the previous row's four releases
+  and `alsoRunsOn` exactly. The previous row stays, as the record of the SDK release built from it.
+  The installed row's raw release assets also ship, under
+  `sdk/dist/artifacts/releases/<compiler>/<tag>/<asset>`, named for the first row of the release set
+  (`releases/2.6.4/` for the 1.5.0 set; a compiler-only release keeps the path), dist only: they
+  equal the release the top-level artifacts are derived from, and stay for whoever reads them by
+  path. `KEPT_ASSET_FOLDERS` in the sync names the folders an earlier SDK shipped that this one
+  keeps: `releases/2.6.3/`, SDK 1.1.0's, which holds kitchen-evm and v12-evm 1.4.0's assets, the
+  engine and Router the SDK still cooks fixed-Router and Shared Pots on. They are read from that
+  SDK's public tarball, each asset held to its row's digest in both artifact-source modes, and
+  written beside the installed row's. A CREATE3 row's legacy files (`src/artifacts/legacy/2.6.3/`)
+  are derived from those raw assets (`legacyFromRawAssets`), because that tarball's top-level files
+  are the 1.3.0 set. The engines `alsoRunsOn` names are written to
+  `sdk/src/artifacts/legacy/<compiler>/` (src only, never dist), from the public `@eco-incorp/sauce`
+  tarball of the newest row pinning each engine (`publicPackage(row)`, integrity-pinned in
+  `releases.json`, no credential) and held to that row's digests, in both artifact-source modes. A
+  sync reads and checks everything before it writes anything — the raw assets, what the default
+  artifacts are made of and the earlier releases' artifacts — and then writes them together, so a
+  refusal anywhere leaves `sdk/{src,dist}/artifacts` as it was.
   **Fetching needs no PAT.** Each release publishes its assets as a PRIVATE npm package on GitHub
   Packages (`@eco-incorp/<package>` at `npm.pkg.github.com`, one per independently-released
   component). Read access is granted per package to the CONSUMING REPOSITORY (package settings ->
@@ -287,8 +334,24 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   surfaced: `execFileSync` puts the command line in it and these commands carry the credential, which
   printed a live token into output before this was fixed.
 
-  **If this repository is ever made public**, note that granting a public repository access to a
-  private package lets FORKS of it read that package.
+  **This repository is public**, and granting a public repository access to a private package lets
+  FORKS of it read that package.
+
+  **Without the grant — a fork, an outside contributor — set `SAUCE_ARTIFACT_SOURCE=npm`**, read only
+  by the sync (a build script). It takes every artifact from the PUBLIC `@eco-incorp/sauce` tarball
+  the row's `npm` names (`{ version, integrity }`, a published version built from that row): the
+  tarball held to the committed integrity, its own `releases.json` carrying the row unchanged, every
+  release asset to the row's digest and the derived files to the row's versions, engines, Kitchen
+  and Pot hash (for a CREATE3 row also its Router, schemes and Pot deployer), and rebuilt from the
+  raw `abis.json` and `addresses.json` the same tarball carries, which must make the files it
+  carries; any mismatch refuses with nothing written. The release manifests' cross-check
+  (corroboration, never the guarantee) is the one check it cannot repeat. It is EXPLICIT, never a
+  fallback (a fork's workflow has a `GITHUB_TOKEN` too, so "no credential" cannot select it), never
+  reads the credential, and caches apart, under `node_modules/.cache/sauce-engine-releases/npm/`. CI
+  selects it where `.github/actions/setup` sees a fork's pull request or a fork's own repository;
+  `publish.yml` pins the private source. A compiler bump has no public source until a version built
+  from its row is published and pinned. In either mode every failure stops the sync: nothing a
+  previous sync left on disk stands in for a refused read or a digest that does not match.
 
 - **Foundry is required only to RUN things, never to build artifacts.** The sync no longer compiles
   anything: the ABIs arrive as a release asset. What still needs Foundry is `anvil` on `PATH` for
@@ -318,13 +381,32 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   block interval (12 s on Ethereum, 2 s elsewhere — WOOFi's oracle goes stale 120 s
   after its last post), refuses to fork, and makes any non-loopback `fetch` throw, so a suite that
   starts reading something new FAILS (a missing slot reads as zero) rather than reaching the
-  network. Blob sizes at capture: actions ~680 KB, quote ~270 KB, split-swap ~80 KB, the swap
-  venue suites `swap` (Ethereum) ~135 KB, `swap-base` ~165 KB, `swap-avalanche` ~30 KB, and the names
-  suite's three (one per chain, `names-{ethereum,base,avalanche}`) ~45, ~65 and ~40 KB,
-  `holdings-{ethereum,base}` ~30 KB each, the docs examples suite's three (`docs-examples`,
-  `-base`, `-optimism`) ~80, ~35 and ~25 KB, the cookbook's two
-  (`cookbook-{ethereum,base}`) ~135 KB each, and `official-ethereum` ~630 KB, which no suite reads
-  at present.
+  network. Every blob is committed with its contract code pinned (below), so each holds balances,
+  nonces and storage only: 185 KB for all 17, the largest `swap-base` ~75 KB, `actions` ~30 KB and
+  `official-ethereum` ~21 KB (which `examples.mainnet` alone reads and captures).
+
+  **Contract code is pinned, not committed.** An account with code carries `codeHash` (keccak256)
+  where an anvil genesis has `code`; capture writes the code to the content-addressed
+  `node_modules/.cache/sauce-contract-code/<codeHash>.hex`, and `pnpm --filter './sdk'
+fetch-contract-code --rpc-config fixtures.rpc.config.json` (`sdk/scripts/fetch-contract-code.mjs`,
+  run by CI's setup action) fills that cache from each blob's chain (`eth_getCode` at `latest`
+  through the explicitly configured public endpoints, held to the
+  hash; code at an address changes only by self-destruct or an EIP-7702 delegation, which it names
+  when it refuses). Replay puts each code back before anvil boots and fails, naming the fetch, when
+  one is missing. The testing kit's `test/testing/state/base.json.gz` is pinned the same way (see
+  `dev-tools/` below). Never commit third-party program code in a blob; the non-program `0xef`
+  marker is the exception and stays inline as `code`.
+  Both fixture fetchers require `--rpc-config <path>` for online runs: a flat JSON object mapping
+  chain ids to public, keyless HTTPS URLs or nonempty lists of them in fallback order. Keep this
+  separate from credential-bearing capture configs in gitignored `sdk/fixtures.rpc.config.json`,
+  with ids `1`, `8453`, `43114`, `10` and `1399811149`. With `pnpm --filter './sdk'`, relative
+  paths resolve from `sdk`, hence `--rpc-config fixtures.rpc.config.json`. There is no default,
+  environment lookup or access to the CLI-only RPC roster. CI takes the public-only JSON from
+  the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG` — on a fork's run, which GitHub gives
+  no variable, from `ci.yml`'s literal of the same JSON (keep the two equal; it is the one line
+  `no-embedded-rpc.test.ts` allows outside the command's list) — writes it to a runner temporary
+  file and passes its absolute path. `--offline` needs no config and uses verified local caches
+  without any network access.
 
   **Recapture** only when a suite needs state it does not have — a new test, a new venue, or a moved
   pinned block (then recapture every suite on that chain, and revisit every pinned figure: pools,
@@ -384,16 +466,35 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   ABI (a Router constructor argument up to kitchen-evm 1.0.0; `setRouter` after), as v12's deploy
   tooling does.
 
+- **The legacy arms: the engine-executing suites run once per engine.** On the installed release,
+  and again with `SAUCE_TEST_EVM_ARM=<version>` or `SAUCE_TEST_SVM_ARM=<version>` (read only by
+  `sdk/test/release-arm.ts`) for each earlier engine version the installed row's `alsoRunsOn` names
+  (EVM `1.4.0` and `1.3.0`, Solana `1.4.0`), from `src/artifacts/legacy/`: the evidence for the
+  claim `alsoRunsOn` makes for every program the SDK compiles. CI has one job per version,
+  `legacy-<target>-<version with dashes>` (`legacy-evm-1-4-0`, `legacy-evm-1-3-0`,
+  `legacy-svm-1-4-0`), each running `sdk/scripts/run-arm-suites.mjs <evm|svm> <sdk|actions|mcp>
+<version>` (the scripts are `test:evm-legacy` in `sdk`, `actions` and `mcp`, and `test:svm-legacy`
+  in `sdk`, each taking the version). The `sauce` command's own suites (`cli-anvil.ts`) run on the
+  default and 1.3.0 arms only: the 1.4.0 stack has no engine at the address the command names.
+  `sdk/test/legacy-arm.json` lists, per target and version, each suite that runs and, with its reason, each
+  that does not, and `legacy-arm.test.ts` fails a suite that starts an engine and is on neither
+  list: a new engine suite goes on one list in the same change. A suite that passes on the
+  installed release and fails only on the legacy arm means `alsoRunsOn` is wrong for some program,
+  which is not edited around.
+
 - **EVM engine artifacts** (`sdk/{src,dist}/artifacts/` — `Router`, `ISauceRouter`, `V12Pot`,
   `V12Kitchen`, `V12KitchenProxy`, `V12RuntimeBytecode`, `V12EngineGate`, `V12Deployments`, `IERC20`,
   `IUniswapV3Pool`) ship to downstream SDK consumers,
   which read them for local tests/deploys. **Nothing is tracked** — an `artifacts/` directory at any
-  depth is gitignored, as is every `dist/` — so they exist only where a sync has run, and `tsc` does
+  depth is gitignored, as is every `dist/` (the `releases/` subtree and `src/artifacts/legacy/` are
+  build output too) — so they exist only where a sync has run, and `tsc` does
   not emit them: **after any repin run `pnpm --filter './sdk' sync-engine-artifacts`**. Five ABIs
   come from the `kitchen-evm` release's `abis.json`, `IERC20` is declared in the script (the ERC-20 standard is
   never v12's), `IUniswapV3Pool` comes from `@uniswap/v3-core`, and `V12RuntimeBytecode` wraps the
-  release's creation code. `V12EngineGate` records the released engine's Kitchen/Pot gate anchors —
-  the Kitchen and the Pot init-code hash, and not the Router, which no Pot hash derives from.
+  release's creation code. `V12EngineGate` records the released engine's Kitchen/Pot gate anchors:
+  the Kitchen, the Pot creation code's hash (`potInitCodeHash`, what the Kitchen's
+  `potInitCodeHash()` reports) and, from kitchen-evm 1.4.0 (`scheme: "create3"`), the Pot proxy's
+  init-code hash, the Pot profile hash and the fixed Router.
   CI asserts all 10 landed, so a broken generation fails there rather than
   shipping an empty dir. No generated file is committed and drift-checked any more:
   `engine-abi.generated.ts` went with the engine that produced it.
@@ -440,7 +541,7 @@ compile(options: CompileOptions): CompileResult
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
 `true`), `cache` (default `true`), `chain`, `chainProfiles`, `entryKind` and scalar `args` are optional.
-All four manifests pin the compiler exactly to **2.6.1**, matching the lockfile.
+All four manifests pin the compiler exactly to **2.6.4**, matching the lockfile.
 `CompileResult` contains `bytecode: Uint8Array`, `isaRevision: "stack-v3"`,
 `entryEncoding: "abi-v1"`, `entryParams`, `entrySignature`, nested `programs` reports, and optional
 `manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM.
@@ -471,6 +572,13 @@ the gitignored `src/embedded/*.generated.ts` (regenerated by `build`, `typecheck
 not add a `node:*` import or `Buffer` to shipped code: `svm/engine-artifacts` (file paths for a
 local LiteSVM harness) is the one Node-only module, on its own subpath and in no barrel. CI bundles
 every export for the browser and compiles in headless Chromium, so a regression fails there.
+
+The `./svm` barrel does not load Sauce's Kitchen client implementation: `client.ts`, whose
+`createSauceSvmClient` factory calls `createSolanaRpc` and `createSolanaRpcSubscriptions`, is the
+`./svm/client` subpath and is re-exported from the barrel as types only (`export type *`).
+`barrel-no-rpc-client.test.ts` walks relative runtime imports in Sauce's own sources and fails if
+they reach a Sauce module naming either constructor. It does not traverse bare-package edges: other
+barrel modules still import `@solana/kit` and its RPC-related dependencies.
 
 **There is no cross-chain intent surface**: no Portal encoders, no intent commands, no intent tools.
 A chain export is a plain namespace object, so a program that calls one (`Base(() => …)`) fails to
@@ -593,30 +701,138 @@ program declares it in scope, and as the caller's where the compile binds it. On
 holds no EVM contract, and the Solana lowering never sees an absent token: `checkNames` refuses a
 live `pot.<TOKEN>` of one and `withoutDead` has blanked a ruled-out one.
 
-**Every registry ABI is pinned against the deployed contract, offline.** `test/registry-abi.test.ts`
-checks each function, event and custom error of each `abis.ts` export against
-`test/fixtures/registry-abi/evidence.json`: the
-deployed code must dispatch its selector (after resolving EIP-1167 clones, EIP-1967/beacon/legacy
-proxy slots, `implementation()` getters, and diamond or selector routers), and where a verified ABI
-exists, its outputs, mutability and struct field names must match. An event's topic and an
-error's selector must be carried by the deployed code (a PUSH32 before its LOG, a constant before
-its REVERT), an event's `indexed` flags must match the verified ABI, and each event's captured real
-log (`logs` in the fixture, where a deployment has emitted one) must decode, strictly, with the
-registry's own declaration. `targets.json` beside it is the
-hand-written half: which deployments evidence which export (`roles` from `addresses.ts`, narrowed
-by `chains` where one role's deployments run different releases, or representative `instances` for
-interface ABIs), `probes` (extra signatures to ask a selector router about), and every exception
-with its reason — `exempt` (a deployment that legitimately differs),
-`unverified` (no verified source on any keyless source; the selector is still checked) and
-`unverifiable`. An
-exception that stops applying fails the test. `required` names an overload a consumer binds (with
-the consumer): the registry need not declare every overload a contract has, but it must keep
-declaring those, and removing one fails the test. So does a new export with no target, a deployment
-of a targeted role the evidence does not cover (an `addresses.ts` edit not yet recaptured, or one
-no export's `chains` includes), and a `<X>ABI.json` twin that is missing or no longer matches
-`abis.ts` (regenerate with `bun run scripts/generate-abi-json.ts`, then prettier). The widened-type workaround the registry
-used to carry (`uint32` for `uint24`, `uint256` for `bytes32`/`int*`) is gone: the pinned compiler
-takes every ABI type, so declare the deployed one.
+**Every registry ABI is the deployed contract's full ABI, pinned to it offline.** An `abis.ts`
+export is the FULL verified ABI of the contract it speaks for — every function, event and custom
+error of the implementation behind its proxies and of every facet its selector router reaches —
+and, where its deployments run different releases, their union. `scripts/gen-registry-abis.mjs`
+writes each export and its `<X>ABI.json` twin from `test/fixtures/registry-abi/evidence.json`
+(`--check` exits 1 when stale; `registry-abi.test.ts` runs it): what `abis.ts` already declares is
+kept as written, comments included (each comment inside an entry is hoisted above it), so a program
+that compiles keeps compiling, and the evidence's other functions, events and errors are added,
+sorted by name and argument count — but for a name's overloads the registry declared before it took
+full ABIs, which come first in their order then (`test/fixtures/registry-abi/baseline-order.json`,
+main's twins at 92af3e34, written once): a lookup by name with no argument count (`methodOf`,
+`selectorOf`, `abi.find` by name) takes a name's first overload, so `selectorOf(router, "execute")`
+stays `0x3593564c` beside the added `execute(bytes,bytes[])`; `registry-default-overload.test.ts`
+holds every export, twin, descriptor and chain view to it. A function no deployment dispatches is
+not added. What cannot be exposed is left out and listed, with why, in the generated
+`test/fixtures/registry-abi/omitted.json`,
+which the registry's generated documents render: a second overload of one name and argument count
+(a call picks its overload by argument count; the registry's is kept, else the one `overloads`
+names, else the most dispatched), overloads mixing reads and writes, a name the SDK reads as its own
+(an accessor's properties, a value's methods, a sibling contract on a protocol's default contract),
+and a function or event an interface's instances declare differently. A registry function that
+would be left out for its name fails the generator instead. A function the deployments drop stays
+in `abis.ts` until removed by hand: the test fails it (no deployment dispatches it).
+
+A FUNCTION LEFT OUT FOR ITS NAME OR ITS ARITY ALONE IS STILL CALLED, BY ITS SIGNATURE. Its
+`omitted.json` entry carries its ABI item (`function`; its reason ends "called by its signature"),
+and `gen-source-globals.mjs` writes it into `CONTRACT_LINKS` as `bySignature` on every contract of
+the export, with `bySignatureWithheld` per chain for the signatures that chain's role deployment
+does not run as declared (`descriptorOn(chain)` drops them from its `bySignature`). Today that is
+21 same-arity overloads and 2 accessor-name collisions (Beefy `Vault.available()`, ENS
+`BaseRegistrar.available(uint256)`) at export level, carried on 25 contracts. A program calls any
+function of a namespace contract by its canonical signature (name and parameter types, tuples in
+parentheses, no names or spaces): `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](…)`,
+chain-qualified (`Base.<Namespace>.<Contract>[…]`), on a `const` holding the contract, after
+`.at(addr)`, or on an interface bound in the same expression (`Beefy.Vault(v)["available()"]()`).
+`protocol-rewrite.ts` (shape H) lowers it to a binding of that one function,
+`I<Protocol>_<Contract>_<selector>` (`_On<Chain>` after it where that chain's deployment declares the
+function otherwise, `shapes`), so the bytes equal the call by name where the name reaches the
+function. Refused: through a protocol's default contract (`Permit2["…"](…)`) and on a bound
+interface held in a local (both by the rewrite, the latter at the binding); a signature not the
+contract's (naming the nearest five) and one the chain's deployment withholds (naming the chains
+that run it), by `method-refusals.ts#signatureRefusal`, which the names check (`absent-names.ts`)
+applies to a namespace contract and the rewrite to a bound one; a call by name to a function only
+reachable by signature gets `bySignatureHint`'s spelling. `source-globals.generated.ts` declares
+them as string-keyed members for TypeScript closures. They are not in the `<X>ABI.json` twin.
+`registry-abi.test.ts` checks each against the evidence like every other function — dispatch,
+outputs, mutability, struct field names, `unverified` where no verified source declares it, and
+per-chain withholding (`bySignatureWithheld`; none is served declared otherwise) — and holds
+`bySignature` on each contract of the export to `omitted.json`. The registry documents list them
+under each ABI, apart from the rest left out, with each contract's spelling and the deployments
+that withhold them.
+
+A ROLE'S DEPLOYMENT ON ONE CHAIN MAY NOT RUN ALL OF ITS UNION AS DECLARED. `gen-source-globals.mjs`
+writes, per singleton contract and chain, two tables in `CONTRACT_LINKS`. `shapes`: each function
+that chain's deployment dispatches and its verified ABI declares with the same signature and other
+outputs, mutability or struct field names, as that verified fragment (Ethereum's and Polygon's
+`CometRewards.rewardConfig`, three fields to the ABI's four; Base's `CbETH.mint`, no return value).
+`withheld`: every other function it does not run as declared (it does not dispatch the selector,
+its verified ABI declares only another overload of the name, or its declaration would mix reads
+and writes among the name's overloads). The descriptor's `descriptorOn(chain)` view drops the
+withheld and carries the reshaped in place of the ABI's (`shapesOn`), the chain's names module
+imports that view's ABI, and a program compiled for the chain that calls a withheld one is
+refused, naming the chains that run it (`AaveV3.Pool`'s L2-only `supply(bytes32)` on Ethereum,
+`CbETH.exchangeRate()` on Base), while a reshaped one compiles as its deployment declares it. The
+host accessors call the view too, so their TypeScript types (the ABI's declaration) can differ
+from what a call on that chain decodes, and `toSauceScript()` refuses a reshaped method, whose
+twin import would declare it otherwise. An interface (a by-address contract) has no chain to
+filter by: it is its representative instances' union. Withholding and reshaping apply to
+NAMESPACE names only. An explicit twin import (`import X from "./protocols/<slug>/<Export>.json"`)
+and a caller's `contracts` are the registry's ABI for the contract — what `omitted.json` leaves
+out is not in it, and what it leaves out for name or arity is reached only through the namespace,
+by signature — with the same entries on every chain and no per-chain withholding or
+reshaping, as `IERC20.at(addr)` is the explicit unchecked escape hatch: no address a twin is bound
+to is matched against a deployment, and none is to be added. The registry documents say so beside
+each twin's import line, list each deployment's withheld and reshaped functions, and say of an
+interface whose captured instances do not all dispatch the same selectors that not every contract
+it reaches runs every function listed (`gen-skills-references.mjs`, reading `evidence.json` at
+generation time).
+
+`test/registry-abi.test.ts` checks each function, event and custom error of each export against the
+evidence: some deployment must dispatch each function's selector (after resolving EIP-1167 clones,
+EIP-1967/beacon/legacy proxy slots, `implementation()` getters — asked of proxy-shaped code, and of
+larger code that DELEGATECALLs and dispatches one, a delegator forwarding each function by name such
+as Moonwell's and Benqi's markets, which stays a layer of its own rather than a wrapper —
+`delegates`, and diamond or selector routers), and where a verified ABI exists, its outputs,
+mutability and struct field names must match; a role's deployment that does not match must
+withhold it, or carry its verified declaration under `shapes` where it dispatches the selector and
+declares the signature otherwise, and one that does match must do neither; an
+interface instance that declares it otherwise needs an `exempt`. An event or error ships only where
+some deployment's code carries it (a PUSH32 before its LOG, an anonymous event's LOG of as many
+topics as it indexes, a constant before its REVERT), `unverified` or not: the generator leaves the
+rest out as "no deployment carries it", and records each shipped one a deployment's code does not
+carry under `uncarried` in `omitted.json`, which the test holds both ways. It must match a verified
+declaration (`indexed` flags and `anonymous` included), or have an `unverified` entry; each event a
+target lists under `logs` must have a captured real log that decodes, strictly, with the registry's
+own declaration. And every function, event and error the deployments verifiably declare is either
+in the export or in `omitted.json`: nothing is trimmed silently. `targets.json` beside it is the
+hand-written half (its `note` defines every key): which deployments evidence which export (`roles`
+from `addresses.ts`, narrowed by `chains` where one role's deployments run different releases, or
+representative `instances` for interface ABIs), `probes` (extra signatures to ask a selector router
+about), `unresolved` (a router inventory's facet no deployment reaches, and why), `delegates`
+(getters naming the contracts it delegates to, each captured as a layer: Comet's fallback's
+`extensionDelegate()`, Euler EVault's `MODULE_TOKEN()` and its seven other modules), `overloads`,
+`default` (the contract `<Protocol>.<method>(…)` calls where a
+protocol has several singletons: Aave V3's Pool), `standard` (an interface whose instances are
+examples of an ERC or a protocol's interface — ERC-20, ERC-4626, ERC-3156's lender, Morpho Blue's
+IOracle: its ABI is its pinned reference interface alone, each function where every instance
+dispatches it, so an example's own functions never reach every token), `common` (an interface
+whose instances run different implementations: only what every instance declares alike — Pendle's
+markets and SYs), and every exception with its reason — `exempt`, `unverified` (no verified source
+on any keyless source; the selector is still checked) and `unverifiable`. The generator fails
+`standard` or `common` on an export a role is bound to. An exception that stops applying fails the
+test. `required` names an overload a consumer binds (with the consumer); removing one fails the
+test. So does a new export with no target, a deployment of a targeted role the evidence does not
+cover (an `addresses.ts` edit not yet recaptured, or one no export's `chains` includes), and a stale
+twin. The widened-type workaround the registry used to carry (`uint32` for `uint24`, `uint256` for
+`bytes32`/`int*`) is gone: the pinned compiler takes every ABI type, so declare the deployed one.
+
+A contract with no verified source on any keyless explorer takes the functions of a REFERENCE
+INTERFACE its deployed code dispatches: `test/fixtures/registry-abi/reference/` holds each as a
+canonical ABI file, and `index.json` names it per export with its exact provenance (an npm package
+version or a repository commit) and sha256, which the test re-hashes. Each function adopted that
+way is an `unverified` entry naming that source. Never write a function no source declares.
+
+A router that names one selector's facet at a time (Pendle's `selectorToFacet`, 0x's
+`getFunctionImplementation`, Paraswap's `getImplementation`) reveals only the facets a candidate
+selector reaches, so `index.json`'s `inventories` lists every facet its maker publishes, each its
+interface pinned by sha256; the capture asks the router about every function listed and records
+each deployment's `router` (the lookups it answers, or `facets()` for a loupe's whole table) and
+which facets it reached. A facet's functions reach the registry only from its deployed code's
+verified ABI, never from the inventory. The test fails a per-selector router with no inventory, a
+facet no deployment reaches without an `unresolved` reason, and a stale `unresolved`.
 
 A target may name a protocol this tree does not have yet (one another branch adds): the suite skips
 it and the capture carries its evidence over untouched, so the evidence can land before the
@@ -626,17 +842,38 @@ captured: no EVM ABI applies to them.
 Recapture only on explicit request — it reads live chains: `pnpm --filter './sdk' build` (the script
 reads `dist/`), then
 `node scripts/capture-registry-abi.mjs --recapture --rpc-config rpc.config.json [--chains <id>,…] [slug ...]`
-from `sdk/`, with no slugs for everything (about 540 deployments; responses cache under
-`node_modules/.cache/registry-abi/`, and `--no-cache` bypasses that). Without `--recapture` it
-refuses to run. `--chains` narrows the run to those chains' deployments and keeps every other
-chain's evidence as captured. RPC endpoints come only from the `--rpc-config` file, a JSON object of
-chain id to URL. Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the
-committed `sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The
-script reads nothing from the environment and has no public fallback: before its first request it
-fails, listing each chain id the selected deployments need that the file does not give. Verified
-ABIs come from Sourcify, Blockscout and keyless Etherscan-compatible APIs. The fixture must never hold an endpoint
-or key; the suite greps it. Review the fixture diff before committing it: a changed selector map is
-a contract upgrade to look at, not noise.
+from `sdk/`, with no slugs for everything (about 750 deployments on 27 chains; responses cache under
+`node_modules/.cache/registry-abi/`, and `--no-cache` bypasses that), then
+`pnpm --filter './sdk' gen-registry-abis` and `gen-source-globals`. Without `--recapture` it refuses
+to run. Each export's instances are captured together, again until no instance adds a candidate:
+dispatch is recorded for every function any of them verifiably declares, on every one of them.
+`--chains` narrows the run to those chains' deployments and keeps every other chain's evidence as
+captured. RPC endpoints come only from the `--rpc-config` file, a JSON object of chain id to a URL
+or a list of URLs (a failed request moves along the list, and an empty code or zero storage answer
+is asked of the others before it is believed: a lagging node once dropped a Pool's implementation).
+Keep yours at `sdk/rpc.config.json`, which is gitignored, starting from the committed
+`sdk/rpc.config.example.json`, which holds `<…>` placeholders and never a real URL. The script
+reads nothing from the environment and has no public fallback: before its first request it fails,
+listing each chain id the selected deployments need that the file does not give. Verified ABIs come
+from Sourcify, Blockscout and keyless Etherscan-compatible APIs. An explorer that refuses (any
+status but 404, as HTTP 401/403: Base, Arbitrum and Polygon Blockscout sit behind a challenge page)
+is recorded as `abiErrors`, never as "unverified". A READ THAT FAILS IS NEVER AN ANSWER: a null
+carrier means code was read and does not carry the event or error, and `gen-registry-abis.mjs` leaves
+out what no deployment carries, so every code read (layers, facets, linked libraries:
+`scripts/lib/registry-capture.mjs`) throws when it cannot be answered and the run stops before it
+writes; a node that aborts a call is no revert; a proxy chain deeper than the guard is refused, not
+cut short; and a deployment whose layers could not be resolved is recorded with `error`, which both
+generators refuse (`readableRows`). `registry-capture-failclosed.test.ts` drives those reads with a
+reader that fails. A layer an explorer refused first takes the verified ABI of the same runtime
+code elsewhere (another captured layer, or the address on another configured chain), byte-equal by
+keccak and recorded as `sameCodeAs`; else a deployment whose layers and code are unchanged keeps the
+fragments the previous capture verified from that source, the source marked
+`carried: { date, partial }`. A carry from a capture before the registry took full ABIs kept only
+the registry's names then, so it is `partial`: `omitted.json` lists each under `partial` and the
+registry documents say that export may lack what that deployment runs; the test fails an unlisted
+one. The fixture must never hold an endpoint or key; the suite greps it. Review the fixture diff
+before committing it: a changed layer code hash or facet is a contract upgrade to look at, not
+noise.
 
 **Every token-registry row is pinned to the chain, offline, and the stock tokens come from their
 issuers.** `test/token-registry-evidence.test.ts` checks each EVM row of `TOKEN_REGISTRY` against
@@ -937,7 +1174,7 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.6.1, accepts `import { a as b }`), which keeps a program's own
+is ALIASED (the pinned compiler accepts `import { a as b }`), which keeps a program's own
 `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other
@@ -1146,7 +1383,8 @@ quotes and, for the split swap, the same quoter calls as SauceScript over fixed 
 been checked.
 
 **The `sauce` bin** (`sdk/src/cli/`, built to `sdk/dist/cli/main.js`) is the package's one
-executable: `compile`, `actions`, `simulate`, `run`, `wallet <verb>`, `tx`, `pot`, `globals`,
+executable. Its import-free launcher refuses Node <24 before loading `start.ts`, which wires the
+process into `run.ts`. Commands: `compile`, `actions`, `simulate`, `run`, `wallet <verb>`, `tx`, `pot`, `globals`,
 `inspect`, `verify`, `init` and `skills install|update|status`, on EVM chains and (`solana.ts`)
 Solana. `run.ts` dispatches `wallet <verb>` (`WALLET_VERBS`: new, list, address, import, export)
 and `pot <verb>` (`POT_VERBS`: list, import; `sauce pot` with no verb predicts and deploys) as
@@ -1154,15 +1392,70 @@ commands of their own (`VERBS`), each with its own flags and `--help`; the skill
 verbs from each command's `--help`. `pot-store.ts` is the Pot store, `~/.sauce/pots`
 (`--pots <dir>`): one owner-only `<chainId>/<pot>.json` per Pot, linked into place once, nothing
 read and written back; it imports only Node's modules, so `cli-pot-store.test.ts` runs it in
-child processes. A Pot's identity is its chain id AND, on Solana, its
+child processes. Which Pot a cook names, and the engine it cooks on, is `cook-pot.ts`'s: a Pot given
+by address cooks on the engine built for it (`evm/engine.ts#potEngine`: the engine of the release that
+made it, and for a fixed-Router or Shared Pot the one whose release's `fixedRouter` is its `router()`,
+`deployments/pot.ts#potReleaseSet`); an owner (`--owner`, `--wallet`) means
+the owner's deployed Pot of an earlier release whose engine runs this SDK's programs (`alsoRunsOn`;
+the oldest wins), else the installed release's CREATE3 Pot. Offline the chain cannot say, and the
+Pot store is no stand-in for it: it also keeps what landed on a fork or another network with the
+chain's id (`PotRecord.deployment.blockHash` is what tells them apart, and nothing offline can
+check it). So an owner's Pot is the CREATE3 one, with a note, and where the store records an
+earlier release's Pot for the owner and salt (`CookPot.stored`) nothing is built for either until
+the user names one (`--pot`) or gives an endpoint: `cook-pot.ts#refuseUnchosen` runs right after
+`cookPotOf` in `txCommand` and in both of `sign.ts`'s commands, before any `--fund` transfer, the
+policy or a signature, and the MCP tools `sauce_tx` and `sauce_signed_cook` get it by calling them;
+`sauce pot --offline` and `sauce_pot` show both Pots and build nothing. A Pot given by address
+takes its engine from a record only when the record is its own: its chain and Pot are the ones
+named and `PotStore#filesOf` says it is `bound` (filed in its chain's directory under its Pot's
+name); any other record is ignored with a note naming its file, a record that cannot be read is a
+note, and with none the engine is the installed one, with a note (a record decides only for a fixed-Router or Shared Pot). A Pot's identity (the release families, an
+address, which release made a Pot) is `deployments/pot.ts`'s alone, browser-safe and shared with
+`engine.ts`, the harnesses and the kit: `cli/pots.ts` keeps only records, stores and chain reads.
+`sauce pot` and the MCP `sauce_pot` say which Router a deployed Pot runs from one function,
+`commands.ts#potRouterStatus`, so the two cannot disagree. A
+Solana Pot cooks on the engine that owns its account where that engine runs this compiler's output
+(the installed release's, and a release `alsoRunsOn` lists: v12-svm 1.4.0's today), and on the
+installed engine where it does not (v12-svm 1.2.0's and 1.3.0's, which no row pairs with the
+compiler), as SDKs before this one cooked every Pot: the Kitchen binds no engine to a Pot, but inside
+the program `ctx.self()` is the engine that runs it, so a check that the Pot's owner is `ctx.self()`
+fails there, and so does a write to the Pot's storage, which only its owner's engine may make
+(`solana.ts#svmPotEngine`, each engine held to its release's digest by `solana-release.ts`; the rule
+is `svm/engine-release.ts#potCookEngine`, the one the plan and the testing kit take it from). A Pot's
+account is told by `svm/engine-release.ts#potAccountState`, which the testing kit shares: an address
+with no account, or only lamports (the System Program's, no data), is a Pot no engine owns yet, and
+is cooked as it is on the installed engine with no
+`create_pot`: the Kitchen signs for a Pot that need not exist, a program that pays SOL out of the
+Pot through the System Program needs it so (that transfer takes no `from` that carries data), and
+anyone can put an address in that state by sending it lamports, so refusing it would let a
+stranger stop an owner's first cook. `sauce pot` and `sauce_pot` report it as not created, and
+`--deploy` creates it (the Kitchen's `create_pot` tops up the rent, allocates and assigns: checked
+in LiteSVM with the address funded below, at and above the Pot's rent); an account a program owns
+that this SDK does not know as an engine (a later release's, say) is refused, naming the owner,
+with no claim that it is no Pot. What a Pot's state means for a cook (`solana.ts#svmPotNotes`: only
+lamports, or an engine this compiler's output does not run on) is said with every result of one,
+with the error of a `sauce run` that stops before its cook is sent (`CliError#notes`, which
+`run.ts` prints after the message and the MCP registrar returns in its error result), and with
+every step of a plan (`svm-plan.ts#potNow`), so a cursor resumed with `sauce send` says it too,
+and says that its step that creates the Pot is dropped where lamports reached the address since.
+**On Solana nothing may name an engine that the release table
+(`svm/engine-release.ts`) and the pairing rules (`engineRunsCompiler`) do not hold**, because the
+Kitchen pins no engine to a Pot and signs for it into whatever program a cook names: a Pot of
+either release engine cooks through the other and the chain refuses neither (probe S2, pinned in
+`svm/engine-binding.e2e.test.ts`), unlike EVM, where an engine refuses another release's Pots. So
+a cook's engine comes from the Pot's own owner program (`potCookEngine`); a plan's cursor carries
+one only if `decodeCursor` finds it in the table and running this compiler; `potNow` holds
+it against the Pot at every step, a Pot no engine owns yet included (the installed engine's); and
+a path that let outside data choose it would hand that program the Pot's authority over every
+account in the transaction. A Pot's store key is its chain id AND, on Solana, its
 cluster (by genesis hash, `pots.ts#clusterOf`; filed as `<chainId>-<cluster>` off mainnet), since
 the Kitchen's id, and so a Pot's address, is the same on every cluster. A second deployment of one
 Pot address (a fork with the chain's id, or a Solana Pot closed and created again) is kept beside
 the first as `<pot>@<tx>.json` and said, never dropped; an EVM record keeps its block's hash. Its records are not written by the commands: the two
 places every send lands, `chain.ts#landed` and `solana.ts#svmLanded`, read what a transaction
 deployed from the chain (the Kitchen's `PotDeployed` in a receipt that succeeded, its `create_pot`
-in a Solana transaction that succeeded; `pots.ts`, which tells each Pot's release from its address
-under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
+in a Solana transaction that succeeded; `deployments/pot.ts`, which tells each Pot's release from
+its address under every `releases.json` Kitchen and hash), put it on `Sent.pots`/`SvmSent.pots` (so every JSON
 that reports a sent transaction carries `pots`), and hand the transaction to `keep.ts#keepLanded`.
 That is the ONE hook a store a landed transaction feeds attaches to (`LocalStores`, the Pot store
 its one member): it gives the transaction to each store of the current scope, which `runCli` sets
@@ -1182,12 +1475,36 @@ The Solana distributed swap's suites (`svm/distributed-swap.e2e.test.ts`,
 (`std/router/svm.e2e.test.ts`) run nine venues' mainnet programs from a pinned dump: the
 programs and the manifest in `test/fixtures/svm-venue-programs/`, every account the pools' swaps
 take beside the other venue fixtures in `test/svm/fixtures/<venue>/`, as `{ address, owner,
-lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--check --rpc-config <file>`, the
+lamports, base64Data }` (`scripts/dump-svm-venues.mjs --redump|--programs|--check --rpc-config <file>`, the
 layout in `scripts/lib/svm-venue-fixture.mjs`). A redump refreshes a fixture file already holding
 an account rather than adding a second, so `raydium-clmm/` and `orca-whirlpool/`'s SOL/USDC pools
 are that snapshot's, read at one slot with every other venue's: the swap's split is only real
 when every pool's price is one moment's. The CLI suite runs its cluster at mainnet's rent and
 Kitchen fee, which a rehearsal's local copy must take from the cluster.
+**Only the programs whose licence allows it are committed** (MIT, Apache-2.0: the `!` lines in
+`.gitignore`). The rest of both program fixtures, this one's and `svm-exact-in-programs/`, are
+listed in `test/fixtures/fetched-programs.json`, and
+`pnpm --filter './sdk' fetch-program-fixtures --rpc-config fixtures.rpc.config.json`
+(`scripts/fetch-program-fixtures.mjs`, run by CI's setup action) writes them where the suites read
+them. It uses the explicit public-only config described above to read each from mainnet-beta
+(`getAccountInfo` of the program
+and its ProgramData, `scripts/lib/solana-program-elf.mjs`), holds it to its manifest's `sha256`, and
+caches it under `node_modules/.cache/sauce-program-fixtures`. A program upgraded since the dump no
+longer hashes to its pin and is REFUSED: re-dump it and re-verify the suites that run it; a hash is
+never edited to fit. A local copy matching the pin is kept; an invalid one is removed and repaired
+from the verified raw cache, or fetched and held to the same pin when online. Offline setup refuses
+any missing or invalid program without a verified cache entry; the suites do not skip missing
+programs. For a
+venue program, `dump-svm-venues.mjs --programs` re-pins only the
+programs (`programsSlot` records when) and leaves every account at the dump's slot, so the suites'
+pool scenarios hold; it is for an upgrade whose instruction interface is unchanged, which the suites
+prove by passing on the new code. An exact-input program (a `solana program dump`, no script of
+its own) is re-pinned by its `manifest.json` entry once its suite passes on the re-read ELF, its
+pools' accounts kept: they are the state sauce-recipes' vectors and pins were taken at.
+An upgrade that changes a venue's accounts or data is a code change first. Run the fetch before a
+dump script's `--check`, which re-hashes every program file. A new
+dump is ignored by git until it is un-ignored in `.gitignore` (licence permitting) or listed in
+`fetched-programs.json`; the fetch refuses a program that is neither.
 `actions.ts` takes an actions document as a program operand: `sauce actions` prints what it lowers
 to, and `compile`/`tx`/`simulate`/`run` accept one wherever they take a file, as an ordinary
 `ProgramInput` (the generated source, plus its ABI bindings in `contracts`). It loads
@@ -1259,7 +1576,9 @@ wraps the file's source before that compile — a new `main` with the same signa
 through `@sauce/token` (`permitTransferFrom`, `permit`, `transferFrom`), calls the original
 renamed, and sweeps; in a script, the pulls after its imports and the sweeps after its last
 statement — signing Permit2 or EIP-2612 locally; `cli-funding.e2e.test.ts` runs every
-mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`). `cli.e2e.test.ts` runs the
+mode against canonical Permit2's runtime (`test/fixtures/cli/Permit2.json`, gitignored: it compiles
+in AGPL code, so `fetch-contract-code` writes it from Ethereum, held to the committed
+`Permit2.pin.json`). `cli.e2e.test.ts` runs the
 EVM commands against anvils with the released gated stack (and one `cast send` line verbatim);
 `cli-solana.e2e.test.ts` runs the Solana ones against the released Kitchen and engine in LiteSVM
 through a JSON-RPC shim; the packed check runs the installed bin through `npx`. The agent skills
@@ -1272,7 +1591,8 @@ second front end applies the same rules: `run.ts` reads flags into it, and the M
 tool arguments into it.
 
 **`sauce mcp`** is the MCP server (`mcp/`, built to `mcp/dist`). It is a CLI command, not a bin
-of its own, so `npx -y @eco-incorp/sauce mcp` self-hosts it in one command. `sdk/src/cli/mcp.ts`
+of its own, so `npx --engine-strict -y @eco-incorp/sauce@latest mcp` self-hosts it on Node >=24.
+The explicit tag prevents npm from choosing an older, engine-compatible package. `sdk/src/cli/mcp.ts`
 owns its flags and imports `mcp/dist/entry.js` LAZILY, by a specifier TypeScript does not follow
 (so the SDK builds before `mcp/`), and only when the command runs (so no other command loads the
 MCP SDK, an optional peer dependency, as zod is: `optional.ts#provide` finds or installs them first);
@@ -1433,7 +1753,7 @@ old #134's `@sauce/signed` handlers, Router fallback and `--signed-salt` are gon
 back. The helpers are the block between `v12Pot` and `v12Kitchen` in `sdk/src/evm/engine.ts`
 (`signedCookTypedData`/`Json`/`Digest`, `encodeCookSigned`, `encodeInvalidateNonces`, the nonce
 helpers, `verifySignedCook` with the Pot's ecrecover rules and ERC-1271 through a client, and
-`checkSignedCookPot`, which reads a pre-1.3.0 Pot off the pinned init-code hash). `sauce sign`
+`checkSignedCookPot`, which takes a Private Pot of kitchen-evm 1.3.0 or 1.4.0 and refuses an earlier one by its release). `sauce sign`
 (`sdk/src/cli/sign.ts`) signs with a signer or prints the typed data for one (`--signature`
 verifies and builds `cook`), and `--cancel <nonce>` sends or prints `invalidateNonces`; it is
 gated as "signing a cook" and refuses Solana. **A wallet whose policy sets `native` or `tokens`
@@ -1575,7 +1895,7 @@ beside it imports — and `.mts` runners) and, for six of them (`sauce-actions`,
   manual renders it; a fact only a reader of the manual needs (TypeScript, the MCP server's
   operation) is written once, in the manual.
 - **One place per release.** The release's addresses (EVM engine, Routers, Kitchen and its
-  implementation, the Pot init-code hash, the Solana programs in base58 and
+  implementation, the Pot init-code hashes, the Solana programs in base58 and
   as keys, and every engine `V12_RELEASE_SETS` names) are the same on every chain, so each audience
   writes them in one generated file: `docs/reference/deployments.md` and
   `skills/sauce-chains/references/deployments.json` (prettier-ignored; the MCP server serves it like
@@ -1702,7 +2022,9 @@ beside it by the build. It is Node-only (`check-browser-bundles.mjs`' `NODE_ONLY
 `PATH` for an EVM chain, and reads no environment: the RPC, block and state file are arguments.
 `fork(chain, { block, state, rpcUrl, mode })` replays a recorded state file, records one, or forks
 live (`state.ts`): record and replay are `actions/tests/mainnet.ts`' mechanism generalized — a
-recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv),
+recording proxy in its own process (`recorder.mjs`, configured over stdin, never env or argv;
+a live fork reaches its RPC through the same proxy, recording nothing, so no mode puts the URL, or a
+key in it, on anvil's command line or in the stderr a failed start quotes),
 `--no-storage-caching` for anvil (no RPC cache, read or written), dev accounts' code cleared, the
 genesis written
 with the pinned block's own header in a gzipped `{ sauce: {...}, genesis }` file that must not
@@ -1715,7 +2037,11 @@ fees and block spacing. Block hashes and PREVRANDAO are not reproduced. A versio
 before, replays at its genesis's gas limit alone (`test/testing/state/base.json.gz` is one, until it
 is recorded again). `local()` is an empty chain (Base's id by default). `stack.ts` uses a chain's live
 release or deploys it at the release addresses through `sdk/src/evm/release-stack.ts#deployReleaseStack`
-— the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too; it reads no file, so
+— the one CREATE3 deployment, which `sdk/test/evm/gated-engine.ts` calls too. A fork whose Kitchen
+runs the release's Pots but hands out an earlier Router gets the release's engine and Router and,
+from the Kitchen's owner (impersonated), `setRouter`, through `upgradeReleaseStack`: it deploys a
+contract only where its address holds nothing, and upgrades the implementation only where the proxy
+does not already run the pinned one. It reads no file, so
 each caller passes the artifacts (the kit from `sdk/dist/artifacts`). `chain.ts`'s `TestChain` funds through `sdk/src/evm/balance-slot.ts` (the slot
 finder `--assume-balance` uses, moved out of `cli/` so the kit never imports the command), compiles
 through `compileSauceProgram` afresh on every call (a program is its whole import graph, so
@@ -1739,7 +2065,11 @@ command's that start a process, which `no-embedded-rpc.test.ts` lists;
 (`test/testing/`, node:test) are `node.test.ts`, `program.test.ts` (no chain), `local.test.ts`,
 `record.test.ts` (records from an anvil on the machine, then replays with it stopped) and Base
 replayed from `test/testing/state/base.json.gz`; record that again as the actions suites do
-(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). The package script gives each test
+(`RECAPTURE_ANVIL_STATE=1`, RPC from `sdk/rpc.config.json`). That file pins each contract's code by
+its `codeHash`, as the actions blobs do: `fetch-contract-code` fetches it from Base, and the suite's
+`support.ts#replayState` puts it back into a temporary copy the kit replays (`pinStateCode` moves
+it out again after a recording); the shipped kit's own format is unchanged. The package script
+gives each test
 and hook `--test-timeout`, as the guide tells consumers to.
 The packed check imports `/testing` from the tarball and cooks on `local()` where anvil is present.
 The consumer guide is `docs/guides/testing.md`.
@@ -1756,8 +2086,15 @@ from the cluster (`clusterSource`, a hundred to a request, a program's code from
 errors scrubbed of the URL), from a state file (`stateSource`), or nowhere (`local`). A Solana node
 serves accounts only as they are now, so a recording pins the slot it read at (the Clock, Rent and
 EpochSchedule sysvars go in its header) and has no `block` option. The file is gzipped
-`{ sauce: { version: 1, chain, clock, rent, epochSchedule }, accounts, programs }`, sorted, so the
-same reads record the same bytes, and must not mention the RPC. A replayed key the file lacks reads
+`{ sauce: { version: 2, chain, engine: { build, sha256 }, clock, rent, epochSchedule }, accounts,
+programs }`, sorted, so the same reads record the same bytes, and must not mention the RPC. The
+engine has two builds, mainnet's and devnet's, which compile in different chain ids
+(`ctx.chainId()`); a bank over a cluster loads the one that cluster serves, and a recording names it
+with its digest, so a replay loads exactly that packaged build and refuses a package whose build has
+another digest (`Bank.open`'s `engineBuild`). Version 1, written before a recording named a build,
+was made by banks that always ran the mainnet build, and `stateSource` reads it as mainnet's by its
+version: never a default, and a version 2 file that names no build is refused. A replayed key the
+file lacks reads
 as missing and is noted on the `CookReverted` (or a missing mint's error). LiteSVM has no snapshots:
 the bank snapshots every account it ever read or wrote, plus the clock, and puts back each key read
 since a snapshot as it was first read. Cooks (`solana-cook.ts`) are `sauce run`'s, rebuilt without
@@ -1770,8 +2107,11 @@ writes in place, as `sauce simulate`'s copy does. `simulate` is a snapshot, the 
 by `sdk/scripts/solana-rpc-stub.mjs` on loopback — `solana-support.ts#pinnedCluster` — then replays
 with it closed) and `solana-examples.test.ts`, which runs the skills' and the manual's Solana examples (listed in
 `skills-check/executed.json` and `docs/examples/executed.json`; `example-programs.mjs` counts a suite in dev-tools' `test` script as
-one CI runs) from `test/testing/state/solana-examples.json.gz`. Record that again with
-`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC; the packed check runs a Solana cook,
+one CI runs) from `test/testing/state/solana-examples.json.gz`. That file pins the Whirlpool
+program by its sha256 and holds no ELF: `solana-support.ts#replaySolanaState` puts back the venue
+dump's copy, which `fetch-program-fixtures` fetches. Record it again with
+`RECAPTURE_SOLANA_STATE=1`, from the pinned dumps, with no RPC (`pinSolanaPrograms` then takes the
+ELF out); the packed check runs a Solana cook,
 staged too, from a clean install with LiteSVM beside it, and checks the error naming LiteSVM
 without it.
 
@@ -1794,11 +2134,20 @@ what a Pot's swaps call back through). Its ABIs are synced into `sdk/{src,dist}/
 (`Router`, `ISauceRouter`). **There is no `SauceRouter` artifact any more**: it came from the engine
 repo's Solidity tree and no v12 release publishes it.
 
-**The execution Router (Kitchen 1.3.0)** is content-addressed and has one exact-input method per callback venue family:
+**The execution Router (kitchen-evm 1.5.0)** is content-addressed and has one exact-input method per callback venue family:
 `swapV3`, `swapV4`, `swapMaverickV2`, `swapInfinityCL`, `swapInfinityBin`. All take unsigned
 `amountIn`, pay from the Pot, and return `(amountInUsed, amountOut)`. There is no payer argument,
 unified `swap`, exact-output mode, or quote method. `flash(callback, swap)` wraps the calldata of
-one of those five methods to execute a program during its authenticated callback.
+one of those five methods to execute a program during its authenticated callback. The execution
+Router answers six V3 callback names (Uniswap, PancakeSwap, Algebra, Synthra, UnitFlow, HyperSwap)
+through one handler.
+
+The engine compiles in one fixed Router, so a Router release ships with an engine built for it. A
+fixed-Router or Shared Pot keeps its Router and runs only on its engine
+(`deployments/pot.ts#potReleaseSet`, `evm/engine.ts#potEngine`). Dynamic Pots move only by their
+owner's `setRouter`. `potRouterUpdate` builds it, proposing only `v12RouterAddress()` where the
+Kitchen hands it out. The SDK never sends it, and no SDK text recommends it: that was the owner's
+call for the 1.2.0 rollout.
 
 `@sauce/router` keeps its source-level API; its V3/V4/Maverick functions call the new signatures,
 and `infinityCL`/`infinityBin` call the two Infinity methods. The library checks V3 and Maverick
@@ -1811,15 +2160,140 @@ synced from the private kitchen-evm 1.1.0 package into `V12QuoteRouter.json`. Ac
 `QuoteOptions.router` accepts `v12QuoteRouterAddress()`, never `v12RouterAddress()` (the execution Router).
 The quote service simulates and reverts V3/V4 swaps without funds, so it does not depend on the Pot's
 engine or execution Router. Captured-mainnet tests compare its quotes against execution Router swaps.
+`quoteRouter.assets` pins both `abis.json` and `addresses.json` (the quote Router's address and salt), each
+by sha256, and moving the quote Router updates both digests. The sync stops at once, before `--report`
+prints anything, while `addresses.json` has no digest there, so that digest is hashed by hand (the sha256
+of the release's file in the cache). From the public package the quote Router's `addresses.json` has no
+raw copy to hash, so that entry is held by the package's committed integrity, by its `quoteRouter` pins
+equalling the committed ones, and by the two derived files (`V12Deployments.json` and
+`V12QuoteRouter.json`) agreeing on one address and on generation 3.
 No chain deployment is implied by these release addresses.
 
 ## Publishing
 
-Tag-driven (`.github/workflows/publish.yml`): `git tag v1.2.3 && git push origin v1.2.3` (or manual
-`workflow_dispatch`). Builds all areas, fetches the SVM engine binaries, stamps the **root**
-`package.json` version, and publishes the single `@eco-incorp/sauce` to **public npmjs.com only**
-(`NPM_TOKEN`). GitHub Packages was dropped deliberately — `publish.yml:12` records why. Only the root
-version is published; workspace packages stay `private`.
+Commit-driven (`.github/workflows/publish.yml`): nobody types a version or pushes a tag. Dispatch the
+workflow on `main`; its `plan` job reads the Conventional Commit history since the newest `vX.Y.Z`
+tag and computes the next version with `.github/scripts/release-version.mjs` — `feat` is a minor,
+`fix`, `perf` and `revert` a patch, a `!` header or a `BREAKING CHANGE:` footer a **major** (any type),
+and `docs`, `chore`, `ci`, `test`, `refactor`, `style` and `build` release nothing. These are
+eco-incorp/v12's rules, except that a major is the SDK's own and the pipeline refuses one unless
+`allow_major` is ticked (see [What a major means](#what-a-major-means)).
+Tick `dry_run` to stop after the plan, with the number and the release notes in the run summary (a dry
+run has its own concurrency group, so it never waits behind or cancels a real release).
+`node .github/scripts/release-version.mjs` computes the same number locally, **after
+`git fetch --tags`**: `v1.0.0` is on no branch, so a plain fetch or pull never receives it and a local
+run would count from `v0.99.18`. Locally npm is not consulted (see below); `--notes <file>` writes the
+notes. Then Checks and Lint gate the commit, the build stamps the **root** `package.json` version and
+fetches the SVM engine binaries, and the single `@eco-incorp/sauce` goes to **public npmjs.com only**
+(`NPM_TOKEN`). Only after that does a separate `contents: write` job create the `vX.Y.Z` tag and the
+GitHub release, from the plan's own number and notes (the default-branch ruleset requires a pull
+request, so nothing is pushed to `main`). The baseline is found by tag name, not by reachability:
+`v1.0.0` was cut from a side commit, so a reachability-based tool would count from `v0.99.18`. GitHub
+Packages was dropped deliberately — the header of `publish.yml` records why. Only the root version is
+published; workspace packages stay `private`.
+
+### What a major means
+
+**The SDK's major version is the SDK's own, and moves only for a change SDK users would notice.** A
+user notices a SauceScript program that stops compiling or behaves differently, a removed or renamed
+export, subpath, `sauce` command or flag, or MCP tool, a chain the CLI stops accepting, or a Pot, Kitchen
+or address they already use that stops working. A component's own major is not that. The engines, the
+compiler and the Kitchens version independently and release majors of their own (an engine that drops an
+opcode, a compiler that changes its JavaScript API); when the SDK absorbs it, with no change to SauceScript
+or to anything above, the SDK moves by a minor or a patch, and the pin bump in `releases.json` is a `feat`
+or a `fix`. The changelog's `### Compiler and engines` entry records what the component release changed.
+
+Write the commit to match, because the pipeline reads it:
+
+- Put `!` after the type, or a `BREAKING CHANGE:` footer, on a commit **only** if SDK users would notice.
+  Never for "the engine or compiler had a breaking change". Say that in the body in plain words, without
+  starting a line with `BREAKING CHANGE`.
+- A squash merge carries every commit's message, so one intermediate commit with the footer marks the
+  whole PR. Check the commits before merging, not only the title (`validate` checks only the title).
+- The marker works on a commit of any type (`refactor!`, `chore!`, `docs!`), and a `revert:` of a marked
+  commit does not undo it.
+- When unsure whether users would notice, ask the reviewer; do not mark it. A wrong major cannot be
+  taken back (npm never reissues a version), while a missed one is fixed on the next release with
+  `release_as` set to the major and `allow_major` ticked (`allow_major` alone only permits a major).
+
+The pipeline refuses to plan a major (computed from the commits, or given as `release_as`) unless the
+dispatch ticks `allow_major`. That is a person saying users will notice. Refusal lists the commits that
+asked for it. If the marker was wrong, publish the number it should have been with `release_as`, and
+reword future commits.
+
+**The plan is held to npm.** The baseline tag must be a version npm has, and the newest stable one.
+A tag npm lacks (pushed by hand) or a version npm has that no tag names stops the plan with an error.
+npm records no `gitHead` for this package, so nothing else could tie a version to its commit: without
+this, a dispatch after a failed `release` job would compute the same version from a newer commit,
+skip the publish, and tag that commit, which the tarball does not contain.
+
+**The release gate runs before the real dispatch, and again on the published package.**
+`sdk/scripts/release-gate.mjs` proves against live chains that the package does by default what the
+release is for: the installed testing kit finds the live stack on all six supported EVM chains,
+`sauce pot`, `sauce run` and `sauce simulate` deploy, cook and swap on it, a kitchen-evm 1.3.0 Pot
+still cooks on its engine (step 6), and the installed compiler's authored decode (a word with bit 160
+set, read as an `"Address"`, is its low 160 bits: `decode.sauce.ts` returns 48879, where a 2.6.3
+build reverts) runs through that Pot and through the fresh Pot of step 3 (step 6b,
+`decodeProblem`), a Solana cook names the package's engine, and (step 2b, read-only, on
+every chain with the Kitchen proxy: `ROUTER_CHAINS`, 19 chains) the Router and engine have the
+release's code, the Kitchen hands out that Router and it answers `hyperswapV3SwapCallback`, with a
+coverage scan that fails a chain of the config whose Kitchen proxy has code but is not listed. It
+is not CI: it reads the seven endpoints and one for each chain of `ROUTER_CHAINS` from a
+`--rpc-config`, refuses a key that is not a chain id (counted, never repeated), and forks the live
+chains locally, sending nothing to them, and a missing endpoint is a failure, never a skip. The
+endpoints carry provider keys, so none reaches a
+command line or an output: the Solana one goes to `sauce` in a 0600 `--config` file in the gate's temp
+dir for as long as that command runs, every message is scrubbed of each endpoint whole, in its parts
+and by each path segment and query value of eight characters or more, and an endpoint given where
+the file's path goes is refused without being repeated, whitespace around it or not. Each child the
+gate starts gets only `PATH`, `TMPDIR`, a temp `HOME` and `USERPROFILE` and npm's cache, and the
+installs run with `--ignore-scripts`. The installed testing kit runs in the gate's own process and
+starts anvil and its recorder with no environment of its own, so they inherit the gate's: it is cut
+to `PATH`, `TMPDIR`, `HOME` and `USERPROFILE` once npm's cache is read and before any installed code
+loads. Stopped by SIGINT, SIGTERM or SIGHUP, the gate stops its forks, removes its temp dir and
+exits 130. A command that carries a key is refused unless its `--rpc-url` is the kit's own loopback
+fork, which is what makes "sends nothing to a live chain" a checked property
+(`sdk/test/release-gate-hygiene.test.ts`, `release-gate-config.test.ts`, and `release-gate-stop.test.ts`,
+which runs the whole script against a stand-in package and signals it while it waits on a chain).
+
+```sh
+# before dispatching the real release (on the release commit):
+pnpm build && npm pack --pack-destination /tmp/gate && \
+  node sdk/scripts/release-gate.mjs --package /tmp/gate/eco-incorp-sauce-*.tgz --rpc-config sdk/rpc.config.json
+# after publish, on the npm tarball:
+node sdk/scripts/release-gate.mjs --package 1.2.0 --rpc-config sdk/rpc.config.json
+```
+
+**Recovery when `publish` succeeded and `release` failed: use "Re-run failed jobs" on that same run,
+never a new dispatch** (a new one is refused). It keeps the run's commit, number and notes, so the tag
+lands on the commit that was published; re-running the tag step after it succeeded changes nothing,
+and it refuses to touch a tag that sits on another commit. `publish` itself never skips a version that
+is already on npm, on any attempt: it cannot show whose it is, and a re-run number says nothing about
+which run published it. If that step failed after npm accepted the tarball, compare the registry's
+tarball with this commit's `pnpm pack`, then tag by hand. If the run can no longer be re-run, an admin
+tags the commit the run built (shown on its page) `vX.Y.Z` and creates the release by hand; the next
+dispatch then continues from that tag.
+
+**A misstated number.** A merged commit message cannot be edited, and a revert of a `feat!` still
+counts as breaking, so the computed number can be wrong. Dispatch with `release_as` (`X.Y.Z`, above
+the newest release) to publish that number instead; it replaces only the number, never the decision
+to release, and the summary shows both. Releases from a `release/*` maintenance line are not
+supported: a real run is refused on any ref but `main`.
+
+**Hardening this repository does not have, and the workflow cannot provide.** The "refuse any ref but
+`main`" check lives in the file it guards, so it is a convenience, not an access control: a dispatch
+or a tag push runs the `publish.yml` of the ref it names, every commit from before this change still
+carries the old one (a `v*` tag-push trigger and a dispatch with a typed `version`, neither checked),
+and `NPM_TOKEN` is an organisation secret granted to the repository, with no environment scoping it
+to a ref. What closes that is repository administration: an environment (`npm`) whose deployment
+branches are `main` only, holding the token instead of the organisation, referenced by `environment:`
+on the `publish` job and on `deprecate.yml`; and a tag ruleset on `refs/tags/v*`. A ruleset can stop a
+tag moving or being deleted. Whether it can also reserve creation for this workflow depends on its
+bypass list, because the release job creates the tag with `GITHUB_TOKEN`: check that before relying on
+it. Neither is set today.
+
+`docs/changelog.md` is not written by the pipeline and the ruleset needs a pull request for it: dispatch
+with `dry_run` for the number, land the `docs(changelog)` entry (it drives no release), then release.
 
 The package ships `docs/**/*.md` and `docs/examples/*.ts`. README and scaffold links are **relative
 paths**, so one spelling renders in the repository, on the npm page and inside the published
@@ -1831,6 +2305,34 @@ headings; `check-packed-package.mjs` reruns the same checks and examples on the 
 which is what proves the relative targets also ship. An absolute
 `github.com/eco-incorp/sauce/blob/…/docs/…` URL is rejected: it pins a branch and breaks in the
 tarball. New public doc links must target files shipped in the package.
+
+The package ships a source map only where it works: a `.d.ts.map` whose every source ships too (the
+protocols' and the Hylo venue's, under `sdk/src`), so Go to Definition in a consumer's editor lands
+in the shipped `.ts`. `sdk/tsconfig.json` sets `declarationMap` and leaves `sourceMap` unset;
+`actions/tsconfig.json`, `mcp/tsconfig.json` and `dev-tools/tsconfig.build.json` leave both unset,
+since none of their sources ship. Unset, never `false`: ts-jest maps a test's TypeScript unless its
+tsconfig turns `sourceMap` off, and `sdk/tsconfig.test.json` extends `sdk/tsconfig.json`. The rule
+is `scripts/lib/source-maps.mjs`. It finds a `sourceMappingURL` as Node does, anywhere, in a line
+or a block comment, after code too, with `@` beside `#`, and holds every one in a file to the rule,
+not only the last, which Node takes, since readers differ in which they take; an inline `data:` map
+is refused. The SDK's build ends with `scripts/prune-source-maps.mjs`, which deletes every other map
+and takes off the trailer tsc wrote to name it (`//# sourceMappingURL=<name>.map`, the last line of
+a file in a workspace's `dist`), and changes nothing else: the pattern also matches inside strings,
+regular expressions and longer comments, where a cut breaks the file, so any other refused
+`sourceMappingURL` fails the build, named, and is fixed where it is written. What ships is npm's own
+list (`npm pack --dry-run --json`), never a reading of `files`; the prune runs in the build, not a
+`prepack` hook, because the packed check packs with `--ignore-scripts` and publish.yml publishes
+with `pnpm publish`. `check-packed-package.mjs` holds the tarball to the same rule.
+A directive's URL, a map's `sourceRoot` and each of its `sources` count only as literal relative
+paths inside the package: letters, digits, `.`, `_`, `-` and `/`, not starting with `/`, no empty
+segment. Anything else (`%2e%2e`, `?`, `#`, `\`, a space or control character, a scheme, a leading
+`/`, `x//..`) is refused as written, before it is joined, since a join reads it as the packed file
+beside the one naming it while TypeScript or Node reads it elsewhere. A directive's URL and each
+source must also end in a file name (no trailing `/`, no final `.` or `..`, which a URL keeps as a
+directory), and each source must name the same file under its root as a path (TypeScript) and as a
+string prefix (Node reads `sourceRoot + source`); one resolving above the package's root is refused
+too. This is a list of what is allowed, not of what is not; a refused value is shown as a JSON
+string.
 
 **Every release is in the changelog.** `docs/changelog.md` (Reference, in the index) records each
 SDK 0.99.x release: what changed in SauceScript, the language, and what the compiler and engine
@@ -1853,7 +2355,7 @@ on. A breaking change outside the language (a removed export, a renamed command,
 is one closing `**Also breaking:**` line, named tersely. `docs:check` reads
 `releases.json` and fails while the table has no row whose Compiler, v12-evm, kitchen-evm, v12-svm
 and kitchen-svm cells are a released row's versions; while a table row whose SDK cell is a version
-has no `## SDK <version>` heading (a row whose SDK cell is `Unreleased` needs none); and while the
+has no `## SDK <version>` heading (a row whose SDK cell is `Unreleased` or `None` needs none); and while the
 `quoteRouter` pin's version is not written as `kitchen-evm <version>` outside code fences. It skips
 a whole row with a `null` digest, engine id, Kitchen or hash (a release not out yet, which the sync
 refuses too), and compares only the cells of the components a row gives a version; the installed

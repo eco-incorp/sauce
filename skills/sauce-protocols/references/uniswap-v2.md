@@ -17,8 +17,9 @@ Constant product AMM (x*y=k) with permissionless pair creation. Deployed across 
 - `amountOutMin` is the only bound: there is no price limit.
 - Through the Router, approve it for exactly `amountIn`, and give a `deadline`
   (`ctx.timestamp()` is this block). `uniswapV2` needs neither: it pushes the input to the pair.
-- A fee-on-transfer token needs the `...SupportingFeeOnTransferTokens` variants, which the
-  registry ABI does not declare.
+- A fee-on-transfer token needs the Router's `...SupportingFeeOnTransferTokens` variants. Their
+  swaps, such as `swapExactTokensForTokensSupportingFeeOnTransferTokens`, return nothing: measure
+  what arrived.
 - The pair must exist: `Factory.getPair` returns `0` where it does not.
 
 ## In a Sauce program

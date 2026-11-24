@@ -3,8 +3,9 @@
  * math and swap-step fee model are a BYTE-IDENTICAL clone of Orca Whirlpool's
  * (program `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR`; TypeScript SDK
  * `@cremafinance/crema-sdk-v2`, mirrored verbatim in the community fork
- * `github.com/jup-ag/crema-clmm-sdk-v2` this module's layout/math was
- * cross-verified against). 27 pools live on mainnet at integration time
+ * `github.com/jup-ag/crema-clmm-sdk-v2`, licensed under Apache-2.0 by its
+ * LICENSE file, see THIRD_PARTY_NOTICES.md; this module's layout/math was
+ * cross-verified against it). 27 pools live on mainnet at integration time
  * (`getProgramAccounts` filtered on `dataSize:748`) — thin, per the venue
  * brief; shipped anyway, survivorship (the relative-depth filter) decides.
  *

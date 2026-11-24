@@ -1,13 +1,13 @@
 export const ERC20ABI = [
   {
-    name: "transfer",
+    name: "allowance",
     type: "function",
-    stateMutability: "nonpayable",
+    stateMutability: "view",
     inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
     ],
-    outputs: [{ name: "", type: "bool" }],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "approve",
@@ -20,17 +20,6 @@ export const ERC20ABI = [
     outputs: [{ name: "", type: "bool" }],
   },
   {
-    name: "transferFrom",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
     name: "balanceOf",
     type: "function",
     stateMutability: "view",
@@ -38,21 +27,11 @@ export const ERC20ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "allowance",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "totalSupply",
+    name: "decimals",
     type: "function",
     stateMutability: "view",
     inputs: [],
-    outputs: [{ name: "", type: "uint256" }],
+    outputs: [{ name: "", type: "uint8" }],
   },
   {
     name: "name",
@@ -69,20 +48,32 @@ export const ERC20ABI = [
     outputs: [{ name: "", type: "string" }],
   },
   {
-    name: "decimals",
+    name: "totalSupply",
     type: "function",
     stateMutability: "view",
     inputs: [],
-    outputs: [{ name: "", type: "uint8" }],
+    outputs: [{ name: "", type: "uint256" }],
   },
   {
-    name: "Transfer",
-    type: "event",
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
     inputs: [
-      { name: "from", type: "address", indexed: true },
-      { name: "to", type: "address", indexed: true },
-      { name: "value", type: "uint256", indexed: false },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
     ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
   },
   {
     name: "Approval",
@@ -90,6 +81,15 @@ export const ERC20ABI = [
     inputs: [
       { name: "owner", type: "address", indexed: true },
       { name: "spender", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "Transfer",
+    type: "event",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
       { name: "value", type: "uint256", indexed: false },
     ],
   },

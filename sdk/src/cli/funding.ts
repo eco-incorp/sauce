@@ -33,13 +33,13 @@ import {
   maxUint256,
   parseAbi,
   parseSignature,
-  parseUnits,
   type Address,
   type Hex,
   type PublicClient,
 } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 
+import { exactUnits, tokenAmount, type TokenAmount } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
@@ -67,10 +67,11 @@ export interface FundRequest {
   readonly token?: Address;
   /** What to call it in messages: the symbol given, or the address. */
   readonly label: string;
-  /** Registry decimals for a symbol; `undefined` for an address, read from the token. */
+  /** Its decimals: the registry's for a symbol, 18 for the native currency; for a token named by
+   *  its address, `undefined` until `withDecimals` reads them from the token. */
   readonly decimals?: number;
   /** The amount: in whole tokens as written (`1.5`), or in base units (`1500000n`). */
-  readonly amount: { readonly units: string } | { readonly base: bigint };
+  readonly amount: TokenAmount;
   /** The flag it was given with, for what is said about it. */
   readonly flag: string;
 }
@@ -80,9 +81,9 @@ const NATIVE = /^(eth|native)$/i;
 /**
  * `<TOKEN|address>:<amount>`, as `--fund` and `--assume-balance` take it (`flag` names which, for
  * the error). The amount is in whole tokens — `USDC:1.5` is 1.5 USDC, exact through the registry's
- * decimals (or the token's own, for an address) — or, with a trailing `n` as a JavaScript bigint
- * has, a raw integer in base units: `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's
- * native currency, 18 decimals.
+ * decimals (or the token's own, for an address), and refused where it would need rounding
+ * (`exactUnits`) — or, with a trailing `n` as a JavaScript bigint has, a raw integer in base units:
+ * `USDC:1500000n`. `ETH:<amount>` (or `native:`) is the chain's native currency, 18 decimals.
  */
 export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: string): FundRequest {
   // Solana registers mints by symbol too, but nothing here can pull one: say so, not "unknown".
@@ -100,21 +101,24 @@ export function parseTokenAmount(raw: string, chain: CanonicalChain, flag: strin
         `(base units); got '${raw}'`,
     );
   }
-  const base = /^(\d+)n$/.exec(amount);
-  if (base === null && !/^\d+(\.\d+)?$/.test(amount)) {
+  const parsed = tokenAmount(amount);
+  if (parsed === undefined) {
     throw new UsageError(
       `${flag} ${raw}: '${amount}' is not an amount — whole tokens (1.5) or base units ending in n ` +
         "(1500000n)",
     );
   }
 
-  return tokenRequest(
-    raw,
-    what,
-    chain,
-    flag,
-    base === null ? { units: amount } : { base: BigInt(base[1]!) },
-  );
+  const request = tokenRequest(raw, what, chain, flag, parsed);
+  // Where the decimals are known now, a registered symbol's or the native coin's, an amount that
+  // would need rounding is refused before anything is read or sent. A token named by its address
+  // is held to its own decimals once `withDecimals` has read them, before `sauce run` signs or
+  // sends anything.
+  if ("units" in request.amount && request.decimals !== undefined) {
+    exactUnits(request.amount.units, request.decimals, request.label, `${flag} ${raw}`);
+  }
+
+  return request;
 }
 
 /** The token `what` names on `chain`, with `amount` as given. */
@@ -251,8 +255,44 @@ const read = async <T>(what: string, call: () => Promise<T>): Promise<T> => {
   }
 };
 
+/** A request's token's decimals: as parsed (a registered symbol, the native currency), else read
+ *  from the token. */
+const decimalsOf = async (client: PublicClient, request: FundRequest): Promise<number> =>
+  request.decimals ??
+  Number(
+    await read(`${request.label}'s decimals()`, () =>
+      client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
+    ),
+  );
+
 /**
- * A request's amount in base units, a token's decimals read from it when not registered, and a note
+ * `requests`, each amount in whole tokens of a token named by its address given that token's
+ * decimals, read from it, and held to them (`exactUnits`): what `sauce run` does with its client
+ * before it signs or sends anything, its Pot's deployment included, so an amount the token cannot
+ * hold is refused with nothing sent. A registered symbol and the native currency were held to
+ * theirs when parsed; base units need none, and nothing is read for them.
+ */
+export async function withDecimals(
+  client: PublicClient,
+  requests: readonly FundRequest[],
+): Promise<FundRequest[]> {
+  const resolved: FundRequest[] = [];
+  for (const request of requests) {
+    if (request.decimals !== undefined || !("units" in request.amount)) {
+      resolved.push(request);
+      continue;
+    }
+    const decimals = await decimalsOf(client, request);
+    exactUnits(request.amount.units, decimals, request.label, `${request.flag} ${request.raw}`);
+    resolved.push({ ...request, decimals });
+  }
+
+  return resolved;
+}
+
+/**
+ * A request's amount in base units, exact (`exactUnits` refuses one that would need rounding), a
+ * token's decimals read from it when not registered, and a note
  * when a bare integer of whole tokens reads like base units: at or above 10^decimals (`USDC:1500000`,
  * 1.5 million USDC), which a program's habit of base units makes easy to write by mistake. A note,
  * not a refusal: it may be meant, and base units have their own spelling (`1500000n`).
@@ -263,14 +303,8 @@ export async function baseUnits(
 ): Promise<{ readonly amount: bigint; readonly note?: string }> {
   if ("base" in request.amount) return { amount: request.amount.base };
   const units = request.amount.units;
-  const decimals =
-    request.decimals ??
-    Number(
-      await read(`${request.label}'s decimals()`, () =>
-        client.readContract({ address: request.token!, abi: ERC20, functionName: "decimals" }),
-      ),
-    );
-  const amount = parseUnits(units, decimals);
+  const decimals = await decimalsOf(client, request);
+  const amount = exactUnits(units, decimals, request.label, `${request.flag} ${request.raw}`);
   if (units.includes(".") || decimals === 0 || BigInt(units) < 10n ** BigInt(decimals)) {
     return { amount };
   }
@@ -285,19 +319,73 @@ export async function baseUnits(
 
 /** Every request's amount in base units, and what is said of them. */
 async function amounts(
-  input: FundingInput,
+  client: PublicClient,
+  requests: readonly FundRequest[],
 ): Promise<{ tokens: Funded[]; native: bigint; notes: string[] }> {
   const tokens: Funded[] = [];
   const notes: string[] = [];
   let native = 0n;
-  for (const request of input.requests) {
-    const { amount, note } = await baseUnits(input.client, request);
+  for (const request of requests) {
+    const { amount, note } = await baseUnits(client, request);
     if (note !== undefined) notes.push(note);
     if (request.token === undefined) native += amount;
     else tokens.push({ request, token: request.token, amount });
   }
 
   return { tokens, native, notes };
+}
+
+/**
+ * Holds `owner`'s balances to what is funded, each token's `balanceOf` in order and then the native
+ * coin's, calling `short` with what it lacks: the one wording of a shortfall, for the check `sauce
+ * run` makes before it sends anything (`requireBalances`) and the one `planFunding` makes again.
+ */
+async function checkBalances(
+  client: PublicClient,
+  owner: Address,
+  tokens: readonly Funded[],
+  native: bigint,
+  short: (message: string) => void,
+): Promise<void> {
+  for (const funded of tokens) {
+    const balance = await read(`${funded.request.label}'s balanceOf`, () =>
+      client.readContract({
+        address: funded.token,
+        abi: ERC20,
+        functionName: "balanceOf",
+        args: [owner],
+      }),
+    );
+    if (balance < funded.amount) {
+      short(
+        `${owner} holds ${balance} of ${funded.request.label} (base units), below the ` +
+          `${funded.amount} --fund ${funded.request.raw} needs`,
+      );
+    }
+  }
+  if (native > 0n) {
+    const balance = await client.getBalance({ address: owner });
+    if (balance < native) {
+      short(`${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`);
+    }
+  }
+}
+
+/**
+ * Refuses, as `planFunding` does with a key, funding `owner` cannot pay: a token's balance, or the
+ * native coin's, below what `requests` fund (their decimals already read, `withDecimals`). `sauce
+ * run` calls it before it signs or sends anything; `planFunding` checks again before the funding's
+ * own transactions, after the gas the Pot's deployment spent.
+ */
+export async function requireBalances(
+  client: PublicClient,
+  owner: Address,
+  requests: readonly FundRequest[],
+): Promise<void> {
+  const { tokens, native } = await amounts(client, requests);
+  await checkBalances(client, owner, tokens, native, (message) => {
+    throw new CliError(message);
+  });
 }
 
 /**
@@ -562,8 +650,8 @@ const word = (value: bigint): string => `0x${value.toString(16)}n`;
  * address could take them: a contract that answers `owner()` with the signer shows nothing. The
  * wallet's policy first (`SendGuard.authorizeFunding`), then the chain: the Pot the same run deploys
  * first is the signer's when its address is the signer's `v12PredictPot` at that salt, and any other
- * must show it is (`authenticatePot`: its owner the signer, and its address the CREATE2 of that
- * owner and its salt under a Kitchen a release records). Where that cannot be read, it is refused.
+ * must show it is (`authenticatePot`: its owner the signer, and its address its Kitchen's for that
+ * owner and salt under a release the SDK records). Where that cannot be read, it is refused.
  */
 async function requireOwnPot(input: FundingInput, signer: Address): Promise<void> {
   const pot = getAddress(input.pot);
@@ -589,7 +677,7 @@ async function requireOwnPot(input: FundingInput, signer: Address): Promise<void
  */
 export async function planFunding(input: FundingInput): Promise<Funding> {
   if (input.account !== undefined) await requireOwnPot(input, getAddress(input.account.address));
-  const { tokens, native, notes } = await amounts(input);
+  const { tokens, native, notes } = await amounts(input.client, input.requests);
   const needs: string[] = [];
   const beforeCook: BeforeCook[] = [];
   const sent: Array<{ what: string; sent: Sent }> = [];
@@ -604,28 +692,7 @@ export async function planFunding(input: FundingInput): Promise<Funding> {
     if (!keyless) throw new CliError(message);
     notes.push(`${message}: sauce run would refuse it`);
   };
-  for (const funded of tokens) {
-    const balance = await read(`${funded.request.label}'s balanceOf`, () =>
-      input.client.readContract({
-        address: funded.token,
-        abi: ERC20,
-        functionName: "balanceOf",
-        args: [owner],
-      }),
-    );
-    if (balance < funded.amount) {
-      short(
-        `${owner} holds ${balance} of ${funded.request.label} (base units), below the ` +
-          `${funded.amount} --fund ${funded.request.raw} needs`,
-      );
-    }
-  }
-  if (native > 0n) {
-    const balance = await input.client.getBalance({ address: owner });
-    if (balance < native) {
-      short(`${owner} holds ${balance} wei, below the ${native} --fund sends with the cook`);
-    }
-  }
+  await checkBalances(input.client, owner, tokens, native, short);
   if (keyless && tokens.length > 0) {
     // A simulation with no key cannot sign the pulls. It credits the Pot with what they would
     // bring instead (state overrides, `simulateCommand`), and keeps the sweep.

@@ -116,9 +116,14 @@ re-enter their caller mid-swap to be paid, which a program cannot answer. Those 
 | `pancakeV3SwapCallback`                           | PancakeSwap V3                                                                   |
 | `algebraSwapCallback`                             | Algebra pools (Camelot V3, QuickSwap V3), whose `swap` has Uniswap V3's selector |
 | `synthraV3SwapCallback`, `unitFlowV3SwapCallback` | Synthra V3, UnitFlow V3                                                          |
+| `hyperswapV3SwapCallback`                         | HyperSwap V3                                                                     |
 | `unlockCallback`                                  | Uniswap V4                                                                       |
 | `maverickV2SwapCallback`                          | Maverick V2                                                                      |
 | `lockAcquired`                                    | PancakeSwap Infinity, CL and bin pools alike                                     |
+
+A Pot answers these through the Router it runs, `router()` on the Pot: a Pot whose Router predates a
+callback cannot pay a pool that calls it back, and a fixed-Router or Shared Pot keeps its Router for
+good.
 
 So `uniswapV3` drives every V3-style pool above. Each callback is authenticated to the pool being
 swapped, pays **once**, and pays only the input the pool asks for, never more than `amountIn`
@@ -147,6 +152,13 @@ only as a contract), then call it through its namespace. Its exact-output forms 
 the library has no function for: Uniswap V3's SwapRouter buys an exact amount for at most a
 maximum.
 
+[examples/exact-output.sauce.ts](examples/exact-output.sauce.ts) is that exact-output swap: it
+approves the router for the maximum, calls `exactOutputSingle`, and resets what is left of the
+allowance. [examples/swap-path.sauce.ts](examples/swap-path.sauce.ts) routes through several pools
+in one call: the router's `path` is each token's 20 bytes with the 3-byte fee of the next pool
+between them (`token.toBytesBe(20)`, `fee.toBytesBe(3)`, joined with `.concat`), written from the
+token paid for `exactInput` and from the token bought for `exactOutput`.
+
 ## Flash swaps
 
 A flash loan's lender pays first and then calls the borrower back to be repaid
@@ -163,6 +175,7 @@ through the Router ABI above, `ISauceRouter.at(pot).flash(callback, swap)`.
 Balancer's flash swap needs none of that: one `batchSwap` that sells a token to one pool and buys it
 back from another is settled by the Vault as a whole, so the Pot sends nothing (its limits are zero)
 and receives the profit, and a cycle that would cost anything reverts on the limits.
+[examples/balancer-flash-cycle.sauce.ts](examples/balancer-flash-cycle.sauce.ts) is that cycle.
 
 ## Price limits and partial fills
 
@@ -207,6 +220,25 @@ pool's fee, and move it by the slippage you accept. Never a pool's price alone (
 a stale price), nor the deepest pool's mid price (it sits up to its fee away from the cheap pools).
 `sauce pools --chain <chain> <tokenA> <tokenB>` lists each pool's price with and without its fee.
 
+**The better of two venues, chosen while the program runs**: read each pool (a missing or empty one
+skipped), price it from its `slot0().sqrtPriceX96` with its own fee taken off (Slipstream's from
+`AerodromeSlipstream.Pool(pool).fee()`, which can change any block), and swap on the better one
+with the same limit and `minOut`: the pair is the same at both, so one `sqrtPriceLimitX96` serves
+both. [examples/best-venue-swap.sauce.ts](examples/best-venue-swap.sauce.ts) does this for a Uniswap
+V3 pool against a Slipstream pool on Arc and Base. On Arc the one Slipstream factory is
+`AerodromeSlipstream.CLFactory`; `AerodromeSlipstream.CLFactoryGaugesV3` and
+`AerodromeSlipstream.CLFactoryGaugeCaps` are Base's only, and each Base factory keeps its own
+pools. The comparison is the marginal price now, which suits a trade small next to both pools'
+depth: a larger trade can move the shallow pool past the deep one's price.
+
+**For a trade that moves the price, compare by what each swap would deliver**, measured in the
+cook itself: run each venue's swap inside an atomic `try` whose body throws the amount received
+(as 32 bytes of revert data), which undoes the swap; read the amount back in the `catch` from the
+error's 32 bytes; then swap for real at the venue that delivered most, with the same limit and
+`minOut`. Each measurement is the pool's own answer for the whole amount, fee and depth included,
+and costs a swap's gas. A simulation (`sauce simulate`) shows which venue the cook chose. To fill
+one order from every pool under one limit, see `sauce-distributed-swap`.
+
 ## The guard
 
 Required on every leg. The library checks `minOut`; what is left is the input a price limit left
@@ -231,15 +263,16 @@ sauce run swap-leg.sauce.ts --chain base --keystore <keystore> \
 
 ## When a swap reverts
 
-| Revert                                   | From       | Means                                                                                   |
-| ---------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
-| `SPL`                                    | the pool   | the price limit is on the wrong side of the pool's current price, or at or past a bound |
-| `AS`                                     | the pool   | the amount is zero                                                                      |
-| `LOK`                                    | the pool   | the pool is not initialized (or is mid-swap)                                            |
-| `IIA`                                    | the pool   | its callback paid less input than it asked for                                          |
-| `TF`                                     | the pool   | its transfer of the output token failed                                                 |
-| `InputTokenMismatch()`                   | the Router | the input token does not match the pool key and direction                               |
-| `InputExceedsAuthorized()`, `0x510db218` | the Router | the pool asked for more input than the exact input offered                              |
+| Revert                                   | From        | Means                                                                                                                                                                                       |
+| ---------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SPL`                                    | the pool    | the price limit is on the wrong side of the pool's current price, or at or past a bound                                                                                                     |
+| `AS`                                     | the pool    | the amount is zero                                                                                                                                                                          |
+| `LOK`                                    | the pool    | the pool is not initialized (or is mid-swap)                                                                                                                                                |
+| `IIA`                                    | the pool    | its callback paid less input than it asked for                                                                                                                                              |
+| `TF`                                     | the pool    | its transfer of the output token failed                                                                                                                                                     |
+| `InputTokenMismatch()`                   | the Router  | the input token does not match the pool key and direction                                                                                                                                   |
+| `InputExceedsAuthorized()`, `0x510db218` | the Router  | the pool asked for more input than the exact input offered                                                                                                                                  |
+| none: empty revert data                  | the library | the swap delivered less than `minOut`: the library's check carries no message, so the command shows only the revert and its gas. Check `minOut` against a fresh quote (`sauce pools`) first |
 
 A revert inside the program (a `require`, the library's `minOut` check) is the program's own; the
 cook reverts as a whole either way.
@@ -524,8 +557,20 @@ against the deployed program before sending it.
 
 - [examples/swap-leg.sauce.ts](examples/swap-leg.sauce.ts): one guarded Uniswap V3 leg that
   returns its unspent input.
+- [examples/best-venue-swap.sauce.ts](examples/best-venue-swap.sauce.ts): a Uniswap V3 pool and an
+  Aerodrome Slipstream pool priced after their fees, the swap on the better one, `minOut`, the
+  unspent input returned.
 - [examples/solana-swap.sauce.ts](examples/solana-swap.sauce.ts): a swap at one Orca whirlpool by
   its namespace, the pool found by its key, what arrived forwarded.
+- [examples/exact-output.sauce.ts](examples/exact-output.sauce.ts): an exact amount bought through
+  Uniswap V3's SwapRouter for at most a maximum, the allowance it left reset.
+- [examples/swap-path.sauce.ts](examples/swap-path.sauce.ts): several Uniswap V3 pools in one
+  SwapRouter call, the path written in the program, exact input or exact output.
+- [examples/balancer-batch-swap.sauce.ts](examples/balancer-batch-swap.sauce.ts): a two-pool
+  Balancer V2 batch swap, given in or given out, its limit held to the Vault's own
+  `BalancerV2.Vault.queryBatchSwap`.
+- [examples/balancer-flash-cycle.sauce.ts](examples/balancer-flash-cycle.sauce.ts): a Balancer V2
+  cycle through two pools in one `batchSwap` under zero limits, the profit to a recipient.
 - [examples/swaps.mts](examples/swaps.mts) compiles the leg and pins the library's functions and
   their argument order, the Router's entry points, their price parameters and callbacks, and on
   Solana the functions, their arguments and size, and the namespace example's accounts.

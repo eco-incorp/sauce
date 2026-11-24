@@ -12,7 +12,9 @@
 //     `.sauce.ts`), so a suite that does not load the file cannot be listed for it;
 //   - being one CI runs: jest takes every `sdk/test/**/*.test.ts` and the MCP test script every
 //     `mcp/test/*.test.ts`, but the actions scripts list their suites, and `ci.yml` runs
-//     `test:unit` and `test:mainnet` — a suite in neither never runs.
+//     `test:unit` and `test:mainnet` — a suite in neither never runs. An actions module a listed
+//     suite imports runs inside it (`examples.mainnet.test.ts` registers its groups on one anvil),
+//     so it counts as that suite.
 // This only reads files: the suites themselves run in CI. Tests do not ship, so the installed
 // package's checks skip it.
 //
@@ -36,7 +38,7 @@
 // apart, and no ```sauce fence compiles with `define=`. A value a reader supplies is a `main`
 // argument, there as everywhere.
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 
 import { toFunctionSelector } from "viem";
 
@@ -54,8 +56,18 @@ function ranByCi(repository, suite) {
   }
   if (suite.startsWith("actions/tests/")) {
     const { scripts } = JSON.parse(readFileSync(join(repository, "actions/package.json"), "utf8"));
+    const listed = new Set(
+      ACTIONS_CI_SCRIPTS.flatMap((script) => scripts[script]?.split(/\s+/) ?? []).filter((arg) =>
+        arg.startsWith("tests/"),
+      ),
+    );
     const named = suite.slice("actions/".length);
-    return ACTIONS_CI_SCRIPTS.some((script) => scripts[script]?.split(/\s+/).includes(named));
+    if (listed.has(named)) return true;
+    const specifier = `from "./${basename(named).replace(/\.ts$/, ".js")}"`;
+    return [...listed].some((entry) => {
+      const path = join(repository, "actions", entry);
+      return existsSync(path) && readFileSync(path, "utf8").includes(specifier);
+    });
   }
   return false;
 }

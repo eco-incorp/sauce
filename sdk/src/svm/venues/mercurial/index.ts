@@ -7,9 +7,12 @@
  * bit-for-bit rather than the generalized Curve `ann = amp*n^n`).
  *
  * Layout source: `mercurial-finance/stable-swap-n-pool-instructions`
- * (`src/state.rs`'s `SwapV2`, `src/instruction.rs`'s `SwapInstruction`) and
+ * (`src/state.rs`'s `SwapV2`, `src/instruction.rs`'s `SwapInstruction`;
+ * licensed under WTFPL as declared in its Cargo.toml) and
  * `mercurial-finance/stable-swap-n-pool-js` (`src/index.ts`'s
- * `FEE_DENOMINATOR = 1e10`, the client account ordering for `Exchange`).
+ * `FEE_DENOMINATOR = 1e10`, the client account ordering for `Exchange`;
+ * licensed under MIT as declared in its package.json); see
+ * THIRD_PARTY_NOTICES.md.
  * `SwapV2` is a Vec-backed struct but every array is declared at its
  * compile-time MAX (`PoolParameter::MAX_N_COINS = 4`), so every pool account
  * is a FIXED 265 bytes (1 version tag + `SwapV2::LEN` 264) regardless of how

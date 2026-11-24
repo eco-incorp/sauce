@@ -5,23 +5,11 @@
  * account, so the quote is fully closed-form and needs no off-chain-shipped
  * window/levels at all.
  *
- * SOURCE: the program is OPEN-SOURCE, BUSL-1.1-licensed
- * (github.com/Ellipsis-Labs/plasma, verified build deployed at the program id
- * above per Ellipsis Labs' own "Introducing Gavel"/"Introducing Plasma" posts
- * and the Helius "Solana's Proprietary AMM Revolution" writeup) — every
- * offset and formula below is TRANSCRIBED from `crates/plasma_state/src/
- * {accounts,amm}.rs`, not reverse-engineered, and cross-verified against a
- * REAL mainnet pool (`CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi`, the
- * IBRL/wSOL launch pool referenced in Ellipsis Labs' own "IBRL" test-coin
- * writeup): the discriminator decoded to the pinned constant below,
- * base/quote decimals (6/9) and mints matched the real IBRL/wSOL pair, and
- * quotes at 4 sizes each way matched the REAL `plasma-amm-state` crate's own
- * `Amm::simulate_{buy,sell}_exact_in` bit-for-bit (built from the cloned repo
- * via `cargo build`, fed the live dumped account bytes — see the "sr-AMM
- * healing" section below for why this crate-level check, not a
- * `simulateTransaction`, is the strongest available verification: the crate
- * needs no trader/vault accounts to exercise, and it IS the real program's
- * logic, not a re-implementation of it).
+ * SOURCE: the program's account layout and instruction format below were
+ * confirmed against REAL mainnet state (`CcWf5D6BhUTv2tD4ebFFcmCdTUgBWMc8CqqoJvFHGGXi`,
+ * the IBRL/wSOL launch pool): the discriminator decoded to the pinned
+ * constant below, and base/quote decimals (6/9) and mints matched the real
+ * IBRL/wSOL pair.
  *
  * ── Account layout (`PoolHeader` + `Amm`, `#[repr(C)]` + `bytemuck::Pod`,
  *    cast directly from account bytes at offset 0 — `initialize.rs`'s
@@ -49,51 +37,6 @@
  * `PlasmaInstruction` mutates it — only `WithdrawProtocolFees`, a payout, and
  * `WithdrawLpFees`), so it is baked as a compile-time PARAM (like fluxbeam's
  * trade-fee numerators) rather than re-read live each trade.
- *
- * ── sr-AMM "healing" — a virtual, ONE-LEVEL limit order at the window's
- *    anchor price (amm.rs `get_limit_order_size_in_base_and_quote` +
- *    `buy_exact_in`/`sell_exact_in`) ──
- *
- * Every `Swap` instruction first calls (processor/swap.rs)
- * `let slot = Clock::get()?.slot; let snapshot_slot = (slot / LEADER_SLOT_WINDOW) * LEADER_SLOT_WINDOW;`
- * (`LEADER_SLOT_WINDOW = 4`, lib.rs) then `Amm::maybe_update_snapshot(snapshot_slot)`:
- * if `snapshot_slot > self.slot_snapshot` (a NEW 4-slot leader window since
- * this pool was last touched), the snapshot RESETS to the pool's own CURRENT
- * reserves (so the virtual level's size — see below — collapses to exactly
- * 0, a pure constant-product swap); otherwise (this pool already traded
- * within the SAME window) the STORED snapshot stays in force.
- *
- * When the stored snapshot differs from current reserves, one side carries a
- * virtual limit order priced EXACTLY at the snapshot's price ratio, sized so
- * consuming it exactly restores that ratio (the closed-form in
- * `get_limit_order_size_in_base_and_quote`'s doc comment). CRITICALLY — and
- * this inverts the naive intuition — the side that gets a virtual level is
- * whichever one trades AGAINST the direction the price has ALREADY moved
- * this window (a buyer gets an ask only when price has already DROPPED
- * — `quote_snapshot*base_reserves > base_snapshot*quote_reserves`, i.e.
- * snapshot price > current price — and it fills at that HIGHER, WORSE-for-
- * the-buyer snapshot price; symmetrically a seller's bid only appears when
- * price has RISEN and fills at the LOWER, WORSE-for-the-seller snapshot
- * price). This is NOT a "the taker always benefits" mechanism: it is a
- * "trade back toward the window's anchor price regardless of who benefits"
- * mechanism, and its actual anti-sandwich effect is neutralizing a would-be
- * attacker's BACK-RUN leg (which sells back into a price the attacker's own
- * front-run inflated) — see the module-level measured example below.
- * PROVEN, not assumed: an EARLIER analysis in this exact investigation
- * assumed the opposite sign (that ignoring the level is a strictly
- * CONSERVATIVE approximation) and was REFUTED by a controlled scenario
- * before it shipped — a same-window SELL then BUY (or BUY then SELL)
- * measured the real crate returning STRICTLY LESS than a plain
- * current-reserves constant-product quote for the same input (e.g. a
- * same-window sell of 30_000_000_000 lowering price, then a 2_000_000_000
- * buy: real crate 174,752,288,804 base out vs 175,499,103,175 if the level
- * were ignored) — so a "just use current reserves" shortcut would be a
- * FAVORABLE ERROR (over-promising), exactly the class of bug this repo's
- * integration policy calls a liveness hazard. This module therefore
- * implements the FULL two-piece close (virtual level + constant-product
- * tail), not an approximation, and both branches are validated bit-for-bit
- * against the real `plasma-amm-state` crate (see the module doc above and
- * `test/svm/venues/gavel.test.ts`).
  *
  * WHY THIS IS COMPUTABLE ON-CHAIN WITHOUT A SHIPPED WINDOW (unlike
  * manifest/phoenix's order books): `slot_snapshot` / `*_reserves_snapshot` /
@@ -144,8 +87,8 @@
  * [side u8][swap_type tag=0 u8][amount_in u64 LE (patched)][min_amount_out
  * u64 LE = 1]` — venue-level min_out is 1, the recipe's own terminal outAta
  * delta check is the real floor (the solswap/manifest/phoenix discipline).
- * PROVEN against the real dumped mainnet binary, not just this transcription
- * — see `the consuming app realcpi e2e test`'s `gavel` quadrilateral.
+ * PROVEN against the real dumped mainnet binary — see
+ * `the consuming app realcpi e2e test`'s `gavel` quadrilateral.
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";

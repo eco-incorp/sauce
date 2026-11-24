@@ -37,6 +37,7 @@ export {
   compileProgram,
   expectingRevert,
   potCommand,
+  potRouterStatus,
   txCommand,
   type CliFiles,
   type CommandOutput,
@@ -44,6 +45,7 @@ export {
   type CookInput,
   type ProgramInput,
 } from "../../sdk/dist/cli/commands.js";
+export { cookPotOf } from "../../sdk/dist/cli/cook-pot.js";
 export { globalsCommand } from "../../sdk/dist/cli/globals.js";
 export {
   assumedBalances,
@@ -95,9 +97,11 @@ export {
   previewRefusal,
   PreviewChainError,
   requireSupported,
+  SUPPORTED_CHAIN_SLUGS,
   supportedChainNames,
   type PreviewChainRefusal,
 } from "../../sdk/dist/cli/support.js";
+export { unitsCommand } from "../../sdk/dist/cli/units.js";
 export { HOT_WALLET, looksLikeKey, openWallet } from "../../sdk/dist/cli/wallet-commands.js";
 export { handoff } from "../../sdk/dist/cli/handoff.js";
 export { describeSource, ENV_NAME, type PasswordSource } from "../../sdk/dist/cli/password.js";
@@ -133,7 +137,9 @@ export {
   parseAccounts,
   parsePubkey,
   svmPotCommand,
-  svmPotExists,
+  svmPotFacts,
+  svmPotState,
+  svmPotWithFacts,
   svmAssumedBalances,
   svmPotTokenAccounts,
   svmSimulateCommand,

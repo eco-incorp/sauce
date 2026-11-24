@@ -42,7 +42,7 @@ function main(
       oftCmd: hex``,
     },
     { nativeFee: ctx.msgValue(), lzTokenFee: 0 },
-    ctx.msgSender(),
+    ctx.self(),
   );
 }
 ```
@@ -52,6 +52,7 @@ function main(
 - `recipient`: Destination address as bytes32 (left-padded)
 - `amount`: Amount in token's native decimals (LD = local decimals)
 - `minAmount`: Minimum amount to receive on destination (slippage protection)
+- `_refundAddress`: receives the LayerZero fee paid in excess, on the source chain. The template passes the Pot (`ctx.self()`), not whoever called the cook (a relayer, under a signed cook)
 - Requires native token (ETH) for LayerZero messaging fee (sent as msg.value)
 - Requires ERC-20 approval to the pool for non-native tokens
 

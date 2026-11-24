@@ -35,9 +35,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { requireChain, type CanonicalChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
+import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { registryTokenAddress } from "../src/routes/token-registry.js";
 import { freePort, spawnAnvil } from "./anvil-process.js";
 import * as gated from "./evm/gated-engine.js";
+import { releaseArm } from "./release-arm.js";
 
 export const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -136,11 +138,79 @@ export interface LocalChain {
   mint(token: Address, to: Address, amount: bigint): Promise<void>;
   balanceOf(token: Address, holder: Address): Promise<bigint>;
   stop(): Promise<void>;
+  /**
+   * Where `owner`'s Pot at `salt` (the CLI's default salt when left out) is on this chain: the
+   * earlier release's Pot where the chain minted one for that owner at that salt (`legacy`), else
+   * the installed release's, as `v12PredictPot` derives it.
+   */
+  potOf(owner: Address, salt?: Hex): Address;
+  /**
+   * The engine `pot` cooks on: the earlier release's for a Pot in `legacy.pots`, else the installed
+   * release's.
+   */
+  engineOf(pot: Address): Address;
+  /**
+   * With `upgraded`: the earlier release as the chain ran it before the upgrade — its engine and
+   * Router, the DEPLOYER's Pot at `POT_SALT`, and the Pot of each of `legacyOwners` at that salt,
+   * all minted by that release's Kitchen (`evm/gated-engine.ts#startUpgradedChain`).
+   */
+  readonly legacy?: {
+    readonly engine: Address;
+    readonly router: Address;
+    readonly pot: Address;
+    readonly pots: Readonly<Record<Address, Address>>;
+    /** From a chain that ran kitchen-evm 1.4.0: the DEPLOYER's fixed-Router and Shared Pot at the
+     *  legacy salt, on the earlier Router for good. */
+    readonly fixedPot?: Address;
+    readonly sharedPot?: Address;
+  };
+  /** From `from: "1.4.0"`: the DEPLOYER's fixed-Router and Shared Pot minted after the Router
+   *  switch, on the new Router. */
+  readonly fixedPot?: Address;
+  readonly sharedPot?: Address;
 }
 
-/** Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a
- *  suite never names one, so no two suites can share one. */
-export async function startChain(slug: string): Promise<LocalChain> {
+/** What `startChain` can stand up besides the release this SDK pins. */
+export interface ChainOptions {
+  /** The chain as the live ones are after kitchen-evm 1.4.0's rollout: the earlier release's stack
+   *  with Pots minted on it, upgraded to the release this SDK pins (`startUpgradedChain`). */
+  readonly upgraded?: boolean;
+  /** With `upgraded`: owners whose earlier-release Pot is minted too, at `legacySalt`. */
+  readonly legacyOwners?: readonly Address[];
+  /** With `upgraded`: the salt the earlier-release Pots are minted at (`POT_SALT` when left out). */
+  readonly legacySalt?: Hex;
+  /** With `upgraded`: the earlier engine version the chain ran before the upgrade (`"1.3.0"` when
+   *  left out; `"1.4.0"`: a chain whose Kitchen then switched to the new Router). */
+  readonly from?: string;
+}
+
+/**
+ * Starts an anvil standing in for `slug`, on a port the OS hands out (`anvil-process.ts`): a suite
+ * never names one, so no two suites can share one.
+ *
+ * On a legacy arm (`SAUCE_TEST_EVM_ARM=1.3.0`, `release-arm.ts`) a call that does not say
+ * `upgraded` stands up the chain as the live ones are: each of the CLI suites' fixed accounts (the
+ * deployer, the owner and the "other" account) already owns an earlier-release Pot at the CLI's
+ * default salt, so every command those accounts run online cooks on that Pot through the earlier
+ * engine, and a fresh account still gets the installed release's Pot. The `sauce` command cannot
+ * run on the `1.4.0` arm, whose stack has no engine at the address the command names.
+ */
+export async function startChain(slug: string, requested: ChainOptions = {}): Promise<LocalChain> {
+  const arm = releaseArm("evm");
+  if (arm === "1.4.0") {
+    throw new Error(
+      "the sauce command's suites run on the default and 1.3.0 arms (sdk/test/legacy-arm.json)",
+    );
+  }
+  const options: ChainOptions =
+    arm !== "default" && requested.upgraded === undefined
+      ? {
+          upgraded: true,
+          legacyOwners: [DEPLOYER.address, OWNER.address, privateKeyToAccount(OTHER_KEY).address],
+          legacySalt: DEFAULT_POT_SALT,
+          from: arm,
+        }
+      : requested;
   const chain = requireChain(slug);
   const port = await freePort();
   const rpcUrl = `http://127.0.0.1:${port}`;
@@ -185,14 +255,28 @@ export async function startChain(slug: string): Promise<LocalChain> {
     anvil.kill();
     await exited;
   };
+  let legacy: LocalChain["legacy"];
+  let fixedPot: Address | undefined;
+  let sharedPot: Address | undefined;
+  const legacySalt = options.legacySalt ?? gated.POT_SALT;
   // A chain that cannot be set up is stopped, not left running for the rest of the worker's life.
   try {
     const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
-    const stack = await gated.startGatedEngine(
-      { publicClient, walletClient: deployer, testClient },
-      DEPLOYER.address,
-      creationCode,
-    );
+    const clients = { publicClient, walletClient: deployer, testClient };
+    let stack: gated.GatedEngine;
+    if (options.upgraded) {
+      const upgraded = await gated.startUpgradedChain(clients, DEPLOYER.address, creationCode, {
+        ...(options.legacyOwners === undefined ? {} : { legacyOwners: options.legacyOwners }),
+        ...(options.legacySalt === undefined ? {} : { legacySalt: options.legacySalt }),
+        ...(options.from === undefined ? {} : { from: options.from }),
+      });
+      legacy = upgraded.legacy;
+      fixedPot = upgraded.fixedPot;
+      sharedPot = upgraded.sharedPot;
+      stack = upgraded;
+    } else {
+      stack = await gated.startGatedEngine(clients, DEPLOYER.address, creationCode);
+    }
     // The CLI names the engine the SDK records. A harness that deploys it at that release address
     // needs nothing more; one that deploys it elsewhere moves it there.
     const released = getAddress(v12EngineAddress());
@@ -240,6 +324,30 @@ export async function startChain(slug: string): Promise<LocalChain> {
         args: [holder],
       }),
     stop,
+    potOf: (who, salt = DEFAULT_POT_SALT) => {
+      const minted =
+        legacy !== undefined && salt.toLowerCase() === legacySalt.toLowerCase()
+          ? legacy.pots[getAddress(who)]
+          : undefined;
+
+      return minted ?? getAddress(v12PredictPot(who, salt));
+    },
+    engineOf: (pot) => {
+      const is = (one: Address | undefined): boolean =>
+        one !== undefined && getAddress(one) === getAddress(pot);
+      // A fixed-Router or Shared Pot minted before a Router switch runs on the earlier engine for
+      // good; a dynamic Pot of such a chain runs on the installed one, as every Pot of a CREATE3
+      // release does.
+      if (is(legacy?.fixedPot) || is(legacy?.sharedPot)) return legacy!.engine;
+      if (options.from === "1.4.0") return getAddress(v12EngineAddress());
+
+      return legacy !== undefined && Object.values(legacy.pots).some((one) => is(one))
+        ? legacy.engine
+        : getAddress(v12EngineAddress());
+    },
+    ...(legacy === undefined ? {} : { legacy }),
+    ...(fixedPot === undefined ? {} : { fixedPot }),
+    ...(sharedPot === undefined ? {} : { sharedPot }),
   };
 }
 

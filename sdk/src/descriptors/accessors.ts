@@ -26,7 +26,9 @@ import {
   type ChainSlug,
 } from "../chains/canonical.js";
 import { pascalOfSlug } from "../routes/builder.js";
+import { withheldRefusal } from "../routes/method-refusals.js";
 import { makeContractCall, type ContractCall } from "./call.js";
+import { descriptorOn } from "./derive.js";
 import type { ChainContracts } from "./contracts.generated.js";
 import { addressOn, methodOf, requireContract } from "./query.js";
 import { DESCRIPTORS } from "./registry.js";
@@ -95,10 +97,13 @@ const ACCESSOR_PROPERTIES: ReadonlySet<string> = new Set([
 ]);
 
 function buildAccessor(
-  descriptor: ContractDescriptor,
+  full: ContractDescriptor,
   chain: CanonicalChain,
   addressOverride?: Address,
 ): Contract {
+  // The contract as the chain's deployment runs it: a method it withholds is refused, naming it,
+  // and one it declares otherwise is called as it declares it.
+  const descriptor = descriptorOn(full, chain.id);
   const isInterface = descriptor.kind === "interface";
   const resolvedAddress: Address | undefined =
     addressOverride ?? (isInterface ? undefined : addressOn(descriptor, chain));
@@ -114,14 +119,14 @@ function buildAccessor(
     abi: descriptor.abi,
     methods: descriptor.methods,
     at(newAddress: Address): Contract {
-      return buildAccessor(descriptor, chain, newAddress);
+      return buildAccessor(full, chain, newAddress);
     },
   };
 
   // An overloaded name dispatches on argument count, so the call reports the overload it encodes.
   // `descriptors-linkage.test.ts` holds every descriptor's overloads to distinct counts.
   const byName = new Map<string, DescriptorMethod[]>();
-  for (const method of descriptor.methods) {
+  for (const method of full.methods) {
     byName.set(method.name, [...(byName.get(method.name) ?? []), method]);
   }
   for (const [name, overloads] of byName) {
@@ -131,12 +136,23 @@ function buildAccessor(
       );
     }
     base[name] = (...args: unknown[]): ContractCall => {
-      const method =
-        overloads.length === 1 ? overloads[0]! : methodOf(descriptor, name, args.length);
+      const method = overloads.length === 1 ? overloads[0]! : methodOf(full, name, args.length);
       if (method === undefined) {
         throw new Error(
           `${descriptor.protocol}.${descriptor.contract}.${name} takes ` +
             `${overloads.map((candidate) => candidate.inputs.length).join(" or ")} arguments, got ${args.length}`,
+        );
+      }
+      const own = descriptor.methods.find((m) => m.signature === method.signature);
+      if (own === undefined) {
+        throw new Error(
+          withheldRefusal(
+            `${pascalOfSlug(chain.slug)}.${pascalOfSlug(full.protocol)}.${full.contract}.${name}(…)`,
+            name,
+            full,
+            chain,
+            overloads.length === 1 ? undefined : method.signature,
+          ),
         );
       }
       let address = resolvedAddress;
@@ -156,7 +172,7 @@ function buildAccessor(
           `${descriptor.protocol}.${descriptor.contract}: no address resolved on '${chain.slug}'`,
         );
       }
-      return makeContractCall(descriptor, chain, address, method, args);
+      return makeContractCall(descriptor, chain, address, own, args);
     };
   }
 

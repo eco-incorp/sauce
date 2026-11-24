@@ -49,6 +49,29 @@ const BIG_ARRAY = JSON.stringify([
     outputs: [{ name: "", type: "uint256[256]" }],
   },
 ]);
+// A function returning a `bytes4` beside a `uint256`, which no program can call.
+const PAIR = JSON.stringify([
+  {
+    type: "function",
+    name: "pair",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      { name: "selector", type: "bytes4" },
+      { name: "amount", type: "uint256" },
+    ],
+  },
+]);
+// A function returning an address, for its `.catch()` fallback's width.
+const OWNED = JSON.stringify([
+  {
+    type: "function",
+    name: "owner",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+]);
 const many = (n, value) => Array.from({ length: n }, () => value).join(", ");
 const long = Array.from({ length: 60 }, (_, i) => `v = v + ${i}n;`).join(" ");
 
@@ -516,6 +539,11 @@ export const rejections = [
     src: "function main(t: Address): void { Big.at(t).get(); }",
   },
   {
+    targets: ["evm"],
+    contracts: [["Pair", PAIR]],
+    src: "function main(t: Address): Uint256 { return Pair.at(t).pair().amount; }",
+  },
+  {
     targets: ["svm"],
     contracts,
     src: "function main(t: Uint256, o: Uint256): Uint256 { return ERC20.at(t).balanceOf(o); }",
@@ -539,6 +567,16 @@ export const rejections = [
     targets: ["evm"],
     contracts,
     src: "function main(t: Uint256, o: Uint256, k: Uint256): Uint256 { return ERC20.at(t).balanceOf(o).catch(() => { return k; }); }",
+  },
+  {
+    targets: ["evm"],
+    contracts,
+    src: "function main(t: Uint256, to: Uint256): Uint256 { const ok = ERC20.at(t).transfer(to, 5n).catch(() => { return 2n; }); return ok; }",
+  },
+  {
+    targets: ["evm"],
+    contracts: [["Owned", OWNED]],
+    src: "function main(t: Uint256): Uint256 { const o = Owned.at(t).owner().catch(() => { return 0x10000000000000000000000000000000000000000; }); return o; }",
   },
   {
     targets: ["evm"],

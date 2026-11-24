@@ -55,8 +55,8 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Across](../protocols/across.md) | spokePool | `0x7E63A5f1a8F0B4d0934B2f2327DAED3F6bb2ee75` | `Across.SpokePool` |
-| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [Across](../protocols/across.md) | spokePool | `0x7E63A5f1a8F0B4d0934B2f2327DAED3F6bb2ee75` | `Across.SpokePool`; not on this deployment: `__OvmSpokePool_init`, `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `DEPRECATED_zkErc20Bridge`, `fxChild`, `initialize`, `L1_USDB`, `l1ChainId`, `l1Gas`, `L2_ASSET_ROUTER_ADDR`, `L2_BLAST_BRIDGE`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2Eth`, `l2GatewayRouter`, `l2ScrollMessenger`, `MESSENGER`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `remoteL1Tokens`, `renounceOwnership`, `setFxChild`, `setL1GasLimit`, `setL2GatewayRouter`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `setRemoteL1Token`, `setTokenBridge`, `tokenBridges`, `transferOwnership`, `USDB`, `whitelistedTokens`, `whitelistToken`, `wrap`, `YIELD_RECIPIENT`, `zkUSDCBridge` |
+| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger`; not on this deployment: `getMinFeeAmount`, `initialize`, `MIN_FEE_MULTIPLIER`, `minFee`, `minFeeController`, `setMinFee`, `setMinFeeController` |
 | [KyberSwap Aggregator](../protocols/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerZero](../protocols/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
 | [Linea Native Bridge](../protocols/linea-bridge.md) | l2MessageService | `0x508Ca82Df566dCD1B0DE8296e70a96332cD644ec` | `LineaBridge.L2MessageService` |

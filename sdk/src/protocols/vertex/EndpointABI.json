@@ -1,6 +1,18 @@
 {
   "abi": [
     {
+      "name": "clearinghouse",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "depositCollateral",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -21,6 +33,400 @@
       "outputs": []
     },
     {
+      "name": "executeSlowModeTransactions",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "count",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "getBook",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getLinkedSigner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getNonce",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "getNumSubaccounts",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "getPricesX18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "healthGroup",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "spotPriceX18",
+              "type": "int128"
+            },
+            {
+              "name": "perpPriceX18",
+              "type": "int128"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getPriceX18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "priceX18",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "getSequencer",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getSubaccountById",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccountId",
+          "type": "uint64"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getSubaccountId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "getTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getVersion",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_sanctions",
+          "type": "address"
+        },
+        {
+          "name": "_sequencer",
+          "type": "address"
+        },
+        {
+          "name": "_clearinghouse",
+          "type": "address"
+        },
+        {
+          "name": "slowModeTimeout",
+          "type": "uint64"
+        },
+        {
+          "name": "_time",
+          "type": "uint128"
+        },
+        {
+          "name": "_prices",
+          "type": "int128[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "nSubmissions",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "processSlowModeTransaction",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "transaction",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "requireSubaccount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "subaccount",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "sequencerFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "sequencerFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "setBook",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "productId",
+          "type": "uint32"
+        },
+        {
+          "name": "book",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setSequencer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_sequencer",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "slowModeConfig",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "timeout",
+          "type": "uint64"
+        },
+        {
+          "name": "txCount",
+          "type": "uint64"
+        },
+        {
+          "name": "txUpTo",
+          "type": "uint64"
+        }
+      ]
+    },
+    {
+      "name": "slowModeFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int128"
+        }
+      ]
+    },
+    {
+      "name": "slowModeTxs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "executableAt",
+          "type": "uint64"
+        },
+        {
+          "name": "sender",
+          "type": "address"
+        },
+        {
+          "name": "tx",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
       "name": "submitSlowModeTransaction",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -31,6 +437,128 @@
         }
       ],
       "outputs": []
+    },
+    {
+      "name": "submitTransactions",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "transactions",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitTransactionsChecked",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "idx",
+          "type": "uint64"
+        },
+        {
+          "name": "transactions",
+          "type": "bytes[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "submitTransactionsCheckedWithGasLimit",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "idx",
+          "type": "uint64"
+        },
+        {
+          "name": "transactions",
+          "type": "bytes[]"
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "Initialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "version",
+          "type": "uint8",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SubmitSlowModeTransaction",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "executableAt",
+          "type": "uint64",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tx",
+          "type": "bytes",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SubmitTransactions",
+      "type": "event",
+      "inputs": []
     }
   ]
 }

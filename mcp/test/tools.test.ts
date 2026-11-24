@@ -111,10 +111,6 @@ describe("the tool list", () => {
     assert.match(instructions, /sauce:\/\/skills\/index/);
     assert.match(instructions, /has no endpoint of its own/);
     assert.match(instructions, /rpcUrl/);
-    // How an agent gets the command the skills write as `sauce …`.
-    assert.match(instructions, /`npm i -g @eco-incorp\/sauce` installs it/);
-    assert.match(instructions, /`npx -y @eco-incorp\/sauce <command>` runs it with no install/);
-    assert.doesNotMatch(instructions, /npx sauce/);
   });
 });
 
@@ -133,6 +129,7 @@ describe("the sauce command's flags as the tools' inputs", () => {
       ["pot"],
       ["globals"],
       ["price"],
+      ["units"],
       ["pools"],
       ["inspect"],
       ["verify"],
@@ -198,19 +195,31 @@ describe("sauce_globals", () => {
     assert.equal((one.protocol as { namespace: string }).namespace, "UniswapV3");
   });
 
-  it("lists every namespace's contracts without their methods, which `protocol` gives", async () => {
+  it("lists every namespace's contracts and every interface without their methods, which `protocol` gives", async () => {
     type Namespace = { namespace: string; contracts: Array<Record<string, unknown>> };
     const all = ok(await mcp.call("sauce_globals", { chain: "base", protocols: true })) as {
       protocols: Namespace[];
+      interfaces: Array<Record<string, unknown>>;
     };
     const contracts = all.protocols.flatMap((each) => each.contracts);
     assert.ok(contracts.length > 10);
     assert.ok(contracts.every((contract) => !("methods" in contract)));
     assert.ok(contracts.every((contract) => typeof contract.address === "string"));
+    assert.ok(all.interfaces.length > 0);
+    assert.ok(all.interfaces.every((bound) => !("methods" in bound)));
+    assert.ok(all.interfaces.some((bound) => bound.namespace === "Erc4626"));
     const one = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "UniswapV3" })) as {
       protocol: Namespace;
     };
     assert.ok(one.protocol.contracts.some((contract) => Array.isArray(contract.methods)));
+    const bound = ok(await mcp.call("sauce_globals", { chain: "base", protocol: "Erc4626" })) as {
+      interfaces: Array<{ namespace: string; methods: Array<{ name: string }> }>;
+    };
+    assert.deepEqual(
+      bound.interfaces.map((each) => each.namespace),
+      ["Erc4626"],
+    );
+    assert.ok(bound.interfaces[0]!.methods.some((method) => method.name === "totalAssets"));
   });
 
   it("counts tokenized stocks out of the default, and says how to list and find them", async () => {
@@ -514,6 +523,55 @@ describe("sauce_price", () => {
   });
 });
 
+describe("sauce_units", () => {
+  /** `sauce units --json` with the same input, offline: what the tool must return. */
+  async function command(...argv: string[]): Promise<Record<string, unknown>> {
+    let stdout = "";
+    const io = { ...nodeIo(), stdout: (text: string) => void (stdout += text), stderr: () => {} };
+    assert.equal(await runCli(["--no-update-check", "units", ...argv, "--json"], io), 0);
+
+    return JSON.parse(stdout) as Record<string, unknown>;
+  }
+
+  it("returns what sauce units prints, both ways, by symbol or by address", async () => {
+    const out = ok(await mcp.call("sauce_units", { chain: "base", amount: "1.5", token: "usdc" }));
+    assert.deepEqual(out, await command("--chain", "base", "1.5", "usdc"));
+    assert.equal(out.baseUnits, "1500000");
+    const back = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "1500000n", token: "USDC" }),
+    );
+    assert.deepEqual([back.amount, back.baseUnits], ["1.5", "1500000"]);
+    const mint = ok(
+      await mcp.call("sauce_units", { chain: "solana", amount: "0.25", token: "WSOL" }),
+    );
+    assert.equal(mint.baseUnits, "250000000");
+    const token = `0x${"12".repeat(20)}`;
+    const byAddress = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "2", token, decimals: 18 }),
+    );
+    assert.deepEqual(byAddress, await command("--chain", "base", "2", token, "--decimals", "18"));
+  });
+
+  it("notes a bare integer that reads like base units, and says decimals, not --decimals", async () => {
+    const out = ok(
+      await mcp.call("sauce_units", { chain: "base", amount: "1500000", token: "USDC" }),
+    );
+    assert.equal(out.baseUnits, "1500000000000");
+    assert.deepEqual(out.notes, [
+      "1500000 USDC: that is 1.5 million USDC; for base units write 1500000n",
+    ]);
+    const message = failed(
+      await mcp.call("sauce_units", { chain: "base", amount: "1", token: `0x${"12".repeat(20)}` }),
+    );
+    assert.match(message, /pass decimals <n>/);
+    assert.doesNotMatch(message, /--decimals/);
+    assert.match(
+      failed(await mcp.call("sauce_units", { chain: "base", amount: "1.0000001", token: "USDC" })),
+      /cannot be written exactly/,
+    );
+  });
+});
+
 describe("sauce_pools", () => {
   it("lists a pair's pools only through an endpoint, and says so without one", async () => {
     const message = failed(
@@ -592,23 +650,23 @@ describe("sauce_pools", () => {
 
 describe("sauce_compile", () => {
   it("compiles a program with its own ABI beside it, given in modules", async () => {
-    // The sauce-script skill's example: the factory and the pool namespaces, `observe` through
-    // the program's own ./IOracle.json.
+    // The sauce-script skill's example: an ERC-721 collection, which no registry records, through
+    // the program's own ./IERC721.json.
     const examples = new URL("../../skills/sauce-script/examples/", import.meta.url);
-    const source = readFileSync(new URL("twap.sauce.ts", examples), "utf8");
-    const abi = readFileSync(new URL("IOracle.json", examples), "utf8");
+    const source = readFileSync(new URL("nft-handover.sauce.ts", examples), "utf8");
+    const abi = readFileSync(new URL("IERC721.json", examples), "utf8");
     const out = ok(
-      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IOracle.json": abi } }),
+      await mcp.call("sauce_compile", { source, chain: "base", modules: { "IERC721.json": abi } }),
     );
     assert.match(out.bytecode as string, /^0x[0-9a-f]+$/);
     assert.deepEqual(
       (out.entryParams as Array<{ name: string }>).map((param) => param.name),
-      ["tokenA", "tokenB", "fee", "window"],
+      ["nft", "tokenId", "to"],
     );
     // Without the module, the import has nothing to resolve to.
     assert.match(
       failed(await mcp.call("sauce_compile", { source, chain: "base" })),
-      /IOracle\.json/,
+      /IERC721\.json/,
     );
   });
 

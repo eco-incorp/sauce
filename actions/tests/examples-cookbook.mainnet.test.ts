@@ -11,6 +11,9 @@
  * `skills:check` compiles the programs and holds their headers; this runs them.
  *
  * The Solana program, `pay-stock`, runs in `sdk/test/examples-cookbook-solana.e2e.test.ts`.
+ * Gateway deposits and the fee-adjusted marginal venue selector run their exact files from
+ * `skills/sauce-protocols/examples` and `skills/sauce-swaps/examples` on the same captured state.
+ * Failure cases submit a real local transaction and check its reverted receipt and restored state.
  */
 import { after, afterEach, before, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -22,12 +25,28 @@ import { getAddress, parseAbi, toHex, type Address, type Hex } from "viem";
 import { requireChain, routes } from "../../sdk/dist/index.js";
 import { nodeIo, runCli } from "../../sdk/dist/cli/run.js";
 import { POT_SALT } from "../../sdk/test/evm/gated-engine.js";
+import { GatewayWalletABI } from "../../sdk/dist/protocols/circle-gateway/abis.js";
+import {
+  AerodromeSlipstreamPoolABI,
+  SlipstreamCLFactoryABI,
+} from "../../sdk/dist/protocols/aerodrome-slipstream/abis.js";
 import { OWNER_KEY, REPO_ROOT, skipReason, startAnvil, type Anvil } from "./anvil.js";
 import type { ChainName } from "./mainnet.js";
-import { balanceOf, setBalance } from "./swap-venues.js";
+import { allowance, balanceOf, setBalance } from "./swap-venues.js";
 
 const EXAMPLES = join(REPO_ROOT, "skills/sauce-examples/examples");
 const example = (name: string): string => join(EXAMPLES, `${name}.sauce.ts`);
+const GATEWAY_DEPOSIT = join(
+  REPO_ROOT,
+  "skills/sauce-protocols/examples",
+  "gateway-deposit.sauce.ts",
+);
+const SWAP_GATEWAY = join(
+  REPO_ROOT,
+  "skills/sauce-protocols/examples",
+  "swap-then-gateway.sauce.ts",
+);
+const BEST_VENUE = join(REPO_ROOT, "skills/sauce-swaps/examples", "best-venue-swap.sauce.ts");
 
 /** The address a program compiled for `chain` names `name` by: the SDK's own define for it. */
 function named(chain: ChainName, name: string): Address {
@@ -109,7 +128,7 @@ async function simulate(
   flags: readonly string[] = [],
 ): Promise<{ ok: boolean; returned?: unknown; reason?: string }> {
   const { code, stdout, stderr } = await sauce([
-    ...["simulate", example(name), "--chain", chain.name, "--rpc-url", chain.env.rpc],
+    ...["simulate", name, "--chain", chain.name, "--rpc-url", chain.env.rpc],
     ...["--owner", chain.env.account.address, "--salt-hex", POT_SALT, "--json", ...flags],
     ...(args.length === 0 ? [] : ["--args", ...args]),
   ]);
@@ -126,7 +145,7 @@ async function run(
   flags: readonly string[] = [],
 ): Promise<void> {
   const { code, stdout, stderr } = await sauce([
-    ...["run", example(name), "--chain", chain.name, "--rpc-url", chain.env.rpc],
+    ...["run", name, "--chain", chain.name, "--rpc-url", chain.env.rpc],
     ...["--private-key", OWNER_KEY, "--salt-hex", POT_SALT, "--json", ...flags],
     ...(args.length === 0 ? [] : ["--args", ...args]),
   ]);
@@ -141,6 +160,25 @@ async function cook(chain: Chain, name: string, args: readonly string[]): Promis
   await run(chain, name, args);
 
   return rehearsal.returned;
+}
+
+/** Builds the exact file's unsigned cook, then submits it WITHOUT a successful preflight. */
+async function revertedCook(chain: Chain, file: string, args: readonly string[]): Promise<void> {
+  const { code, stdout, stderr } = await sauce([
+    ...["tx", file, "--chain", chain.name, "--rpc-url", chain.env.rpc],
+    ...["--owner", chain.env.account.address, "--salt-hex", POT_SALT],
+    ...["--args", ...args],
+  ]);
+  assert.equal(code, 0, `${stderr}\n${stdout}`);
+  const planned = JSON.parse(stdout) as {
+    sendCalls: { calls: Array<{ to: Address; data: Hex; value: Hex }> };
+  };
+  assert.equal(planned.sendCalls.calls.length, 1, "the Pot already exists");
+  const call = planned.sendCalls.calls[0]!;
+  assert.equal(getAddress(call.to), getAddress(chain.env.pot));
+  const receipt = await chain.env.send({ ...call, value: BigInt(call.value) });
+  assert.equal(receipt.status, "reverted", "the failing floor must revert a mined transaction");
+  assert.deepEqual(receipt.logs, [], "a reverted cook cannot leave transfer or deposit logs");
 }
 
 /** What Uniswap's QuoterV2 says `amountIn` buys at `pool`'s `fee` up to `sqrtPriceLimitX96`. */
@@ -237,6 +275,328 @@ describe(
     const fund = (chain: Chain, token: "USDC" | "WETH", holder: Address, amount: bigint) =>
       setBalance(chain.env, named(chain.name, token), BALANCE_SLOT[token], holder, amount);
 
+    /** Independent Gateway accounting, including the wallet/Pot distinction and token custody. */
+    async function gatewayState(chain: Chain, depositor: Address) {
+      const usdc = named(chain.name, "USDC");
+      const gateway = named(chain.name, "CircleGateway_GatewayWallet");
+      const credit = (who: Address, functionName: "totalBalance" | "availableBalance") =>
+        chain.env.publicClient.readContract({
+          address: gateway,
+          abi: GatewayWalletABI,
+          functionName,
+          args: [usdc, who],
+        });
+      return {
+        wallet: await credit(depositor, "totalBalance"),
+        available: await credit(depositor, "availableBalance"),
+        pot: await credit(chain.env.pot, "totalBalance"),
+        custody: await balanceOf(chain.env, usdc, gateway),
+        held: await balanceOf(chain.env, usdc, chain.env.pot),
+        walletUsdc: await balanceOf(chain.env, usdc, depositor),
+        approval: await allowance(chain.env, usdc, chain.env.pot, gateway),
+      };
+    }
+
+    for (const chain of [base, ethereum]) {
+      describe(`gateway-deposit on ${chain.name}: the real Gateway credits the wallet, not the Pot`, () => {
+        it("deposits exactly the budget twice, accumulating wallet credit and preserving other USDC", async () => {
+          const depositor = PEOPLE[0]!;
+          const amount = 5_000_000n;
+          const other = 7_000_000n;
+          const gateway = named(chain.name, "CircleGateway_GatewayWallet");
+          assert.notEqual(await chain.env.publicClient.getCode({ address: gateway }), "0x");
+          assert.equal(
+            await chain.env.publicClient.readContract({
+              address: gateway,
+              abi: GatewayWalletABI,
+              functionName: "isTokenSupported",
+              args: [named(chain.name, "USDC")],
+            }),
+            true,
+          );
+          await fund(chain, "USDC", chain.env.pot, 2n * amount + other);
+          const before = await gatewayState(chain, depositor);
+          for (let count = 1n; count <= 2n; count++) {
+            const returned = await cook(chain, GATEWAY_DEPOSIT, [String(amount), depositor]);
+            assert.deepEqual(returned, {
+              deposited: String(amount),
+              total: String(before.wallet + count * amount),
+            });
+            assert.deepEqual(await gatewayState(chain, depositor), {
+              ...before,
+              wallet: before.wallet + count * amount,
+              available: before.available + count * amount,
+              custody: before.custody + count * amount,
+              held: before.held - count * amount,
+              approval: 0n,
+            });
+          }
+          assert.equal(await balanceOf(chain.env, named(chain.name, "USDC"), chain.env.pot), other);
+        });
+
+        it("mines reverted zero/underfunded deposits without changing credit, custody or approval", async () => {
+          const depositor = PEOPLE[0]!;
+          await fund(chain, "USDC", chain.env.pot, 5_000_000n);
+          const before = await gatewayState(chain, depositor);
+          for (const amount of [0n, 5_000_001n]) {
+            await revertedCook(chain, GATEWAY_DEPOSIT, [String(amount), depositor]);
+            assert.deepEqual(await gatewayState(chain, depositor), before);
+          }
+        });
+      });
+    }
+
+    describe("swap-then-gateway on Base: only the swap delta is deposited", () => {
+      const budget = 10n ** 18n;
+      const otherWeth = 3n * 10n ** 17n;
+      const otherUsdc = 11_000_000n;
+      const depositor = PEOPLE[0]!;
+
+      async function setup() {
+        await fund(base, "WETH", base.env.pot, budget + otherWeth);
+        await fund(base, "USDC", base.env.pot, otherUsdc);
+        const pool = await v3Pool(base, BASE.WETH, BASE.USDC, 500);
+        const price = await sqrtPriceOf(base, pool);
+        // WETH is token0: a very near floor forces a positive partial fill.
+        assert.ok(BigInt(BASE.WETH) < BigInt(BASE.USDC));
+        const limit = (price * 999_999n) / 1_000_000n;
+        const quoted = await quote(base, BASE.WETH, BASE.USDC, budget, 500, limit);
+        assert.ok(quoted > 0n);
+        return { pool, limit, quoted };
+      }
+
+      it("returns unspent WETH, leaves old balances alone and credits only newly swapped USDC", async () => {
+        const { pool, limit, quoted } = await setup();
+        const before = await gatewayState(base, depositor);
+        const walletWeth = await balanceOf(base.env, BASE.WETH, depositor);
+        const poolWeth = await balanceOf(base.env, BASE.WETH, pool);
+        const returned = await cook(base, SWAP_GATEWAY, [
+          BASE.WETH,
+          "500",
+          String(budget),
+          String(limit),
+          String(quoted),
+          depositor,
+        ]);
+        assert.deepEqual(returned, {
+          deposited: String(quoted),
+          total: String(before.wallet + quoted),
+        });
+        const spent = (await balanceOf(base.env, BASE.WETH, pool)) - poolWeth;
+        assert.ok(spent > 0n && spent < budget, `expected partial input, got ${spent}`);
+        assert.equal(await balanceOf(base.env, BASE.WETH, depositor), walletWeth + budget - spent);
+        assert.equal(await balanceOf(base.env, BASE.WETH, base.env.pot), otherWeth);
+        assert.equal(await sqrtPriceOf(base, pool), limit);
+        assert.deepEqual(await gatewayState(base, depositor), {
+          ...before,
+          wallet: before.wallet + quoted,
+          available: before.available + quoted,
+          custody: before.custody + quoted,
+          approval: 0n,
+        });
+      });
+
+      it("minUsdc one above the real quote reverts the mined swap and every observed balance", async () => {
+        const { pool, limit, quoted } = await setup();
+        const state = async () => ({
+          gateway: await gatewayState(base, depositor),
+          price: await sqrtPriceOf(base, pool),
+          balances: await Promise.all(
+            [BASE.WETH, BASE.USDC].flatMap((token) =>
+              [base.env.pot, depositor, pool].map((who) => balanceOf(base.env, token, who)),
+            ),
+          ),
+          routerApproval: await allowance(base.env, BASE.WETH, base.env.pot, base.env.router),
+        });
+        const before = await state();
+        await revertedCook(base, SWAP_GATEWAY, [
+          BASE.WETH,
+          "500",
+          String(budget),
+          String(limit),
+          String(quoted + 1n),
+          depositor,
+        ]);
+        assert.deepEqual(await state(), before);
+      });
+    });
+
+    describe("best-venue-swap on Base: fee-adjusted marginal prices, not depth routing", () => {
+      const recipient = PEOPLE[1]!;
+
+      async function candidates(tokenIn: Address, tokenOut: Address, fee: number, spacing: number) {
+        const uni = await v3Pool(base, tokenIn, tokenOut, fee);
+        const cl = await base.env.publicClient.readContract({
+          address: named("base", "AerodromeSlipstream_CLFactory"),
+          abi: SlipstreamCLFactoryABI,
+          functionName: "getPool",
+          args: [tokenIn, tokenOut, spacing],
+        });
+        const pools = [];
+        for (const [venue, pool] of [uni, cl].entries()) {
+          let price = 0n;
+          let gross = 0n;
+          let ownFee = fee;
+          if (BigInt(pool) !== 0n) {
+            const liquidity = await base.env.publicClient.readContract({
+              address: pool,
+              abi: abi.pool,
+              functionName: "liquidity",
+            });
+            if (liquidity > 0n) {
+              price =
+                venue === 0
+                  ? await sqrtPriceOf(base, pool)
+                  : (
+                      await base.env.publicClient.readContract({
+                        address: pool,
+                        abi: AerodromeSlipstreamPoolABI,
+                        functionName: "slot0",
+                      })
+                    )[0];
+              if (venue === 1)
+                ownFee = await base.env.publicClient.readContract({
+                  address: pool,
+                  abi: AerodromeSlipstreamPoolABI,
+                  functionName: "fee",
+                });
+              const ratio = (price * price) / Q96;
+              gross = BigInt(tokenIn) < BigInt(tokenOut) ? ratio : Q192 / ratio;
+            }
+          }
+          pools.push({
+            venue,
+            pool,
+            price,
+            gross,
+            fee: ownFee,
+            score: (gross * BigInt(1_000_000 - ownFee)) / 1_000_000n,
+          });
+        }
+        return pools;
+      }
+
+      it("executes the independently ranked winner in both directions, including a fee-blind reversal", async () => {
+        let reversed = false;
+        const winners = new Set<number>();
+        for (const [tokenIn, tokenOut, amount] of [
+          [BASE.WETH, BASE.USDC, 10n ** 12n],
+          [BASE.USDC, BASE.WETH, 10_000n],
+        ] as const) {
+          for (const fee of [100, 500, 3000, 10000]) {
+            const pools = await candidates(tokenIn, tokenOut, fee, 100);
+            if (pools.every((pool) => pool.score === 0n)) continue;
+            const [uni, cl] = pools;
+            const winner = cl!.score > uni!.score ? cl! : uni!;
+            const raw = cl!.gross > uni!.gross ? 1 : 0;
+            if (raw !== winner.venue) reversed = true;
+            winners.add(winner.venue);
+            await fund(base, tokenIn === BASE.WETH ? "WETH" : "USDC", base.env.pot, amount + 123n);
+            await fund(base, tokenOut === BASE.WETH ? "WETH" : "USDC", base.env.pot, 456n);
+            const before = await balanceOf(base.env, tokenOut, recipient);
+            const unchosen = pools[1 - winner.venue]!;
+            const unchosenBefore = unchosen.price;
+            const returned = (await cook(base, BEST_VENUE, [
+              tokenIn,
+              tokenOut,
+              String(amount),
+              String(fee),
+              "100",
+              "0",
+              "1",
+              recipient,
+            ])) as { venue: string; spent: string; received: string };
+            assert.equal(Number(returned.venue), winner.venue);
+            assert.equal(BigInt(returned.spent), amount, "this trade is deliberately small");
+            assert.equal(
+              await balanceOf(base.env, tokenOut, recipient),
+              before + BigInt(returned.received),
+            );
+            assert.equal(await balanceOf(base.env, tokenIn, base.env.pot), 123n);
+            assert.equal(await balanceOf(base.env, tokenOut, base.env.pot), 456n);
+            const after = await candidates(tokenIn, tokenOut, fee, 100);
+            assert.notEqual(
+              after[winner.venue]!.price,
+              winner.price,
+              "the chosen real pool swapped",
+            );
+            assert.equal(
+              after[1 - winner.venue]!.price,
+              unchosenBefore,
+              "the other pool did not swap",
+            );
+          }
+        }
+        assert.deepEqual([...winners].sort(), [0, 1], "exercise both real venue implementations");
+        assert.equal(reversed, true, "at least one winner must change when its fee is omitted");
+      });
+
+      it("returns partial-fill input and preserves both old Pot balances", async () => {
+        const amount = 10n ** 18n;
+        const pools = await candidates(BASE.WETH, BASE.USDC, 500, 100);
+        const winner = pools[1]!.score > pools[0]!.score ? pools[1]! : pools[0]!;
+        const limit = (winner.price * 999_999n) / 1_000_000n;
+        await fund(base, "WETH", base.env.pot, amount + 123n);
+        await fund(base, "USDC", base.env.pot, 456n);
+        const inputBefore = await balanceOf(base.env, BASE.WETH, recipient);
+        const outputBefore = await balanceOf(base.env, BASE.USDC, recipient);
+        const poolBefore = await balanceOf(base.env, BASE.WETH, winner.pool);
+        const returned = (await cook(base, BEST_VENUE, [
+          BASE.WETH,
+          BASE.USDC,
+          String(amount),
+          "500",
+          "100",
+          String(limit),
+          "1",
+          recipient,
+        ])) as { venue: string; spent: string; received: string };
+        const spent = BigInt(returned.spent);
+        assert.equal(Number(returned.venue), winner.venue);
+        assert.ok(spent > 0n && spent < amount);
+        assert.equal(await balanceOf(base.env, BASE.WETH, winner.pool), poolBefore + spent);
+        assert.equal(await balanceOf(base.env, BASE.WETH, recipient), inputBefore + amount - spent);
+        assert.equal(
+          await balanceOf(base.env, BASE.USDC, recipient),
+          outputBefore + BigInt(returned.received),
+        );
+        assert.equal(await balanceOf(base.env, BASE.WETH, base.env.pot), 123n);
+        assert.equal(await balanceOf(base.env, BASE.USDC, base.env.pot), 456n);
+      });
+
+      it("minOut above the successful rehearsal reverts the mined transaction and both pools' state", async () => {
+        const amount = 10n ** 12n;
+        await fund(base, "WETH", base.env.pot, amount + 123n);
+        await fund(base, "USDC", base.env.pot, 456n);
+        const args = [BASE.WETH, BASE.USDC, String(amount), "500", "100", "0", "1", recipient];
+        const rehearsal = await simulate(base, BEST_VENUE, args);
+        assert.equal(rehearsal.ok, true);
+        const returned = rehearsal.returned;
+        assert.ok(returned && typeof returned === "object" && "received" in returned);
+        assert.equal(typeof returned.received, "string");
+        const got = BigInt(returned.received as string);
+        assert.ok(got > 0n);
+        const state = async () => {
+          const pools = await candidates(BASE.WETH, BASE.USDC, 500, 100);
+          return {
+            pools,
+            balances: await Promise.all(
+              [BASE.WETH, BASE.USDC].flatMap((token) =>
+                [base.env.pot, recipient, ...pools.map((pool) => pool.pool)].map((who) =>
+                  balanceOf(base.env, token, who),
+                ),
+              ),
+            ),
+            approval: await allowance(base.env, BASE.WETH, base.env.pot, base.env.router),
+          };
+        };
+        const before = await state();
+        args[6] = String(got + 1n);
+        await revertedCook(base, BEST_VENUE, args);
+        assert.deepEqual(await state(), before);
+      });
+    });
+
     describe("buy-stock: SpaceX shares on Ethereum, from the cheapest pool after its fee", () => {
       const ONE_SHARE = 10n ** 18n;
       const BUDGET = 1_000_000_000n; // 1,000 USDC
@@ -283,7 +643,7 @@ describe(
         );
         const quoted = await quote(ethereum, ETH.USDC, ETH.SPCXon, BUDGET, cheapest.fee, limit);
 
-        const returned = (await cook(ethereum, "buy-stock", [
+        const returned = (await cook(ethereum, example("buy-stock"), [
           String(BUDGET),
           String(priceLimit),
           "1",
@@ -305,7 +665,7 @@ describe(
         const cheapest = (await pools()).reduce((a, b) => (b.paid < a.paid ? b : a));
         await fund(ethereum, "USDC", ethereum.env.pot, BUDGET);
         const [recipient, refundTo] = PEOPLE;
-        const below = await simulate(ethereum, "buy-stock", [
+        const below = await simulate(ethereum, example("buy-stock"), [
           String(BUDGET),
           String((cheapest.paid * 99n) / 100n),
           "1",
@@ -314,7 +674,7 @@ describe(
         ]);
         assert.equal(below.ok, false);
         assert.match(String(below.reason), /every pool is above priceLimit/);
-        const short = await simulate(ethereum, "buy-stock", [
+        const short = await simulate(ethereum, example("buy-stock"), [
           String(BUDGET),
           String(cheapest.paid * 2n),
           String(ONE_SHARE * 1_000_000n),
@@ -349,7 +709,7 @@ describe(
         const quoted = await quote(ethereum, ETH.WETH, ETH.USDC, HELD, 500, limit);
         assert.ok(BigInt(pool) !== 0n);
 
-        const returned = (await cook(ethereum, "stop-loss", [
+        const returned = (await cook(ethereum, example("stop-loss"), [
           String(answer + 1n), // the stop is just above the price: it triggers
           "0",
           String(slippage),
@@ -367,7 +727,7 @@ describe(
       it("takes profit at or above takeProfit, and does nothing between the two", async () => {
         const { answer } = await oracle();
         await fund(ethereum, "WETH", ethereum.env.pot, HELD);
-        const between = (await cook(ethereum, "stop-loss", [
+        const between = (await cook(ethereum, example("stop-loss"), [
           String(answer - 1n),
           String(answer + 1n),
           "100",
@@ -377,8 +737,9 @@ describe(
         assert.equal(BigInt(between.sold), 0n);
         assert.equal(await balanceOf(ethereum.env, ETH.WETH, ethereum.env.pot), HELD);
 
-        const profit = (await simulate(ethereum, "stop-loss", ["0", String(answer), "100", "3600"]))
-          .returned as { triggered: boolean; sold: string };
+        const profit = (
+          await simulate(ethereum, example("stop-loss"), ["0", String(answer), "100", "3600"])
+        ).returned as { triggered: boolean; sold: string };
         assert.equal(profit.triggered, true);
         assert.equal(BigInt(profit.sold), HELD);
       });
@@ -387,7 +748,7 @@ describe(
         const { answer, updatedAt } = await oracle();
         await fund(ethereum, "WETH", ethereum.env.pot, HELD);
         const { timestamp } = await ethereum.env.publicClient.getBlock();
-        const stale = await simulate(ethereum, "stop-loss", [
+        const stale = await simulate(ethereum, example("stop-loss"), [
           String(answer + 1n),
           "0",
           "100",
@@ -408,7 +769,7 @@ describe(
           (poolPrice * 9_995n) / 10_000n < answer / 100n,
           "the pool pays less than the oracle",
         );
-        const none = (await cook(ethereum, "stop-loss", [
+        const none = (await cook(ethereum, example("stop-loss"), [
           String(answer + 1n),
           "0",
           "0",
@@ -462,7 +823,7 @@ describe(
         const low = prices.reduce((a, b) => (b < a ? b : a));
         const high = prices.reduce((a, b) => (b > a ? b : a));
 
-        const survey = await simulate(ethereum, "eth-prices", [String(ONE)]);
+        const survey = await simulate(ethereum, example("eth-prices"), [String(ONE)]);
         assert.equal(survey.ok, true, survey.reason);
         assert.deepEqual(survey.returned, {
           oracle: String(oracle),
@@ -497,7 +858,10 @@ describe(
         const args = [String(RESERVE), String(MIN_MOVE)];
         const token = await aToken();
         await fund(ethereum, "USDC", ethereum.env.pot, 2_000_000_000n);
-        const supplied = (await cook(ethereum, "supply-idle", args)) as Record<string, string>;
+        const supplied = (await cook(ethereum, example("supply-idle"), args)) as Record<
+          string,
+          string
+        >;
         assert.equal(BigInt(supplied.supplied!), 1_500_000_000n);
         assert.equal(BigInt(supplied.withdrawn!), 0n);
         assert.equal(BigInt(supplied.liquid!), RESERVE);
@@ -508,13 +872,19 @@ describe(
 
         // The Pot spends down to 100 USDC: the next run withdraws the 400 it is short.
         await fund(ethereum, "USDC", ethereum.env.pot, 100_000_000n);
-        const withdrawn = (await cook(ethereum, "supply-idle", args)) as Record<string, string>;
+        const withdrawn = (await cook(ethereum, example("supply-idle"), args)) as Record<
+          string,
+          string
+        >;
         assert.equal(BigInt(withdrawn.withdrawn!), 400_000_000n);
         assert.equal(await balanceOf(ethereum.env, ETH.USDC, ethereum.env.pot), RESERVE);
 
         // 30 USDC over the reserve is under minMove: nothing moves.
         await fund(ethereum, "USDC", ethereum.env.pot, RESERVE + 30_000_000n);
-        const skipped = (await cook(ethereum, "supply-idle", args)) as Record<string, string>;
+        const skipped = (await cook(ethereum, example("supply-idle"), args)) as Record<
+          string,
+          string
+        >;
         assert.equal(BigInt(skipped.supplied!), 0n);
         assert.equal(BigInt(skipped.withdrawn!), 0n);
         assert.equal(
@@ -545,10 +915,10 @@ describe(
         );
         const quoted = await quote(base, BASE.USDC, BASE.WETH, TRANCHE, 500, limit);
 
-        const tick = (await cook(base, "dca", [String(TRANCHE), String(priceLimit)])) as Record<
-          string,
-          string
-        >;
+        const tick = (await cook(base, example("dca"), [
+          String(TRANCHE),
+          String(priceLimit),
+        ])) as Record<string, string>;
         assert.equal(BigInt(tick.price!), now);
         assert.equal(BigInt(tick.bought!), quoted);
         assert.equal(await balanceOf(base.env, BASE.WETH, base.env.pot), quoted);
@@ -562,16 +932,16 @@ describe(
       it("waits, without failing, above priceLimit or short of a tranche", async () => {
         const now = await price();
         await fund(base, "USDC", base.env.pot, 1_000_000_000n);
-        const above = (await cook(base, "dca", [String(TRANCHE), String(now / 2n)])) as Record<
-          string,
-          string
-        >;
+        const above = (await cook(base, example("dca"), [
+          String(TRANCHE),
+          String(now / 2n),
+        ])) as Record<string, string>;
         assert.equal(BigInt(above.spent!), 0n);
         await fund(base, "USDC", base.env.pot, TRANCHE - 1n);
-        const short = (await cook(base, "dca", [String(TRANCHE), String(now * 2n)])) as Record<
-          string,
-          string
-        >;
+        const short = (await cook(base, example("dca"), [
+          String(TRANCHE),
+          String(now * 2n),
+        ])) as Record<string, string>;
         assert.equal(BigInt(short.spent!), 0n);
         assert.equal(await balanceOf(base.env, BASE.USDC, base.env.pot), TRANCHE - 1n);
         assert.equal(await balanceOf(base.env, BASE.WETH, base.env.pot), 0n);
@@ -634,7 +1004,7 @@ describe(
         const before = await account();
         assert.ok(before.healthFactor < TRIGGER, `health factor ${before.healthFactor}`);
 
-        const guarded = (await cook(base, "aave-health", [
+        const guarded = (await cook(base, example("aave-health"), [
           String(TRIGGER),
           String(TARGET),
         ])) as Record<string, string>;
@@ -650,7 +1020,7 @@ describe(
         assert.ok(repaid >= BigInt(guarded.repaid!) && repaid - BigInt(guarded.repaid!) < 100n);
         assert.ok(after.debt < before.debt, "the debt fell");
 
-        const again = (await cook(base, "aave-health", [
+        const again = (await cook(base, example("aave-health"), [
           String(TRIGGER),
           String(TARGET),
         ])) as Record<string, string>;
@@ -662,7 +1032,7 @@ describe(
       it("pays each recipient its share, the last the remainder, and keeps the Pot's other USDC", async () => {
         const [alice, bob, carol] = PEOPLE;
         await fund(base, "USDC", base.env.pot, 6_000_000_001n + 100_000_000n);
-        const paid = await cook(base, "payroll", [
+        const paid = await cook(base, example("payroll"), [
           JSON.stringify([alice, bob, carol]),
           "[3,2,1]",
           "6000000001",
@@ -682,7 +1052,7 @@ describe(
           [[JSON.stringify([alice, bob]), "[1]", "1000"], /one weight per recipient/],
           [[JSON.stringify([alice, bob]), "[1,1]", "1000001"], /budget is not in the Pot/],
         ] as const) {
-          const refused = await simulate(base, "payroll", args);
+          const refused = await simulate(base, example("payroll"), args);
           assert.equal(refused.ok, false);
           assert.match(String(refused.reason), reason);
         }
@@ -713,7 +1083,7 @@ describe(
           sqrtPriceAt(floor, BASE.USDC, BASE.WETH, 10n ** 18n),
         );
 
-        const moved = (await cook(base, "rebalance", ["5000", "500", "30"])) as Record<
+        const moved = (await cook(base, example("rebalance"), ["5000", "500", "30"])) as Record<
           string,
           string | boolean
         >;
@@ -730,7 +1100,7 @@ describe(
       it("buys WETH when it is under, and trades nothing inside the band", async () => {
         await fund(base, "WETH", base.env.pot, 10n ** 17n);
         await fund(base, "USDC", base.env.pot, 2_000_000_000n);
-        const bought = (await cook(base, "rebalance", ["5000", "500", "30"])) as Record<
+        const bought = (await cook(base, example("rebalance"), ["5000", "500", "30"])) as Record<
           string,
           string | boolean
         >;
@@ -739,7 +1109,7 @@ describe(
         const after = BigInt(bought.after as string);
         assert.ok(after > 4_900n && after < 5_100n, `WETH is ${after} bps after`);
 
-        const within = (await cook(base, "rebalance", ["5000", "500", "30"])) as Record<
+        const within = (await cook(base, example("rebalance"), ["5000", "500", "30"])) as Record<
           string,
           string | boolean
         >;

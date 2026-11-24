@@ -304,27 +304,37 @@ from an earlier row can misread its programs, and an earlier compiler's programs
 can fail on a newer engine. `V12_RELEASE_SETS` (from
 `@eco-incorp/sauce/deployments`) holds one row per compiler version: the four v12
 releases that compiler pairs with, each asset's digest, and each engine's
-address or program id. The SDK pins one compiler and ships the engines of that
-compiler's row, so `v12EngineAddress()` and `v12SvmEngineProgramId()` always
-name engines that run the SDK's own programs.
+address or program id. `v12ReleaseSet()` with no argument is the installed
+compiler's own row, the release the SDK's defaults come from, the one
+`v12EngineAddress()` and `v12SvmEngineProgramId()` name. `v12DeployedReleaseSet()`
+and `v12OptInReleaseSet()` return the same row, kept for compatibility.
+
+A compiler's row can also list earlier engines its programs run on, as `alsoRunsOn`:
+compiler 2.6.4's output runs on v12-evm 1.4.0, v12-evm 1.3.0 and v12-svm 1.4.0 as well as on the
+engines of its own row. `engineRunsCompiler(target, engine, compiler?)` says whether
+an engine runs a compiler's output: `true` when the compiler's row names the engine
+or lists its version in `alsoRunsOn`, `false` for an engine another row names, and
+`undefined` for one no row names. The SDK then cooks a Pot of an earlier release on
+its own engine.
 
 Every SDK builder that names an engine — `v12Pot.encodeCook`,
 `routes.buildSauceEvmCall`, the SVM engine instructions and the Kitchen cook
 instructions — calls `assertEngineRunsCompiler(target, engine)` first. It throws
-for an engine a release set names for another compiler, saying which engine
-this compiler's output needs instead. An engine no release set names, such as
-one you deployed yourself, is not refused: the SDK cannot tell what it is.
+for an engine a release set names that does not run this compiler's output, saying
+which engine this compiler's output needs instead. An engine no release set names,
+such as one you deployed yourself, is not refused: the SDK cannot tell what it is.
 
 ```ts
 import { assertEngineRunsCompiler, v12ReleaseSet } from "@eco-incorp/sauce/deployments";
 
-const set = v12ReleaseSet(); // this SDK's compiler and the four releases it pairs with
+const set = v12ReleaseSet(); // the release the SDK's defaults come from
 console.log(set.compiler, set["v12-evm"].version, set["v12-svm"].version);
-assertEngineRunsCompiler("evm", set["v12-evm"].engine!); // passes: the pinned engine
+assertEngineRunsCompiler("evm", set["v12-evm"].engine!); // passes: the default engine
 ```
 
-`v12ReleaseSet(compiler)` returns another compiler's row, and throws for a
-compiler no row pairs with. When you run programs from a different compiler
+`v12ReleaseSet(compiler)` returns that compiler's own row, and throws for a
+compiler no row pairs with; `v12ReleaseSet(sdkCompilerVersion())` is
+`v12ReleaseSet()`. When you run programs from a different compiler
 version than the SDK's, pass that version as the third argument:
 `assertEngineRunsCompiler("evm", engine, compiler)`.
 

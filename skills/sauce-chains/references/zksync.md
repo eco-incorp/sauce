@@ -49,7 +49,7 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0xE0B015E54d54fc84a6cB9B666099c46adE9335FF` | `Across.SpokePool` |
+| [Across](../../sauce-protocols/references/registry/across.md) | spokePool | `0xE0B015E54d54fc84a6cB9B666099c46adE9335FF` | `Across.SpokePool`; not on this deployment: `__OvmSpokePool_init`, `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `fxChild`, `initialize`, `L1_USDB`, `l1Gas`, `L2_BLAST_BRIDGE`, `l2GatewayRouter`, `l2ScrollMessenger`, `MESSENGER`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `remoteL1Tokens`, `renounceOwnership`, `setFxChild`, `setL1GasLimit`, `setL2GatewayRouter`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `setRemoteL1Token`, `setTokenBridge`, `tokenBridges`, `transferOwnership`, `USDB`, `whitelistedTokens`, `whitelistToken`, `wrap`, `YIELD_RECIPIENT` |
 | [KyberSwap Aggregator](../../sauce-protocols/references/registry/kyberswap-aggregator.md) | metaAggregationRouter | `0x3F95eF3f2eAca871858dbE20A93c01daF6C2e923` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerZero](../../sauce-protocols/references/registry/layerzero.md) | endpointV2 | `0xd07C30aF3Ff30D96BDc9c6044958230Eb797DDBF` | `Layerzero.EndpointV2` |
 | [SyncSwap](../../sauce-protocols/references/registry/syncswap.md) | router | `0x2da10A1e27bF85cEdD8FFb1AbBe97e53391C0295` | `Syncswap.Router` |

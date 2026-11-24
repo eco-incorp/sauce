@@ -1,0 +1,21 @@
+[
+  {
+    "$comment": "ERC-721's ownerOf and safeTransferFrom(address,address,uint256), as OpenZeppelin's IERC721 declares them: an NFT collection is no contract the registry records.",
+    "type": "function",
+    "name": "ownerOf",
+    "stateMutability": "view",
+    "inputs": [{ "name": "tokenId", "type": "uint256" }],
+    "outputs": [{ "name": "owner", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "safeTransferFrom",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "from", "type": "address" },
+      { "name": "to", "type": "address" },
+      { "name": "tokenId", "type": "uint256" }
+    ],
+    "outputs": []
+  }
+]

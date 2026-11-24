@@ -15,23 +15,23 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 
 ## Find an import by goal
 
-| I want to                                   | Import                                                                                | Read                                                                 |
-| ------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Compile a program to bytecode               | `compile` from `/compiler`                                                            | [Compiler](compiler.md)                                              |
-| Encode a program's arguments                | `routes.encodeEntryArguments`, `routes.decodeEntryArguments` from `.`                 | [Program arguments](routes.md#arguments-a-program-takes-at-run-time) |
-| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.encodeEntryArguments` from `.`                  | [Programs and cooks](routes.md)                                      |
-| Call a protocol or a token by name          | `Base.USDC`, `Base.UniswapV3.Factory`, `contracts` from `.`                           | [Contracts and tokens](contracts.md)                                 |
-| Swap at a venue from a program              | `@sauce/router`, imported inside the program                                          | [`@sauce/router`](router.md)                                         |
-| Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                           | [Actions](../guides/actions.md)                                      |
-| Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`            | [Coverage](coverage.md)                                              |
-| Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`     | [Programs and cooks](routes.md#build-a-cook)                         |
-| Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                       | [Deployments](../reference/deployments.md)                           |
-| Run on Solana from TypeScript               | `createSauceSvmClient`, `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm`              | [Solana from TypeScript](../guides/solana-from-typescript.md)        |
-| Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify` | [Verification](../guides/verification.md)                            |
-| Test a program on a local chain             | `fork`, `local` from `/testing`                                                       | [Testing kit](testing-kit.md)                                        |
-| Read a protocol's document as text          | `getProtocolSkill` from `/skills`                                                     | [Protocol resources](#protocol-resources)                            |
-| Type-check a `*.sauce.ts` file in an editor | `/sauce-script` (types only)                                                          | [In an editor](../guides/cli-programs.md#in-an-editor)               |
-| See what changed between releases           | none                                                                                  | [Changelog](../changelog.md)                                         |
+| I want to                                   | Import                                                                                      | Read                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Compile a program to bytecode               | `compile` from `/compiler`                                                                  | [Compiler](compiler.md)                                              |
+| Encode a program's arguments                | `routes.encodeEntryArguments`, `routes.decodeEntryArguments` from `.`                       | [Program arguments](routes.md#arguments-a-program-takes-at-run-time) |
+| Compile a program for one chain, by name    | `routes.compileSauceProgram`, `routes.encodeEntryArguments` from `.`                        | [Programs and cooks](routes.md)                                      |
+| Call a protocol or a token by name          | `Base.USDC`, `Base.UniswapV3.Factory`, `contracts` from `.`                                 | [Contracts and tokens](contracts.md)                                 |
+| Swap at a venue from a program              | `@sauce/router`, imported inside the program                                                | [`@sauce/router`](router.md)                                         |
+| Turn a JSON document into a program         | `compileProgram` and the rest of `/actions`                                                 | [Actions](../guides/actions.md)                                      |
+| Find out what a registry holds              | `getProtocol`, `listProtocols`, `routes.knownTokenSymbols`, `requireChain`                  | [Coverage](coverage.md)                                              |
+| Predict a Pot and build a cook              | `v12PredictPot`, `routes.buildSauceEvmCall` from `.`; `v12Pot` from `/evm/engine`           | [Programs and cooks](routes.md#build-a-cook)                         |
+| Find the Kitchen and engine                 | `v12KitchenAddress()`, `v12EngineAddress()` from `/deployments`                             | [Deployments](../reference/deployments.md)                           |
+| Run on Solana from TypeScript               | `createSauceSvmClient` from `/svm/client`; `SOLANA_CLUSTERS`, `resolveAccounts` from `/svm` | [Solana from TypeScript](../guides/solana-from-typescript.md)        |
+| Check a settlement payload                  | `validateSettleProgram` from `/verify`; `verifySvmSettleExecution` from `/svm/verify`       | [Verification](../guides/verification.md)                            |
+| Test a program on a local chain             | `fork`, `local` from `/testing`                                                             | [Testing kit](testing-kit.md)                                        |
+| Read a protocol's document as text          | `getProtocolSkill` from `/skills`                                                           | [Protocol resources](#protocol-resources)                            |
+| Type-check a `*.sauce.ts` file in an editor | `/sauce-script` (types only)                                                                | [In an editor](../guides/cli-programs.md#in-an-editor)               |
+| See what changed between releases           | none                                                                                        | [Changelog](../changelog.md)                                         |
 
 ## Every import path
 
@@ -45,12 +45,13 @@ are suffixes of that package name; `.` means `@eco-incorp/sauce` itself.
 | `/deployments`                 | Sauce engine and Kitchen addresses, Pot derivation inputs, and which engine runs which compiler's programs                                                                                                                                                                                                             |
 | `/recipes`                     | The EVM settlement program's source (`settleSource`)                                                                                                                                                                                                                                                                   |
 | `/recipes/settle.sauce.ts`     | EVM settlement source asset                                                                                                                                                                                                                                                                                            |
-| `/svm`                         | The Solana side: clients (`createSauceSvmClient`), clusters, program-derived addresses (`derivePotPda`), account resolution (`resolveAccounts`), Kitchen instructions, transactions (`buildExecuteTransaction`), token accounts (`svmTokenAccount`), venue accessors (`venue`, `venues`) and recipes                   |
+| `/svm`                         | The Solana side: the client's types (`SauceSvmClient`), clusters, program-derived addresses (`derivePotPda`), account resolution (`resolveAccounts`), Kitchen instructions, transactions (`buildExecuteTransaction`), token accounts (`svmTokenAccount`), venue accessors (`venue`, `venues`) and recipes              |
+| `/svm/client`                  | The Kitchen client (`createSauceSvmClient`), which constructs its own RPC clients when called. `/svm` re-exports its types without loading Sauce's client implementation; other barrel modules still load `@solana/kit` and its dependencies.                                                                          |
 | `/svm/engine`                  | SVM engine wire format and instruction builders                                                                                                                                                                                                                                                                        |
 | `/svm/engine-artifacts`        | Node-only: file paths to the packaged SVM engine and Kitchen binaries and the Kitchen IDL                                                                                                                                                                                                                              |
 | `/svm/verify`                  | SVM program and gated engine CPI verification (`verifySvmSettleProgram`, `decodeSvmSettleExecution`, `verifySvmSettleExecution`); the Kitchen's own envelope is decoded separately                                                                                                                                     |
 | `/svm/recipes/settle.sauce.ts` | SVM settlement source asset                                                                                                                                                                                                                                                                                            |
-| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), `potRouterUpdate`, and the signed-cook helpers (`signedCookTypedData`, `encodeCookSigned`, `encodeInvalidateNonces`, `verifySignedCook`, `checkSignedCookPot` and the nonce helpers)                                |
+| `/evm/engine`                  | EVM Pot and Kitchen ABIs and call encoders (`v12PotAbi`, `v12KitchenAbi`, `v12Pot`, `v12Kitchen`), `potEngine`, `potRouterUpdate`, and the signed-cook helpers (`signedCookTypedData`, `encodeCookSigned`, `encodeInvalidateNonces`, `verifySignedCook`, `checkSignedCookPot` and the nonce helpers)                   |
 | `/verify`                      | EVM settlement encoding, structural decoding, and validation against the pinned program                                                                                                                                                                                                                                |
 | `/skills`                      | The per-protocol documents and their index, as text                                                                                                                                                                                                                                                                    |
 | `/testing`                     | Node-only: run programs on a forked or empty local chain from a test, recorded once and replayed                                                                                                                                                                                                                       |
@@ -156,11 +157,27 @@ in that USDC.
 
 ### A Pot's Router after a rollout
 
+A Pot keeps the Router its Kitchen handed it when it was minted. A Pot minted before a Router
+rollout runs the old one, and a swap through a pool that calls back a name only the new Router
+answers (HyperSwap V3's `hyperswapV3SwapCallback`) cannot pay it; a Pot minted since starts on the
+new one. `potEngine(client, pot)` from `@eco-incorp/sauce/evm/engine` returns the engine a cook on
+a Pot must name: an engine runs a fixed-Router or Shared Pot only if it was built for that Pot's
+Router, so such a Pot minted on the 1.4.0 Router cooks on engine 1.4.0 and one minted since on the
+installed engine, and every other Pot of the current Kitchen cooks on the installed engine. It
+needs only `readContract` of your client, for four reads of the Pot: its `kitchen`, `owner`,
+`userSalt` and `router`. It throws for an address no release this SDK knows derives, and, for a
+fixed-Router or Shared Pot only, for a Router no release this SDK knows built an engine for. A
+dynamic Pot is never refused for its Router: it cooks on the installed engine whichever Router it
+runs.
+
 After a Router rollout, `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` reads the
 Pot's Router and the Kitchen's through your client. It returns the `setRouter` call for the Pot's
-owner to sign, or nothing when the Pot is already current. Nothing sends it for you, and a call
-from anyone but the owner reverts with `NotOwner()`. It throws for a Pot of an earlier Kitchen
-release, which has no `setRouter` and keeps its Router for good.
+owner to sign when the Pot is not on the Router this release pins and the Kitchen names that
+Router, and nothing when the Pot is already on the Kitchen's Router or when the Kitchen names
+another one (upgrade the SDK to hear of that rollout). Nothing sends it for you, and a call from
+anyone but the owner reverts with `NotOwner()`. A Pot of an earlier Kitchen release keeps its
+Router for good, and so does a fixed-Router or Shared Pot: it returns nothing for them, and throws
+only for an address no known release derives.
 [pot-router.ts](../examples/pot-router.ts) shows the check.
 
 ### Signed cooks

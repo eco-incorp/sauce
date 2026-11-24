@@ -16,6 +16,7 @@ import { after, before, describe, it } from "node:test";
 import { formatUnits, getAddress, toFunctionSelector, type Address, type Hex } from "viem";
 
 import {
+  DEPLOYER,
   FEE,
   fixture,
   OWNER,
@@ -24,8 +25,10 @@ import {
   startChain,
   type LocalChain,
 } from "../../sdk/test/cli-anvil.js";
+import { NEW_POT_SALT, POT_SALT } from "../../sdk/test/evm/gated-engine.js";
 import { v12KitchenAddress } from "../../sdk/dist/deployments/index.js";
 import { v12PredictPot } from "../../sdk/dist/deployments/pot.js";
+import { releaseArm } from "../../sdk/test/release-arm.js";
 import { connect, endpointsFor, erred, failed, ok, type Connected } from "./harness.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -443,21 +446,31 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     );
   });
 
-  it("builds a deployment the owner's own wallet signs, then sees the Pot deployed", async () => {
-    const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(unsigned.deployed, false);
-    // Signed and sent here, outside the server, with a key it never saw.
-    await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
-    const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
-    assert.equal(after.deployed, true);
-    assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
-    const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
-    assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
-    // Named by its address alone, the Pot's owner is read from the chain: who signs.
-    const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
-    assert.equal(byPot.to, after.pot);
-    assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
-  });
+  it(
+    "builds a deployment the owner's own wallet signs, then sees the Pot deployed",
+    {
+      // The installed release's first Pot for a fixed account, deployed and then seen (A3,
+      // sdk/test/legacy-arm.json): the legacy arm's chain already holds the owner's earlier Pot.
+      skip:
+        releaseArm("evm") !== "default" &&
+        "the chain already holds the owner's Pot of an earlier release",
+    },
+    async () => {
+      const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
+      assert.equal(unsigned.deployed, false);
+      // Signed and sent here, outside the server, with a key it never saw.
+      await local.send(local.owner, unsigned.to as Address, unsigned.data as Hex);
+      const after = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: OWNER.address }));
+      assert.equal(after.deployed, true);
+      assert.ok((after.notes as string[]).some((note) => /do not send the deployment/.test(note)));
+      const tx = ok(await mcp.call("sauce_tx", { ...pay, owner: OWNER.address }));
+      assert.ok((tx.notes as string[]).some((note) => /It is deployed/.test(note)));
+      // Named by its address alone, the Pot's owner is read from the chain: who signs.
+      const byPot = ok(await mcp.call("sauce_tx", { ...pay, pot: after.pot }));
+      assert.equal(byPot.to, after.pot);
+      assert.equal(getAddress(byPot.from as Address), getAddress(OWNER.address));
+    },
+  );
 
   it("fetches a transaction by hash and takes it apart", async () => {
     const unsigned = ok(await mcp.call("sauce_pot", { chain: "ethereum", owner: RECIPIENT }));
@@ -565,3 +578,67 @@ describe("the tools against a chain", { skip: RUNTIME_HEX_PATH === undefined }, 
     assert.match(token, /answers none of a V3-style pool's reads on ethereum/);
   });
 });
+
+describe(
+  "sauce_pot says which Router a Pot runs, as the sauce command does",
+  {
+    skip:
+      RUNTIME_HEX_PATH === undefined ||
+      (releaseArm("evm") !== "default" &&
+        "only the installed release's Router is one a switched Kitchen hands out"),
+  },
+  () => {
+    // The Router of the Pots minted before the chain's switch, and the one its Kitchen hands out now.
+    const R1 = getAddress("0xcc5e707d3c063Faae1e0dAf2C6CBc2Fd076AE759");
+    const R2 = getAddress("0xBbBaB15200b9031fB7Fd31811Cb62b6F83DF24e6");
+    let local: LocalChain;
+    let mcp: Connected;
+
+    before(async () => {
+      local = await startChain("ethereum", { upgraded: true, from: "1.4.0" });
+      mcp = await connect(endpointsFor({ [String(local.chain.id)]: local.rpcUrl }));
+    });
+    after(async () => {
+      await mcp?.close();
+      await local?.stop();
+    });
+
+    it("a dynamic Pot minted before the switch: its Router, and why a pool calling a newer name cannot pay it", async () => {
+      const out = ok(
+        await mcp.call("sauce_pot", {
+          chain: "ethereum",
+          owner: DEPLOYER.address,
+          saltHex: POT_SALT,
+        }),
+      );
+      assert.equal(out.pot, local.legacy!.pot);
+      assert.equal(out.deployed, true);
+      assert.equal(out.router, R1);
+      const notes = out.notes as string[];
+      assert.ok(
+        notes.some(
+          (note) =>
+            note.includes(
+              `Pot ${out.pot} runs the Router ${R1}, not the one this chain's Kitchen now gives ` +
+                `new Pots, ${R2}`,
+            ) && note.includes("hyperswapV3SwapCallback"),
+        ),
+        notes.join("\n"),
+      );
+      assert.ok(!notes.some((note) => /setRouter/.test(note)), "no note moves a Pot");
+    });
+
+    it("a Pot minted after the switch: the Kitchen's Router, and no such note", async () => {
+      const out = ok(
+        await mcp.call("sauce_pot", {
+          chain: "ethereum",
+          owner: DEPLOYER.address,
+          saltHex: NEW_POT_SALT,
+        }),
+      );
+      assert.equal(out.deployed, true);
+      assert.equal(out.router, R2);
+      assert.ok(!(out.notes as string[]).some((note) => /runs the Router/.test(note)));
+    });
+  },
+);

@@ -1,6 +1,878 @@
 {
   "abi": [
     {
+      "name": "_become",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "unitroller",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_grantXVS",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setAccessControl",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAccessControlAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setActionsPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "markets_",
+          "type": "address[]"
+        },
+        {
+          "name": "actions_",
+          "type": "uint8[]"
+        },
+        {
+          "name": "paused_",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setCloseFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCloseFactorMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setComptrollerLens",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "comptrollerLens_",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setForcedLiquidation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "enable",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setForcedLiquidationForUser",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "enable",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setLiquidatorContract",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newLiquidatorContract_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setMarketBorrowCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "newBorrowCaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setMarketSupplyCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "newSupplyCaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setPauseGuardian",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPauseGuardian",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setPriceOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setPrimeToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_prime",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setProtocolPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "state",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "_setTreasuryData",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newTreasuryGuardian",
+          "type": "address"
+        },
+        {
+          "name": "newTreasuryAddress",
+          "type": "address"
+        },
+        {
+          "name": "newTreasuryPercent",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setVAIController",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vaiController_",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setVAIMintRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newVAIMintRate",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "_setVAIVaultInfo",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vault_",
+          "type": "address"
+        },
+        {
+          "name": "releaseStartBlock_",
+          "type": "uint256"
+        },
+        {
+          "name": "minReleaseAmount_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setVenusSpeeds",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "supplySpeeds",
+          "type": "uint256[]"
+        },
+        {
+          "name": "borrowSpeeds",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setVenusVAIVaultRate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "venusVAIVaultRate_",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setXVSToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "xvs_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_setXVSVToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "xvsVToken_",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "_supportMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "accountAssets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "actionPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        },
+        {
+          "name": "action",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "addPoolMarkets",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolIds",
+          "type": "uint96[]"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "admin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "allMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "approvedDelegates",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "authorizedFlashLoan",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "borrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowCapGuardian",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "borrowCaps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "borrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "checkMembership",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "claimVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holders",
+          "type": "address[]"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "borrowers",
+          "type": "bool"
+        },
+        {
+          "name": "suppliers",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holders",
+          "type": "address[]"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "borrowers",
+          "type": "bool"
+        },
+        {
+          "name": "suppliers",
+          "type": "bool"
+        },
+        {
+          "name": "collateral",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimVenusAsCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimVenusAsCollateral",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "closeFactorMantissa",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "comptrollerImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "comptrollerLens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "corePoolId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint96"
+        }
+      ]
+    },
+    {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "label",
+          "type": "string"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint96"
+        }
+      ]
+    },
+    {
+      "name": "deviationBoundedOracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "diamondCut",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "diamondCut_",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "facetAddress",
+              "type": "address"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "functionSelectors",
+              "type": "bytes4[]"
+            }
+          ]
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "enterMarketBehalf",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "onBehalf",
+          "type": "address"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "enterMarketForAccount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "enterMarkets",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -18,6 +890,46 @@
       ]
     },
     {
+      "name": "enterPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "executeFlashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "onBehalf",
+          "type": "address"
+        },
+        {
+          "name": "receiver",
+          "type": "address"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "underlyingAmounts",
+          "type": "uint256[]"
+        },
+        {
+          "name": "param",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "exitMarket",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -30,6 +942,2996 @@
       "outputs": [
         {
           "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "facetAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "functionSelector",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "facetAddress",
+              "type": "address"
+            },
+            {
+              "name": "functionSelectorPosition",
+              "type": "uint96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "facetAddresses",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "facetFunctionSelectors",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "facet",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes4[]"
+        }
+      ]
+    },
+    {
+      "name": "facetPosition",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "facet",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "facets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "facetAddress",
+              "type": "address"
+            },
+            {
+              "name": "functionSelectors",
+              "type": "bytes4[]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "flashLoanPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "getAccountLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getAllMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getAssetsIn",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getBorrowingPower",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getCollateralFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getEffectiveLiquidationIncentive",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getEffectiveLtvFactor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "weightingStrategy",
+          "type": "uint8"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getHypotheticalAccountLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "vTokenModify",
+          "type": "address"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationIncentive",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getLiquidationThreshold",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getPoolMarketIndex",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ]
+    },
+    {
+      "name": "getPoolVTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address[]"
+        }
+      ]
+    },
+    {
+      "name": "getXVSAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getXVSVTokenAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "hasValidPoolBorrows",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "targetPoolId",
+          "type": "uint96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isComptroller",
+      "type": "function",
+      "stateMutability": "pure",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isForcedLiquidationEnabled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isForcedLiquidationEnabledForUser",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isMarketListed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "lastPoolId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint96"
+        }
+      ]
+    },
+    {
+      "name": "liquidateBorrowAllowed",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidateBorrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "liquidateCalculateSeizeTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidateCalculateSeizeTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidateVAICalculateSeizeTokens",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "liquidatorContract",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "markets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isListed",
+          "type": "bool"
+        },
+        {
+          "name": "collateralFactorMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "isVenus",
+          "type": "bool"
+        },
+        {
+          "name": "liquidationThresholdMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "liquidationIncentiveMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "marketPoolId",
+          "type": "uint96"
+        },
+        {
+          "name": "isBorrowAllowed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "minReleaseAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "minter",
+          "type": "address"
+        },
+        {
+          "name": "mintAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintedVAIs",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "mintVAIGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "mintVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "minter",
+          "type": "address"
+        },
+        {
+          "name": "actualMintAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "mintTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "oracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pauseGuardian",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "pendingComptrollerImplementation",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "poolMarkets",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "isListed",
+          "type": "bool"
+        },
+        {
+          "name": "collateralFactorMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "isVenus",
+          "type": "bool"
+        },
+        {
+          "name": "liquidationThresholdMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "liquidationIncentiveMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "marketPoolId",
+          "type": "uint96"
+        },
+        {
+          "name": "isBorrowAllowed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "pools",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint96"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "isActive",
+          "type": "bool"
+        },
+        {
+          "name": "allowCorePoolFallback",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "prime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "redeemAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "redeemer",
+          "type": "address"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "redeemVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "redeemer",
+          "type": "address"
+        },
+        {
+          "name": "redeemAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "redeemTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "releaseStartBlock",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "removePoolMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "repayBorrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "repayAmount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "repayBorrowVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "payer",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "actualRepayAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "borrowerIndex",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "repayVAIGuardianPaused",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "seizeAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "seizeVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holders",
+          "type": "address[]"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "seizeVenus",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "holders",
+          "type": "address[]"
+        },
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "seizeVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokenCollateral",
+          "type": "address"
+        },
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "liquidator",
+          "type": "address"
+        },
+        {
+          "name": "borrower",
+          "type": "address"
+        },
+        {
+          "name": "seizeTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setActionsPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "markets_",
+          "type": "address[]"
+        },
+        {
+          "name": "actions_",
+          "type": "uint8[]"
+        },
+        {
+          "name": "paused_",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setAllowCorePoolFallback",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "allowFallback",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setCloseFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newCloseFactorMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setCollateralFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "newCollateralFactorMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "newLiquidationThresholdMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setCollateralFactor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "newCollateralFactorMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "newLiquidationThresholdMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setDeviationBoundedOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDeviationBoundedOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setFlashLoanPaused",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setForcedLiquidation",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokenBorrowed",
+          "type": "address"
+        },
+        {
+          "name": "enable",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setIsBorrowAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "borrowAllowed",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setLiquidationIncentive",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "newLiquidationIncentiveMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setLiquidationIncentive",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "newLiquidationIncentiveMantissa",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setMarketBorrowCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "newBorrowCaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMarketSupplyCaps",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vTokens",
+          "type": "address[]"
+        },
+        {
+          "name": "newSupplyCaps",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMintedVAIOf",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setPoolActive",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "active",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolLabel",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "newLabel",
+          "type": "string"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setPrimeToken",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_prime",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setWhiteListFlashLoanAccount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        },
+        {
+          "name": "isWhiteListed",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "supplyCaps",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "supportMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferAllowed",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "src",
+          "type": "address"
+        },
+        {
+          "name": "dst",
+          "type": "address"
+        },
+        {
+          "name": "transferTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "transferVerify",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address"
+        },
+        {
+          "name": "src",
+          "type": "address"
+        },
+        {
+          "name": "dst",
+          "type": "address"
+        },
+        {
+          "name": "transferTokens",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "treasuryAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "treasuryGuardian",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "treasuryPercent",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "unlistMarket",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "market",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "updateDelegate",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "delegate",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "userPoolId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint96"
+        }
+      ]
+    },
+    {
+      "name": "vaiController",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "vaiMintRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "vaiVaultAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "venusAccrued",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "venusBorrowerIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "venusBorrowSpeeds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "venusBorrowState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint224"
+        },
+        {
+          "name": "block",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "venusInitialIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint224"
+        }
+      ]
+    },
+    {
+      "name": "venusSupplierIndex",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        },
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "venusSupplySpeeds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "venusSupplyState",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "index",
+          "type": "uint224"
+        },
+        {
+          "name": "block",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "venusVAIVaultRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ActionPausedMarket",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "action",
+          "type": "uint8",
+          "indexed": true
+        },
+        {
+          "name": "pauseState",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ActionProtocolPaused",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "state",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BorrowAllowedUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "market",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldStatus",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "newStatus",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ClaimSkipped",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "errorCode",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelegateUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "approver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "delegate",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DiamondCut",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_diamondCut",
+          "type": "tuple[]",
+          "components": [
+            {
+              "name": "facetAddress",
+              "type": "address"
+            },
+            {
+              "name": "action",
+              "type": "uint8"
+            },
+            {
+              "name": "functionSelectors",
+              "type": "bytes4[]"
+            }
+          ],
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DistributedBorrowerVenus",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "venusDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "venusBorrowIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DistributedSupplierVenus",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "supplier",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "venusDelta",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "venusSupplyIndex",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DistributedVAIVaultVenus",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Failure",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "error",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "info",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "detail",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FlashLoanExecuted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "assets",
+          "type": "address[]",
+          "indexed": false
+        },
+        {
+          "name": "amounts",
+          "type": "uint256[]",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FlashLoanPauseChanged",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPaused",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "newPaused",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FlashLoanRepaid",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "onBehalf",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "repaidAmount",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "remainingDebt",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IsAccountFlashLoanWhitelisted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "isWhitelisted",
+          "type": "bool",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "IsForcedLiquidationEnabledForUserUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "borrower",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "enable",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IsForcedLiquidationEnabledUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "enable",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MarketEntered",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "MarketExited",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "MarketListed",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "MarketUnlisted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewAccessControl",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAccessControlAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newAccessControlAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewBorrowCap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newBorrowCap",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewCloseFactor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldCloseFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newCloseFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewCollateralFactor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldCollateralFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newCollateralFactorMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewComptrollerLens",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldComptrollerLens",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newComptrollerLens",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewDeviationBoundedOracle",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldDeviationBoundedOracle",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newDeviationBoundedOracle",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewLiquidationIncentive",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldLiquidationIncentiveMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newLiquidationIncentiveMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewLiquidationThreshold",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldLiquidationThresholdMantissa",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newLiquidationThresholdMantissa",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewLiquidatorContract",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldLiquidatorContract",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newLiquidatorContract",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPauseGuardian",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPauseGuardian",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPauseGuardian",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPriceOracle",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPriceOracle",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPriceOracle",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewPrimeToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldPrimeToken",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newPrimeToken",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewSupplyCap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newSupplyCap",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewTreasuryAddress",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldTreasuryAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newTreasuryAddress",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewTreasuryGuardian",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldTreasuryGuardian",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newTreasuryGuardian",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewTreasuryPercent",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldTreasuryPercent",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newTreasuryPercent",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewVAIController",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldVAIController",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newVAIController",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewVAIMintRate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldVAIMintRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newVAIMintRate",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewVAIVaultInfo",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vault_",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "releaseStartBlock_",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "releaseInterval_",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewVenusVAIVaultRate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldVenusVAIVaultRate",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "newVenusVAIVaultRate",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "NewXVSToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldXVS",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newXVS",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "NewXVSVToken",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldXVSVToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newXVSVToken",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolActiveStatusUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "oldStatus",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "newStatus",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PoolCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "label",
+          "type": "string",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PoolFallbackStatusUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "oldStatus",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "newStatus",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PoolLabelUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "oldLabel",
+          "type": "string",
+          "indexed": false
+        },
+        {
+          "name": "newLabel",
+          "type": "string",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "PoolMarketInitialized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "market",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolMarketRemoved",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96",
+          "indexed": true
+        },
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolSelected",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "previousPoolId",
+          "type": "uint96",
+          "indexed": false
+        },
+        {
+          "name": "newPoolId",
+          "type": "uint96",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "VenusBorrowSpeedUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newSpeed",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VenusGranted",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VenusSeized",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "holder",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "VenusSupplySpeedUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "vToken",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newSpeed",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "FailedToCreateDebtPosition",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "FlashLoanNotEnabled",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "FlashLoanPausedSystemWide",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InactivePool",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        }
+      ]
+    },
+    {
+      "name": "IncompatibleBorrowedAssets",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "InvalidFlashLoanParams",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "LiquidityCheckFailed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "errorCode",
+          "type": "uint256"
+        },
+        {
+          "name": "shortfall",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "MarketAlreadyListed",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "poolId",
+          "type": "uint96"
+        },
+        {
+          "name": "vToken",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "MarketNotListedInCorePool",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NoAssetsRequested",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotAnApprovedDelegate",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "NotEnoughRepayment",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "repaid",
+          "type": "uint256"
+        },
+        {
+          "name": "required",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ReentrancyGuardReentrantCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SenderNotAuthorizedForFlashLoan",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "TooManyAssetsRequested",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "requested",
+          "type": "uint256"
+        },
+        {
+          "name": "maximum",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "UnsafeLiquidationParams",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "liquidationThresholdMantissa",
+          "type": "uint256"
+        },
+        {
+          "name": "liquidationIncentiveMantissa",
           "type": "uint256"
         }
       ]

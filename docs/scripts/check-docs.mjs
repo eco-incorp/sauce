@@ -60,7 +60,10 @@ for (const directory of ["concepts", "guides", "api", "reference", "examples"]) 
 }
 const failures = [];
 for (const file of manual) {
-  const content = readFileSync(file, "utf8").replace(/```[^]*?```/g, "");
+  // Fenced blocks and inline code hold no links: `X["<signature>"](…)` in a code span is a call.
+  const content = readFileSync(file, "utf8")
+    .replace(/```[^]*?```/g, "")
+    .replace(/`[^`\n]*`/g, "``");
   for (const match of content.matchAll(/\[[^\]]*\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {
     const target = match[1].replace(/^<|>$/g, "");
     // Documentation links stay relative so they render in the repository, on the npm page and
@@ -348,9 +351,8 @@ console.log(`Manual links: ${manual.length} files checked`);
 
   // The table under `## Which versions work together` has a row whose Compiler, v12-evm,
   // kitchen-evm, v12-svm and kitchen-svm cells are the versions of each released row. A row is not
-  // out yet when the sync would refuse it: a `null` engine id, Kitchen, Pot init-code hash or asset
-  // digest in any of its components. Such a row needs no table row. Every table row whose SDK cell
-  // is a version has its `## SDK <version>` entry; a row whose SDK cell is `Unreleased` needs none.
+  // out yet when the sync would refuse it: a missing engine id, Kitchen, Pot identity or digest.
+  // Such a row needs no table row. Only numbered SDK cells need a `## SDK <version>` entry.
   // The quote router pin names a kitchen-evm release, which the page names outside code. The
   // installed package ships no releases.json, and its run skips this.
   const pinned = join(root, "sdk/src/deployments/releases.json");
@@ -358,11 +360,12 @@ console.log(`Manual links: ${manual.length} files checked`);
     const releases = JSON.parse(readFileSync(pinned, "utf8"));
     const COMPONENTS = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
     const pending = (entry) =>
-      ["engine", "kitchen", "potInitCodeHash"].some((key) => entry?.[key] === null) ||
+      ["engine", "kitchen"].some((key) => entry?.[key] === null) ||
+      (entry?.potInitCodeHash === null && !entry?.potProfileHash) ||
       Object.values(entry?.assets ?? {}).some((digest) => digest === null);
     const changelog = outsideFences(join(docs, "changelog.md"));
     // The table as the build reads it (`sdk/scripts/lib/sdk-releases.mjs`): every line of it a row,
-    // each row's cells versions, the Unreleased one included.
+    // each row's cells versions, the Unreleased and None rows included.
     let table;
     try {
       table = versionTableOf(changelog);

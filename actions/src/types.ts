@@ -287,7 +287,10 @@ export interface BalancerV2BatchSwapAction extends Explicit {
   deadline: number;
 }
 
-/** One Balancer V3 pool. The router pulls through Permit2: `permit2Approve` it first. */
+/**
+ * One Balancer V3 pool. The router pulls through Permit2 (`permit2Approve` it first), except a WETH
+ * input under `wethIsEth`, which the Pot pays as native ETH.
+ */
 export interface BalancerV3SwapAction extends Spends {
   type: "balancerV3Swap";
   router: Contract;

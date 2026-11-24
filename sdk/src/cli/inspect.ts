@@ -21,7 +21,7 @@ import {
 } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12DeployedAddresses, v12EngineAddress } from "../deployments/index.js";
+import { V12_RELEASE_SETS, engineRunsCompiler } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { v12KitchenAbi, v12PotAbi, verifySignedCook } from "../evm/engine.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
@@ -33,6 +33,7 @@ import { connect, potState, receiptOf } from "./chain.js";
 import { manifestJson, type CommandOutput } from "./commands.js";
 import { linkLines, txLinks } from "./links.js";
 import { costJson, costLine, costOf, receiptEffects, receiptReport } from "./receipt.js";
+import { releaseEngines } from "./pots.js";
 
 /** What a description needs to know beyond the bytes. */
 export interface InspectContext {
@@ -165,12 +166,21 @@ function programPart(program: Uint8Array, context: InspectContext): Part {
   return { json, lines };
 }
 
-/** The released engine's name, for an engine a cook names. */
+/**
+ * A released engine's name, for an engine a cook names: any engine a release set names, with the
+ * newest release naming it, and whether it runs this SDK's programs; `not a released engine` for
+ * any other.
+ */
 function engineName(engine: Address): string {
-  if (engine.toLowerCase() !== v12EngineAddress().toLowerCase()) return "not the released engine";
-  const { version } = v12DeployedAddresses().releases["v12-evm"];
+  if (!releaseEngines().includes(getAddress(engine))) return "not a released engine";
+  const { version } = [...V12_RELEASE_SETS]
+    .reverse()
+    .find((set) => set["v12-evm"].engine?.toLowerCase() === engine.toLowerCase())!["v12-evm"];
 
-  return `the released v12 engine ${version}`;
+  return (
+    `the released v12 engine ${version}` +
+    (engineRunsCompiler("evm", engine) === false ? ", which does not run this SDK's programs" : "")
+  );
 }
 
 /** `Pot.cook(engine, program)` or `Pot.cookSigned(…)`, or `undefined` when `data` is neither. */
@@ -184,7 +194,7 @@ function cookCall(data: Hex, context: InspectContext): Part | undefined {
   if (decoded.functionName !== "cook" && decoded.functionName !== "cookSigned") return undefined;
   const [engine, program] = decoded.args as readonly [Address, Hex];
   const described = programPart(hexToBytes(program), context);
-  const named = { address: engine, released: engineName(engine) !== "not the released engine" };
+  const named = { address: engine, released: engineName(engine) !== "not a released engine" };
   if (decoded.functionName === "cook") {
     return {
       json: { call: "Pot.cook", engine: named, program: described.json },
@@ -278,12 +288,34 @@ export function describeData(data: Hex, context: InspectContext): Part {
   try {
     const kitchen = decodeFunctionData({ abi: v12KitchenAbi, data });
     if (kitchen.functionName === "deployPot") {
-      const [owner, salt] = kitchen.args as readonly [Address, Hex];
-      const pot = v12PredictPot(owner, salt);
+      const [owner, salt, routerFixed] = kitchen.args as readonly [Address, Hex, boolean?];
+      const pot = v12PredictPot(
+        owner,
+        salt,
+        routerFixed === undefined ? undefined : { routerFixed },
+      );
 
       return {
-        json: { call: "Kitchen.deployPot", owner, salt, pot },
-        lines: [`Kitchen.deployPot: the Pot ${pot}, owner ${owner}, salt ${salt}`],
+        json: {
+          call: "Kitchen.deployPot",
+          owner,
+          salt,
+          ...(routerFixed === undefined ? {} : { routerFixed }),
+          pot,
+        },
+        lines: [
+          `Kitchen.deployPot: the ${routerFixed === true ? "fixed-Router " : ""}Pot ${pot}, ` +
+            `owner ${owner}, salt ${salt}`,
+        ],
+      };
+    }
+    if (kitchen.functionName === "deploySharedPot") {
+      const [salt] = kitchen.args as readonly [Hex];
+      const pot = v12PredictPot(zeroAddress, salt);
+
+      return {
+        json: { call: "Kitchen.deploySharedPot", salt, pot },
+        lines: [`Kitchen.deploySharedPot: the Shared Pot ${pot}, salt ${salt}`],
       };
     }
   } catch {

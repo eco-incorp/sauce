@@ -41,9 +41,16 @@ import {
   sdkCompilerVersion,
   v12EngineAddress,
   v12KitchenAddress,
-  v12ReleaseSet,
+  v12RouterAddress,
 } from "../deployments/index.js";
-import { v12PredictPot } from "../deployments/pot.js";
+import {
+  potFamilyRunsCompiler,
+  v12DefaultPotFamily,
+  v12PotRelease,
+  v12PredictPot,
+  type PotFamily,
+  type PotKind,
+} from "../deployments/pot.js";
 import { v12KitchenAbi, v12Pot } from "../evm/engine.js";
 import { kitchenExecutionFee } from "../evm/execution-fee.js";
 import { Permit2ABI } from "../protocols/permit2/abis.js";
@@ -52,16 +59,17 @@ import { UsageError } from "./args.js";
 import { CliError } from "./args.js";
 import { guardOf } from "./policy.js";
 import { keepLanded, keptPots, sayKept } from "./keep.js";
-import type { PotKind, PotRecord } from "./pot-store.js";
+import type { PotRecord } from "./pot-store.js";
 import {
   answered,
   evmKitchenRelease,
-  evmPotRelease,
   evmPotsDeployed,
   evmRelease,
+  familyRelease,
   ownerPotsText,
   ownReleasePot,
   pairedSdkReleases,
+  pairWith,
   releaseText,
 } from "./pots.js";
 
@@ -363,9 +371,14 @@ async function hasCode(client: PublicClient, address: Address, what: string): Pr
   return code !== undefined && code !== "0x";
 }
 
-/** The released engine and Kitchen on the connected chain: whether each has code, and the fee. */
-export async function releasedContracts(client: PublicClient): Promise<Released> {
-  const engine = getAddress(v12EngineAddress());
+/**
+ * The released Kitchen on the connected chain and the engine a cook names (the release's own, or an
+ * earlier release's that runs this SDK's programs): whether each has code, and the fee.
+ */
+export async function releasedContracts(
+  client: PublicClient,
+  engine: Address = getAddress(v12EngineAddress()),
+): Promise<Released> {
   const kitchen = getAddress(v12KitchenAddress());
   const [engineThere, kitchenThere] = await Promise.all([
     hasCode(client, engine, "the engine's code"),
@@ -401,12 +414,17 @@ const notDeployed = (
       "run there",
   );
 
-/** Refuses an online cook without its released engine and Kitchen, returning the Kitchen's fee. */
+/**
+ * Refuses an online cook without the engine it names and the released Kitchen, returning the
+ * Kitchen's fee. `engine` is the cook's (`cook-pot.ts`): the release's own unless the cook is on an
+ * earlier release's Pot.
+ */
 export async function requireCookContracts(
   client: PublicClient,
   chain: CanonicalChain,
+  engine: Address = getAddress(v12EngineAddress()),
 ): Promise<bigint> {
-  const released = await releasedContracts(client);
+  const released = await releasedContracts(client, engine);
   for (const [name, contract] of [
     ["engine", released.engine],
     ["Kitchen", released.kitchen],
@@ -418,7 +436,7 @@ export async function requireCookContracts(
 }
 
 /** What every refusal of a Pot says last. */
-const NOTHING_SENT = "Nothing was simulated, built or sent.";
+export const NOTHING_SENT = "Nothing was simulated, built or sent.";
 /** What a refusal of a deployment the chain already has says last instead: it was sent, and what
  *  comes after it is not. */
 const NOTHING_AFTER = "Nothing after it was sent.";
@@ -439,10 +457,6 @@ const NO_OWNER =
 export function requirePotOwner(owner: Address): void {
   if (getAddress(owner) === zeroAddress) throw new UsageError(`${NO_OWNER} ${NOTHING_SENT}`);
 }
-
-/** `paired` SDK releases (`pots.ts#pairedSdkReleases`) pair with a release: one, or several. */
-const pairWith = (paired: string): string =>
-  `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
 
 /**
  * Which release the deployed Kitchen mints, as a refusal says it: the release whose Kitchen and Pot
@@ -478,8 +492,36 @@ async function kitchenRelease(client: PublicClient, chain: CanonicalChain): Prom
       "knows records: the Kitchen is newer than this SDK. Upgrade @eco-incorp/sauce (sauce update)."
     );
   }
-  if (family.sets.some((set) => set.compiler === sdkCompilerVersion())) {
-    return `${it} mints Pots of ${releaseText(evmRelease(v12ReleaseSet()))}, the release this SDK pins.`;
+  if (family === v12DefaultPotFamily()) {
+    const current = getAddress(v12RouterAddress());
+    const router = await client
+      .readContract({ address: kitchen, abi: v12KitchenAbi, functionName: "router" })
+      .then(getAddress, () => undefined);
+    if (router === undefined || router === current) {
+      return `${it} mints Pots of ${releaseText(familyRelease(family))}, the release this SDK pins.`;
+    }
+    // The Kitchen has not switched to this release's Router: what a new fixed-Router or Shared Pot
+    // there runs on is the engine built for the Router it hands out.
+    const earlier = family.sets.find((set) => {
+      const fixed = set["kitchen-evm"].fixedRouter;
+
+      return fixed !== undefined && getAddress(fixed) === router;
+    });
+
+    return (
+      `${it} mints Pots of ${releaseText(familyRelease(family))}, the release this SDK pins, but ` +
+      `hands new Pots the Router ${router}` +
+      `${earlier === undefined ? "" : ` (kitchen-evm ${earlier["kitchen-evm"].version})`}, not ` +
+      `this release's ${current}: a fixed-Router or Shared Pot minted there now runs on ` +
+      `${earlier === undefined ? "no engine this SDK knows" : earlier["v12-evm"].engine}.`
+    );
+  }
+  if (potFamilyRunsCompiler(family)) {
+    return (
+      `${it} mints Pots of ${releaseText(familyRelease(family))}, an earlier release whose Pots ` +
+      `this SDK still cooks; this SDK deploys new Pots under ` +
+      `${releaseText(familyRelease(v12DefaultPotFamily()))}.`
+    );
   }
   const release = evmRelease(family.sets[0]!);
   const paired = pairedSdkReleases(release);
@@ -512,7 +554,7 @@ async function potRefusal(
   let listed: string | undefined;
   if (of !== undefined) {
     said.push(
-      `Under its release, ${releaseText(evmRelease(v12ReleaseSet()))}, this SDK deploys the ` +
+      `Under its release, ${releaseText(familyRelease(v12DefaultPotFamily()))}, this SDK deploys the ` +
         `${of.kind === "shared" ? `Shared Pot of salt ${of.salt}` : `Pot of owner ${of.owner} and salt ${of.salt}`} ` +
         `at ${ownReleasePot(of.owner, of.salt, of.kind)}.`,
     );
@@ -599,20 +641,21 @@ export async function requireKitchenPredicts(
 }
 
 /**
- * Refuses code at `pot` that is not a Pot of the release this SDK pins, told from the chain as
- * `pots.ts` tells a Pot's release: its owner, salt and Kitchen read off it, its address that
- * Kitchen's CREATE2 under a release's Pot init-code hash (`evmPotRelease`). Compiler output pairs
- * with an engine by exact version, so a Pot of another release cannot run this SDK's programs; one
- * no release this SDK knows minted is refused too. A Pot of this release is taken whatever the
- * deployed Kitchen mints now: its engine is its release's. Its code is not compared with the
- * release's: a contract at a Pot's address that answers as the Pot would needs a dishonest
+ * Refuses code at `pot` that is not a Pot of a release whose engine runs this SDK's compiler output,
+ * told from the chain as `pots.ts` tells a Pot's release: its owner, salt and Kitchen read off it,
+ * its address the one that Kitchen's release gives for them (`v12PotRelease`). Compiler output pairs
+ * with an engine by exact version (`alsoRunsOn` lists the earlier engines that run it), so a Pot of
+ * a release whose engine does not cannot run this SDK's programs; one no release this SDK knows
+ * minted is refused too. A Pot of such a release is taken whatever the deployed Kitchen mints now,
+ * and returned with its family: its cooks run on its family's engine. Its code is not compared with
+ * the release's: a contract at a Pot's address that answers as the Pot would needs a dishonest
  * endpoint (a fork, or an RPC that lies), and the guard trusts the endpoint as every read does.
  */
 export async function requireReleasePot(
   client: PublicClient,
   chain: CanonicalChain,
   pot: Address,
-): Promise<void> {
+): Promise<{ readonly family: PotFamily; readonly kind: PotKind; readonly owner: Address }> {
   const read = async <T>(
     functionName: "owner" | "userSalt" | "kitchen",
   ): Promise<T | undefined> => {
@@ -636,8 +679,10 @@ export async function requireReleasePot(
         "userSalt() and kitchen().",
     );
   }
-  const found = evmPotRelease({ kitchen, owner, salt, pot });
-  if (found?.family.sets.some((set) => set.compiler === sdkCompilerVersion())) return;
+  const found = v12PotRelease({ kitchen, owner, salt, pot });
+  if (found !== undefined && potFamilyRunsCompiler(found.family)) {
+    return { family: found.family, kind: found.kind, owner: getAddress(owner) };
+  }
   const of = {
     owner: getAddress(owner),
     salt,
@@ -668,10 +713,10 @@ export async function requireReleasePot(
 
 /**
  * The Pot a cook, a Pot deployment or a signed cook names, checked against the chain before
- * anything is simulated, built or sent: code there must be a Pot of the release this SDK pins
- * ({@link requireReleasePot}); with none, the Kitchen must put the owner's Pot where this SDK
- * deploys it ({@link requireKitchenPredicts}). A Pot with no code and no owner known is the caller's
- * to refuse.
+ * anything is simulated, built or sent: code there must be a Pot of a release whose engine runs this
+ * SDK's programs ({@link requireReleasePot}); with none, the Kitchen must put the owner's Pot where
+ * this SDK deploys it ({@link requireKitchenPredicts}). A Pot with no code and no owner known is
+ * the caller's to refuse.
  */
 export async function requirePot(
   client: PublicClient,
@@ -683,7 +728,11 @@ export async function requirePot(
     readonly salt?: Hex;
   },
 ): Promise<void> {
-  if (input.deployed) return requireReleasePot(client, chain, input.pot);
+  if (input.deployed) {
+    await requireReleasePot(client, chain, input.pot);
+
+    return;
+  }
   if (input.owner !== undefined && input.salt !== undefined) {
     await requireKitchenPredicts(client, chain, input.owner, input.salt);
   }
@@ -799,10 +848,10 @@ export class PlanRefusal extends CliError {
 /**
  * Holds every step of a plan that reaches a Pot to the guard at once, before the first is sent, so a
  * plan never sends its first steps (an approval, a transfer into the Pot) only for a later one to be
- * refused. A cook must go to a Pot of the release this SDK pins ({@link requireReleasePot}) — never to
- * an address with no code, unless a step before it deploys the Pot there — and each of the released
- * Kitchen's deployments, `deployPot(owner, salt)` with or without `routerFixed` and
- * `deploySharedPot(salt)`, must put its Pot where this SDK predicts it
+ * refused. A cook must go to a Pot of a release whose engine runs this SDK's programs
+ * ({@link requireReleasePot}) — never to an address with no code, unless a step before it deploys
+ * the Pot there — and each of the released Kitchen's deployments, `deployPot(owner, salt)` with or
+ * without `routerFixed` and `deploySharedPot(salt)`, must put its Pot where this SDK predicts it
  * ({@link requireKitchenPredicts}). Every deployment is read first, before the chain is: one whose
  * calldata carries no owner and salt is refused. Steps already `sent` are not checked again, but for
  * a deployment whose Pot has no code yet (pending, or landed where this SDK has no Pot), which is held
@@ -1150,13 +1199,13 @@ export interface Sent {
 
 /**
  * Signs `tx` as `account`, sends it through `url`, and waits for its receipt. A cook or a Pot's
- * deployment is first held to the deployed Kitchen (`requireSendable`): a cook goes only to a Pot
- * of this release, and a deployment only where this SDK predicts the Pot. It is simulated next, so
- * a transaction that would revert is refused with its reason and never sent. Then it is
- * made whole as it will be signed (its gas, fees, nonce and chain), and from a wallet (`--wallet`)
- * that whole transaction is held to the wallet's policy (`policy.ts`), measured with the gas and fees
- * it carries, and what it spends is reserved in the wallet's ledger. What is signed is exactly what
- * was measured: nothing of it is filled in or changed after.
+ * deployment is first held to the deployed Kitchen (`requireSendable`): a cook goes only to a Pot of
+ * a release whose engine runs this SDK's programs, and a deployment only where this SDK predicts the
+ * Pot. It is simulated next, so a transaction that would revert is refused with its reason and
+ * never sent. Then it is made whole as it will be signed (its gas, fees, nonce and chain), and from
+ * a wallet (`--wallet`) that whole transaction is held to the wallet's policy (`policy.ts`),
+ * measured with the gas and fees it carries, and what it spends is reserved in the wallet's ledger.
+ * What is signed is exactly what was measured: nothing of it is filled in or changed after.
  */
 export async function sendAndWait(
   client: PublicClient,

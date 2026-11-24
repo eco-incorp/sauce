@@ -38,8 +38,13 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
   `--owner <address>` instead.
 - **Units differ by flag.** `--args` and a program take **base units** (`1000000` is 1 USDC);
   `--fund` and `--assume-balance` take **whole tokens** (`USDC:1` is 1 USDC, `USDC:1000000` a
-  million), base units there only with a trailing `n` (`USDC:1000000n` is 1 USDC). A token the
-  chain does not register is `<address>:<amount>`, in its own decimals.
+  million), base units there only with a trailing `n` (`USDC:1000000n` is 1 USDC), and an amount
+  past the token's decimals (`USDC:1.2345678`) is refused, never rounded. A token the chain does
+  not register is `<address>:<amount>`, in its own decimals.
+  `sauce units --chain base 1.5 USDC` prints `1500000`, the number `--args` takes, and
+  `sauce units --chain base 1500000n USDC` reads base units back as `1.5`; a token the chain has no
+  symbol for is named by its address (a mint on Solana) with `--decimals <n>`, and `--json` prints
+  one object.
 - **Transactions are built only on supported chains** (`sauce-overview`; the list of refused
   commands is below).
 - `sauce <command> --help` lists every option; on Solana the same commands apply, with the
@@ -47,12 +52,23 @@ the other skills'; how a program runs on Solana is `sauce-solana`'s.
 
 ## Getting the command
 
-Install it once with `npm i -g @eco-incorp/sauce` (Node.js 24 or newer); `sauce --version` checks
-it, and `sauce update` upgrades it the way it was installed (`sauce update --check` only reports the
+Use Node.js 24 or newer. Install the global CLI with
+`npm install --global --engine-strict @eco-incorp/sauce@latest`; `sauce --version` checks it.
+Keep both `@latest` and `--engine-strict`: unversioned npm installs on unsupported Node can select
+an obsolete CLI release; strict installation refuses an unsupported runtime. Upgrade Node first,
+then reinstall. Without an install, run
+`npx --engine-strict -y @eco-incorp/sauce@latest <command>` in its place. Never run a bare
+`npx sauce` outside a project that depends on the package: npx then fetches and runs npm's unrelated
+`sauce` package.
+
+`sauce update` upgrades it the way it was installed (`sauce update --check` only reports the
 latest; a line on stderr saying a newer `sauce` is available changes nothing the command did, and
-`--no-update-check` leaves it out). Without an install, run `npx -y @eco-incorp/sauce <command>` in
-its place. Never run a bare `npx sauce` outside a project that depends on the package: npx then
-fetches and runs npm's unrelated `sauce` package.
+`--no-update-check` leaves it out).
+
+For a project-local CLI, `npm install --engine-strict -D -E @eco-incorp/sauce@latest` saves an exact
+development dependency; the project's npm scripts then run that pinned copy, not the global CLI.
+For application imports, install the library locally with
+`npm install --engine-strict @eco-incorp/sauce@latest viem` instead.
 
 ## Commands
 
@@ -61,6 +77,7 @@ fetches and runs npm's unrelated `sauce` package.
 | `sauce globals`  | The tokens, protocol contracts, chains and functions a program on a chain can use |
 | `sauce pools`    | Lists a pair's price-limit pools on a chain, deepest first, with their prices     |
 | `sauce price`    | Turns a price, or a pool's now, into `sqrtPriceX96`, the limits and `priceLimit`  |
+| `sauce units`    | Turns whole tokens into the base units `--args` takes, or base units back; no RPC |
 | `sauce compile`  | Compiles a file for a chain; prints its bytecode, or with `--json` what it takes  |
 | `sauce actions`  | Lowers a JSON actions document for a chain; prints its SauceScript and bytecode   |
 | `sauce simulate` | Simulates the cook from the Pot's owner, with no key: gas, or why it reverts      |
@@ -273,8 +290,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    native currency) gives the Pot that balance for the simulation only; a token that keeps no stored
    balance (rebasing, shares) is refused. On Arc, `USDC:<amount>` sets the Pot's native balance (the
    token is the native coin, which no token storage holds), and `ETH:<amount>` or
-   `native:<amount>` is native USDC there, not ether. On a local chain with Uniswap V3's own pools
-   at 2,650 USDC per WETH, it printed, addresses written as their roles:
+   `native:<amount>` is native USDC there, not ether. A simulation that passes with an assumed
+   balance shows the program works if the Pot holds it, not that the owner does: tell the user so.
+   On a local chain with Uniswap V3's own pools at 2,650 USDC per WETH, it printed, addresses
+   written as their roles:
 
    ```text
    The cook succeeds from <owner>: gas used 273670 for the cook, after the Pot's deploy (1. below), returns <96 bytes>
@@ -350,9 +369,9 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
 
 4. **The Pot.** `sauce pot --chain base --owner <address>` (or `--wallet <name>` for the signer's)
    prints the Pot's address, known before it exists, its deploy transaction, whether the chain has
-   the released engine and Kitchen (and the Kitchen's fee), and whether the Pot is deployed. There is
-   no deploy step to take: a command deploys your Pot when it first needs it (asks, or `--yes`), and
-   `sauce tx` puts its deployment first.
+   the released engine and Kitchen (and the Kitchen's fee), and whether the Pot is deployed. A
+   command deploys your Pot when it first needs it (asks, or `--yes`), and `sauce tx` puts its
+   deployment first; deploy it by hand only to send it tokens yourself (step 5).
    `sauce pot --deploy --chain base --wallet <name> --password-env <NAME>` deploys it by hand.
    `--salt <label>` names another Pot of the same owner
    (`--salt-hex <bytes32>` for an exact salt); use the same salt in every later command.
@@ -370,7 +389,8 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
    (`sauce pot import --chain solana --owner <owner> --salt <label>`, the only way on Solana).
    `sauce tx` sends nothing, so it records nothing.
 
-5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet, or
+5. **Fund** the Pot with what the program spends: send its address the tokens from any wallet once
+   it is deployed (`sauce pot --deploy`), or
    pass `--fund USDC:100` (repeatable; `ETH:0.01` as value) to `run`, which pulls it from the signer
    into the Pot in the same cook; `--sweep` sends the Pot's whole balance of each funded token back
    to the signer (and of the native coin, when native is funded), not only what this run brought,
@@ -465,7 +485,10 @@ to 100 USDC, at no more than 2,700 USDC per WETH, for at least 0.037 WETH.
   as the cook's value), simulated with them for its gas where an endpoint is given; a balance short
   of a transfer is said, as the batch would revert. `--format cast` prints a `cast send` line
   instead. It simulates only for gas: show the user the program, the arguments and
-  `sauce simulate`'s outcome first.
+  `sauce simulate`'s outcome first. The transactions carry no gas price fields (`maxFeePerGas`,
+  `maxPriorityFeePerGas`): the signer sets them, and on Arc and Arc Testnet it must set a
+  `maxFeePerGas` of at least 20 gwei, their minimum base fee, or the transaction is never included
+  (`sauce tx` notes it there, and `sauce send` refuses a transaction signed below it).
 - **`sauce send <signed>… --chain base`** broadcasts what a hardware wallet, a KMS or another tool
   signed (raw hex for EVM, the base64 wire transaction for Solana), in order, waits for each and
   prints what it did as `run` does. It takes no key. Each is simulated as signed first, and one that
@@ -643,6 +666,15 @@ is not deployed on <chain>`: there is no Pot to cook on there. The checks trust 
   every read does: a contract at a Pot's address that answers as a Pot would needs a dishonest
   endpoint (a fork, or an RPC that lies). Offline the deployed release cannot be checked, and the
   notes say `The Pot's address is NOT checked against the deployed Kitchen`.
+- **A Pot only the store records** (exit 1, EVM, offline). `the Pot store records … Pot for this
+owner and salt…`: the command read no chain, and the Pot store, which also keeps Pots that
+  landed on a fork or another network with the chain's id, holds a Pot of another Kitchen release
+  for the owner and salt, so nothing offline says which of it and this package's Pot is theirs.
+  Nothing was built, signed or funded (`sauce tx` with `--fund` or `--value` too, `sauce sign` and
+  `--cancel`). Pass an RPC endpoint and the chain decides, or name the Pot with `--pot <address>`:
+  its engine then comes from the record when the record is that Pot's own. `sauce pot --offline`
+  prints both Pots under `candidates`, with the record's file, transaction and block hash, and
+  builds nothing.
 - **A Pot with no owner** (exit 2, EVM). `Kitchen.deployPot reverts for the owner …`: the owner
   given is the zero address, and no Kitchen call deploys a private Pot for it, so nothing was built,
   online or offline. Name the Pot's owner. A Pot with no owner is a Shared Pot, which anyone may

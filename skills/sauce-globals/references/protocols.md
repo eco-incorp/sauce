@@ -14,6 +14,7 @@ and in each chain's file in `sauce-chains`.
 ## Contracts
 
 - `AaveV2.LendingPool` ([`aave-v2`](../../sauce-protocols/references/registry/aave-v2.md), default)
+- `AaveV3.Oracle` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md))
 - `AaveV3.Pool` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md), default)
 - `AaveV3.PoolAddressesProvider` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md))
 - `AaveV4.AvaxCorrelatedSpoke` ([`aave-v4`](../../sauce-protocols/references/registry/aave-v4.md))
@@ -87,6 +88,7 @@ and in each chain's file in `sauce-chains`.
 - `CompoundV3.CUSDCv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
 - `CompoundV3.CUSDTv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
 - `CompoundV3.CWETHv3` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
+- `CompoundV3.CometRewards` ([`compound-v3`](../../sauce-protocols/references/registry/compound-v3.md))
 - `Connext.EverclearSpoke` ([`connext`](../../sauce-protocols/references/registry/connext.md), default)
 - `Convex.Booster` ([`convex`](../../sauce-protocols/references/registry/convex.md), default)
 - `Convex.CvxRewardPool` ([`convex`](../../sauce-protocols/references/registry/convex.md))
@@ -294,6 +296,8 @@ an address it holds and calls a method in the same expression,
 `Namespace.Contract(address).method(...)` (or `.at(address)`), such as a pool its factory
 returned.
 
+- `AaveV3.AToken(<address>)` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md))
+- `AaveV3.VariableDebtToken(<address>)` ([`aave-v3`](../../sauce-protocols/references/registry/aave-v3.md))
 - `Abracadabra.Cauldron(<address>)` ([`abracadabra`](../../sauce-protocols/references/registry/abracadabra.md))
 - `Aerodrome.Pool(<address>)` ([`aerodrome`](../../sauce-protocols/references/registry/aerodrome.md))
 - `AerodromeSlipstream.Pool(<address>)` ([`aerodrome-slipstream`](../../sauce-protocols/references/registry/aerodrome-slipstream.md))
@@ -315,8 +319,11 @@ returned.
 - `Layerbank.LToken(<address>)` ([`layerbank`](../../sauce-protocols/references/registry/layerbank.md))
 - `Maverick.V2Pool(<address>)` ([`maverick`](../../sauce-protocols/references/registry/maverick.md))
 - `Moonwell.MToken(<address>)` ([`moonwell`](../../sauce-protocols/references/registry/moonwell.md))
+- `MorphoBlue.Oracle(<address>)` ([`morpho-blue`](../../sauce-protocols/references/registry/morpho-blue.md))
 - `PancakeswapV2.Pair(<address>)` ([`pancakeswap-v2`](../../sauce-protocols/references/registry/pancakeswap-v2.md))
 - `PancakeswapV3.Pool(<address>)` ([`pancakeswap-v3`](../../sauce-protocols/references/registry/pancakeswap-v3.md))
+- `Pendle.Market(<address>)` ([`pendle`](../../sauce-protocols/references/registry/pendle.md))
+- `Pendle.SY(<address>)` ([`pendle`](../../sauce-protocols/references/registry/pendle.md))
 - `Premia.Diamond(<address>)` ([`premia`](../../sauce-protocols/references/registry/premia.md))
 - `Quickswap.V2Pair(<address>)` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
 - `Quickswap.V3Pool(<address>)` ([`quickswap`](../../sauce-protocols/references/registry/quickswap.md))
@@ -355,10 +362,11 @@ other name, such as one that two members share, is ambiguous: name the versioned
 - `Aave.LombardBtcSpoke` → `AaveV4.LombardBtcSpoke`: ethereum
 - `Aave.Mag7Spoke` → `AaveV4.Mag7Spoke`: base
 - `Aave.MainSpoke` → `AaveV4.MainSpoke`: ethereum, arc, avalanche
+- `Aave.Oracle` → `AaveV3.Oracle`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
 - `Aave.PaxgGoldSpoke` → `AaveV4.PaxgGoldSpoke`: ethereum
 - `Aave.PlusHub` → `AaveV4.PlusHub`: ethereum
 - `Aave.Pool` → `AaveV3.Pool`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
-- `Aave.PoolAddressesProvider` → `AaveV3.PoolAddressesProvider`: ethereum, optimism, polygon, monad, base, arbitrum, avalanche
+- `Aave.PoolAddressesProvider` → `AaveV3.PoolAddressesProvider`: ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll
 - `Aave.PrimeHub` → `AaveV4.PrimeHub`: ethereum
 - `Aave.UsdgMapleESpoke` → `AaveV4.UsdgMapleESpoke`: ethereum
 - `Aave.UsdgPendleSpoke` → `AaveV4.UsdgPendleSpoke`: ethereum
@@ -368,6 +376,7 @@ other name, such as one that two members share, is ambiguous: name the versioned
 - `Compound.CUSDCv3` → `CompoundV3.CUSDCv3`: ethereum, optimism, polygon, base, arbitrum, scroll
 - `Compound.CUSDTv3` → `CompoundV3.CUSDTv3`: ethereum, arbitrum
 - `Compound.CWETHv3` → `CompoundV3.CWETHv3`: ethereum, base
+- `Compound.CometRewards` → `CompoundV3.CometRewards`: ethereum, optimism, polygon, base, arbitrum, scroll
 - `Compound.Comptroller` → `CompoundV2.Comptroller`: ethereum
 - `Euler.EthereumVaultConnector` → `EulerV2.EthereumVaultConnector`: ethereum
 - `Gmx.DataStore` → `GmxV2.DataStore`: arbitrum

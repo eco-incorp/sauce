@@ -19,6 +19,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 
+import { TokenAmountError } from "../amounts.js";
 import type { CanonicalChain } from "../chains/canonical.js";
 import {
   addressDefines,
@@ -71,6 +72,7 @@ import {
   txCommand,
   unapproved,
 } from "./commands.js";
+import { cookPotOf } from "./cook-pot.js";
 import type { FundRequest } from "./funding.js";
 import type { Ask } from "./prompt.js";
 import { potImportCommand, potListCommand } from "./pot-commands.js";
@@ -107,6 +109,7 @@ import {
 } from "./sign.js";
 import { simulateCommand } from "./simulate.js";
 import { previewChainsNote, requireSupported, supportedChainNames } from "./support.js";
+import { unitsCommand } from "./units.js";
 import { parsePin, verifyCommand } from "./verify.js";
 import {
   loadKeypair,
@@ -155,6 +158,7 @@ import {
 } from "./terminal.js";
 import { updateCheckOff, updateNotice, type UpdateCheck } from "./update-check.js";
 import { updateCommand, type Updater } from "./update.js";
+import { whereCommand } from "./where.js";
 import {
   AGENTS,
   describeStatus,
@@ -1713,6 +1717,64 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       return undefined;
     },
   },
+  where: {
+    usage: "sauce where <file | -> [--chains <slug,…>] [--supported] [--json]",
+    summary: "Compile a program for every chain and list the ones it compiles on",
+    flags: {
+      chains: {
+        type: "string",
+        value: "<slug,…>",
+        help: "Only these chains, comma-separated (default: every chain Sauce knows)",
+      },
+      supported: { type: "boolean", help: "Only the chains transactions are built and sent on" },
+      "source-dir": PROGRAM["source-dir"]!,
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "Compiles the file once for each chain, the same compile `sauce compile` runs, and lists",
+      "the chains it compiles on with the program's size, then the ones it does not with the",
+      "first reason: most often a token or protocol that chain has no name for. It reads no",
+      "chain and needs no key, so it answers whether a program written for Base also runs on",
+      "Ethereum or Solana before a cook is built anywhere.",
+      "",
+      "Examples:",
+      "  sauce where pay.sauce.ts",
+      "  sauce where swap.sauce.ts --supported",
+      "  sauce where pay.sauce.ts --chains base,ethereum,solana --json",
+    ].join("\n"),
+    run: (args, io) => {
+      const { file, text, stdin } = programText(io, fileOperand(args));
+      if (isActionsDocument(text)) {
+        throw new UsageError(
+          `${file} is an actions document: sauce where takes a SauceScript program; compile a ` +
+            "document with sauce compile <file> --chain <slug>",
+        );
+      }
+      const list = stringFlag(args, "chains");
+      const sourceDir = stringFlag(args, "source-dir");
+      const chains =
+        list === undefined
+          ? undefined
+          : list
+              .split(",")
+              .map((each) => each.trim())
+              .filter((each) => each !== "")
+              .map((each) => parseChain(each, "--chains"));
+
+      return whereCommand(
+        {
+          file,
+          text,
+          ...(stdin ? { stdin } : {}),
+          ...(sourceDir === undefined ? {} : { sourceDir }),
+          ...(chains === undefined ? {} : { chains }),
+          supported: args.values.supported === true,
+        },
+        io,
+      );
+    },
+  },
   actions: {
     usage: "sauce actions <file | -> [--chain <slug|id>] [--json]",
     summary: "Lower an actions document to SauceScript for a chain; print the source and bytecode",
@@ -1927,7 +1989,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "reason when it reverts (exit 1). The signer is the owner. The value defaults to the",
       "Kitchen's execution fee, read from the chain.",
       "",
-      "You never deploy the Pot as a step of your own: a run deploys it when it first needs it.",
+      "You need not deploy the Pot as a step of your own: a run deploys it when it first needs it.",
       "What the run sends before its cook, each in a transaction of its own, it asks you to",
       "approve at the terminal first; -y (--yes, or --auto-approve) approves every one without",
       "asking, and says `auto-approved: <action>` for each. They are:",
@@ -1942,7 +2004,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "--fund TOKEN:amount gets tokens into the Pot in the same cook: the program is wrapped so",
       "it first pulls each amount from you, then runs, then (--sweep) returns what is left. The",
       "amount is in whole tokens: USDC:1.5 is 1.5 USDC, and USDC:1500000 is 1.5 million (said",
-      "on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC).",
+      "on stderr); base units end in n, as a bigint is written (USDC:1500000n is 1.5 USDC). An",
+      "amount past the token's decimals (USDC:1.2345678) is refused, never rounded.",
       "ETH:<amount> rides as the cook's value. Every pull is a safeTransferFrom: @sauce/token's",
       "SafeERC20 one, or Permit2's own (Solmate's SafeTransferLib). --fund-mode:",
       "  permit2    (default) you sign a Permit2 transfer of exactly this amount to this Pot, once;",
@@ -2076,6 +2139,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "as the cook's value. Sent as one batch, a smart wallet deploys, funds and cooks with one",
       "approval, or nothing happens.",
       "",
+      "Offline (--offline, or no endpoint) --owner means this release's Pot, and an earlier release's",
+      "cannot be seen. The Pot store also keeps Pots that landed on a fork, so where it records an",
+      "earlier release's Pot for the owner and salt, nothing is built, naming the record, until",
+      "--pot <address> names a Pot or an endpoint lets the chain say.",
+      "",
       "On Solana: { chain, via, feePayer, pot, fee, maxExecutionFee, createsPot, transaction },",
       "the Kitchen cook as a base64 transaction signed by no one, for --owner to sign — or, --via",
       "engine, the engine's own paid cook, with no Pot. A Pot not created yet is created by the",
@@ -2167,7 +2235,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "the salt name still signs, and the result carries deployPot, Kitchen.deployPot, which any",
       "account sends first. A Pot minted before signed cooks (it has no cookSigned), a Shared Pot",
       "and a contract that is not a Pot are refused. It also reads the Kitchen's fee and the",
-      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing.",
+      "Pot's balance, and warns when they do not cover the fee. --offline reads nothing: --owner",
+      "then means this release's Pot, and where the Pot store records an earlier release's Pot for",
+      "the owner and salt (it also keeps Pots that landed on a fork) nothing is signed or built",
+      "until --pot <address> names a Pot or an endpoint lets the chain say.",
       "",
       "--cancel <nonce> (repeatable) cancels instead: one invalidateNonces(word, mask) per nonce",
       "word, to the Pot, from its owner. With a signer and an endpoint they are sent; without a",
@@ -2525,7 +2596,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       ...HELP,
     },
     details: [
-      "A Pot's address is CREATE2 from the released Kitchen over (owner, salt), so it is known",
+      "A Pot's address is the released Kitchen's for (owner, salt), so it is known",
       "before it exists. You need not deploy it yourself: sauce run deploys it when it first",
       "needs it (asking, or with -y), and sauce tx plans its deployment first. This does it by",
       "hand. Prints the address and the unsigned Kitchen.deployPot transaction as JSON; with",
@@ -2538,6 +2609,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
       "Without --deploy it also reads",
       "the chain: whether the released engine and Kitchen are there, the Kitchen's fee, and",
       "whether the Pot is deployed and whose it is (under `deployment`, and on stderr).",
+      "",
+      "With --offline (or no endpoint) it only predicts: this release's Pot. The Pot store also",
+      "keeps Pots that landed on a fork or another network with the chain's id, so where it",
+      "records an earlier release's Pot for the owner and salt, nothing says which is the owner's:",
+      "both are printed under `candidates`, each with where it came from (the record's file,",
+      "transaction and block hash), with no `pot` and no deployment to send.",
       "",
       "On Solana a Pot is the Kitchen's PDA over (owner, salt): this prints it and the create_pot",
       "instruction; --deploy (with --keypair) creates it. There the owner signs create_pot, so",
@@ -2627,7 +2704,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         };
 
         if (rpcUrl !== undefined) return potStatusCommand({ ...target, rpcUrl });
-        const predicted = potCommand(target);
+        // Offline the Pot store can only say an earlier release's Pot may be the owner's: both Pots
+        // are shown then (`CookPot.stored`), and nothing is built for either.
+        const at = await cookPotOf(chain, target);
+        const predicted = potCommand(target, at);
 
         // A preview chain's prediction carries no deployment, so nothing is taken on trust.
         return predicted.cast === undefined
@@ -2702,6 +2782,53 @@ const COMMANDS: Readonly<Record<string, Command>> = {
         stocks: args.values.stocks === true,
         ...(protocol === undefined ? {} : { protocol }),
         ...(search === undefined ? {} : { search }),
+      });
+    },
+  },
+  units: {
+    usage: "sauce units --chain <slug|id> <amount> <token> [--decimals <n>] [--json]",
+    summary: "Turn an amount in whole tokens into the smallest unit main takes, or back",
+    flags: {
+      chain: { type: "string", value: "<slug|id>", help: "The chain whose token it is" },
+      decimals: {
+        type: "string",
+        value: "<n>",
+        help: "The token's decimals, for a token the chain has no symbol for",
+      },
+      ...JSON_FLAG,
+      ...HELP,
+    },
+    details: [
+      "A program's amounts are integers in the token's smallest unit: USDC has 6 decimals, so",
+      "1.5 USDC is 1500000. This reads the token's decimals from the same registries the compile",
+      "resolves (any case: usdc is USDC), so the number it prints is the one --args takes. An",
+      "amount that would need rounding (a digit other than 0 past the token's decimals) is",
+      "refused, never rounded: 1.5000000 USDC is exact, 1.2345678 USDC is not. A token the",
+      "chain has no symbol for is named by its address, with --decimals. Base units end in",
+      "n, as --fund writes them (1500000n USDC is 1.5 USDC); a bare 1500000 USDC is 1.5 million,",
+      "and a note on stderr says so.",
+      "",
+      "Examples:",
+      "  sauce units --chain base 1.5 USDC",
+      "  sauce units --chain base 1500000n USDC",
+      "  sauce units --chain solana 0.25 WSOL --json",
+      "  sauce units --chain base 2 0x… --decimals 18",
+    ].join("\n"),
+    run: (args) => {
+      if (args.positionals.length !== 2) {
+        throw new UsageError("give the amount and the token: sauce units --chain base 1.5 USDC");
+      }
+      const [amount, token] = args.positionals as [string, string];
+      const decimals = stringFlag(args, "decimals");
+      if (decimals !== undefined && !/^\d{1,2}$/.test(decimals)) {
+        throw new UsageError(`--decimals: ${decimals} is not a number of decimals`);
+      }
+
+      return unitsCommand({
+        chain: parseChain(requiredFlag(args, "chain", "<slug|id>")),
+        amount,
+        token,
+        ...(decimals === undefined ? {} : { decimals: Number(decimals) }),
       });
     },
   },
@@ -3389,11 +3516,12 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     flags: { ...MCP_FLAGS, ...HELP },
     details: [
       "The Sauce MCP server. Every server, over stdio or HTTP, has this command's building half",
-      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_pools, sauce_compile,",
-      "sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim, sauce_simulate,",
-      "sauce_inspect and sauce_verify; sauce_send, which broadcasts what the caller signed; the",
-      "agent skills as tools (sauce_skills, sauce_skill, sauce_dev, sauce_install_skills) and as",
-      "resources, at sauce://skills/<path>; and a prompt, sauce_write_program. Over stdio it also",
+      "as tools: sauce_chains, sauce_globals, sauce_price, sauce_units, sauce_pools,",
+      "sauce_compile, sauce_actions, sauce_tx, sauce_signed_cook, sauce_pot, sauce_reclaim,",
+      "sauce_simulate, sauce_inspect and sauce_verify; sauce_send, which broadcasts what the",
+      "caller signed; the agent skills as tools (sauce_skills, sauce_skill, sauce_dev,",
+      "sauce_install_skills) and as resources, at sauce://skills/<path>; and a prompt,",
+      "sauce_write_program. Over stdio it also",
       "has the wallet tools and the",
       "store tools (below). No tool takes a key or a password: a transaction comes back unsigned,",
       "for the user's own wallet, or is sent from one of the server's own wallets.",
@@ -3781,13 +3909,16 @@ export async function runCli(argv: readonly string[], rawIo: CliIo): Promise<num
 
     return output.exitCode ?? 0;
   } catch (error) {
-    if (error instanceof UsageError) {
+    // An amount past its token's decimals (`amounts.ts`) is the invocation's fault too.
+    if (error instanceof UsageError || error instanceof TokenAmountError) {
       io.stderr(`sauce ${label}: ${error.message}\nRun \`sauce ${label} --help\` for usage.\n`);
 
       return 2;
     }
     const message = error instanceof Error ? error.message : String(error);
     io.stderr(`sauce ${label}: ${message}\n`);
+    // What the failure's setting adds (a Pot's state, for a cook that failed), after the failure.
+    if (error instanceof CliError) for (const note of error.notes) io.stderr(`${note}\n`);
 
     return 1;
   } finally {

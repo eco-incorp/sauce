@@ -1,8 +1,13 @@
 import type { Abi } from "viem";
 import { getProtocol } from "../protocols/index.js";
 import type { ChainDeployment } from "../core/types.js";
-import { CONTRACT_LINKS, PROTOCOL_SOURCES, RETURNED_CONTRACTS } from "./contracts.generated.js";
-import type { ContractLink, ReturnedContractLink } from "./links.js";
+import {
+  CONTRACT_LINKS,
+  PRIOR_OVERLOADS,
+  PROTOCOL_SOURCES,
+  RETURNED_CONTRACTS,
+} from "./contracts.generated.js";
+import type { ContractLink, PriorOverloadsLink, ReturnedContractLink } from "./links.js";
 import { buildDescriptor } from "./derive.js";
 import type { ContractDescriptor, MethodReturn } from "./types.js";
 import type { ChainSlug } from "../chains/canonical.js";
@@ -45,6 +50,22 @@ const RETURNS: ReadonlyMap<string, ReadonlyMap<string, readonly MethodReturn[]>>
     map.set(key, bySignature);
     const returned = { path: link.path, ...link.returns };
     bySignature.set(link.signature, [...(bySignature.get(link.signature) ?? []), returned]);
+  }
+  return map;
+})();
+
+/** `<protocol>/<abiExport>` -> name -> its overloads before the full ABIs, in their order then
+ *  (`PRIOR_OVERLOADS`): what `describeContract`'s methods map chooses among. */
+export const PRIOR_OVERLOADS_BY_EXPORT: ReadonlyMap<
+  string,
+  ReadonlyMap<string, readonly string[]>
+> = (() => {
+  const map = new Map<string, Map<string, readonly string[]>>();
+  for (const link of PRIOR_OVERLOADS as readonly PriorOverloadsLink[]) {
+    const key = `${link.protocol}/${link.abiExport}`;
+    const names = map.get(key) ?? new Map<string, readonly string[]>();
+    map.set(key, names);
+    names.set(link.name, link.signatures);
   }
   return map;
 })();

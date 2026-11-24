@@ -1,0 +1,323 @@
+{
+  "note": "Reference interface ABIs from upstream packages and repositories, for registry exports whose deployed contracts have no verified source on any keyless explorer; a function is adopted from them only where the capture proves the deployed code (a proxy layer or Diamond facet included) dispatches its selector.",
+  "exports": {
+    "erc20.ERC20ABI": [
+      {
+        "file": "openzeppelin-ierc20-metadata.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC20Metadata.json",
+        "sha256": "316b3892ffb95d78326cdcf041fb8fc11ebf1263ec50237d07963c415f9dabfd"
+      }
+    ],
+    "erc3156.FlashLenderABI": [
+      {
+        "file": "openzeppelin-ierc3156-flash-lender.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC3156FlashLender.json",
+        "sha256": "05559bddeb99c522ea9e60ee00df2e67d42b7d915f9a6c66b0191810e76e72ee"
+      }
+    ],
+    "erc4626.VaultABI": [
+      {
+        "file": "openzeppelin-ierc4626.json",
+        "source": "@openzeppelin/contracts@5.0.1 build/contracts/IERC4626.json",
+        "sha256": "3f07293a14f43dbc0606d67c3ddce8cf9f3115bbb243d3aa2c4b37a547f79921"
+      }
+    ],
+    "maverick.MaverickV2FactoryABI": [
+      {
+        "file": "maverick-v2-factory.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Factory.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "524d4922f51d0d9f885accdcee3e6eaf2a2ba5c3c6a0468afef6f0fcab500eb3"
+      },
+      {
+        "file": "maverick-v2-factory-admin.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2FactoryAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "b58a275b68fb687a1755e4ab6457ef8a8ce253bea3c157cce1196633f90e2b41"
+      }
+    ],
+    "maverick.MaverickV2PoolABI": [
+      {
+        "file": "maverick-v2-pool.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2Pool.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "a4937150b09dff981a80614d622e7595d746989f375fdf34ef3ea2a0be1ad042"
+      },
+      {
+        "file": "maverick-v2-pool-admin.json",
+        "source": "maverickprotocol/v2-common@d91e8714a20b65913166d6b6608590ff822c3f06 contracts/interfaces/IMaverickV2PoolAdmin.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@5.0.1)",
+        "sha256": "bc9b5c1faa7f81dc751077e77e6079bc090d01504be78f2e62c7c2b68ea9dcbe"
+      }
+    ],
+    "morpho-blue.OracleABI": [
+      {
+        "file": "morpho-blue-ioracle.json",
+        "source": "@morpho-org/morpho-blue@1.0.0 src/interfaces/IOracle.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "26d86a8eda4ec222829cf51ff09c18cad92cb47b0659108538cf183e481cf125"
+      }
+    ],
+    "spookyswap.SpookySwapRouterABI": [
+      {
+        "file": "uniswap-v2-router02.json",
+        "source": "@uniswap/v2-periphery@1.1.0-beta.0 build/UniswapV2Router02.json",
+        "sha256": "690fd0f1bc279180964bf6956dc4a8d3e6e312aa1bf5f2371bf571edac4f2140"
+      }
+    ],
+    "synthra-v3.SynthraV3FactoryABI": [
+      {
+        "file": "uniswap-v3-factory.json",
+        "source": "@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json",
+        "sha256": "b90bc55bc8374b6a852424380c777eefe5ed0e872f40980f574a06feddea263d"
+      }
+    ],
+    "synthra-v3.SynthraV3NonfungiblePositionManagerABI": [
+      {
+        "file": "uniswap-v3-nonfungible-position-manager.json",
+        "source": "@uniswap/v3-periphery@1.4.4 artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json",
+        "sha256": "093e5115751711b0c577a4c89546321666cd8c2805e4554f0e8840dab6e7aec7"
+      }
+    ],
+    "synthra-v3.SynthraV3PoolABI": [
+      {
+        "file": "uniswap-v3-pool.json",
+        "source": "@uniswap/v3-core@1.0.1 artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json",
+        "sha256": "e196cb57c05ed1fbeb2c5032714f38049eff496ce67fc50f1311535f79ee9b88"
+      }
+    ],
+    "synthra-v3.SynthraV3QuoterV2ABI": [
+      {
+        "file": "uniswap-v3-quoter-v2.json",
+        "source": "@uniswap/v3-periphery@1.4.4 artifacts/contracts/lens/QuoterV2.sol/QuoterV2.json",
+        "sha256": "7b5afcbe93bf90d236550b5baf551b97f7b9de8bb1264091383ce40984c697dd"
+      }
+    ],
+    "synthra-v3.SynthraV3SwapRouter02ABI": [
+      {
+        "file": "uniswap-swap-router02.json",
+        "source": "@uniswap/swap-router-contracts@1.3.1 artifacts/contracts/SwapRouter02.sol/SwapRouter02.json",
+        "sha256": "da6f17f29ea02fa25171b5d9f34cc81acb262a81b9534fccd6fd21f5abb104fb"
+      }
+    ],
+    "unitflow-v3.UnitFlowV3FactoryABI": [
+      {
+        "file": "unitflow-v3-factory.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Factory.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "6e9d5d73831c9e3f0304709ee99c656946ae3fdcffce6b690543fb5ef89ec7a7"
+      },
+      {
+        "file": "unitflow-v3-pool-deployer.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3PoolDeployer.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "74393182cd3faac86a46c75973d2018e8720ef90cbe9643656d4ed7d52f79eb4"
+      }
+    ],
+    "unitflow-v3.UnitFlowV3PoolABI": [
+      {
+        "file": "unitflow-v3-pool.json",
+        "source": "UnitFlow-Finance/UnitFlowV3-contract@7690d7c59824a362e5ae010b9534539f3937605a contracts/core/interfaces/IUnitFlowV3Pool.sol (ABI compiled by solc 0.8.36 --abi)",
+        "sha256": "1ca5afa3feeaff6f584fb8c446babadd5f33d7dfc58669b06a059d0aa530875a"
+      }
+    ]
+  },
+  "inventories": {
+    "note": "Router inventories: for a contract that routes each selector to a facet one lookup at a time (Pendle selectorToFacet, 0x getFunctionImplementation, Paraswap getImplementation), every facet its maker publishes, with that facet's interface. The capture asks the router about every function listed, so no facet goes undiscovered for want of a candidate, and records which facets each deployment reached; registry-abi.test.ts fails a facet no deployment reaches unless its target says why under `unresolved`, and a per-selector router with no inventory. A facet's functions reach the registry only from its deployed code's verified ABI, never from here.",
+    "pendle.PendleRouterABI": {
+      "facets": {
+        "ActionAddRemoveLiqV3": {
+          "file": "pendle-action-add-remove-liq-v3.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionAddRemoveLiqV3.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "b7077b3493015771885efdbfdbcda93c0f3674a656f89f7ed590a9291204bb5a"
+        },
+        "ActionSwapPTV3": {
+          "file": "pendle-action-swap-pt-v3.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionSwapPTV3.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "2a60d03d6482de4d9ee55520e41932cdf76406b126b8a176bca3dde04f32ba9d"
+        },
+        "ActionSwapYTV3": {
+          "file": "pendle-action-swap-yt-v3.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionSwapYTV3.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "653ff528a2e6d272dba8a35bf993ff3a1f575bf24ecdb162484e290f930a749f"
+        },
+        "ActionMiscV3": {
+          "file": "pendle-action-misc-v3.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionMiscV3.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "a92c4cdbc28fc51a9570fb4d6dc80ab2733dfd002f3b93daed20b7a79510c594"
+        },
+        "ActionCallbackV3": {
+          "file": "pendle-action-callback-v3.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionCallbackV3.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "40516cafe1a589a11a8644de7be1a065831a4c3a20488623937577dc2a600dda"
+        },
+        "ActionStorageV4": {
+          "file": "pendle-action-storage-v4.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionStorageV4.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "79e8a57fd44916ca05ca358efaa2297f8fca3370f379a770b40a2843da988ba6"
+        },
+        "ActionSimple": {
+          "file": "pendle-action-simple.json",
+          "source": "pendle-finance/pendle-core-v2-public@87685c89d05087535e9b9647eeda0e3d297d1f06 contracts/interfaces/IPActionSimple.sol (ABI compiled by solc 0.8.36 --abi, @openzeppelin/contracts@4.9.3 and @openzeppelin/contracts-upgradeable@4.9.3)",
+          "sha256": "be616d92272485e6e65e70611288a2478b240d229a21ea49d29bd92f92d00f9e"
+        }
+      }
+    },
+    "zerox.ExchangeProxyABI": {
+      "facets": {
+        "OwnableFeature": {
+          "file": "zerox-ownable-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IOwnableFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "537b7c895dd80de3c0a81ca075b78b33782c02e24e07b1329c58f5de532e3786"
+        },
+        "SimpleFunctionRegistryFeature": {
+          "file": "zerox-simple-function-registry-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/ISimpleFunctionRegistryFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "0b25493ba459c1f3c2c40753522b85cae417bcc22c2d555abca44fe5524112dc"
+        },
+        "TransformERC20Feature": {
+          "file": "zerox-transform-erc20-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/ITransformERC20Feature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "5459a27509aa923cc21c6bdce626e2369ebe2524e4cfda41bfbc562a95a1db3e"
+        },
+        "MetaTransactionsFeature": {
+          "file": "zerox-meta-transactions-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IMetaTransactionsFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "9483c60d2d8b4c3cedd96d9675571aec72b6b6b1098b6680c1b1274365e9f541"
+        },
+        "MetaTransactionsFeatureV2": {
+          "file": "zerox-meta-transactions-feature-v2.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IMetaTransactionsFeatureV2.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "4017fcfdaa9b3377aa8cb1a957cebc0324b6e80fa6ad742f65bc1f4da778e3b7"
+        },
+        "UniswapFeature": {
+          "file": "zerox-uniswap-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IUniswapFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "f88b330c379acd6a1c4cc81eb747ca5c248dc53f977473ae8eada155da7391dd"
+        },
+        "UniswapV3Feature": {
+          "file": "zerox-uniswap-v3-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IUniswapV3Feature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "fce4af7eb163cd08c1631ff97d8b4a5fde93fd352c39c355541f4b54ca612c35"
+        },
+        "PancakeSwapFeature": {
+          "file": "zerox-pancake-swap-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IPancakeSwapFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "722a8482404c25cf2a16e5ab608817ecc7336ac4c4e767d6f621d7f06cd11457"
+        },
+        "LiquidityProviderFeature": {
+          "file": "zerox-liquidity-provider-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/ILiquidityProviderFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "8e59ea9f819f7c44b0419ee092add10a7034aadc16c99457fe3d631ea9983465"
+        },
+        "NativeOrdersFeature": {
+          "file": "zerox-native-orders-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/INativeOrdersFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "c64bb62215ab5dab401e13f49c5566d35ce91cf835402b94978a6368b38e61ca"
+        },
+        "BatchFillNativeOrdersFeature": {
+          "file": "zerox-batch-fill-native-orders-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IBatchFillNativeOrdersFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "a43c08cf5f7cd90d35ceca7afa14f99f84e064ba87bd2f89cc0441c1dae5023c"
+        },
+        "MultiplexFeature": {
+          "file": "zerox-multiplex-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IMultiplexFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "63271df47e0e7160bcc8a07549d66702aca4b4da153935918020f7324343410c"
+        },
+        "OtcOrdersFeature": {
+          "file": "zerox-otc-orders-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IOtcOrdersFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "219afeff7670ff6895203ce4bb8b0f7ad0c38042b035ed60aaccaab7dfa2828a"
+        },
+        "FundRecoveryFeature": {
+          "file": "zerox-fund-recovery-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IFundRecoveryFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "15285d59ba7dabee45875cf2995d14c45a1fec073e1c1aacdc606014f70f6bd1"
+        },
+        "ERC721OrdersFeature": {
+          "file": "zerox-erc721-orders-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IERC721OrdersFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "d364f80ea9341d96ec0bdfd3446540b92045f9a42120582e750896ca960dd923"
+        },
+        "ERC1155OrdersFeature": {
+          "file": "zerox-erc1155-orders-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IERC1155OrdersFeature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "8db12437f3b60f07d919578506a4245f8a22a164e6344736bcf2b2b44377eccf"
+        },
+        "ERC165Feature": {
+          "file": "zerox-erc165-feature.json",
+          "source": "0xProject/protocol@66edc60b3e6a7d606cf803aab133d745eae34b23 (the gitHead of @0x/contracts-zero-ex@0.49.0) contracts/zero-ex/contracts/src/features/interfaces/IERC165Feature.sol (ABI compiled by solc 0.6.12 --abi)",
+          "sha256": "3314166124075d12017964298760dda45d97c0c415191a2d58092079e6a1e7f0"
+        }
+      }
+    },
+    "paraswap.AugustusV5ABI": {
+      "facets": {
+        "AugustusRFQRouter": {
+          "file": "paraswap-v5-augustus-rfq-router.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/AugustusRFQRouter.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "9c9c044ec5c1dac170d5957605d6c295edf77afc04a71029329581d727ab9d6e"
+        },
+        "DirectSwap": {
+          "file": "paraswap-v5-direct-swap.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/DirectSwap.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "6af67254e802e639551c5ae72e4897d0c6d495464e36fb29ce9a420c61052366"
+        },
+        "ERC165": {
+          "file": "paraswap-v5-erc165.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/ERC165.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "333fea0495f5a276272deccb5ab066869a803fd36bdd965f927cd3abf84c1067"
+        },
+        "MultiPath": {
+          "file": "paraswap-v5-multi-path.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/MultiPath.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "8d034cbe0bfe112d1237be5a8cc33ddfb1c3c26770cc05a731fe308d996b7092"
+        },
+        "NewUniswapV2Router": {
+          "file": "paraswap-v5-new-uniswap-v2-router.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/NewUniswapV2Router.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "d0fef51bca422221d32d23b298b9eb24e74bb95aefe686f0117905acf176a3b1"
+        },
+        "OnERC1155Received": {
+          "file": "paraswap-v5-on-erc1155-received.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/OnERC1155Received.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "cbb1820d6bdfbc8125efb547a9a10ac799de1826b8c5d979fe3519b5af4e2bc4"
+        },
+        "OnERC721Received": {
+          "file": "paraswap-v5-on-erc721-received.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/OnERC721Received.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "3f93f90feede0f6915c389a66348a2945b4ccf2c5c5f5c64a83c24237579c9c0"
+        },
+        "ProtectedMultiPath": {
+          "file": "paraswap-v5-protected-multi-path.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/ProtectedMultiPath.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "ab56fe449c2c4ee3465006270c5908a71b20fbe3bceec828a2d100a562691b69"
+        },
+        "ProtectedSimpleSwap": {
+          "file": "paraswap-v5-protected-simple-swap.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/ProtectedSimpleSwap.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "41b8361c46671f761bfa543196d61c5535d53712b143d2f829abc6b0582dab64"
+        },
+        "SimpleSwap": {
+          "file": "paraswap-v5-simple-swap.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/SimpleSwap.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "dd48c977cbe87b3d904aa9814d7a9b0924bf55bdf7d81073f6187aaa3f8e0266"
+        },
+        "SimpleSwapNFT": {
+          "file": "paraswap-v5-simple-swap-nft.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/SimpleSwapNFT.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "54b7957bb87abd75fe59bde4c337c49e97601c5742c496edaa1c9b35497e0446"
+        },
+        "UniswapV2Router": {
+          "file": "paraswap-v5-uniswap-v2-router.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/UniswapV2Router.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "67cb2c7da4322857c02b22cb8af84fb499095acddd9743c47e73aff95f863e3d"
+        },
+        "ZeroxV2Router": {
+          "file": "paraswap-v5-zerox-v2-router.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/ZeroxV2Router.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "e764e55b560404e1e33c51d41038b208f2ccf68a7fa87e6fadc301aeec433254"
+        },
+        "ZeroxV4Router": {
+          "file": "paraswap-v5-zerox-v4-router.json",
+          "source": "VeloraDEX/augustus-v5@d297477b8fc7be65c337b0cf2bc21f4f7f925b68 deployments/mainnet/ZeroxV4Router.json abi (the published deployment record of a router Augustus V5 dispatches to)",
+          "sha256": "a388fd9b280a177fb07a4c2c4372b6ec959a64637921f1c4607d0e694004138e"
+        }
+      }
+    }
+  }
+}

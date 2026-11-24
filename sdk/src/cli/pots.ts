@@ -10,11 +10,12 @@
  * pot --deploy`, a run that deploys its Pot first, `sauce send`, a cook whose program calls the
  * Kitchen.
  *
- * Which release minted an EVM Pot is told from its address: `CREATE2(kitchen, gate salt, hash)`
- * under each Kitchen and Pot init-code hash `deployments/releases.json` records, with the gate salt
- * of each kind of Pot (`keccak256(abi.encode(owner, salt))`, and `…, true)` for a fixed Router or a
- * Shared Pot). Offline: the release the SDK pins today does not decide it. A Solana Pot is the
- * Kitchen's PDA under every release; its engine is the program its creation named.
+ * Which release minted an EVM Pot is told from its address under each Kitchen release
+ * `deployments/releases.json` records — CREATE2 under the Pot's init-code hash up to kitchen-evm
+ * 1.3.0, CREATE3 under its proxy's from 1.4.0 (`deployments/pot.ts`) — with the gate salt of each
+ * kind of Pot (`keccak256(abi.encode(owner, salt))`, and `…, true)` for a fixed Router or a Shared
+ * Pot). Offline: the release the SDK pins today does not decide it. A Solana Pot is the Kitchen's
+ * PDA under every release; its engine is the program its creation named.
  *
  * Every landed transaction carries its records (`Sent.pots`, `SvmSent.pots`), which every JSON that
  * reports it includes. Where a scope keeps the Pot store (`keep.ts`: the command, and the local MCP
@@ -35,11 +36,11 @@ import {
   decodeEventLog,
   ContractFunctionRevertedError,
   ContractFunctionZeroDataError,
-  encodeAbiParameters,
   getAddress,
-  getCreate2Address,
   hexToBytes,
-  keccak256,
+  isAddress,
+  isHex,
+  size,
   toEventSelector,
   zeroAddress,
   type Address,
@@ -49,12 +50,24 @@ import {
 
 import { requireChain, resolveChain, type CanonicalChain } from "../chains/canonical.js";
 import {
-  sdkCompilerVersion,
   V12_RELEASE_SETS,
-  v12PotDerivation,
+  engineRunsCompiler,
+  sdkCompilerVersion,
   v12SvmKitchenProgramId,
   type V12ReleaseSet,
 } from "../deployments/index.js";
+import {
+  potAddressIn,
+  potGateSalt,
+  potReleaseSet,
+  preferredReleaseSets,
+  v12DefaultPotFamily,
+  v12PotFamilies,
+  v12PotRelease,
+  type PotFamily,
+  type PotKind,
+  type PotRelease,
+} from "../deployments/pot.js";
 import { SDK_RELEASES } from "../embedded/sdk-releases.generated.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
 import { svmClusterOf } from "../routes/token-registry.js";
@@ -64,9 +77,11 @@ import type { Landed } from "./keep.js";
 import {
   MAINNET_CLUSTER,
   POT_SCHEMA,
-  type PotKind,
+  pathText,
+  recordText,
   type PotRecord,
   type PotStore,
+  type StoredPot,
 } from "./pot-store.js";
 
 let version: string | undefined;
@@ -109,13 +124,17 @@ export function pairedSdkReleases(release: Readonly<Record<string, string>>): st
     : runs.map((one) => (one.length === 1 ? one[0] : `${one[0]} to ${one.at(-1)}`)).join(", ");
 }
 
+/** `paired` SDK releases (`pairedSdkReleases`) pair with a release: one, or several. */
+export const pairWith = (paired: string): string =>
+  `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
+
 /** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
 export const releaseText = (release: PotRecord["release"]): string => {
   if (release === undefined) return "release unknown";
   const { compiler, ...components } = release;
 
-  return `compiler ${compiler} (${Object.entries(components)
-    .map(([component, version]) => `${component} ${version}`)
+  return `compiler ${recordText(compiler)} (${Object.entries(components)
+    .map(([component, version]) => `${recordText(component)} ${recordText(version)}`)
     .join(", ")})`;
 };
 
@@ -123,138 +142,41 @@ export const releaseText = (release: PotRecord["release"]): string => {
 // Which release minted a Pot
 // ---------------------------------------------------------------------------------------------
 
-/** One Kitchen and the init-code hash its Pots are minted under, with every release set that
- *  minted them: the SDK's own first, then the newest. */
-export interface PotFamily {
-  readonly kitchen: Address;
-  readonly potInitCodeHash: Hex;
-  readonly sets: readonly V12ReleaseSet[];
-}
-
-let preferredSets: readonly V12ReleaseSet[] | undefined;
-
-/** The release sets, the SDK's own first and then the newest: the one a Pot is recorded under
- *  when several share its Kitchen and hash. The table is the SDK's own, so it is ordered once. */
-const preferred = (): readonly V12ReleaseSet[] => {
-  const own = sdkCompilerVersion();
-
-  return (preferredSets ??= [...V12_RELEASE_SETS]
-    .reverse()
-    .sort((a, b) => +(b.compiler === own) - +(a.compiler === own)));
-};
-
-let families: readonly PotFamily[] | undefined;
-
-/** Every Kitchen and Pot init-code hash a known release mints under: gathered once. */
-const potFamilies = (): readonly PotFamily[] => (families ??= gatherFamilies());
-
-function gatherFamilies(): PotFamily[] {
-  const families = new Map<
-    string,
-    { kitchen: Address; potInitCodeHash: Hex; sets: V12ReleaseSet[] }
-  >();
-  for (const set of preferred()) {
-    const { kitchen, potInitCodeHash } = set["kitchen-evm"];
-    if (kitchen === null || potInitCodeHash === null) continue;
-    const key = `${kitchen.toLowerCase()}:${potInitCodeHash.toLowerCase()}`;
-    const family = families.get(key) ?? {
-      kitchen: getAddress(kitchen),
-      potInitCodeHash: potInitCodeHash.toLowerCase() as Hex,
-      sets: [],
-    };
-    family.sets.push(set);
-    families.set(key, family);
-  }
-
-  return [...families.values()];
-}
-
-/** The salt a Pot of `kind` is CREATE2 under (`Kitchen._salt`, which `Pot.gateSalt` mirrors). */
-const gateSalt = (owner: Address, salt: Hex, routerFixed: boolean): Hex =>
-  keccak256(
-    routerFixed
-      ? encodeAbiParameters(
-          [{ type: "address" }, { type: "bytes32" }, { type: "bool" }],
-          [owner, salt, true],
-        )
-      : encodeAbiParameters([{ type: "address" }, { type: "bytes32" }], [owner, salt]),
-  );
-
 const kindOf = (owner: Address, routerFixed: boolean): PotKind =>
   !routerFixed ? "private" : owner === zeroAddress ? "shared" : "private-fixed-router";
 
 /** Every Pot the Kitchen of `family` could mint for (owner, salt): one of each kind. */
 function candidates(
-  family: Pick<PotFamily, "kitchen" | "potInitCodeHash">,
+  family: Pick<PotFamily, "kitchen" | "scheme" | "hash">,
   owner: Address,
   salt: Hex,
 ): Array<{ readonly pot: Address; readonly kind: PotKind }> {
   // A Private Pot has an owner, a Shared one none; either may have its Router fixed.
-  const fixed = owner === zeroAddress ? [true] : [false, true];
-
-  return fixed.map((routerFixed) => ({
-    pot: getCreate2Address({
-      from: family.kitchen,
-      salt: gateSalt(owner, salt, routerFixed),
-      bytecodeHash: family.potInitCodeHash,
-    }),
+  return (owner === zeroAddress ? [true] : [false, true]).map((routerFixed) => ({
+    pot: potAddressIn(family, owner, salt, routerFixed),
     kind: kindOf(owner, routerFixed),
   }));
 }
 
 /**
- * The release that minted `pot`, Kitchen `kitchen`'s for (`owner`, `salt`), and its kind: the
- * family whose CREATE2 lands on it. `undefined` when no release the SDK knows does.
+ * The release Kitchen `kitchen` mints under when it reports `reportedHash` from its
+ * `potInitCodeHash()` — for a CREATE3 release, keccak256 of the Pot's creation code: the family a
+ * known release records. `undefined` for a hash no release the SDK knows records — a Kitchen
+ * upgraded past this SDK.
  */
-export function evmPotRelease(input: {
-  readonly kitchen: Address;
-  readonly owner: Address;
-  readonly salt: Hex;
-  readonly pot: Address;
-}): { readonly family: PotFamily; readonly kind: PotKind } | undefined {
-  const owner = getAddress(input.owner);
-  const pot = getAddress(input.pot);
-  for (const family of potFamilies()) {
-    if (family.kitchen !== getAddress(input.kitchen)) continue;
-    const found = candidates(family, owner, input.salt).find((one) => one.pot === pot);
-    if (found !== undefined) return { family, kind: found.kind };
-  }
-
-  return undefined;
-}
-
-/**
- * The release Kitchen `kitchen` mints under when it reports Pot init-code hash `potInitCodeHash`
- * (its `potInitCodeHash()`): the family a known release records. `undefined` for a hash no release
- * the SDK knows records — a Kitchen upgraded past this SDK.
- */
-export const evmKitchenRelease = (
-  kitchen: string,
-  potInitCodeHash: string,
-): PotFamily | undefined =>
-  potFamilies().find(
+export const evmKitchenRelease = (kitchen: string, reportedHash: string): PotFamily | undefined =>
+  v12PotFamilies().find(
     (family) =>
-      family.kitchen === getAddress(kitchen) &&
-      family.potInitCodeHash === potInitCodeHash.toLowerCase(),
+      family.kitchen === getAddress(kitchen) && family.reportedHash === reportedHash.toLowerCase(),
   );
 
 /**
  * The Pot of kind `kind` the release this SDK pins mints for (`owner`, `salt`): its Kitchen's
- * CREATE2 under its Pot init-code hash, where this SDK deploys that Pot.
+ * address for it under the installed release (CREATE3 since kitchen-evm 1.4.0), where this SDK
+ * deploys that Pot.
  */
-export function ownReleasePot(owner: Address, salt: Hex, kind: PotKind): Address {
-  const derivation = v12PotDerivation();
-  const own = candidates(
-    {
-      kitchen: getAddress(derivation.deployer),
-      potInitCodeHash: derivation.initCodeHash.toLowerCase() as Hex,
-    },
-    getAddress(owner),
-    salt,
-  );
-
-  return (own.find((one) => one.kind === kind) ?? own[0]!).pot;
-}
+export const ownReleasePot = (owner: Address, salt: Hex, kind: PotKind): Address =>
+  potAddressIn(v12DefaultPotFamily(), getAddress(owner), salt, kind !== "private");
 
 /** The EVM part of a release set, as a record names it. */
 export const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
@@ -263,8 +185,133 @@ export const evmRelease = (set: V12ReleaseSet): Record<string, string> => ({
   "kitchen-evm": set["kitchen-evm"].version,
 });
 
+/**
+ * The release a record names for a Pot of `set`: the installed compiler with the set's engine and
+ * Kitchen where that engine runs this SDK's programs, else the set as it is.
+ */
+const releaseOf = (set: V12ReleaseSet): Record<string, string> =>
+  evmRelease(
+    engineRunsCompiler("evm", set["v12-evm"].engine!) === true
+      ? { ...set, compiler: sdkCompilerVersion() }
+      : set,
+  );
+
+/** The release a record names for a Pot of `family`'s first set: the installed one for the default family. */
+export const familyRelease = (family: PotFamily): Record<string, string> =>
+  releaseOf(family.sets[0]!);
+
+/**
+ * A record whose `kitchen`, `owner`, `pot` or `salt` is not what it should be. Its message names the
+ * field and says its value through {@link recordText}, so a note says it as it is.
+ */
+export class UnreadableRecord extends Error {}
+
+/**
+ * An error met reading a record or the store, as a note says it: an {@link UnreadableRecord}'s message
+ * as it is, any other error's quoted (an operating system's error names a path, and a parser's quotes
+ * the file it read).
+ */
+export const errorText = (error: unknown): string =>
+  error instanceof UnreadableRecord
+    ? error.message
+    : recordText(error instanceof Error ? error.message : error, 400);
+
+/**
+ * What an EVM record's Pot is, told again from its address (`v12PotRelease`): the family its Kitchen
+ * belongs to, and its kind. A record written before its release was known is identified now, and
+ * its `kind` field is not what decides: SDK 1.1.0 wrote a CREATE3 Pot with no release, and the kind
+ * `private` for any owner but the zero address where the Kitchen's `gateSalt()` could not be read,
+ * a fixed-Router Pot's included. `undefined` for a Pot no known release derives, of which a record
+ * says only what it says itself. Throws, naming the field, for a record whose `kitchen`, `owner` or
+ * `pot` is no address or whose `salt` is not 32 bytes of hex: the store checks that a field is a
+ * string, not what it holds.
+ */
+export function recordPotRelease(record: PotRecord): PotRelease | undefined {
+  if (!record.pot.startsWith("0x")) return undefined;
+  for (const field of ["kitchen", "owner", "pot"] as const) {
+    if (!isAddress(record[field], { strict: false })) {
+      throw new UnreadableRecord(`its ${field} is not an address: ${recordText(record[field])}`);
+    }
+  }
+  if (!isHex(record.salt, { strict: true }) || size(record.salt) !== 32) {
+    throw new UnreadableRecord(`its salt is not 32 bytes of hex: ${recordText(record.salt)}`);
+  }
+
+  return v12PotRelease({
+    kitchen: getAddress(record.kitchen),
+    owner: getAddress(record.owner),
+    salt: record.salt,
+    pot: getAddress(record.pot),
+  });
+}
+
+/**
+ * A record's kind as its address says it ({@link recordPotRelease}), and the stored `kind` only
+ * where no release this SDK knows derives the Pot (a Pot of a release it does not know, or a Solana
+ * Pot). The stored field is not what decides: an earlier SDK wrote it wrongly where it could not read
+ * the Kitchen, and a record is a file anyone can edit.
+ */
+export const recordKind = (record: PotRecord): PotKind =>
+  recordPotRelease(record)?.kind ?? record.kind;
+
+/** A record's release as a reader reads it: the one it names, else the one its address tells. */
+export function recordRelease(record: PotRecord): PotRecord["release"] {
+  if (record.release !== undefined) return record.release;
+  const found = recordPotRelease(record);
+  if (found === undefined) return undefined;
+  // An unread Router names no release for a fixed-Router or Shared Pot of a CREATE3 family.
+  if (found.family.scheme === "create3" && found.kind !== "private") return undefined;
+
+  return familyRelease(found.family);
+}
+
+/** What a listing says of one record: see {@link recordFacts}. */
+export interface RecordFacts {
+  /** The kind its address says, or the one the record stores where that cannot be told. */
+  readonly kind: PotKind;
+  /** The release the record names, else the one its address tells; none where neither does. */
+  readonly release: PotRecord["release"];
+  /** Why its address cannot be read, where a field of the record is no address. */
+  readonly unreadable?: string;
+}
+
+/**
+ * What a listing says of `record`: its kind and release as {@link recordKind} and
+ * {@link recordRelease} tell them. The store checks that a record's fields are strings, not that
+ * they are addresses, so a record with a field that is none cannot be told from its address: it is
+ * listed with the kind it stores and the release it names, `unreadable` saying why, where it would
+ * otherwise stop every listing of the store.
+ */
+export function recordFacts(record: PotRecord): RecordFacts {
+  try {
+    return { kind: recordKind(record), release: recordRelease(record) };
+  } catch (error) {
+    return {
+      kind: record.kind,
+      release: record.release,
+      unreadable: errorText(error),
+    };
+  }
+}
+
+/** The warning for a record `recordFacts` found unreadable, naming its file. */
+export const unreadableNote = (path: string, facts: RecordFacts): string =>
+  `warning: ${pathText(path)} cannot be told from its address (${facts.unreadable}): it is listed with the ` +
+  `kind it stores and ${releaseText(facts.release)}`;
+
+/** Every EVM engine a release set names, each once, newest first. */
+export const releaseEngines = (): readonly Address[] => [
+  ...new Set(
+    [...V12_RELEASE_SETS].reverse().flatMap((set) => {
+      const engine = set["v12-evm"].engine;
+
+      return engine === null ? [] : [getAddress(engine)];
+    }),
+  ),
+];
+
 /** The Solana part of a release set, as a record names it. */
-const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
+export const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
   compiler: set.compiler,
   "v12-svm": set["v12-svm"].version,
   "kitchen-svm": set["kitchen-svm"].version,
@@ -272,7 +319,7 @@ const svmRelease = (set: V12ReleaseSet): Record<string, string> => ({
 
 /** The release set whose Solana engine is `engine`, the SDK's own first. */
 const svmSetOf = (engine: string): V12ReleaseSet | undefined =>
-  preferred().find((set) => set["v12-svm"].engine === engine);
+  preferredReleaseSets().find((set) => set["v12-svm"].engine === engine);
 
 /** What every record shares. */
 const base = (chain: CanonicalChain, origin: PotRecord["origin"]) => ({
@@ -302,15 +349,36 @@ async function evmRecord(input: {
   readonly origin: PotRecord["origin"];
   readonly deployment?: PotRecord["deployment"];
   readonly unknown?: () => Promise<{ readonly hash?: Hex; readonly kind?: PotKind }>;
+  /** A fixed-Router or Shared Pot's `router()`: the Router it runs, which names the engine built for it. */
+  readonly router?: () => Promise<Address | undefined>;
 }): Promise<PotRecord> {
-  const known = evmPotRelease(input);
+  const known = v12PotRelease(input);
   const read = known === undefined ? await input.unknown?.() : undefined;
-  const set = known?.family.sets[0];
-  const hash = known?.family.potInitCodeHash ?? read?.hash;
+  const family = known?.family;
+  // A fixed-Router or Shared Pot of a CREATE3 family runs only on the engine built for the Router it
+  // was minted with, which the Pot says; any other Pot is its family's first set.
+  const fixed = family?.scheme === "create3" && known?.kind !== "private";
+  const router = fixed ? await input.router?.() : undefined;
+  const set =
+    family === undefined
+      ? undefined
+      : fixed
+        ? potReleaseSet(family, known!.kind, router)
+        : family.sets[0];
+  const identity =
+    family === undefined
+      ? read?.hash === undefined
+        ? {}
+        : { potInitCodeHash: read.hash }
+      : family.scheme === "create3"
+        ? {
+            potProxyInitCodeHash: family.hash,
+            potProfileHash: family.sets[0]!["kitchen-evm"].potProfileHash!,
+          }
+        : { potInitCodeHash: family.hash };
   // Told by neither: a Pot with no owner is a Shared one, and any other its owner's.
   const kind =
     known?.kind ?? read?.kind ?? kindOf(getAddress(input.owner), input.owner === zeroAddress);
-  const engine = set?.["v12-evm"].engine;
 
   return {
     ...base(input.chain, input.origin),
@@ -319,14 +387,21 @@ async function evmRecord(input: {
     salt: input.salt.toLowerCase(),
     kind,
     kitchen: getAddress(input.kitchen),
-    ...(hash === undefined ? {} : { potInitCodeHash: hash }),
-    ...(engine === undefined || engine === null ? {} : { engine: getAddress(engine) }),
-    ...(set === undefined ? {} : { release: evmRelease(set) }),
+    ...identity,
+    ...(set === undefined
+      ? {}
+      : { engine: getAddress(set["v12-evm"].engine!), release: releaseOf(set) }),
     sdk: sdkVersion(),
     ...(input.deployment === undefined ? {} : { deployment: input.deployment }),
     recordedAt: new Date().toISOString(),
   };
 }
+
+/** The Router `pot` runs, as the Pot says; `undefined` where it cannot be read. */
+const potRouter = (client: PublicClient, pot: Address): Promise<Address | undefined> =>
+  client
+    .readContract({ address: pot, abi: v12PotAbi, functionName: "router" })
+    .catch(() => undefined);
 
 /**
  * The init-code hash and kind of `pot`, which Kitchen `kitchen` minted at `blockNumber` for
@@ -358,7 +433,7 @@ async function unknownRelease(
   const under =
     hash === undefined
       ? undefined
-      : candidates({ kitchen: at.kitchen, potInitCodeHash: hash }, at.owner, at.salt).find(
+      : candidates({ kitchen: at.kitchen, scheme: "create2", hash }, at.owner, at.salt).find(
           (one) => one.pot === at.pot,
         )?.kind;
   if (under !== undefined) return { hash, kind: under };
@@ -366,7 +441,7 @@ async function unknownRelease(
     .readContract({ address: at.pot, abi: v12PotAbi, functionName: "gateSalt", blockNumber })
     .catch(() => undefined);
   const fixed = [false, true].find(
-    (routerFixed) => gateSalt(at.owner, at.salt, routerFixed) === gate,
+    (routerFixed) => potGateSalt(at.owner, at.salt, routerFixed) === gate,
   );
 
   return {
@@ -385,7 +460,7 @@ let knownKitchens: ReadonlySet<Address> | undefined;
 
 /** Every Kitchen a known release mints from. */
 const kitchens = (): ReadonlySet<Address> =>
-  (knownKitchens ??= new Set(potFamilies().map((family) => family.kitchen)));
+  (knownKitchens ??= new Set(v12PotFamilies().map((family) => family.kitchen)));
 
 /**
  * The Pots a landed EVM transaction deployed: one record per `PotDeployed` a known Kitchen emitted
@@ -445,6 +520,7 @@ export async function evmPotsDeployed(
         },
         // A Kitchen upgraded past the releases the SDK knows: as the chain says it was then.
         unknown: () => unknownRelease(client, { kitchen, owner, salt, pot }, sent.blockNumber),
+        router: () => potRouter(client, pot),
       });
     }),
   );
@@ -643,7 +719,7 @@ export function keepPots(store: PotStore, landed: Landed): string[] {
         .flatMap((one) =>
           one.deployment === undefined || one.deployment.tx === pot.deployment?.tx
             ? []
-            : [one.deployment.tx],
+            : [recordText(one.deployment.tx)],
         );
 
       return (
@@ -656,7 +732,7 @@ export function keepPots(store: PotStore, landed: Landed): string[] {
     } catch (error) {
       return (
         `warning: Pot ${pot.pot} on ${pot.chain} was deployed, but not recorded in ${store.dir}: ` +
-        (error instanceof Error ? error.message : String(error))
+        errorText(error)
       );
     }
   });
@@ -674,17 +750,15 @@ export function ownerPotsText(
   owner: Address,
   except: Address,
 ): string {
-  let records: PotRecord[];
+  let files: StoredPot[];
+  let warnings: string[];
   try {
-    records = store.list().pots;
+    ({ files, warnings } = store.listFiles());
   } catch (error) {
-    return (
-      `The Pot store ${store.dir} could not be read: ` +
-      (error instanceof Error ? error.message : String(error))
-    );
+    return `The Pot store ${store.dir} could not be read: ${errorText(error)}`;
   }
   const listed = new Set<string>([except.toLowerCase()]);
-  const pots = records.filter((record) => {
+  const pots = files.filter(({ record }) => {
     const pot = record.pot.toLowerCase();
     if (record.chainId !== chain.id || record.owner.toLowerCase() !== owner.toLowerCase()) {
       return false;
@@ -695,18 +769,25 @@ export function ownerPotsText(
     return true;
   });
   const whose = `of ${owner} on ${chain.slug}`;
-  if (pots.length === 0) return `The Pot store ${store.dir} holds no other Pot ${whose}.`;
+  // A file the store left out is said too: it may be the Pot.
+  const left = warnings.map((warning) => `  ${warning}`);
+  if (pots.length === 0)
+    return [`The Pot store ${store.dir} holds no other Pot ${whose}.`, ...left].join("\n");
 
   return [
     `The Pot store ${store.dir} holds ${pots.length} other Pot${pots.length === 1 ? "" : "s"} ${whose}:`,
-    ...pots.map((record) => {
-      const paired = record.release === undefined ? undefined : pairedSdkReleases(record.release);
+    ...pots.flatMap(({ record, path }) => {
+      const facts = recordFacts(record);
+      const paired = facts.release === undefined ? undefined : pairedSdkReleases(facts.release);
 
-      return (
-        `  ${record.pot}  ${record.kind}, salt ${record.salt}: ${releaseText(record.release)}` +
-        (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`)
-      );
+      return [
+        `  ${recordText(record.pot)}  ${recordText(facts.kind)}, salt ${recordText(record.salt)}: ` +
+          releaseText(facts.release) +
+          (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`),
+        ...(facts.unreadable === undefined ? [] : [`  ${unreadableNote(path, facts)}`]),
+      ];
     }),
+    ...left,
   ].join("\n");
 }
 
@@ -716,7 +797,7 @@ export function ownerPotsText(
 
 /** What every release says of where Pots come from, for a refusal. */
 const knownReleases = (): string =>
-  potFamilies()
+  v12PotFamilies()
     .map(
       (family) =>
         `kitchen-evm ${[...new Set(family.sets.map((set) => set["kitchen-evm"].version))].join(", ")}`,
@@ -787,7 +868,7 @@ export async function importEvmPot(
     read<Hex>("userSalt"),
     read<Address>("kitchen"),
   ]);
-  if (evmPotRelease({ kitchen, owner, salt, pot }) === undefined) {
+  if (v12PotRelease({ kitchen, owner, salt, pot }) === undefined) {
     throw new Error(
       `${pot} on ${chain.slug} says it is Kitchen ${kitchen}'s, for owner ${owner} and salt ` +
         `${salt}, but no release this sauce knows minted it there (${knownReleases()}): it is not ` +
@@ -802,15 +883,17 @@ export async function importEvmPot(
     salt,
     pot,
     origin: "imported",
+    router: () => potRouter(client, pot),
   });
 }
 
 /**
  * Whether `pot` is `wallet`'s own Pot, as the chain shows it: its owner is the wallet, and its
- * address is the CREATE2 of its owner and salt under a Kitchen a release records, which no other
- * contract can sit at. `"not"` where the contract answers otherwise (it has no such getters, or
- * another owner), `"unreadable"` where a read failed for any reason but the contract's own answer:
- * the wallet's claim to it is then neither shown nor refuted.
+ * address is the one its Kitchen's release gives for that owner and salt (`v12PotRelease`: CREATE2
+ * up to kitchen-evm 1.3.0, CREATE3 from 1.4.0), which no other contract can sit at. `"not"` where
+ * the contract answers otherwise (it has no such getters, or another owner), `"unreadable"` where
+ * a read failed for any reason but the contract's own answer: the wallet's claim to it is then
+ * neither shown nor refuted.
  */
 export async function authenticatePot(
   client: PublicClient,
@@ -835,7 +918,7 @@ export async function authenticatePot(
   if ("answer" in salt) return salt.answer;
   if ("answer" in kitchen) return kitchen.answer;
 
-  return evmPotRelease({ kitchen: kitchen.value, owner: owner.value, salt: salt.value, pot }) ===
+  return v12PotRelease({ kitchen: kitchen.value, owner: owner.value, salt: salt.value, pot }) ===
     undefined
     ? "not"
     : "own";
@@ -849,7 +932,7 @@ export async function importEvmOwnerPots(
   salt: Hex,
 ): Promise<PotRecord[]> {
   const found = await Promise.all(
-    potFamilies().flatMap((family) =>
+    v12PotFamilies().flatMap((family) =>
       candidates(family, getAddress(owner), salt).map(async ({ pot }) =>
         (await hasCode(client, pot)) ? importEvmPot(client, chain, pot) : undefined,
       ),
@@ -867,13 +950,17 @@ export interface SvmAccountReader {
   readonly genesis: () => Promise<string>;
 }
 
+/** The System Program: the owner of an address that holds only lamports. */
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+
 /**
  * `owner`'s Pot at `salt` on Solana: the Kitchen's PDA, which must exist and be an engine's —
  * `create_pot` hands the account to the engine it names, so a Pot is owned by one a release
- * records. An account there owned by anything else (lamports sent to the address before any Pot,
- * held by the System Program) is no Pot, and is refused: a record is never rewritten, so it would
- * stand for the Pot for good. On a chain held to a cluster (`solana-devnet`), the endpoint is held
- * to it first.
+ * records. An account there held by the System Program (lamports sent to the address before any
+ * Pot) is no Pot, and one owned by a program this SDK does not know may be the Pot of a later
+ * release's engine, which a newer SDK imports. Both are refused: a record is never rewritten, so it
+ * would stand for the Pot for good. On a chain held to a cluster (`solana-devnet`), the endpoint is
+ * held to it first.
  */
 export async function importSvmPot(
   reader: SvmAccountReader,
@@ -893,10 +980,13 @@ export async function importSvmPot(
     throw new Error(`${owner} has no Pot at salt ${salt} on ${chain.slug}: ${pot} does not exist`);
   }
   if (svmSetOf(engine) === undefined) {
+    const where = `${pot}, ${owner}'s Pot address at salt ${salt} on ${chain.slug}, is owned by ${engine}`;
     throw new Error(
-      `${pot}, ${owner}'s Pot address at salt ${salt} on ${chain.slug}, is owned by ${engine}, ` +
-        "which no release this sauce knows names as its engine: it is not a Pot, and is not " +
-        "recorded",
+      engine === SYSTEM_PROGRAM
+        ? `${where}, which no release this sauce knows names as its engine: it is not a Pot, and ` +
+            "is not recorded"
+        : `${where}, which is not an engine this SDK knows: it is not recorded. Where a later ` +
+            "release's engine owns it, a newer SDK imports it.",
     );
   }
 

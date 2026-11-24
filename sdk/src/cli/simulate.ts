@@ -18,18 +18,20 @@ import {
 } from "viem";
 
 import { nativeErc20 } from "../chains/index.js";
-import { v12EngineAddress } from "../deployments/index.js";
 import { CliError } from "./args.js";
 import { entryReturnType } from "../routes/entry.js";
 import { mergeOverrides } from "../evm/balance-slot.js";
 import { assumeTokenBalance } from "./assume.js";
-import { balanceReader, connectAt, potState, requireCookContracts, requirePot } from "./chain.js";
+import { balanceReader, connectAt, requireCookContracts, requirePot } from "./chain.js";
+import { cookPotOf } from "./cook-pot.js";
+import { releaseEngines } from "./pots.js";
 import {
   type ChainAccess,
   type CliFiles,
   type CommandOutput,
   type CookInput,
-  cookOf,
+  cookOn,
+  cookProgram,
   kitchenAddress,
   priceLimitNotes,
   revertedFirst,
@@ -245,29 +247,35 @@ export async function simulateCommand(
 }
 
 async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<CommandOutput> {
-  const cook = cookOf(input, files);
+  const { program, payload } = cookProgram(input, files);
   // Every read and the rehearsal itself on one block: what it saw is what it says it saw.
   const { client, block } = await connectAt(input.rpcUrl, input.chain, input.block);
-  const fee = await requireCookContracts(client, input.chain);
-  const state = await potState(client, cook.pot);
+  const at = await cookPotOf(input.chain, input.target, client);
+  const fee = await requireCookContracts(client, input.chain, at.engine);
+  const state = { deployed: at.deployed!, ...(at.owner === undefined ? {} : { owner: at.owner }) };
   const target = input.target;
   if (!state.deployed && !("owner" in target)) {
     throw new CliError(
-      `Pot ${cook.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it is: ` +
+      `Pot ${at.pot} is not deployed on ${input.chain.slug}, and --pot does not say whose it is: ` +
         "give its --owner (and --salt) instead, and the simulation deploys it first",
     );
   }
-  await requirePot(client, input.chain, { ...target, pot: cook.pot, deployed: state.deployed });
+  await requirePot(client, input.chain, { ...target, pot: at.pot, deployed: state.deployed });
+  const cook = { pot: at.pot, engine: at.engine, data: cookOn(at, payload), program };
   const owner = state.deployed ? state.owner! : (target as { readonly owner: Address }).owner;
   const deploy = state.deployed ? undefined : { salt: (target as { readonly salt: Hex }).salt };
   const kitchen = kitchenAddress();
 
-  const funding =
-    input.fund === undefined
+  const fund = input.fund === undefined ? undefined : await input.fund(client, cook.pot, owner);
+  const funding = fund === undefined ? undefined : await fund({ deploySalt: deploy?.salt });
+  const wrapped =
+    funding === undefined
       ? undefined
-      : await input.fund(client, cook.pot, owner, { deploySalt: deploy?.salt });
+      : cookProgram({ ...input, text: funding.wrap(input.text) }, files);
   const funded =
-    funding === undefined ? cook : cookOf({ ...input, text: funding.wrap(input.text) }, files);
+    wrapped === undefined
+      ? cook
+      : { ...cook, data: cookOn(at, wrapped.payload), program: wrapped.program };
   const value = valueOf(input.value, fee, input.chain) + (funding?.value ?? 0n);
   const {
     assumed,
@@ -304,7 +312,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
   });
   const labels = addressLabels(input.chain, [
     [kitchen, "Kitchen"],
-    [getAddress(v12EngineAddress()), "engine"],
+    ...releaseEngines().map((engine) => [engine, "engine"] as const),
     [owner, "owner"],
     [cook.pot, "the Pot"],
   ]);
@@ -435,6 +443,7 @@ async function simulateEvm(input: SimulateInput, files: CliFiles): Promise<Comma
         }),
   };
   const notes = [
+    ...at.notes,
     ...amountNotes,
     ...priceLimitNotes(input, cook.program.entryParams, input.args),
     ...(funding?.notes ?? []),

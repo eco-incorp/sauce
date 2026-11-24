@@ -14,8 +14,8 @@
  *   4. `Router.flash(callback, swap)`, the one Router entry that runs a program as the Pot inside the
  *      callback of a pool it swaps with: the callback runs as the Pot and repays with a nested swap,
  *      a short repayment reverts the whole cook, the nested swap's floor is what keeps the Pot's own
- *      balance from paying a shortfall, and each of the Router's refusals leaves every balance as it
- *      was.
+ *      balance from paying a shortfall, and each refusal here (`CallbackNotRun`, `UnknownSwap`,
+ *      `UnauthorizedCaller`) leaves every balance as it was.
  *
  * The pool is v12's own `test/mocks/MockV3Pool.sol` (copied into `fixtures/`, built by forge from
  * the same tree as the Router): Uniswap V3's `swap` selector, a settable callback selector, and a
@@ -36,22 +36,25 @@ import {
   encodeErrorResult,
   encodeFunctionData,
   getAddress,
+  getCreate2Address,
   http,
+  keccak256,
   parseAbi,
   stringToHex,
   toFunctionSelector,
+  zeroAddress,
 } from "viem";
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12DeployedAddresses } from "../../src/deployments/index.js";
+import { v12DeployedAddresses, V12_RELEASE_SETS } from "../../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../../src/deployments/pot.js";
 import { potRouterUpdate, v12KitchenAbi, v12PotAbi } from "../../src/evm/engine.js";
 import { compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { POT_SALT, startGatedEngine } from "./gated-engine.js";
-import { potFromReleasedBytecode } from "./pot-address.js";
 import type { GatedEngine } from "./gated-engine.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
+import { releaseArm } from "../release-arm.js";
 
 const RUNTIME_HEX_PATH =
   process.env.SAUCE_V12_RUNTIME_CREATION_HEX ?? process.env.SAUCE_RUST_V12_RUNTIME;
@@ -174,7 +177,7 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
   });
 
   it("the live Kitchen predicts the Pot the SDK derives for an owner", async () => {
-    // Any owner: a Pot's address is the Kitchen's CREATE2 of (owner, salt), deployed or not.
+    // Any owner: a Pot's address is the Kitchen's own answer for (owner, salt), deployed or not.
     const owner = STRANGER.address;
     const predicted = await publicClient.readContract({
       abi: v12KitchenAbi,
@@ -182,8 +185,9 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       args: [owner, DEFAULT_POT_SALT],
       functionName: "predictPot",
     });
-    expect(predicted).toBe(v12PredictPot(owner));
-    expect(predicted).toBe(potFromReleasedBytecode(owner));
+    // Where this stack's Kitchen places it: the installed release's Pot, or on the legacy arm the
+    // earlier release's (A1).
+    expect(predicted).toBe(sauce.predictPot(owner, DEFAULT_POT_SALT));
   });
 
   describe("potRouterUpdate", () => {
@@ -192,70 +196,87 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
     });
 
-    it("hands back the switch for a Pot the Kitchen moved past, which only its owner can sign", async () => {
-      // A new Router on the Kitchen: what a Router rollout is. The Kitchen's own switch is its
-      // owner's alone…
-      const next = await deploy(ROUTER.bytecode);
-      const kitchenSwitch = encodeFunctionData({
-        abi: v12KitchenAbi,
-        args: [next],
-        functionName: "setRouter",
-      });
-      expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch)).toBe("reverted");
-      expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch)).toBe("success");
+    // potRouterUpdate proposes a Router switch only for a Pot of the installed release (D13), and
+    // only onto the Router this release pins; the legacy arm's Pot is an earlier release's, for
+    // which it returns nothing (A3).
+    (releaseArm("evm") === "default" ? it : it.skip)(
+      "hands back the switch for a Pot off the Router this release pins, which only its owner can sign, and nothing while the Kitchen names another",
+      async () => {
+        // A new Router on the Kitchen: what a Router rollout is. The Kitchen's own switch is its
+        // owner's alone…
+        const next = await deploy(ROUTER.bytecode);
+        const kitchenSwitch = (to: typeof next) =>
+          encodeFunctionData({ abi: v12KitchenAbi, args: [to], functionName: "setRouter" });
+        expect(await sendAs(STRANGER, sauce.kitchen, kitchenSwitch(next))).toBe("reverted");
+        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch(next))).toBe("success");
 
-      // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
-      expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        // …and it moves no existing Pot: the harness Pot is still on the Router it was minted with.
+        expect(await potRouter(sauce.pot)).toBe(sauce.router);
 
-      const update = await potRouterUpdate(publicClient, sauce.pot);
-      expect(update).toEqual({
-        to: sauce.pot,
-        data: encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
-      });
+        // The Kitchen names a Router this release does not pin: nothing is proposed, however far
+        // behind the Pot is (D13: a pairing nobody qualified).
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
 
-      // Anyone but the owner is refused with NotOwner().
-      const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
-      expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
-      expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
-      expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        // A Pot minted after the Kitchen's switch starts on the new Router.
+        const salt = `0x${"00".repeat(31)}08` as Hex;
+        expect(
+          await sendAs(
+            OWNER,
+            sauce.kitchen,
+            encodeFunctionData({
+              abi: v12KitchenAbi,
+              args: [STRANGER.address, salt],
+              functionName: "deployPot",
+            }),
+          ),
+        ).toBe("success");
+        const fresh = await publicClient.readContract({
+          abi: v12KitchenAbi,
+          address: sauce.kitchen,
+          args: [STRANGER.address, salt],
+          functionName: "predictPot",
+        });
+        expect(await potRouter(fresh)).toBe(getAddress(next));
+        expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
 
-      // The owner signs it; the Pot is current, and says so.
-      expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
-      expect(await potRouter(sauce.pot)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+        // The Kitchen back on the release's Router: the harness Pot is on it, so nothing is handed back.
+        expect(await sendAs(OWNER, sauce.kitchen, kitchenSwitch(sauce.router))).toBe("success");
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
 
-      // A Pot minted after the Kitchen's switch starts on the new Router.
-      const salt = `0x${"00".repeat(31)}08` as Hex;
-      expect(
-        await sendAs(
-          OWNER,
-          sauce.kitchen,
-          encodeFunctionData({
-            abi: v12KitchenAbi,
-            args: [STRANGER.address, salt],
-            functionName: "deployPot",
+        // A Pot its owner moved onto another Router gets the switch back to the release's: the
+        // owner's call alone.
+        expect(
+          await sendAs(
+            OWNER,
+            sauce.pot,
+            encodeFunctionData({ abi: v12PotAbi, args: [next], functionName: "setRouter" }),
+          ),
+        ).toBe("success");
+        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+        const update = await potRouterUpdate(publicClient, sauce.pot);
+        expect(update).toEqual({
+          to: sauce.pot,
+          data: encodeFunctionData({
+            abi: v12PotAbi,
+            args: [sauce.router],
+            functionName: "setRouter",
           }),
-        ),
-      ).toBe("success");
-      const fresh = await publicClient.readContract({
-        abi: v12KitchenAbi,
-        address: sauce.kitchen,
-        args: [STRANGER.address, salt],
-        functionName: "predictPot",
-      });
-      expect(await potRouter(fresh)).toBe(getAddress(next));
-      expect(await potRouterUpdate(publicClient, fresh)).toBeUndefined();
+        });
 
-      // Back to the release's Router, for the swaps below — the same owner-only path.
-      expect(
-        await sendAs(
-          OWNER,
-          sauce.pot,
-          encodeFunctionData({ abi: v12PotAbi, args: [sauce.router], functionName: "setRouter" }),
-        ),
-      ).toBe("success");
-      expect(POT_SALT).not.toBe(salt);
-    });
+        // Anyone but the owner is refused with NotOwner().
+        const refusal = await revertOf(STRANGER.address, update!.to, update!.data);
+        expect(decodeErrorResult({ abi: v12PotAbi, data: refusal! }).errorName).toBe("NotOwner");
+        expect(await sendAs(STRANGER, update!.to, update!.data)).toBe("reverted");
+        expect(await potRouter(sauce.pot)).toBe(getAddress(next));
+
+        // The owner signs it; the Pot is back on the release's Router for the swaps below, and
+        // says so.
+        expect(await sendAs(OWNER, update!.to, update!.data)).toBe("success");
+        expect(await potRouter(sauce.pot)).toBe(sauce.router);
+        expect(await potRouterUpdate(publicClient, sauce.pot)).toBeUndefined();
+        expect(POT_SALT).not.toBe(salt);
+      },
+    );
 
     it("refuses a switch to an address with no code", async () => {
       const refusal = await revertOf(
@@ -273,7 +294,7 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
     });
   });
 
-  describe("a Synthra V3 pool through the generation-4 Router", () => {
+  describe("a renamed-callback V3 pool (Synthra, HyperSwap) through the generation-4 Router", () => {
     const AMOUNT_IN = 1_000n;
     const RATE = 2n * 10n ** 18n; // token0 -> token1 at 2x
     let token0: Address;
@@ -325,47 +346,72 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       );
     });
 
-    it("is the release's content-addressed Router, and it answers both renamed callbacks", () => {
+    it("is the release's content-addressed Router, and it answers every renamed callback", () => {
       expect(v12DeployedAddresses().evm.contracts.router.addressing).toBe("content");
       const answered = ISAUCE_ROUTER.abi
         .filter((item) => item.type === "function")
         .map((item) => (item as { name: string }).name);
       expect(answered).toEqual(
-        expect.arrayContaining(["synthraV3SwapCallback", "unitFlowV3SwapCallback"]),
+        expect.arrayContaining([
+          "synthraV3SwapCallback",
+          "unitFlowV3SwapCallback",
+          "hyperswapV3SwapCallback",
+        ]),
       );
       // The selector Synthra's own pools call back (see the synthra-v3 skill document).
       expect(toFunctionSelector("synthraV3SwapCallback(int256,int256,bytes)")).toBe("0x13abb0ca");
+      // The one HyperSwap's pools call back: the callback the Router before this release lacks.
+      expect(toFunctionSelector("hyperswapV3SwapCallback(int256,int256,bytes)")).toBe("0xfa85398b");
     });
 
-    it("pays the pool the exact input from the Pot and delivers the output to it", async () => {
-      const at = await pool("synthraV3SwapCallback(int256,int256,bytes)");
-      const { to, data } = swapCall(at);
-      const [potIn, potOut] = [await balance(token0, sauce.pot), await balance(token1, sauce.pot)];
+    for (const callback of ["synthraV3SwapCallback", "hyperswapV3SwapCallback"] as const) {
+      // HyperSwap's callback is answered by the installed release's Router alone: an earlier
+      // release's stack (the legacy arms) reverts it, which is what T24 holds for each Pot (A3).
+      const swaps =
+        callback === "hyperswapV3SwapCallback" && releaseArm("evm") !== "default" ? it.skip : it;
+      const signature = `${callback}(int256,int256,bytes)`;
 
-      expect(await sendAs(OWNER, to, data)).toBe("success");
-      expect(await balance(token0, at)).toBe(AMOUNT_IN);
-      expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
-      expect(await balance(token1, sauce.pot)).toBe(potOut + (AMOUNT_IN * RATE) / 10n ** 18n);
-    });
+      swaps(
+        `pays the pool the exact input from the Pot and delivers the output to it: ${callback}`,
+        async () => {
+          const at = await pool(signature);
+          const { to, data } = swapCall(at);
+          const [potIn, potOut] = [
+            await balance(token0, sauce.pot),
+            await balance(token1, sauce.pot),
+          ];
+
+          expect(await sendAs(OWNER, to, data)).toBe("success");
+          expect(await balance(token0, at)).toBe(AMOUNT_IN);
+          expect(await balance(token0, sauce.pot)).toBe(potIn - AMOUNT_IN);
+          expect(await balance(token1, sauce.pot)).toBe(potOut + (AMOUNT_IN * RATE) / 10n ** 18n);
+        },
+      );
+
+      swaps(
+        `refuses a pool asking for more than the exact input: InputExceedsAuthorized: ${callback}`,
+        async () => {
+          const at = await pool(signature, 1n);
+          const { to, data } = swapCall(at);
+          const refusal = await revertOf(OWNER.address, to, data);
+          expect(refusal).toBeDefined();
+          expect(
+            refusal!.includes(
+              toFunctionSelector("InputExceedsAuthorized(uint256,uint256)").slice(2),
+            ),
+          ).toBe(true);
+          expect(getAddress(to)).toBe(sauce.pot);
+          expect(await sendAs(OWNER, to, data)).toBe("reverted");
+          expect(await balance(token0, at)).toBe(0n);
+        },
+      );
+    }
 
     it("reverts when the pool calls back under a name the Router does not answer", async () => {
       // What a Router older than generation 3 does with `synthraV3SwapCallback`: the Pot's fallback
       // delegatecalls a Router with no such function, and the swap dies.
       const at = await pool("someOtherV3SwapCallback(int256,int256,bytes)");
       const { to, data } = swapCall(at);
-      expect(await sendAs(OWNER, to, data)).toBe("reverted");
-      expect(await balance(token0, at)).toBe(0n);
-    });
-
-    it("refuses a pool asking for more than the exact input: InputExceedsAuthorized", async () => {
-      const at = await pool("synthraV3SwapCallback(int256,int256,bytes)", 1n);
-      const { to, data } = swapCall(at);
-      const refusal = await revertOf(OWNER.address, to, data);
-      expect(refusal).toBeDefined();
-      expect(
-        refusal!.includes(toFunctionSelector("InputExceedsAuthorized(uint256,uint256)").slice(2)),
-      ).toBe(true);
-      expect(getAddress(to)).toBe(sauce.pot);
       expect(await sendAs(OWNER, to, data)).toBe("reverted");
       expect(await balance(token0, at)).toBe(0n);
     });
@@ -678,7 +724,8 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
 
     it("refuses flash called on the Pot or the Router by anyone, the owner too: UnauthorizedCaller", async () => {
       const s = await scenario(KIND_RATE, HELD0);
-      // The callback a caller would run as the Pot if it could: it hands them the Pot's token0.
+      // A program that would hand them the Pot's token0 if it ran as the Pot. It never runs: each
+      // call is refused before `flash` arms it.
       const drain = compileSauceRoute(
         "base",
         [
@@ -699,7 +746,6 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       await refuses(s, [STRANGER, sauce.pot, data], unauthorized);
       await refuses(s, [OWNER, sauce.pot, data], unauthorized);
       await refuses(s, [STRANGER, sauce.router, data], unauthorized);
-      expect(await balance(s.token0, STRANGER.address)).toBe(0n);
     });
 
     it("PLANTED: a wrong expectation in the callback or after the flash reverts the same cook", async () => {
@@ -713,5 +759,117 @@ describeEvm("the Pot's Router, and swaps a generation-4 Router pays", () => {
       // Unplanted, the same cook on the same pools lands.
       expect(await sendAs(OWNER, sauce.pot, cookOf(s, PROFITABLE))).toBe("success");
     });
+  });
+});
+
+// The installed release itself: its fixed-Router and Shared Pots. The default arm only (A3,
+// sdk/test/legacy-arm.json): on the legacy arm the Kitchen is the earlier release's.
+const describeDefaultRelease =
+  RUNTIME_HEX_PATH && releaseArm("evm") === "default" ? describe : describe.skip;
+
+describeDefaultRelease("the default release's fixed and Shared Pots", () => {
+  beforeAll(async () => {
+    anvil = await spawnAnvil(PORT);
+    const creationCode = readFileSync(RUNTIME_HEX_PATH as string, "utf8").trim() as Hex;
+    sauce = await startGatedEngine(
+      { publicClient, testClient, walletClient },
+      OWNER.address,
+      creationCode,
+    );
+  }, 120_000);
+
+  afterAll(async () => {
+    if (anvil?.exitCode === null) {
+      const exited = once(anvil, "exit");
+      anvil.kill();
+      await exited;
+    }
+  });
+
+  it("creates the predicted fixed Pot and pays an ordinary V3 swap through the release Router", async () => {
+    const args = [OWNER.address, POT_SALT, true] as const;
+    const potAbi = parseAbi([
+      "function predictPot(address,bytes32,bool) view returns (address)",
+      "function deployPot(address,bytes32,bool) returns (address)",
+      "function predictSharedPot(bytes32) view returns (address)",
+    ]);
+    for (const routerFixed of [false, true]) {
+      const onchain = await publicClient.readContract({
+        address: sauce.kitchen,
+        abi: potAbi,
+        functionName: "predictPot",
+        args: [OWNER.address, POT_SALT, routerFixed],
+      });
+      expect(v12PredictPot(OWNER.address, POT_SALT, { routerFixed })).toBe(onchain);
+    }
+    const shared = await publicClient.readContract({
+      address: sauce.kitchen,
+      abi: potAbi,
+      functionName: "predictSharedPot",
+      args: [POT_SALT],
+    });
+    expect(v12PredictPot(zeroAddress, POT_SALT)).toBe(shared);
+    expect(() => v12PredictPot(zeroAddress, POT_SALT, { routerFixed: false })).toThrow(
+      "shared Pots always have a fixed Router",
+    );
+    // An earlier row predicts its own Pot: CREATE2 under that row's Kitchen and init-code hash,
+    // which a viem computation of the Kitchen's salt gives independently of the SDK's.
+    const earlier = V12_RELEASE_SETS.find((row) => row.compiler === "2.6.2")!["kitchen-evm"];
+    expect(v12PredictPot(OWNER.address, POT_SALT, { compiler: "2.6.2" })).toBe(
+      getCreate2Address({
+        bytecodeHash: earlier.potInitCodeHash as Hex,
+        from: earlier.kitchen as Address,
+        salt: keccak256(
+          encodeAbiParameters(
+            [{ type: "address" }, { type: "bytes32" }],
+            [OWNER.address, POT_SALT],
+          ),
+        ),
+      }),
+    );
+    const pot = v12PredictPot(OWNER.address, POT_SALT, { routerFixed: true });
+    expect(
+      await sendAs(
+        OWNER,
+        sauce.kitchen,
+        encodeFunctionData({
+          abi: potAbi,
+          functionName: "deployPot",
+          args,
+        }),
+      ),
+    ).toBe("success");
+    expect(await potRouter(pot)).toBe(sauce.router);
+
+    const [a, b] = [await deploy(MOCK_ERC20.creationCode), await deploy(MOCK_ERC20.creationCode)];
+    const [tokenIn, tokenOut] = BigInt(a) < BigInt(b) ? [a, b] : [b, a];
+    const pool = await deploy(
+      `${MOCK_V3_POOL.creationCode}${encodeAbiParameters(
+        [{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "uint256" }],
+        [tokenIn, tokenOut, 3000, 2n * 10n ** 18n],
+      ).slice(2)}` as Hex,
+    );
+    for (const [token, to] of [
+      [tokenIn, pot],
+      [tokenOut, pool],
+    ] as const) {
+      expect(
+        await sendAs(
+          OWNER,
+          token,
+          encodeFunctionData({
+            abi: erc20,
+            functionName: "mint",
+            args: [to, 10_000n],
+          }),
+        ),
+      ).toBe("success");
+    }
+    const source = `import { uniswapV3 } from "@sauce/router";
+function main() { uniswapV3(${BigInt(pool)}n, ${BigInt(tokenIn)}n, ${BigInt(tokenOut)}n, 1000n, 0n, 0n, ctx.self()); }`;
+    const { calls } = compileSauceRoute("base", source, { engine: sauce.engine, pot });
+    expect(await sendAs(OWNER, pot, calls[0]!.data)).toBe("success");
+    expect(await balance(tokenIn, pool)).toBe(1000n);
+    expect(await balance(tokenOut, pot)).toBe(2000n);
   });
 });

@@ -57,15 +57,15 @@ Starts a copy of `chain` as it was at a pinned point. On an EVM chain it boots `
 ten test accounts exist, and account 0's Pot is deployed. Returns a `TestChain`, or a
 `SolanaTestChain` when `chain` is Solana.
 
-| Option          | EVM | Solana | Meaning                                                                                   |
-| --------------- | --- | ------ | ----------------------------------------------------------------------------------------- |
-| `block`         | yes | no     | The block the copy starts at. Required on an EVM chain; refused on Solana                 |
-| `state`         | yes | yes    | The recorded state file (`.json.gz`): replayed when it exists, written when it does not   |
-| `rpcUrl`        | yes | yes    | The chain's endpoint, read only to record or to fork live; it must serve state at `block` |
-| `mode`          | yes | yes    | `"auto"` (the default), `"replay"`, `"record"` or `"live"`; see the modes below           |
-| `zeroFee`       | yes | yes    | `true` clears the Kitchen's fee; by default the chain's own fee is kept                   |
-| `blockInterval` | yes | no     | Seconds between blocks after the pinned one: 12 on Ethereum and 2 on every other chain    |
-| `anvil`         | yes | no     | The `anvil` binary; by default the one on `PATH`                                          |
+| Option          | EVM | Solana | Meaning                                                                                                                                                                  |
+| --------------- | --- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `block`         | yes | no     | The block the copy starts at. Required on an EVM chain; refused on Solana                                                                                                |
+| `state`         | yes | yes    | The recorded state file (`.json.gz`): replayed when it exists, written when it does not                                                                                  |
+| `rpcUrl`        | yes | yes    | The chain's endpoint, read only to record or to fork live; it must serve state at `block`. On an EVM chain an http(s) URL, any `user:pass@` in it sent as a Basic header |
+| `mode`          | yes | yes    | `"auto"` (the default), `"replay"`, `"record"` or `"live"`; see the modes below                                                                                          |
+| `zeroFee`       | yes | yes    | `true` clears the Kitchen's fee; by default the chain's own fee is kept                                                                                                  |
+| `blockInterval` | yes | no     | Seconds between blocks after the pinned one: 12 on Ethereum and 2 on every other chain                                                                                   |
+| `anvil`         | yes | no     | The `anvil` binary; by default the one on `PATH`                                                                                                                         |
 
 | Mode       | Starts when                             | Needs    | What happens                                                          |
 | ---------- | --------------------------------------- | -------- | --------------------------------------------------------------------- |
@@ -75,6 +75,11 @@ ten test accounts exist, and account 0's Pot is deployed. Returns a `TestChain`,
 
 `"auto"` picks the first row that applies. Passing a mode forces it: `"replay"` refuses to start
 without the file, and `"record"` records the file again.
+
+On an EVM chain, recording and a live fork both read `rpcUrl` through a proxy the kit runs on
+loopback, which reaches the endpoint directly and never through `HTTP_PROXY`/`HTTPS_PROXY`. anvil
+does honour `HTTP_PROXY`, with no loopback exception, so set `NO_PROXY=127.0.0.1` in a test run that
+has `HTTP_PROXY` set.
 
 ### `local(options?)`
 
@@ -94,20 +99,20 @@ programs, wrapped SOL, and nothing else.
 
 What `fork` and `local` return on an EVM chain.
 
-| Call                                        | What it does                                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `account(i)`                                | Test account `i` (0–9): `address`, `privateKey`, and `pot`, its Pot under the default salt |
-| `fund(holder, { USDC: "100", ETH: "1" })`   | Adds whole tokens (a string) or base units (a bigint) to `holder`                          |
-| `balanceOf(holder, "USDC")`                 | A balance in base units. A token is a registry symbol, an address, or `ETH`                |
-| `run(program, { from, args, value })`       | Sends the program as a cook from test account `from`'s Pot, and waits for it to be mined   |
-| `simulate(program, { from, args, value })`  | The same cook, run and not sent                                                            |
-| `compile(program)`                          | The program compiled for the chain: `bytecode`, `params`, `returnType`                     |
-| `impersonate(address, (send) => …)`         | Sends transactions as any address, such as a token holder                                  |
-| `deployPot(account)`                        | Deploys a test account's Pot now, rather than on its first cook                            |
-| `snapshot()`, `revert()`                    | Saves the chain's state, and returns to it. They nest                                      |
-| `increaseTime(seconds)`, `mine(n)`, `now()` | Moves the clock and mines a block, mines blocks, reads the latest block's time             |
-| `executionFee()`                            | The Kitchen's fee, which every cook pays                                                   |
-| `stop()`                                    | Stops the node. A recording chain writes its state file here, so await it                  |
+| Call                                        | What it does                                                                                         |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `account(i)`                                | Test account `i` (0–9): `address`, `privateKey`, and `pot`, its Pot under the default salt           |
+| `fund(holder, { USDC: "100", ETH: "1" })`   | Adds whole tokens (a string, refused past the token's decimals) or base units (a bigint) to `holder` |
+| `balanceOf(holder, "USDC")`                 | A balance in base units. A token is a registry symbol, an address, or `ETH`                          |
+| `run(program, { from, args, value })`       | Sends the program as a cook from test account `from`'s Pot, and waits for it to be mined             |
+| `simulate(program, { from, args, value })`  | The same cook, run and not sent                                                                      |
+| `compile(program)`                          | The program compiled for the chain: `bytecode`, `params`, `returnType`                               |
+| `impersonate(address, (send) => …)`         | Sends transactions as any address, such as a token holder                                            |
+| `deployPot(account)`                        | Deploys a test account's Pot now, rather than on its first cook                                      |
+| `snapshot()`, `revert()`                    | Saves the chain's state, and returns to it. They nest                                                |
+| `increaseTime(seconds)`, `mine(n)`, `now()` | Moves the clock and mines a block, mines blocks, reads the latest block's time                       |
+| `executionFee()`                            | The Kitchen's fee, which every cook pays                                                             |
+| `stop()`                                    | Stops the node. A recording chain writes its state file here, so await it                            |
 
 | Property                      | What it is                                                        |
 | ----------------------------- | ----------------------------------------------------------------- |
@@ -194,25 +199,31 @@ It holds every account the test's transactions named, as the cluster held it whe
 each program's code included. An account the recording does not hold reads as missing, and the
 error says so.
 
+The Sauce engine has two builds, one for mainnet-beta and one for devnet and testnet, and a program
+reads a different chain id on each. The file names the build the recording ran on and its digest,
+and a replay runs exactly that build. A package whose build has another digest refuses the replay:
+record it again. A file from before recordings named a build was made on mainnet's, and replays on
+it.
+
 ## `SolanaTestChain`
 
 What `fork` and `local` return when the chain is Solana.
 
-| Call                                          | What it does                                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `account(i)`                                  | Test account `i` (0–9): `address`, `secretKey` (as `solana-keygen` writes one), and `pot` |
-| `fund(holder, { USDC: "100", SOL: "1" })`     | Adds whole tokens (a string) or base units (a bigint) to `holder`                         |
-| `balanceOf(holder, "USDC")`                   | A balance in base units. A token is a registry symbol, a mint, or `SOL`                   |
-| `run(program, { from, args, accounts })`      | Sends the program as a cook from test account `from`'s Pot, as `sauce run` sends it       |
-| `simulate(program, { from, args, accounts })` | The same cook, and everything before it, run and undone                                   |
-| `compile(program)`                            | The program compiled for Solana: bytecode, parameters, return type, the accounts it takes |
-| `getAccount(key)`, `setAccount(key, account)` | Reads or writes any account: lamports, owner, data                                        |
-| `deployPot(account)`                          | Creates a test account's Pot now, rather than on its first cook                           |
-| `snapshot()`, `revert()`                      | Saves the chain's state, and returns to it. They nest                                     |
-| `increaseTime(seconds)`, `warp(slots)`        | Moves the clock and the slot together, 400 ms a slot                                      |
-| `now()`, `slot()`                             | The time and the slot a program reads (`ctx.timestamp()`, `ctx.blockNumber()`)            |
-| `executionFee()`                              | The Kitchen's fee, which every cook's owner pays                                          |
-| `stop()`                                      | Stops the chain. A recording chain writes its state file here, so await it                |
+| Call                                          | What it does                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `account(i)`                                  | Test account `i` (0–9): `address`, `secretKey` (as `solana-keygen` writes one), and `pot`            |
+| `fund(holder, { USDC: "100", SOL: "1" })`     | Adds whole tokens (a string, refused past the token's decimals) or base units (a bigint) to `holder` |
+| `balanceOf(holder, "USDC")`                   | A balance in base units. A token is a registry symbol, a mint, or `SOL`                              |
+| `run(program, { from, args, accounts })`      | Sends the program as a cook from test account `from`'s Pot, as `sauce run` sends it                  |
+| `simulate(program, { from, args, accounts })` | The same cook, and everything before it, run and undone                                              |
+| `compile(program)`                            | The program compiled for Solana: bytecode, parameters, return type, the accounts it takes            |
+| `getAccount(key)`, `setAccount(key, account)` | Reads or writes any account: lamports, owner, data                                                   |
+| `deployPot(account)`                          | Creates a test account's Pot now, rather than on its first cook                                      |
+| `snapshot()`, `revert()`                      | Saves the chain's state, and returns to it. They nest                                                |
+| `increaseTime(seconds)`, `warp(slots)`        | Moves the clock and the slot together, 400 ms a slot                                                 |
+| `now()`, `slot()`                             | The time and the slot a program reads (`ctx.timestamp()`, `ctx.blockNumber()`)                       |
+| `executionFee()`                              | The Kitchen's fee, which every cook's owner pays                                                     |
+| `stop()`                                      | Stops the chain. A recording chain writes its state file here, so await it                           |
 
 Each test account starts with 1,000 SOL, and account 0's Pot is created at start; another test
 account's on its first cook. On a fork the Kitchen's fee is the cluster's, which the owner pays

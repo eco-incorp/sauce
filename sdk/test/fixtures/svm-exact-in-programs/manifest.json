@@ -1,5 +1,5 @@
 {
-  "$comment": "Each venue's mainnet program, as `solana program dump` read it on 2026-10-07: the exact-input venues `svm-exact-in.e2e.test.ts` runs. sha256 is of the program's ELF as dumped, before gzip.",
+  "$comment": "Mainnet program dumps for the venues in `svm-exact-in.e2e.test.ts`. `sha256` hashes each ELF before gzip, and `redeploySlot` records the deployment used to refresh a pin when known.",
   "programs": [
     {
       "name": "raydium-cp-swap",
@@ -71,19 +71,20 @@
       "name": "meteora-damm-v2",
       "programId": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG",
       "file": "meteora-damm-v2.so.gz",
-      "sha256": "4d5b920baebc090f89b2e8796a3452ed067c9667a143058c96a312f2c1e6848b"
+      "sha256": "967ff9fb161eec2e62f66d2c899100739fb747c445f697b8625c86b31b9a2022"
     },
     {
       "name": "meteora-damm-v1",
       "programId": "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
       "file": "meteora-damm-v1.so.gz",
-      "sha256": "de81c5e8e2725857af73da5294323cecae4eb639f5b4b66e300662b5a0f2547b"
+      "sha256": "524353534312b332e486537f3c420b738cf09241e2f65b3eea7969ea28b8732a",
+      "redeploySlot": 468782174
     },
     {
       "name": "meteora-vault",
       "programId": "24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi",
       "file": "meteora-vault.so.gz",
-      "sha256": "fd0f3dd9e38a51f3afe04084a9df9dad1017af3e482674d2eed5b16e47ec78eb"
+      "sha256": "2ca789753622df50bd4eb5d7a07769943d6795349196f7420657951875b827fd"
     },
     {
       "name": "aldrin",
@@ -113,13 +114,15 @@
       "name": "stabble-stable-swap",
       "programId": "swapNyd8XiQwJ6ianp9snpu4brUqFxadzvHebnAXjJZ",
       "file": "stabble-stable-swap.so.gz",
-      "sha256": "ee3d3ecf3d7759cef2d91123eef1c363f076e5a456ba9dcc5c8a79cf44890622"
+      "sha256": "f6277bbb38ff494944ba5fa21361ff09c8de672b3eb0633a585372cadd94ff2a",
+      "redeploySlot": 471391543
     },
     {
       "name": "stabble-weighted-swap",
       "programId": "swapFpHZwjELNnjvThjajtiVmkz3yPQEHjLtka2fwHW",
       "file": "stabble-weighted-swap.so.gz",
-      "sha256": "847dbff22f4e1ec19c221b702035f87a2a483f089bf461ca4dd7bdad342f4ffe"
+      "sha256": "996d3fe82a1667412f79fe8a8764c724648c72c76795c0d34c09345dc823abac",
+      "redeploySlot": 471391464
     },
     {
       "name": "stabble-vault",
@@ -137,13 +140,14 @@
       "name": "pumpswap",
       "programId": "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA",
       "file": "pumpswap.so.gz",
-      "sha256": "2e2608ddce89d1d23216756f0ace0f718e9164660bcdb4a40221318dc56db4ca"
+      "sha256": "c75b6c042e6111965915ebafaba02fd4b241ff508326f6d7c83873910bba1722",
+      "redeploySlot": 471854493
     },
     {
       "name": "pump-fee",
       "programId": "pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ",
       "file": "pump-fee.so.gz",
-      "sha256": "8a9bfa986ac0f97ade1a327a09ccc24421dfa52bb8ee462f75458e3e5bad48d9"
+      "sha256": "303fd7a4540bcd42e9ce715cb7ee5bcde9a1dae27605955d6a45228ed9503e73"
     },
     {
       "name": "bonkswap",
@@ -197,13 +201,14 @@
       "name": "hadron",
       "programId": "HADRoNbLovyqhCsocfYQYB7QdfCAAinN9HTePvBCVDQ8",
       "file": "hadron.so.gz",
-      "sha256": "d08a1a5993212f5b858a371460a8b804896d139d47b6bb57f3755fb53a1d977a"
+      "sha256": "d5221aa673dc29fb57463d41f4fb401e2010247f7d3b9710366b913cd6d5e425"
     },
     {
       "name": "taurusfi",
       "programId": "9VX8EKBg6vM6tA68xaDsPkbrx26XConZjkQmhVApUptc",
       "file": "taurusfi.so.gz",
-      "sha256": "026f5ef2073ef291d4ad5168e8ad1d8739c6d647ebfe6ee38943bb63a778f162"
+      "sha256": "4a9834c811d25024eb062f8b18320474d99f80f6e92c827b5cda5fb82d52a622",
+      "redeploySlot": 470963587
     },
     {
       "name": "riptide",
@@ -215,7 +220,8 @@
       "name": "denali",
       "programId": "DNL1tgEj3nJovHw9jtyCCQD3arssCJzkmpDizknwzey4",
       "file": "denali.so.gz",
-      "sha256": "24036b8d6e53dce0a756ef10ae64c4ed645a8733eadc5942eeb3fab9f036fac5"
+      "redeploySlot": 454575418,
+      "sha256": "a27dd365372b0603c623fd8b034c22ad39107fe0ffbba4e3546095460e7bb271"
     },
     {
       "name": "gavel",
@@ -233,19 +239,22 @@
       "name": "flint",
       "programId": "FLiNTXPwppyoJabCoxc2uiiRygAHpmMXajiDXo2Ub1z",
       "file": "flint.so.gz",
-      "sha256": "f6a7393598b5e2e52abc74a6f73699a4d94e7e0c81dce8a686bee5010f7d6ff3"
+      "sha256": "ff42445b43832690a0e1ff97290357869327b0b48b698f52e9acec949a88548d",
+      "redeploySlot": 471564195
     },
     {
       "name": "deriverse",
       "programId": "DRVSpZ2YUYYKgZP8XtLhAGtT1zYSCKzeHfb4DgRnrgqD",
       "file": "deriverse.so.gz",
-      "sha256": "13a87c3105475aeeb1fb7ddf3e89499d4dfbc79f3f5585703e4feceb55d84820"
+      "sha256": "53b1164108a5504b73ee59a68326635b4c64b20747ca587f487d29ba49537fd3",
+      "redeploySlot": 472997121
     },
     {
       "name": "goonfi-v2",
       "programId": "goonuddtQRrWqqn5nFyczVKaie28f3kDkHWkHtURSLE",
       "file": "goonfi-v2.so.gz",
-      "sha256": "a24aa13a0a9a4d7d1c8752cc9d9a566a5fae3bc20ba0ca3ba11368abd613e43c"
+      "sha256": "f0cbaf8e4e0959eea523b8005ee3ecdde42125dcf0dae1c447f322849cd1eaea",
+      "redeploySlot": 468054214
     },
     {
       "name": "raydium-launchlab",
@@ -263,7 +272,7 @@
       "name": "meteora-dbc",
       "programId": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
       "file": "meteora-dbc.so.gz",
-      "sha256": "4c26a8a5da99f8ce932fa0300c46675b527090021fbb74214c9486bedda9f23b"
+      "sha256": "e2bfc853c1a1778dd8ee40ea9a0f3edf5587442360c57c685e7e3024ad0cad47"
     },
     {
       "name": "heaven",
@@ -335,13 +344,15 @@
       "name": "hylo",
       "programId": "HYEXCHtHkBagdStcJCp3xbbb9B7sdMdWXFNj6mdsG4hn",
       "file": "hylo.so.gz",
-      "sha256": "c745eb73d5dfa951a6317bcd5ceef1e540f7367ff7165d12596835d0488f5719"
+      "sha256": "64b9abb77df359aca5705eb0c8bd4c75eb7f241cc35e88f2d42c8e5d74a7ab84",
+      "redeploySlot": 465473117
     },
     {
       "name": "hylo-stability-pool",
       "programId": "HysTabVUfmQBFcmzu1ctRd1Y1fxd66RBpboy1bmtDSQQ",
       "file": "hylo-stability-pool.so.gz",
-      "sha256": "0fc5ee1613b9f3e8aeeceee25a3cd53d3fb586d22f5a6d598a10b3e74d5e5976"
+      "sha256": "06bf6677dc9aeaf110fc658319919f3608f92d418e1b3a27207cb2a43b8e94e7",
+      "redeploySlot": 462250276
     },
     {
       "name": "carrot",
@@ -389,7 +400,7 @@
       "name": "m0-ext",
       "programId": "mextzNVPUbLbvyBwqBqnC5J1SSwjDLjjR4yppf6EBzc",
       "file": "m0-ext.so.gz",
-      "sha256": "f8e897033981090c20762e7515591524be22d513f1ea7342e6452271c8fff88f"
+      "sha256": "2a48d6c1cbdb71bc590c4f06be9f04fdb698013040e7472813c4f60c9f53201a"
     },
     {
       "name": "sanctum-infinity",
@@ -449,7 +460,8 @@
       "name": "perps-jlp",
       "programId": "PERPHjGBqRHArX4DySjwM6UJHiR3sWAatqfdBS2qQJu",
       "file": "perps-jlp.so.gz",
-      "sha256": "a2891a9277f865eb96feaae67e03cd88efc128d43f6093cc70618ad63cb7d9ba"
+      "sha256": "b1d35ccd58b3e8a113612be100fbfe99cd50773ed6e098088498ae0c2f938b9d",
+      "redeploySlot": 465131236
     },
     {
       "name": "one-intro-swap",
@@ -467,7 +479,7 @@
       "name": "archer",
       "programId": "Archer8kgiavM61GyusMzaaS2ft5sALtNsD1HxkUPMhy",
       "file": "archer.so.gz",
-      "sha256": "682854dc48318ec900a81b774e3008b167c710d86e8ff7945268c08a8115252b"
+      "sha256": "5c5ff975a6f24bdffa5d54a82242e937e9710680219bc4e0f6dd9a0694b0a1d5"
     },
     {
       "name": "boop-fun",

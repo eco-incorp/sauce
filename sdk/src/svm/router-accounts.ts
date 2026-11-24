@@ -1250,6 +1250,8 @@ function exactInAccountOrder(
         r("globalConfig"),
         ownerA,
         ownerB,
+        r("eventAuthority"),
+        r("program"),
       ];
     case "gavel":
       return [

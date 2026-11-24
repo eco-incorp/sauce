@@ -83,8 +83,12 @@ export function instructions(
     `section of it). Start with sauce-overview. The same files are resources (${SKILLS_INDEX}).`,
     "For TypeScript against the SDK, or the sauce command, sauce_dev returns the package's own",
     "documents. To set a project up for a coding agent, call sauce_install_skills.",
-    `The skills write the sauce command as \`sauce <command>\`: \`npm i -g ${name}\` installs it,`,
-    `and \`npx -y ${name} <command>\` runs it with no install.`,
+    "Use Node.js 24 or newer for installation and the CLI. The skills write `sauce <command>`:",
+    `\`npm install --global --engine-strict ${name}@latest\` installs the global CLI,`,
+    `and \`npx --engine-strict -y ${name}@latest <command>\` runs it with no install.`,
+    "Keep `@latest` and `--engine-strict`: unsupported Node can make unversioned npm installs select",
+    "an obsolete sauce-dev-tools release. Upgrade Node first, then reinstall.",
+    "In a project that pins the package, `npx sauce <command>` runs that local copy instead.",
     "",
     ...WRITE_IT_YOURSELF,
     "",
@@ -93,6 +97,7 @@ export function instructions(
     "   A fixed sequence of protocol operations can be an actions document in JSON instead:",
     "   sauce_actions (the sauce-actions skill says how).",
     "2. sauce_compile until it compiles; entryParams is what main takes, as args.",
+    "   An amount in args is in the token's smallest unit: sauce_units turns 1.5 USDC into it.",
     ...(local
       ? [
           "   Over stdio a program file on this machine is given by path (relative to the",

@@ -24,8 +24,9 @@ export interface ProtocolNamespace {
   readonly kind: "protocol";
   readonly protocol: string;
   readonly contracts: ReadonlyMap<string, ContractDescriptor>;
-  /** Set iff the protocol has exactly one deployed contract with an ABI (`kind: "singleton"`) --
-   *  shape B's ("<Protocol>.<method>") only source of a default contract. */
+  /** The contract shape B ("<Protocol>.<method>") calls: the singleton the registry marks the
+   *  protocol's default (`ContractLink.default`), else the protocol's one deployed contract with an
+   *  ABI (`kind: "singleton"`), else none. */
   readonly defaultContract?: string;
 }
 
@@ -61,15 +62,18 @@ for (const [slug, descriptors] of protocolGroups) {
   }
   const contracts = new Map<string, ContractDescriptor>();
   for (const d of descriptors) contracts.set(d.contract, d);
-  // Shape B's default is the protocol's one singleton: an address-only contract has no methods, and
-  // an interface no address, so neither could be the target of a bare `<Protocol>.<method>(...)`.
+  // Shape B's default is a singleton: an address-only contract has no methods, and an interface no
+  // address, so neither could be the target of a bare `<Protocol>.<method>(...)`. Among several, the
+  // one the registry marks (`isDefault`); else the protocol's only one.
   // `scripts/gen-source-globals.mjs` declares the same default's methods on the namespace.
   const callable = descriptors.filter((d) => d.kind === "singleton");
+  const marked = callable.filter((d) => d.isDefault === true);
+  const chosen = marked.length === 1 ? marked : callable;
   NAMESPACES.set(key, {
     kind: "protocol",
     protocol: slug,
     contracts,
-    defaultContract: callable.length === 1 ? callable[0]!.contract : undefined,
+    defaultContract: chosen.length === 1 ? chosen[0]!.contract : undefined,
   });
 }
 

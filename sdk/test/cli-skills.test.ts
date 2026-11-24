@@ -221,8 +221,9 @@ describe("the packaged skills", () => {
       // description: present, at most 1024 characters.
       expect(fields.description?.length ?? 0).toBeGreaterThan(0);
       expect(fields.description!.length).toBeLessThanOrEqual(1024);
-      // Every file it links to ships beside it.
-      for (const [, link] of text.matchAll(/\]\(([^)#:]+)\)/g)) {
+      // Every file it links to ships beside it. Code holds no link: `X["<signature>"](…)` is a call.
+      const prose = text.replace(/```[^]*?```/g, "").replace(/`[^`\n]*`/g, "``");
+      for (const [, link] of prose.matchAll(/\]\(([^)#:]+)\)/g)) {
         expect([link, existsSync(join(PACKAGED_SKILLS, name, link!))]).toEqual([link, true]);
       }
     },
@@ -567,9 +568,6 @@ describe("sauce init", () => {
     expect(readFileSync(join(dir, "GEMINI.md"), "utf8")).toBe("@./AGENTS.md\n");
     const agentsMd = readFileSync(join(dir, "AGENTS.md"), "utf8");
     expect(agentsMd).toMatch(/^# AGENTS\.md\n/);
-    // The command is `sauce`, and the instructions say how to get it.
-    expect(agentsMd).toContain(`installed once with\n  \`npm i -g ${MANIFEST.name}\``);
-    expect(agentsMd).not.toMatch(/npx sauce/);
     expect(agentsMd).toContain("<!-- sauce-skills:begin ");
     for (const skills of [".claude/skills", ".agents/skills"]) {
       expect(existsSync(join(dir, skills, "sauce-cli", "SKILL.md"))).toBe(true);

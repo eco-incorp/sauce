@@ -5,7 +5,10 @@
  * virtual reserves differ from real reserves. All byte offsets, formulas and
  * rounding rules follow the historical venue investigation, source-verified against the
  * cp-amm program (github.com/MeteoraAg/damm-v2, Pool = 8-byte discriminator +
- * 1104-byte zero-copy struct).
+ * 1104-byte zero-copy struct). Every constant and field used here is in
+ * Meteora's TypeScript SDK, github.com/MeteoraAg/damm-v2-sdk at commit
+ * 8ecb5ea8, Copyright (c) 2026 Meteora, licensed under the MIT License, see
+ * THIRD_PARTY_NOTICES.md.
  *
  * Accepted pools (everything else is gated with a named error):
  * - pool_status == 0 (enabled), collect_fee_mode in {0, 1} — compounding

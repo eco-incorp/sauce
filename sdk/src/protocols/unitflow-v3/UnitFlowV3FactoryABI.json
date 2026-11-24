@@ -1,6 +1,64 @@
 {
   "abi": [
     {
+      "name": "createPool",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tokenA",
+          "type": "address"
+        },
+        {
+          "name": "tokenB",
+          "type": "address"
+        },
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "pool",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "enableFeeAmount",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "int24"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "feeAmountTickSpacing",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "fee",
+          "type": "uint24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int24"
+        }
+      ]
+    },
+    {
       "name": "getPool",
       "type": "function",
       "stateMutability": "view",
@@ -26,21 +84,56 @@
       ]
     },
     {
-      "name": "feeAmountTickSpacing",
+      "name": "owner",
       "type": "function",
       "stateMutability": "view",
-      "inputs": [
-        {
-          "name": "fee",
-          "type": "uint24"
-        }
-      ],
+      "inputs": [],
       "outputs": [
         {
           "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "parameters",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "factory",
+          "type": "address"
+        },
+        {
+          "name": "token0",
+          "type": "address"
+        },
+        {
+          "name": "token1",
+          "type": "address"
+        },
+        {
+          "name": "fee",
+          "type": "uint24"
+        },
+        {
+          "name": "tickSpacing",
           "type": "int24"
         }
       ]
+    },
+    {
+      "name": "setOwner",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_owner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
     }
   ]
 }

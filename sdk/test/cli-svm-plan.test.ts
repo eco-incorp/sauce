@@ -28,14 +28,15 @@ import {
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 
 import { requireChain } from "../src/chains/canonical.js";
-import { v12SvmKitchenProgramId } from "../src/deployments/index.js";
-import { UsageError } from "../src/cli/args.js";
+import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
+import { CliError, potNotesOf, UsageError } from "../src/cli/args.js";
 import {
   decodeCursor,
   encodeCursor,
   newSvmPlan,
   nextStep,
   signableStep,
+  transactionsAhead,
   unsignedSigner,
   type StepContext,
   type SvmPlan,
@@ -101,8 +102,10 @@ const context = (rpc: StepContext["rpc"]): StepContext => ({
   fee: 5_000n,
 });
 
-/** What a cook step reads once nothing stands in its way: a blockhash, and a rehearsal. */
+/** What a cook step reads once nothing stands in its way: the Pot (not created yet), a blockhash,
+ *  and a rehearsal. */
 const COOK_READS = {
+  getAccountInfo: () => ({ context: { slot: 2_000n }, value: null }),
   getLatestBlockhash: () => ({
     context: { slot: 2_000n },
     value: { blockhash: OTHER_BLOCKHASH, lastValidBlockHeight: 3_000n },
@@ -167,6 +170,21 @@ describe("a plan's cursor", () => {
     expect(decodeCursor(devnetCursor)).toEqual(plan({ chain: devnet }));
   });
 
+  it("names the engine only where it is not the installed release's", () => {
+    const content = (cursor: string): Record<string, unknown> =>
+      JSON.parse(
+        inflateRawSync(Buffer.from(cursor.slice("sauce-plan-1.".length), "base64")).toString(),
+      ) as Record<string, unknown>;
+    const earlier = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+    expect(content(encodeCursor(plan()))).not.toHaveProperty("engine");
+    expect(
+      content(encodeCursor(plan({ engine: address(v12SvmEngineProgramId()) }))),
+    ).not.toHaveProperty("engine");
+    expect(content(encodeCursor(plan({ engine: earlier })))).toMatchObject({ engine: earlier });
+    expect(decodeCursor(encodeCursor(plan({ engine: earlier }))).engine).toBe(earlier);
+    expect(decodeCursor(cursorOf(raw())).engine).toBeUndefined();
+  });
+
   const LONG = Array.from({ length: 257 }, () => MINT);
   it.each<[string, () => string, RegExp]>([
     ["another string", () => "a cursor", /not a plan's cursor/],
@@ -189,6 +207,11 @@ describe("a plan's cursor", () => {
     ],
     ["another via", () => cursorOf(raw({ via: "relay" })), /via is neither kitchen nor engine/],
     ["a short salt", () => cursorOf(raw({ salt: "0x11" })), /salt is not 32 bytes/],
+    [
+      "an engine that is no address",
+      () => cursorOf(raw({ engine: "me" })),
+      /engine is not an address/,
+    ],
     [
       "an owner that is no address",
       () => cursorOf(raw({ owner: "me" })),
@@ -330,6 +353,28 @@ describe("a plan's cursor", () => {
       () => cursorOf(raw({ chain: 1399811150 })),
       /chain is not a Solana chain/,
     ],
+    // The engine a cook names signs for the Pot into whatever program it is: a cursor carries it from
+    // outside, so only an engine the release table names, and whose programs this SDK's run, passes.
+    [
+      "an engine no release names",
+      () => cursorOf(raw({ engine: MINT })),
+      /engine \w+ is not an engine release this SDK knows/,
+    ],
+    [
+      "the Kitchen's id as the engine",
+      () => cursorOf(raw({ engine: v12SvmKitchenProgramId() })),
+      /engine \w+ is not an engine release this SDK knows/,
+    ],
+    [
+      "the engine of a release whose programs this SDK's do not run",
+      () => cursorOf(raw({ engine: "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT" })),
+      /engine 2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT \(v12-svm 1\.3\.0\), which runs compiler .* this SDK compiles with compiler/,
+    ],
+    [
+      "the earliest engine a release names",
+      () => cursorOf(raw({ engine: "HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK" })),
+      /engine HB8b1oD5PB2ptkLH6EV56Rr9RHevutEfvG2YdA7an6rK \(v12-svm 1\.2\.0\)/,
+    ],
   ])("refuses %s", (_, cursor, why) => {
     const read = () => decodeCursor(cursor());
     expect(read).toThrow(UsageError);
@@ -357,6 +402,7 @@ describe("a plan's cursor", () => {
       owner: OWNER,
       salt: `0x${"11".repeat(32)}`,
       via: "kitchen",
+      engine: address(v12SvmEngineProgramId()),
       payload: new Uint8Array([1, 2, 3]),
       tail: [],
       lookupTables: {},
@@ -664,9 +710,13 @@ describe("a cook through a lookup table extended a moment ago", () => {
   });
   const through = plan({ lookupTables: [TABLE], tail: [{ address: MINT, role: 0 }] });
 
+  /** The table at its address, and no account anywhere else (the Pot is not created yet). */
+  const tableOnly = (lastExtendedSlot: bigint) => (at: never) =>
+    String(at) === TABLE ? tableAccount(lastExtendedSlot) : { context: { slot: 1n }, value: null };
+
   it("is not ready until the slot after its extension, and says so at once", async () => {
     const calls: string[] = [];
-    const rpc = endpoint({ getAccountInfo: () => tableAccount(500n), getSlot: () => 500n }, calls);
+    const rpc = endpoint({ getAccountInfo: tableOnly(500n), getSlot: () => 500n }, calls);
     const step = await nextStep(through, context(rpc));
     expect(step.name).toBe("cook");
     expect(step.transactions).toEqual([]);
@@ -682,7 +732,7 @@ describe("a cook through a lookup table extended a moment ago", () => {
   it("is built once the cluster is past that slot", async () => {
     const rpc = endpoint({
       ...COOK_READS,
-      getAccountInfo: () => tableAccount(500n),
+      getAccountInfo: tableOnly(500n),
       getSlot: () => 501n,
     });
     const step = await nextStep(through, context(rpc));
@@ -751,5 +801,328 @@ describe("a cook its simulation says would fail", () => {
     const built = await signableStep(step, context(rpc));
     expect(built.transactions).toEqual([]);
     expect(built.plan.cook).toBeUndefined();
+  });
+});
+
+describe("a cook on the engine that owns the Pot", () => {
+  /** v12-svm 1.4.0's engine: an earlier release's, whose programs run this SDK's. */
+  const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+  const INSTALLED = address(v12SvmEngineProgramId());
+  /** The Pot as the cluster holds it, owned by `owner`. */
+  const potOwnedBy = (owner: string) => () => ({
+    context: { slot: 2_000n },
+    value: { data: ["", "base64"], executable: false, lamports: 1n, owner, space: 0n },
+  });
+
+  it("names the engine the plan was made for, where the Pot is that engine's", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(EARLIER) });
+    const step = await nextStep(plan({ engine: EARLIER }), context(rpc));
+    expect(step.name).toBe("cook");
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(EARLIER);
+    expect(named).not.toContain(INSTALLED);
+  });
+
+  it("refuses a Pot another engine owns than the plan was made for, in either direction", async () => {
+    const earlier = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(EARLIER) });
+    await expect(nextStep(plan(), context(earlier))).rejects.toThrow(
+      `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+    );
+    const installed = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(INSTALLED) });
+    await expect(nextStep(plan({ engine: EARLIER }), context(installed))).rejects.toThrow(
+      `is owned by ${INSTALLED}, and this plan was made for engine ${EARLIER}: make the plan again`,
+    );
+  });
+
+  it("does not hold a plan with no cook left to build to the Pot's owner: its buffer still closes", async () => {
+    // The plan made the Pot in its setup, and another release's engine owns the Pot there now. A
+    // cook it would build is refused (above); one that landed, or that is given up, has only the
+    // code buffer's close left, and the wallet's policy preflight counts its transactions.
+    const rpc = endpoint({
+      ...COOK_READS,
+      getAccountInfo: potOwnedBy(EARLIER),
+      getMultipleAccounts: () => ({ context: { slot: 1n }, value: [] }),
+    });
+    const cooked = plan({ pot: "setup", cooked: { ok: true, signature: signature(1) } });
+    const closing = plan({ pot: "setup", closing: true });
+    await expect(transactionsAhead(cooked, context(rpc))).resolves.toBeDefined();
+    await expect(transactionsAhead(closing, context(rpc))).resolves.toBeDefined();
+    expect((await nextStep(closing, context(rpc), { close: true })).name).toBe("done");
+    // The same plan with its cook still to build is refused.
+    await expect(transactionsAhead(plan({ pot: "setup" }), context(rpc))).rejects.toThrow(
+      `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+    );
+  });
+
+  /** v12-svm 1.3.0's engine: no release of this SDK's compiler runs on it. */
+  const OLD = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+
+  it("cooks a Pot of an engine that does not run this SDK's programs on the installed engine, as earlier SDKs did", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(OLD) });
+    const step = await nextStep(plan(), context(rpc));
+    expect(step.name).toBe("cook");
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(INSTALLED);
+    expect(named).not.toContain(OLD);
+  });
+
+  it("still refuses such a Pot for a plan made for another engine than the installed one", async () => {
+    const rpc = endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(OLD) });
+    await expect(nextStep(plan({ engine: EARLIER }), context(rpc))).rejects.toThrow(
+      `is owned by ${OLD}, and this plan was made for engine ${EARLIER}: make the plan again`,
+    );
+  });
+
+  it("refuses the paired earlier engine where no engine owns the Pot yet: a missing Pot, or one that holds only lamports", async () => {
+    // A Pot no engine owns is created under, and cooked on, the installed engine: a plan that names
+    // the earlier engine, which this SDK's programs run on, names one that will never own it.
+    const SYSTEM = "11111111111111111111111111111111";
+    for (const rpc of [
+      endpoint({
+        ...COOK_READS,
+        getAccountInfo: () => ({ context: { slot: 2_000n }, value: null }),
+      }),
+      endpoint({ ...COOK_READS, getAccountInfo: potOwnedBy(SYSTEM) }),
+    ]) {
+      for (const pot of ["there", "setup"] as const) {
+        await expect(nextStep(plan({ engine: EARLIER, pot }), context(rpc))).rejects.toThrow(
+          `is owned by no engine yet, and this plan was made for engine ${EARLIER}: a Pot no ` +
+            `engine owns is created under and cooked on ${INSTALLED}, so make the plan again`,
+        );
+      }
+      // The plan made for the installed engine is the one such a Pot takes.
+      expect((await nextStep(plan(), context(rpc))).name).toBe("cook");
+    }
+  });
+});
+
+describe("a Pot address that holds only lamports", () => {
+  const INSTALLED = address(v12SvmEngineProgramId());
+  const SYSTEM = "11111111111111111111111111111111";
+  const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  /** The Pot's address as a transfer to it leaves it: the System Program's, with no data. */
+  const lamportsOnly = () => ({
+    context: { slot: 2_000n },
+    value: {
+      data: ["", "base64"],
+      executable: false,
+      lamports: 1_000_000n,
+      owner: SYSTEM,
+      space: 0n,
+    },
+  });
+  const reads = {
+    ...COOK_READS,
+    getMultipleAccounts: () => ({ context: { slot: 1n }, value: [] }),
+  };
+
+  it("is a Pot no engine owns yet: a plan made before the lamports came cooks on it, creating nothing", async () => {
+    // Made while the Pot was missing, so its setup creates the Pot; the address funded since, which
+    // the Kitchen cooks as it is (its IDL: the Pot "need not exist for a program that keeps no
+    // storage"), and which main cooked.
+    const rpc = endpoint({ ...reads, getAccountInfo: lamportsOnly });
+    const step = await nextStep(plan({ pot: "setup" }), context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.transactions.map((tx) => tx.kind)).toEqual(["cook"]);
+    expect(step.transactions[0]!.createsPot).toBeFalsy();
+    // The cook names the installed engine: no engine owns the address.
+    const named = (step.transactions[0]!.instructions.at(-1)!.accounts ?? []).map(
+      (meta) => meta.address,
+    );
+    expect(named).toContain(INSTALLED);
+  });
+
+  it("is listed ahead as the cook alone, whichever way the plan holds the Pot", async () => {
+    // What a wallet's policy counts before anything is sent: no create_pot among it.
+    const rpc = endpoint({ ...reads, getAccountInfo: lamportsOnly });
+    for (const pot of ["setup", "inline", "there"] as const) {
+      const ahead = await transactionsAhead(plan({ pot }), context(rpc));
+      expect([pot, ahead.map((tx) => tx.kind)]).toEqual([pot, ["cook"]]);
+      expect(ahead[0]!.createsPot).toBeFalsy();
+    }
+  });
+
+  it("is still no Pot where another program owns the address, or where the System Program's carries data", async () => {
+    for (const value of [
+      { data: ["", "base64"], owner: TOKEN_PROGRAM },
+      { data: ["AAAA", "base64"], owner: SYSTEM },
+    ]) {
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: () => ({
+          context: { slot: 2_000n },
+          value: { executable: false, lamports: 1_000_000n, space: 0n, ...value },
+        }),
+      });
+      await expect(nextStep(plan(), context(rpc))).rejects.toThrow(
+        `is owned by ${value.owner}, and this plan was made for engine ${INSTALLED}: make the plan again`,
+      );
+    }
+  });
+});
+
+describe("what a step of a plan says of the Pot's state", () => {
+  const INSTALLED = address(v12SvmEngineProgramId());
+  const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+  /** v12-svm 1.3.0's engine: no release of this SDK's compiler runs on it. */
+  const OLD = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+  const SYSTEM = "11111111111111111111111111111111";
+  /** The Pot's address as the cluster holds it: `owner`'s, with no data. */
+  const heldBy =
+    (owner: string, lamports = 1_000_000n) =>
+    () => ({
+      context: { slot: 2_000n },
+      value: { data: ["", "base64"], executable: false, lamports, owner, space: 0n },
+    });
+  const reads = {
+    ...COOK_READS,
+    getMultipleAccounts: () => ({ context: { slot: 1n }, value: [] }),
+  };
+  const OLDER =
+    "is owned by v12-svm 1.3.0 (2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT); it is cooked on " +
+    "v12-svm";
+  const OLDER_WHY = "Inside the program ctx.self() is the installed engine";
+  const FAILS = {
+    simulateTransaction: () => ({
+      context: { slot: 2_000n },
+      value: {
+        err: { InstructionError: [2, { Custom: 6001 }] },
+        logs: ["Program log: the Pot holds too little"],
+        unitsConsumed: 10_000n,
+        returnData: null,
+      },
+    }),
+  };
+
+  it("names a Pot of a release no engine of this compiler runs on, in the cook's step and in a cook that fails", async () => {
+    // What a plan resumed from its cursor says, as the command that made it said it: the cook that
+    // would fail is told the Pot's engine, not only that it would fail.
+    const rpc = endpoint({ ...reads, getAccountInfo: heldBy(OLD) });
+    const step = await nextStep(plan(), context(rpc));
+    expect(step.name).toBe("cook");
+    expect(step.notes).toHaveLength(1);
+    expect(step.notes[0]).toContain(OLDER);
+    expect(step.notes[0]).toContain(OLDER_WHY);
+
+    const failing = await nextStep(
+      plan(),
+      context(endpoint({ ...reads, ...FAILS, getAccountInfo: heldBy(OLD) })),
+    );
+    expect(failing.fails?.logs).toEqual(["Program log: the Pot holds too little"]);
+    expect(failing.notes[0]).toContain(OLDER);
+    expect(failing.notes[0]).toContain(OLDER_WHY);
+  });
+
+  it("names it in a setup step too, ahead of the step's own notes", async () => {
+    const accounts = [key(30)].map((at) => ({
+      address: at as Address,
+      holder: OWNER,
+      mint: MINT,
+      program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address,
+      label: "the Pot's account",
+    }));
+    for (const pot of ["there", "setup"] as const) {
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: heldBy(OLD),
+        getMultipleAccounts: () => ({ context: { slot: 1n }, value: [null] }),
+      });
+      const step = await nextStep(plan({ pot, tokenAccounts: accounts }), context(rpc));
+      expect([pot, step.name]).toEqual([pot, "setup"]);
+      expect([pot, step.notes[0]?.includes(OLDER)]).toEqual([pot, true]);
+    }
+  });
+
+  it("names an address that holds only lamports, and says a plan's step that creates the Pot is dropped", async () => {
+    const rpc = endpoint({ ...reads, getAccountInfo: heldBy(SYSTEM) });
+    const there = await nextStep(plan({ pot: "there" }), context(rpc));
+    expect(there.notes).toHaveLength(1);
+    expect(there.notes[0]).toContain("holds 1000000 lamports and no engine owns it yet:");
+    expect(there.notes[0]).toContain("nothing creates it");
+    expect(there.notes[0]).toContain("`sauce pot --deploy` creates it");
+    // Made while the Pot was missing, so its setup (or its cook) was to create it: funded since,
+    // that step is gone, and the plan says so rather than carry on without a word.
+    for (const pot of ["setup", "inline"] as const) {
+      const step = await nextStep(plan({ pot }), context(rpc));
+      expect([pot, step.transactions.map((tx) => tx.kind)]).toEqual([pot, ["cook"]]);
+      expect([pot, step.notes[0]]).toEqual([
+        pot,
+        expect.stringContaining(
+          "holds 1000000 lamports and no engine owns it yet, so the step of this plan that " +
+            "creates it is dropped:",
+        ),
+      ]);
+    }
+  });
+
+  it("says nothing of a Pot the installed engine owns, the earlier release's, or one not created yet", async () => {
+    for (const [rpc, made] of [
+      [endpoint({ ...reads, getAccountInfo: heldBy(INSTALLED) }), plan()],
+      [endpoint({ ...reads, getAccountInfo: heldBy(EARLIER) }), plan({ engine: EARLIER })],
+      [endpoint({ ...reads }), plan({ pot: "setup" })],
+    ] as const) {
+      const step = await nextStep(made, context(rpc));
+      expect(step.notes).toEqual([]);
+    }
+  });
+
+  it("says nothing of the Pot once there is no cook left to build: the buffer's close is not a cook", async () => {
+    const rpc = endpoint({ ...reads, getAccountInfo: heldBy(OLD) });
+    const cooked = plan({ pot: "setup", cooked: { ok: true, signature: signature(1) } });
+    const step = await nextStep(cooked, context(rpc));
+    expect(step.name).toBe("done");
+    expect(step.notes).toEqual([]);
+  });
+
+  describe("a failure after the step's read of the Pot carries what that read showed", () => {
+    const tokens = [key(30)].map((at) => ({
+      address: at as Address,
+      holder: OWNER,
+      mint: MINT,
+      program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address,
+      label: "the Pot's account",
+    }));
+    const LAMPORTS = "holds 1000000 lamports and no engine owns it yet";
+    /** What `nextStep` throws for `made` on `rpc`; a step that is built is a failure of the test. */
+    const thrownBy = (made: SvmPlan, rpc: StepContext["rpc"]): Promise<unknown> =>
+      nextStep(made, context(rpc)).then(
+        () => {
+          throw new Error("the step was built");
+        },
+        (error: unknown) => error,
+      );
+
+    it("an error of any class carries it, and keeps its class and message", async () => {
+      // A blockhash read with no value breaks the build of the cook with a TypeError, no CliError.
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: heldBy(SYSTEM),
+        getLatestBlockhash: () => ({ context: { slot: 2_000n }, value: undefined }),
+      });
+      const error = await thrownBy(plan({ pot: "there" }), rpc);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(CliError);
+      expect(potNotesOf(error)).toEqual([expect.stringContaining(LAMPORTS)]);
+    });
+
+    it("a setup that creates the Pot keeps its read of it when the read of the token accounts fails after", async () => {
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: heldBy(SYSTEM),
+        getMultipleAccounts: () => {
+          throw new Error("the endpoint dropped the request");
+        },
+      });
+      const error = await thrownBy(plan({ pot: "setup", tokenAccounts: tokens }), rpc);
+      expect(error).toBeInstanceOf(CliError);
+      expect(error).toMatchObject({
+        message: expect.stringContaining("reading the token accounts failed"),
+      });
+      expect(potNotesOf(error)).toEqual([expect.stringContaining(LAMPORTS)]);
+    });
   });
 });

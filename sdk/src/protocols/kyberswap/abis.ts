@@ -1,5 +1,50 @@
 export const KyberSwapElasticRouterABI = [
   {
+    name: "factory",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "multicall",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [{ name: "data", type: "bytes[]" }],
+    outputs: [{ name: "results", type: "bytes[]" }],
+  },
+  { name: "refundEth", type: "function", stateMutability: "payable", inputs: [], outputs: [] },
+  {
+    name: "swapCallback",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "deltaQty0", type: "int256" },
+      { name: "deltaQty1", type: "int256" },
+      { name: "data", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "swapExactInput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountIn", type: "uint256" },
+          { name: "minAmountOut", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountOut", type: "uint256" }],
+  },
+  {
     name: "swapExactInputSingle",
     type: "function",
     stateMutability: "payable",
@@ -21,9 +66,134 @@ export const KyberSwapElasticRouterABI = [
     ],
     outputs: [{ name: "amountOut", type: "uint256" }],
   },
+  {
+    name: "swapExactOutput",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "path", type: "bytes" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+          { name: "maxAmountIn", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "swapExactOutputSingle",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params",
+        type: "tuple",
+        components: [
+          { name: "tokenIn", type: "address" },
+          { name: "tokenOut", type: "address" },
+          { name: "fee", type: "uint24" },
+          { name: "recipient", type: "address" },
+          { name: "deadline", type: "uint256" },
+          { name: "amountOut", type: "uint256" },
+          { name: "maxAmountIn", type: "uint256" },
+          { name: "limitSqrtP", type: "uint160" },
+        ],
+      },
+    ],
+    outputs: [{ name: "amountIn", type: "uint256" }],
+  },
+  {
+    name: "transferAllTokens",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "minAmount", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "transferAllTokensWithFee",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "minAmount", type: "uint256" },
+      { name: "recipient", type: "address" },
+      { name: "feeUnits", type: "uint256" },
+      { name: "feeRecipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "unwrapWeth",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "minAmount", type: "uint256" },
+      { name: "recipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "unwrapWethWithFee",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      { name: "minAmount", type: "uint256" },
+      { name: "recipient", type: "address" },
+      { name: "feeUnits", type: "uint256" },
+      { name: "feeRecipient", type: "address" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "WETH",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
 ] as const;
 
 export const KyberSwapMetaAggregationRouterABI = [
+  {
+    name: "isWhitelist",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "renounceOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "rescueFunds",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
   {
     name: "swap",
     type: "function",
@@ -60,6 +230,146 @@ export const KyberSwapMetaAggregationRouterABI = [
     outputs: [
       { name: "returnAmount", type: "uint256" },
       { name: "gasUsed", type: "uint256" },
+    ],
+  },
+  {
+    name: "swapGeneric",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "execution",
+        type: "tuple",
+        components: [
+          { name: "callTarget", type: "address" },
+          { name: "approveTarget", type: "address" },
+          { name: "targetData", type: "bytes" },
+          {
+            name: "desc",
+            type: "tuple",
+            components: [
+              { name: "srcToken", type: "address" },
+              { name: "dstToken", type: "address" },
+              { name: "srcReceivers", type: "address[]" },
+              { name: "srcAmounts", type: "uint256[]" },
+              { name: "feeReceivers", type: "address[]" },
+              { name: "feeAmounts", type: "uint256[]" },
+              { name: "dstReceiver", type: "address" },
+              { name: "amount", type: "uint256" },
+              { name: "minReturnAmount", type: "uint256" },
+              { name: "flags", type: "uint256" },
+              { name: "permit", type: "bytes" },
+            ],
+          },
+          { name: "clientData", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "returnAmount", type: "uint256" },
+      { name: "gasUsed", type: "uint256" },
+    ],
+  },
+  {
+    name: "swapSimpleMode",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "caller", type: "address" },
+      {
+        name: "desc",
+        type: "tuple",
+        components: [
+          { name: "srcToken", type: "address" },
+          { name: "dstToken", type: "address" },
+          { name: "srcReceivers", type: "address[]" },
+          { name: "srcAmounts", type: "uint256[]" },
+          { name: "feeReceivers", type: "address[]" },
+          { name: "feeAmounts", type: "uint256[]" },
+          { name: "dstReceiver", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "minReturnAmount", type: "uint256" },
+          { name: "flags", type: "uint256" },
+          { name: "permit", type: "bytes" },
+        ],
+      },
+      { name: "executorData", type: "bytes" },
+      { name: "clientData", type: "bytes" },
+    ],
+    outputs: [
+      { name: "returnAmount", type: "uint256" },
+      { name: "gasUsed", type: "uint256" },
+    ],
+  },
+  {
+    name: "transferOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newOwner", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "updateWhitelist",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "addr", type: "address[]" },
+      { name: "value", type: "bool[]" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "WETH",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "ClientData",
+    type: "event",
+    inputs: [{ name: "clientData", type: "bytes", indexed: false }],
+  },
+  { name: "Error", type: "event", inputs: [{ name: "reason", type: "string", indexed: false }] },
+  {
+    name: "Exchange",
+    type: "event",
+    inputs: [
+      { name: "pair", type: "address", indexed: false },
+      { name: "amountOut", type: "uint256", indexed: false },
+      { name: "output", type: "address", indexed: false },
+    ],
+  },
+  {
+    name: "Fee",
+    type: "event",
+    inputs: [
+      { name: "token", type: "address", indexed: false },
+      { name: "totalAmount", type: "uint256", indexed: false },
+      { name: "totalFee", type: "uint256", indexed: false },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "amounts", type: "uint256[]", indexed: false },
+      { name: "isBps", type: "bool", indexed: false },
+    ],
+  },
+  {
+    name: "OwnershipTransferred",
+    type: "event",
+    inputs: [
+      { name: "previousOwner", type: "address", indexed: true },
+      { name: "newOwner", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "Swapped",
+    type: "event",
+    inputs: [
+      { name: "sender", type: "address", indexed: false },
+      { name: "srcToken", type: "address", indexed: false },
+      { name: "dstToken", type: "address", indexed: false },
+      { name: "dstReceiver", type: "address", indexed: false },
+      { name: "spentAmount", type: "uint256", indexed: false },
+      { name: "returnAmount", type: "uint256", indexed: false },
     ],
   },
 ] as const;

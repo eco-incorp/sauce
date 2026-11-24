@@ -48,6 +48,7 @@ import { bytesToHex, hexToBytes } from "viem";
 
 import { PotStore } from "../src/cli/pot-store.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
+import { decodeCursor, encodeCursor, newSvmPlan, planEngine } from "../src/cli/svm-plan.js";
 import { potSalt } from "../src/deployments/pot.js";
 import {
   v12ReleaseSet,
@@ -61,13 +62,13 @@ import {
   buildSetExecutionFeeInstruction,
   COOK_AND_PAY_DISCRIMINATOR,
   COOK_AND_PAY_FROM_ACCOUNT_PINNED_DISCRIMINATOR,
-  createSauceSvmClient,
   deriveProgramDataPda,
   derivePotPda,
   getTransactionSize,
   KITCHEN_DISCRIMINATORS,
   MAX_POT_LEN,
 } from "../src/svm/index.js";
+import { createSauceSvmClient } from "../src/svm/client.js";
 import { svmSettleSource } from "../src/svm/recipes/index.js";
 import {
   describeSvm,
@@ -2258,4 +2259,40 @@ describeSvm("sauce on Solana: pot, simulate, run and tx through the released Kit
       expect(rpc.sent.length).toBe(sentBefore);
     });
   }, 120_000);
+});
+
+describe("a plan's cursor and the engine its Pot cooks on", () => {
+  /** v12-svm 1.4.0's engine: a release the installed one's programs also run on. */
+  const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
+  const planFor = (engine: Address) =>
+    newSvmPlan({
+      chain: requireChain("solana"),
+      owner: randomAddress(),
+      salt: potSalt("cursor"),
+      via: "kitchen",
+      engine,
+      payload: new Uint8Array([1, 2, 3]),
+      tail: [],
+      lookupTables: {},
+      potMissing: false,
+      tokenAccounts: [],
+      labels: new Map(),
+    });
+
+  it("a plan cursor carries a non-default engine", async () => {
+    const plan = await planFor(EARLIER);
+    expect(plan.engine).toBe(EARLIER);
+    const decoded = decodeCursor(encodeCursor(plan));
+    expect(decoded.engine).toBe(EARLIER);
+    expect(planEngine(decoded)).toBe(EARLIER);
+  });
+
+  it("a cursor without an engine decodes to the installed release's", async () => {
+    // The installed release's engine is the cursor's own: a plan for it names none.
+    const plan = await planFor(address(v12SvmEngineProgramId()));
+    expect(plan.engine).toBeUndefined();
+    const decoded = decodeCursor(encodeCursor(plan));
+    expect(decoded.engine).toBeUndefined();
+    expect(planEngine(decoded)).toBe(v12SvmEngineProgramId());
+  });
 });

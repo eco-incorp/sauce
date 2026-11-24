@@ -7,9 +7,9 @@
  */
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer as createHttpServer, type Server } from "node:http";
+import { createServer as createHttpServer, Server } from "node:http";
 import { createServer as createTcpServer } from "node:net";
-import { after, before, describe, it } from "node:test";
+import { after, before, describe, it, mock } from "node:test";
 
 import { blockedAddress, checkRpcUrl, createRpcGuard, type Resolve } from "../src/guard.js";
 import { connect, failed, type Connected } from "./harness.js";
@@ -231,6 +231,36 @@ describe("the guard at each connection", () => {
       await guard.close();
     }
     assert.ok(hits >= 4);
+  });
+
+  it("starts its forwarder again after a start that failed, rather than failing from then on", async () => {
+    // The first listen fails as a port taken would; the mock then gives the real listen back.
+    const listen = mock.method(
+      Server.prototype,
+      "listen",
+      function (this: Server) {
+        process.nextTick(() =>
+          this.emit("error", Object.assign(new Error("listen EADDRINUSE"), { code: "EADDRINUSE" })),
+        );
+
+        return this;
+      },
+      { times: 1 },
+    );
+    const guard = createRpcGuard({ allowPrivate: true });
+    try {
+      await assert.rejects(guard.route(`http://127.0.0.1:${port}/key`), /EADDRINUSE/);
+      const routed = await guard.route(`http://127.0.0.1:${port}/key`);
+      behaviour = "ok";
+      assert.deepEqual(await rpc(routed.url), {
+        status: 200,
+        text: '{"jsonrpc":"2.0","id":1,"result":"0x1"}',
+      });
+      routed.release();
+    } finally {
+      listen.mock.restore();
+      await guard.close();
+    }
   });
 });
 

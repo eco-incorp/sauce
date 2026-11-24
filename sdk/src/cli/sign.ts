@@ -27,8 +27,6 @@ import {
 import type { PrivateKeyAccount } from "viem/accounts";
 
 import type { CanonicalChain } from "../chains/canonical.js";
-import { v12EngineAddress } from "../deployments/index.js";
-import { v12PredictPot } from "../deployments/pot.js";
 import { nativeSymbol } from "../evm/effects.js";
 import {
   checkSignedCookPot,
@@ -44,6 +42,7 @@ import {
   type SignedCookExecution,
 } from "../evm/engine.js";
 import { CliError, UsageError } from "./args.js";
+import { cookPotOf, refuseUnchosen } from "./cook-pot.js";
 import {
   connect,
   kitchenFee,
@@ -194,24 +193,34 @@ export async function signCommand(
   const target = input.target;
   // A Pot named by its owner needs one: no Kitchen call deploys a Pot of the zero address.
   if ("owner" in target) requirePotOwner(target.owner);
-  const pot =
-    "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
   const named = "owner" in target ? getAddress(target.owner) : undefined;
   if (signer !== undefined && named !== undefined && getAddress(signer.address) !== named) {
     throw new UsageError(
       `${signer.address} does not own the Pot: only its owner, ${named}, signs the cooks it runs`,
     );
   }
-  // A wallet's policy, before anything is read: what a signed cook moves is not measurable now.
-  if (signer !== undefined) guardOf(signer.address)?.authorizeSignedCook(chain, pot);
+  // A wallet's policy, in two parts. What does not depend on the Pot (the release's gate, `chains`,
+  // `native` and `tokens`) is held first, before anything is read: what a signed cook moves is not
+  // measurable now. The Pot is held to `to` once it is known — the chain's word with an endpoint (an
+  // earlier release's Pot of the owner, where there is one), else the installed release's, or the
+  // one `--pot` names — so a policy that names only that Pot is not refused for another one guessed
+  // before it was found.
+  const guard = signer === undefined ? undefined : guardOf(signer.address);
+  guard?.preflightSignedCook(chain);
 
   // The Pot, the fee and the time, where the command reaches the chain.
   const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
+  const at = await cookPotOf(chain, target, client);
+  // Before the policy is asked about a Pot, or anything is built or signed for one: an owner's
+  // earlier release's Pot that only the Pot store records is not chosen offline (`cook-pot.ts`).
+  refuseUnchosen(chain, at);
+  const pot = at.pot;
+  guard?.authorizeSignedCook(chain, pot);
   let owner = named;
   let deployPot: { chainId: number; to: Address; data: Hex; value: Hex } | undefined;
   let read: { fee: bigint; balance: bigint; now: bigint } | undefined;
   if (client !== undefined) {
-    const deployed = await hasCode(client, pot);
+    const deployed = at.deployed!;
     if (!deployed && !("owner" in target)) {
       throw new CliError(
         `Pot ${pot} has no code on ${chain.slug}, and --pot does not say whose it is: name it by ` +
@@ -259,7 +268,7 @@ export async function signCommand(
   const execution: SignedCookExecution = {
     chainId: chain.id,
     pot,
-    engine: getAddress(v12EngineAddress()),
+    engine: at.engine,
     program,
     value,
     maxExecutionFee,
@@ -370,6 +379,7 @@ export async function signCommand(
             "signature can be submitted again until the deadline.",
         ]),
     ...(read === undefined ? [POT_UNCHECKED] : []),
+    ...at.notes,
   ];
 
   return { text: JSON.stringify(json, null, 2), json, notes };
@@ -411,20 +421,26 @@ export async function cancelCommand(
   // The zero owner's Pot is a Shared Pot, which runs no signed cook and refuses its own
   // invalidateNonces from every sender: there is no nonce of it to cancel.
   if ("owner" in target) requirePotOwner(target.owner);
-  const pot =
-    "pot" in target ? getAddress(target.pot) : getAddress(v12PredictPot(target.owner, target.salt));
   const named = "owner" in target ? getAddress(target.owner) : undefined;
   if (signer !== undefined && named !== undefined && getAddress(signer.address) !== named) {
     throw new UsageError(
       `${signer.address} does not own the Pot: only its owner, ${named}, cancels its nonces`,
     );
   }
+  // The Pot the owner has, told from the chain where there is an endpoint, else the installed
+  // release's (an earlier release's Pot only the Pot store records is refused below).
+  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
+  const at = await cookPotOf(chain, target, client);
+  refuseUnchosen(chain, at);
+  // Sent from a signer, the cancellation needs an endpoint: said after the Pot is chosen, so an owner
+  // whose earlier release's Pot only the Pot store records is told that first, signer or not.
   if (signer !== undefined && input.rpcUrl === undefined) {
     throw new UsageError(
       "sending the cancellation needs an RPC endpoint (--rpc-url or --config): leave out the " +
         "signer to print it unsigned instead",
     );
   }
+  const pot = at.pot;
   const nonces = [...new Set(input.nonces)];
   const transactions = cookNonceMasks(nonces).map(({ word, mask }) => {
     const covered = nonces.filter((nonce) => nonce >> 8n === word);
@@ -439,7 +455,6 @@ export async function cancelCommand(
     };
   });
   let owner = named;
-  const client = input.rpcUrl === undefined ? undefined : await connect(input.rpcUrl, chain);
   if (client !== undefined) {
     // Sent to an address with no code, a call "succeeds" and cancels nothing.
     if (!(await hasCode(client, pot))) {

@@ -97,7 +97,9 @@ describe("canonical chain registry: protocol chainName reconciliation", () => {
       }
     }
     expect(visited).toBeGreaterThan(0); // guards a vacuously-true loop
-    expect(pairs.size).toBe(24); // + (1329, "Sei"), from circle-gateway; + (57073, "Ink"), from uniswap-v4
+    // + (1329, "Sei"), from circle-gateway; + (57073, "Ink"), from uniswap-v4; + Arc Testnet, Base
+    // Sepolia and Ethereum Sepolia, from cctp and circle-gateway.
+    expect(pairs.size).toBe(27);
   });
 });
 

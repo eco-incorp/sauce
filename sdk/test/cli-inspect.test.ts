@@ -16,6 +16,7 @@ import {
   hexToBytes,
   keccak256,
   numberToHex,
+  zeroAddress,
   type Address,
   type Hex,
 } from "viem";
@@ -24,7 +25,7 @@ import { requireChain } from "../src/chains/canonical.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
 import { v12EngineAddress } from "../src/deployments/index.js";
 import { potSalt, v12PredictPot } from "../src/deployments/pot.js";
-import { v12Pot } from "../src/evm/engine.js";
+import { v12KitchenAbi, v12Pot } from "../src/evm/engine.js";
 import { ERC20ABI } from "../src/protocols/erc20/abis.js";
 import { NAMESPACE_KEYS, resolveNamespace } from "../src/routes/accessor-index.js";
 import { chainDefines } from "../src/routes/ambient.js";
@@ -202,11 +203,37 @@ describe("sauce globals", () => {
     );
     expect(Object.keys(one)).toEqual(["chain", "protocol"]);
     expect((one.protocol as { namespace: string }).namespace).toBe("UniswapV4");
+    // Methods with --protocol, for the namespace it names, as the text lists them.
+    const named = one.protocol as { contracts: Array<{ methods?: unknown[] }> };
+    expect(named.contracts.some((contract) => (contract.methods ?? []).length > 0)).toBe(true);
     const full = json(await sauce("globals", "--chain", "base", "--json"));
     expect((full.defines as Record<string, unknown>).chainId).toBe("8453");
     expect((full.defines as Record<string, unknown>).USDC).toBe(
       "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     );
+    // Everything else lists each contract and interface without its methods.
+    const contracts = (
+      full.protocols as Array<{ contracts: Array<Record<string, unknown>> }>
+    ).flatMap((ns) => ns.contracts);
+    expect(contracts.length).toBeGreaterThan(10);
+    expect(contracts.filter((contract) => "methods" in contract)).toEqual([]);
+    expect(contracts.every((contract) => typeof contract.address === "string")).toBe(true);
+    const interfaces = full.interfaces as Array<Record<string, unknown>>;
+    expect(interfaces.length).toBeGreaterThan(0);
+    expect(interfaces.filter((bound) => "methods" in bound)).toEqual([]);
+    // --protocols with --protocol: the named namespace keeps its methods in the list too.
+    const both = json(
+      await sauce("globals", "--chain", "base", "--protocols", "--protocol", "UniswapV4", "--json"),
+    );
+    const listed = both.protocols as Array<{
+      namespace: string;
+      contracts: Array<Record<string, unknown>>;
+    }>;
+    for (const ns of listed) {
+      expect(ns.contracts.some((contract) => "methods" in contract)).toBe(
+        ns.namespace === "UniswapV4",
+      );
+    }
   });
 
   it("lists Tether's token where it is USDT0 as USDT0, the symbol a program there writes", async () => {
@@ -410,6 +437,8 @@ describe("sauce globals", () => {
     expect(out.interfaces).toEqual([
       expect.objectContaining({ namespace: "Erc4626", name: "Vault", protocol: "erc4626" }),
     ]);
+    const [named] = out.interfaces as Array<{ methods: Array<{ name: string }> }>;
+    expect(named!.methods.map((m) => m.name)).toContain("totalAssets");
     // Every one listed binds and compiles as listed.
     const vault = sourceGlobals("base").interfaces.find((bound) => bound.namespace === "Erc4626")!;
     expect(vault.methods.map((m) => m.name)).toContain("totalAssets");
@@ -527,6 +556,42 @@ describe("sauce inspect", () => {
       call: "ERC20.approve",
       args: { amount: "2000" },
     });
+  });
+
+  it("reads the Pot of a Kitchen.deployPot with its Router fixed, and of a deploySharedPot", async () => {
+    const salt = potSalt("treasury");
+    // The 3-argument deployPot places another Pot than the 2-argument one, and deploySharedPot the
+    // zero owner's: each is told as the Kitchen deploys it.
+    const fixed = encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deployPot",
+      args: [OWNER, salt, true],
+    });
+    const fixedPot = v12PredictPot(OWNER, salt, { routerFixed: true });
+    expect(fixedPot).not.toBe(v12PredictPot(OWNER, salt));
+    expect(json(await sauce("inspect", fixed, "--json"))).toEqual({
+      call: "Kitchen.deployPot",
+      owner: OWNER,
+      salt,
+      routerFixed: true,
+      pot: fixedPot,
+    });
+    expect((await sauce("inspect", fixed)).stdout).toContain(
+      `Kitchen.deployPot: the fixed-Router Pot ${fixedPot}, owner ${OWNER}, salt ${salt}`,
+    );
+    const shared = encodeFunctionData({
+      abi: v12KitchenAbi,
+      functionName: "deploySharedPot",
+      args: [salt],
+    });
+    expect(json(await sauce("inspect", shared, "--json"))).toEqual({
+      call: "Kitchen.deploySharedPot",
+      salt,
+      pot: v12PredictPot(zeroAddress, salt),
+    });
+    expect((await sauce("inspect", shared)).stdout).toContain(
+      `Kitchen.deploySharedPot: the Shared Pot ${v12PredictPot(zeroAddress, salt)}, salt ${salt}`,
+    );
   });
 
   it("asks for an endpoint for a transaction hash, and reads a non-hex operand as a file", async () => {

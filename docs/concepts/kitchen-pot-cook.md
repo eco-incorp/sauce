@@ -29,9 +29,10 @@ has the same three roles, and that section says what differs.
 ## A Pot's life
 
 1. **Its address comes first.** For an EVM Kitchen release, a Pot's address follows from the
-   Kitchen, its Pot init-code hash, its owner and a salt (zero by default). It is known before
-   deployment and fixed once deployed. A release with new Pot code derives a different address
-   for the same owner and salt; it does not move an existing Pot or its balances.
+   Kitchen, its release's Pot identity (CREATE2 under its init-code hash up to kitchen-evm 1.3.0,
+   CREATE3 from 1.4.0), its owner and a salt (zero by default). It is known before deployment and
+   fixed once deployed. A release with new Pot code derives a different address for the same owner
+   and salt; it does not move an existing Pot or its balances.
 2. **It is deployed once.** The Kitchen's `deployPot(owner, salt)` creates it. Anyone may send that
    transaction, and the Pot is the owner's whoever sends it; sending it again returns the Pot
    already there. You need not do it as a step of your own: the `sauce` command deploys your Pot

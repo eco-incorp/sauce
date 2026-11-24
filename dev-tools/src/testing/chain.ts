@@ -8,15 +8,11 @@ import {
   createTestClient,
   createWalletClient,
   defineChain,
-  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getCreate2Address,
   http,
   isAddress,
-  keccak256,
   parseAbi,
-  parseUnits,
   toHex,
   type Address,
   type Chain,
@@ -42,7 +38,9 @@ import {
   balanceOverride,
   buildSauceEvmCall,
   effectsOf,
+  exactUnits,
   TOKEN_REGISTRY,
+  v12PredictPot,
   type CanonicalChain,
   type Effects,
   type EntryValue,
@@ -162,16 +160,7 @@ export class TestChain {
         index,
         address,
         privateKey: toHex(hd.getHdKey().privateKey!),
-        pot: getCreate2Address({
-          bytecodeHash: stack.potInitCodeHash,
-          from: stack.kitchen,
-          salt: keccak256(
-            encodeAbiParameters(
-              [{ type: "address" }, { type: "bytes32" }],
-              [address, DEFAULT_POT_SALT],
-            ),
-          ),
-        }),
+        pot: getAddress(v12PredictPot(address, DEFAULT_POT_SALT)),
       };
     });
   }
@@ -286,8 +275,9 @@ export class TestChain {
   }
 
   /**
-   * Gives `holder` more of each token: `{ USDC: "100", ETH: "1" }` adds whole tokens, a bigint adds
-   * base units (`{ USDC: 100_000_000n }`). A token's balance is written into its own storage, in the
+   * Gives `holder` more of each token: `{ USDC: "100", ETH: "1" }` adds whole tokens, exactly (an
+   * amount past the token's decimals is refused, never rounded), a bigint adds base units
+   * (`{ USDC: 100_000_000n }`). A token's balance is written into its own storage, in the
    * slot `balanceOf` reads (its total supply is left as it was); the native currency is set on the
    * account. A token whose balance is computed rather than stored, or a B20 precompile, is refused:
    * fund the holder from an account that has it instead (`impersonate`).
@@ -296,7 +286,14 @@ export class TestChain {
     for (const [name, amount] of Object.entries(amounts)) {
       const token = this.token(name);
       const units =
-        typeof amount === "bigint" ? amount : parseUnits(amount, await this.decimals(token));
+        typeof amount === "bigint"
+          ? amount
+          : exactUnits(
+              amount,
+              await this.decimals(token),
+              token.symbol,
+              `cannot fund ${holder} with ${name}`,
+            );
       if (token.address === "native") {
         const target = (await this.balanceOf(holder, name)) + units;
         await this.test.setBalance({ address: holder, value: target });

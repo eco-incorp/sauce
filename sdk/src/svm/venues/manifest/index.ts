@@ -8,8 +8,8 @@
  * registry.
  *
  * Layout source-verified against github.com/CKS-Systems/manifest
- * (programs/manifest/src/state/{market,resting_order}.rs, lib/src/
- * red_black_tree.rs, program/{instruction,processor/swap}.rs, quantities.rs)
+ * (programs/manifest/src/state/{market,resting_order}.rs,
+ * program/{instruction,processor/swap}.rs, quantities.rs)
  * AND a mainnet dump of the SOL/USDC market ENhU8LsaR7... (238,896 bytes,
  * sdk/test/svm/fixtures/manifest/): MarketFixed = 256 bytes, discriminant
  * (u64 LE @0) = 4859840929024028656; the dynamic byte array after the header
@@ -21,13 +21,13 @@
  * @+36, is_bid u8 @+40, order_type u8 @+41. All integers little-endian.
  *
  * THE WINDOW (the pinned Phase 2 CLOB design, the whirlpool net-cache thesis
- * transplanted to a book): an in-VM red-black-tree successor walk is
- * unaffordable AND unbounded on the interpreter (get_next_lower_index chases
- * parent/child pointers with a data-dependent inner loop — the same class as
+ * transplanted to a book): an in-VM red-black-tree walk to the next order is
+ * unaffordable AND unbounded on the interpreter (it chases parent/child
+ * pointers with a data-dependent inner loop — the same class as
  * whirlpool's rejected in-VM tick discovery). So prepare walks the tree
  * OFF-CHAIN from the side's best index (bids_best for a base-in sell, asks_best
- * for a quote-in buy) following the venue's own get_next_lower_index taker
- * order, and ships up to MANIFEST_MAX_ORDERS price levels as per-trade cfg
+ * for a quote-in buy) in the taker's match order (`nextLower`, below),
+ * and ships up to MANIFEST_MAX_ORDERS price levels as per-trade cfg
  * params — each level a (block DataIndex, sequence_number) pair. Everything
  * value-bearing stays LIVE: the fragment reads each shipped order's price and
  * num_base_atoms from the market account at cook time. The sequence_number is
@@ -117,7 +117,7 @@ export const OFF_ORDER_LAST_VALID_SLOT = 52; // u32
 export const OFF_ORDER_IS_BID = 56; // u8
 export const OFF_ORDER_TYPE = 57; // u8
 
-/** u32::MAX — the tree/free-list null pointer (state/hypertree.rs). */
+/** u32::MAX — the tree/free-list null pointer. */
 export const NIL = 0xffff_ffff;
 /** OrderType::Global — draws from a separate global account; a taker halts at it. */
 export const ORDER_TYPE_GLOBAL = 3;
@@ -158,44 +158,46 @@ export interface ManifestPoolConfig extends PoolConfig {
   windows: { baseIn: ManifestWindow; quoteIn: ManifestWindow };
 }
 
-// --- off-chain red-black-tree helpers over the raw market bytes ---
+// --- off-chain red-black-tree walk over the raw market bytes ---
 const nodeBase = (dataIndex: number): number => MARKET_FIXED_SIZE + dataIndex;
-const treeLeft = (data: Uint8Array, idx: number): number =>
-  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_LEFT, 4));
-const treeRight = (data: Uint8Array, idx: number): number =>
-  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_RIGHT, 4));
-const treeParent = (data: Uint8Array, idx: number): number =>
-  Number(readUintLE(data, nodeBase(idx) + OFF_NODE_PARENT, 4));
-
-function isLeftChild(data: Uint8Array, idx: number): boolean {
-  const parent = treeParent(data, idx);
-  return parent !== NIL && treeLeft(data, parent) === idx;
-}
 
 /**
- * The venue's get_next_lower_index (red_black_tree.rs): the in-order
- * predecessor in the tree's Ord, which — because the tree's max is the BEST
- * order (bids Ord by price, asks Ord by inverse price) — is the taker's next
- * match. Every pointer hop draws from the caller's whole-walk budget;
- * unaffordable in-VM.
+ * The DataIndex of the order the taker matches after the one at `idx`: the node
+ * that comes immediately before `idx` in the tree's order, or NIL when `idx` is
+ * the tree's first node (or is itself NIL). The tree's last node is the side's
+ * best order (bids ordered by price, asks by inverse price), so stepping back
+ * through the order visits orders best-first. Every pointer hop draws from the
+ * caller's whole-walk budget (`spendHop`); unaffordable in-VM.
  */
 function nextLower(data: Uint8Array, idx: number, spendHop: SpendHop): number {
   if (idx === NIL) return NIL;
-  const left = treeLeft(data, idx);
-  if (left !== NIL) {
-    let cur = left;
-    while (treeRight(data, cur) !== NIL) {
+  const link = (node: number, offset: number): number =>
+    Number(readUintLE(data, nodeBase(node) + offset, 4));
+
+  // With a left subtree, the predecessor is that subtree's largest node: step
+  // to the left child, then follow right children to the end.
+  let node = link(idx, OFF_NODE_LEFT);
+  if (node !== NIL) {
+    let right = link(node, OFF_NODE_RIGHT);
+    while (right !== NIL) {
       spendHop();
-      cur = treeRight(data, cur);
+      node = right;
+      right = link(node, OFF_NODE_RIGHT);
     }
-    return cur;
+    return node;
   }
-  let cur = idx;
-  while (isLeftChild(data, cur)) {
+
+  // Without one, go up while the current node is its parent's left child; the
+  // first parent reached from its right side is the predecessor. Running out of
+  // parents means `idx` was the smallest node.
+  node = idx;
+  let parent = link(node, OFF_NODE_PARENT);
+  while (parent !== NIL && link(parent, OFF_NODE_LEFT) === node) {
     spendHop();
-    cur = treeParent(data, cur);
+    node = parent;
+    parent = link(node, OFF_NODE_PARENT);
   }
-  return treeParent(data, cur);
+  return parent;
 }
 
 /**

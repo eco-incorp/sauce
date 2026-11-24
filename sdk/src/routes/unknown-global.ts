@@ -74,14 +74,16 @@ function protocolsOn(chain: CanonicalChain): string[] {
   return [...NAMESPACE_KEYS].filter(deployed);
 }
 
+/** How far `candidate` is from `name`: nothing for the same name in another case, else their
+ *  distance. */
+const costOf = (name: string, candidate: string): number =>
+  candidate.toLowerCase() === name.toLowerCase() ? 0 : distance(name, candidate);
+
 /** The `candidates` nearest `name`, if any is close enough to be what was meant — at most three. */
 export function nearMatches(name: string, candidates: Iterable<string>): string[] {
   const allowed = name.length <= 4 ? 1 : 2;
   const scored = [...new Set(candidates)]
-    .map((candidate) => ({
-      candidate,
-      cost: candidate.toLowerCase() === name.toLowerCase() ? 0 : distance(name, candidate),
-    }))
+    .map((candidate) => ({ candidate, cost: costOf(name, candidate) }))
     .filter(({ cost }) => cost <= allowed);
   const nearest = Math.min(...scored.map(({ cost }) => cost));
   return scored
@@ -89,6 +91,19 @@ export function nearMatches(name: string, candidates: Iterable<string>): string[
     .map(({ candidate }) => candidate)
     .sort()
     .slice(0, 3);
+}
+
+/** The `count` of `candidates` nearest `name` by the same measure, nearest first, ties by name —
+ *  however far they are. */
+export function nearestOf(name: string, candidates: Iterable<string>, count: number): string[] {
+  return [...new Set(candidates)]
+    .map((candidate) => ({ candidate, cost: costOf(name, candidate) }))
+    .sort(
+      (a, b) =>
+        a.cost - b.cost || (a.candidate < b.candidate ? -1 : a.candidate > b.candidate ? 1 : 0),
+    )
+    .slice(0, count)
+    .map(({ candidate }) => candidate);
 }
 
 /** ` Did you mean `A` or `B`?` for the `candidates` nearest `name`, or nothing. */

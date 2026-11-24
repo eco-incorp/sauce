@@ -160,7 +160,7 @@ destination; LI.FI, Socket and Squid route across bridges from an off-chain quot
 | [Across](protocols/across.md) | — | `Across`: ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll | ethereum, optimism, polygon, zksync, arc, base, mode, arbitrum, linea, blast, scroll |
 | [Arbitrum Native Bridge](protocols/arbitrum-bridge.md) | — | `ArbitrumBridge`: ethereum, arbitrum | ethereum, arbitrum |
 | [Base Native Bridge](protocols/base-bridge.md) | — | `BaseBridge`: ethereum, base | ethereum, base |
-| [CCTP](protocols/cctp.md) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea |
+| [CCTP](protocols/cctp.md) | — | `Cctp`: ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia | ethereum, optimism, unichain, polygon, monad, sonic, arc, base, arbitrum, avalanche, linea, base-sepolia, arc-testnet, sepolia |
 | [Celer Network](protocols/celer.md) | — | `Celer`: ethereum, optimism, bsc, polygon, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arbitrum, avalanche |
 | [Connext (Everclear)](protocols/connext.md) | — | `Connext`: ethereum, optimism, base, arbitrum | ethereum, optimism, base, arbitrum |
 | [deBridge](protocols/debridge.md) | — | `Debridge`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
@@ -188,7 +188,7 @@ messages, each with its own set of verifiers and a fee paid at send time in the 
 | --- | --- | --- | --- |
 | [Axelar](protocols/axelar.md) | — | `Axelar`: ethereum, optimism, polygon, base, arbitrum, avalanche | ethereum, optimism, polygon, base, arbitrum, avalanche |
 | [Chainlink CCIP](protocols/chainlink-ccip.md) | — | `ChainlinkCcip`: ethereum, optimism, polygon, arc, base, arbitrum | ethereum, optimism, polygon, arc, base, arbitrum |
-| [Circle Gateway](protocols/circle-gateway.md) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche |
+| [Circle Gateway](protocols/circle-gateway.md) | — | `CircleGateway`: ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia | ethereum, optimism, unichain, polygon, sonic, sei, arc, base, arbitrum, avalanche, base-sepolia, arc-testnet, sepolia |
 | [Hyperlane](protocols/hyperlane.md) | — | `Hyperlane`: ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, bsc, polygon, arc, base, arbitrum, avalanche |
 | [LayerZero](protocols/layerzero.md) | — | `Layerzero`: ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll | ethereum, optimism, bsc, polygon, zksync, arc, base, arbitrum, avalanche, linea, scroll |
 | [Wormhole](protocols/wormhole.md) | — | `Wormhole`: ethereum, optimism, polygon, arc, base, arbitrum, avalanche | ethereum, optimism, polygon, arc, base, arbitrum, avalanche |
@@ -384,10 +384,11 @@ ambiguous, and a program names the versioned namespace instead.
 | `Aave.LombardBtcSpoke` | `AaveV4.LombardBtcSpoke` | ethereum |
 | `Aave.Mag7Spoke` | `AaveV4.Mag7Spoke` | base |
 | `Aave.MainSpoke` | `AaveV4.MainSpoke` | ethereum, arc, avalanche |
+| `Aave.Oracle` | `AaveV3.Oracle` | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
 | `Aave.PaxgGoldSpoke` | `AaveV4.PaxgGoldSpoke` | ethereum |
 | `Aave.PlusHub` | `AaveV4.PlusHub` | ethereum |
 | `Aave.Pool` | `AaveV3.Pool` | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
-| `Aave.PoolAddressesProvider` | `AaveV3.PoolAddressesProvider` | ethereum, optimism, polygon, monad, base, arbitrum, avalanche |
+| `Aave.PoolAddressesProvider` | `AaveV3.PoolAddressesProvider` | ethereum, optimism, bsc, gnosis, polygon, monad, fantom, metis, base, arbitrum, avalanche, scroll |
 | `Aave.PrimeHub` | `AaveV4.PrimeHub` | ethereum |
 | `Aave.UsdgMapleESpoke` | `AaveV4.UsdgMapleESpoke` | ethereum |
 | `Aave.UsdgPendleSpoke` | `AaveV4.UsdgPendleSpoke` | ethereum |
@@ -397,6 +398,7 @@ ambiguous, and a program names the versioned namespace instead.
 | `Compound.CUSDCv3` | `CompoundV3.CUSDCv3` | ethereum, optimism, polygon, base, arbitrum, scroll |
 | `Compound.CUSDTv3` | `CompoundV3.CUSDTv3` | ethereum, arbitrum |
 | `Compound.CWETHv3` | `CompoundV3.CWETHv3` | ethereum, base |
+| `Compound.CometRewards` | `CompoundV3.CometRewards` | ethereum, optimism, polygon, base, arbitrum, scroll |
 | `Compound.Comptroller` | `CompoundV2.Comptroller` | ethereum |
 | `Euler.EthereumVaultConnector` | `EulerV2.EthereumVaultConnector` | ethereum |
 | `Gmx.DataStore` | `GmxV2.DataStore` | arbitrum |
@@ -442,6 +444,8 @@ returned.
 
 | Interface | Protocol |
 | --- | --- |
+| `AaveV3.AToken(<address>)` | [`aave-v3`](protocols/aave-v3.md) |
+| `AaveV3.VariableDebtToken(<address>)` | [`aave-v3`](protocols/aave-v3.md) |
 | `Abracadabra.Cauldron(<address>)` | [`abracadabra`](protocols/abracadabra.md) |
 | `Aerodrome.Pool(<address>)` | [`aerodrome`](protocols/aerodrome.md) |
 | `AerodromeSlipstream.Pool(<address>)` | [`aerodrome-slipstream`](protocols/aerodrome-slipstream.md) |
@@ -463,8 +467,11 @@ returned.
 | `Layerbank.LToken(<address>)` | [`layerbank`](protocols/layerbank.md) |
 | `Maverick.V2Pool(<address>)` | [`maverick`](protocols/maverick.md) |
 | `Moonwell.MToken(<address>)` | [`moonwell`](protocols/moonwell.md) |
+| `MorphoBlue.Oracle(<address>)` | [`morpho-blue`](protocols/morpho-blue.md) |
 | `PancakeswapV2.Pair(<address>)` | [`pancakeswap-v2`](protocols/pancakeswap-v2.md) |
 | `PancakeswapV3.Pool(<address>)` | [`pancakeswap-v3`](protocols/pancakeswap-v3.md) |
+| `Pendle.Market(<address>)` | [`pendle`](protocols/pendle.md) |
+| `Pendle.SY(<address>)` | [`pendle`](protocols/pendle.md) |
 | `Premia.Diamond(<address>)` | [`premia`](protocols/premia.md) |
 | `Quickswap.V2Pair(<address>)` | [`quickswap`](protocols/quickswap.md) |
 | `Quickswap.V3Pool(<address>)` | [`quickswap`](protocols/quickswap.md) |

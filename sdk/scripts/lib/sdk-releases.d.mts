@@ -1,4 +1,4 @@
-/** Every row of `changelog`'s version table, in its order, the Unreleased one included:
+/** Every row of `changelog`'s version table, in its order, the Unreleased and None rows included:
  *  `{ sdk, compiler, … }`. Throws, naming what is wrong, on a table it cannot read. */
 export declare function versionTableOf(changelog: string): Array<Record<string, string>>;
 

@@ -39,6 +39,7 @@ export {
   buildMethods,
   buildPerChainAddress,
   deriveChainSlugs,
+  descriptorOn,
   deriveContractName,
 } from "./derive.js";
 

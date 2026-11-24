@@ -40,10 +40,10 @@ function main() {
   const held = USDC.balanceOf(pot);
   // `Token(address)` is any other ERC-20, and works for a symbol's address too.
   require(Token(USDC).balanceOf(pot) == held);
-  // `AaveV3.Pool` is Optimism's pool: `0x794a61358D6845594F94dc1DB02A252b5b4814aD`.
-  require(AaveV3.Pool != 0);
+  // `AaveV3.Oracle` is Optimism's oracle: `0xD81eb3728a631871a7eBBaD631b5f424909f0c77`.
+  require(AaveV3.Oracle != 0);
   // The same contract, qualified by the chain's name, from a program on any chain.
-  require(Optimism.AaveV3.Pool == AaveV3.Pool);
+  require(Optimism.AaveV3.Oracle == AaveV3.Oracle);
 }
 ```
 
@@ -64,19 +64,21 @@ address.
 
 | Protocol | Contract | Address | In a program |
 | --- | --- | --- | --- |
-| [Aave V3](../protocols/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool` |
+| [Aave V3](../protocols/aave-v3.md) | oracle | `0xD81eb3728a631871a7eBBaD631b5f424909f0c77` | `AaveV3.Oracle` |
+| [Aave V3](../protocols/aave-v3.md) | pool | `0x794a61358D6845594F94dc1DB02A252b5b4814aD` | `AaveV3.Pool`; not on this deployment: `dropReserve`, `resetIsolationModeTotalDebt` |
 | [Aave V3](../protocols/aave-v3.md) | poolAddressesProvider | `0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb` | `AaveV3.PoolAddressesProvider` |
-| [Across](../protocols/across.md) | spokePool | `0x6f26Bf09B1C792e3228e5467807a900A503c0281` | `Across.SpokePool` |
+| [Across](../protocols/across.md) | spokePool | `0x6f26Bf09B1C792e3228e5467807a900A503c0281` | `Across.SpokePool`; not on this deployment: `BLAST_RETRIEVER`, `BLAST_YIELD_CONTRACT`, `DEPRECATED_zkErc20Bridge`, `fxChild`, `initialize`, `L1_USDB`, `l1ChainId`, `L2_ASSET_ROUTER_ADDR`, `L2_BLAST_BRIDGE`, `L2_NATIVE_TOKEN_VAULT_ADDR`, `l2AssetRouter`, `l2GatewayRouter`, `l2ScrollMessenger`, `owner`, `polygonTokenBridger`, `processMessageFromRoot`, `renounceOwnership`, `setFxChild`, `setL2GatewayRouter`, `setL2ScrollMessenger`, `setPolygonTokenBridger`, `transferOwnership`, `USDB`, `whitelistedTokens`, `whitelistToken`, `wrap`, `YIELD_RECIPIENT`, `zkUSDCBridge` |
 | [Axelar](../protocols/axelar.md) | gateway | `0xe432150cce91c13a887f7D836923d5597adD8E31` | `Axelar.Gateway` |
 | [Axelar](../protocols/axelar.md) | its | `0xB5FB4BE02232B1bBA4dC8f81dc24C26980dE9e3C` | `Axelar.ITS` |
 | [Balancer V2](../protocols/balancer-v2.md) | vault | `0xBA12222222228d8Ba445958a75a0704d566BF2C8` | `BalancerV2.Vault` |
 | [Beefy Finance](../protocols/beefy.md) | BIFI | `0x4E720DD3Ac5CFe1e1fbDE4935f386Bb1C66F4642` | `Beefy.BIFI` |
-| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger` |
+| [CCTP](../protocols/cctp.md) | tokenMessenger | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | `Cctp.TokenMessenger`; not on this deployment: `getMinFeeAmount`, `initialize`, `MIN_FEE_MULTIPLIER`, `minFee`, `minFeeController`, `setMinFee`, `setMinFeeController` |
 | [Celer Network](../protocols/celer.md) | bridge | `0x9D39Fc627A6d9d9F8C831c16995b209548cc3401` | `Celer.Bridge` |
 | [Chainlink CCIP](../protocols/chainlink-ccip.md) | router | `0x3206695CaE29952f4b0c22a169725a865bc8Ce0f` | `ChainlinkCcip.Router` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayMinter | `0x2222222d7164433c4C09B0b0D809a9b52C04C205` | `CircleGateway.GatewayMinter` |
 | [Circle Gateway](../protocols/circle-gateway.md) | gatewayWallet | `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE` | `CircleGateway.GatewayWallet` |
 | [Compound V3](../protocols/compound-v3.md) | cUSDCv3 | `0x2e44e174f7D53F0212823acC11C01A11d58c5bCB` | `CompoundV3.CUSDCv3` |
+| [Compound V3](../protocols/compound-v3.md) | cometRewards | `0x443EA0340cb75a160F31A440722dec7b5bc3C2E9` | `CompoundV3.CometRewards` |
 | [Connext (Everclear)](../protocols/connext.md) | everclearSpoke | `0xa05A3380889115bf313f1Db9d5f335157Be4D816` | `Connext.EverclearSpoke` |
 | [Curve Finance](../protocols/curve.md) | routerNG | `0x0DCDED3545D565bA3B19E683431381007245d983` | `Curve.RouterNG` |
 | [deBridge](../protocols/debridge.md) | dlnDestination | `0xE7351Fd770A37282b91D153Ee690B63579D6dd7f` | `Debridge.DlnDestination` |
@@ -89,11 +91,11 @@ address.
 | [KyberSwap](../protocols/kyberswap.md) | metaAggregationRouterV2 | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `Kyberswap.MetaAggregationRouterV2` |
 | [KyberSwap Aggregator](../protocols/kyberswap-aggregator.md) | metaAggregationRouter | `0x6131B5fae19EA4f9D964eAc0408E4408b66337b5` | `KyberswapAggregator.MetaAggregationRouter` |
 | [LayerZero](../protocols/layerzero.md) | endpointV2 | `0x1a44076050125825900e736c501f859c50fE728c` | `Layerzero.EndpointV2` |
-| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond` |
+| [LI.FI](../protocols/lifi.md) | lifiDiamond | `0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE` | `Lifi.LiFiDiamond`; not on this deployment: `addDex`, `approvedDexs`, `batchAddDex`, `batchRemoveDex`, `batchSetFunctionApprovalBySignature`, `chainflipVault`, `DLN_SOURCE`, `executeCallViaAxelar`, `executeCallWithTokenViaAxelar`, `getChainIdToEid`, `getWhitelistedAddresses`, `getWhitelistedFunctionSelectors`, `IS_HUB`, `isAddressWhitelisted`, `isFunctionApproved`, `isFunctionSelectorWhitelisted`, `isMigrated`, `LIFI_DISTRIBUTOR_CODE`, `M0_ORDER_BOOK`, `PAXOS_TRANSIT_THIS_CHAIN_EID`, `POOL_MANAGER`, `quoteLayerZeroFee`, `registerMegaETHBridge`, `registerOptimismBridge`, `registerRouters`, `relayer`, `removeDex`, `setChainIdToEid`, `setChainName`, `setFunctionApprovalBySignature`, `setLayerZeroChainId`, `setWormholeChainId`, `setWormholeChainIds`, `standardizedBridgeCall`, `standardizedCall`, `standardizedSwapAndBridgeCall`, `standardizedSwapCall`, `startBridgeTokensViaAcross`, `startBridgeTokensViaArbitrumBridge`, `startBridgeTokensViaCBridge`, `startBridgeTokensViaCelerIM`, `startBridgeTokensViaCentrifuge`, `startBridgeTokensViaChainflip`, `startBridgeTokensViaGarden`, `startBridgeTokensViaGnosisBridge`, `startBridgeTokensViaHyphen`, `startBridgeTokensViaLIFuel`, `startBridgeTokensViaM0`, `startBridgeTokensViaMegaETHBridge`, `startBridgeTokensViaMultichain`, `startBridgeTokensViaOmniBridge`, `startBridgeTokensViaOptimismBridge`, `startBridgeTokensViaPaxosTransit`, `startBridgeTokensViaPolygonBridge`, `startBridgeTokensViaSuperset`, `startBridgeTokensViaThorSwap`, `startBridgeTokensViaUnit`, `startBridgeTokensViaWormhole`, `swapAndStartBridgeTokensViaAcross`, `swapAndStartBridgeTokensViaArbitrumBridge`, `swapAndStartBridgeTokensViaCBridge`, `swapAndStartBridgeTokensViaCelerIM`, `swapAndStartBridgeTokensViaCentrifuge`, `swapAndStartBridgeTokensViaChainflip`, `swapAndStartBridgeTokensViaGarden`, `swapAndStartBridgeTokensViaGnosisBridge`, `swapAndStartBridgeTokensViaHyphen`, `swapAndStartBridgeTokensViaLIFuel`, `swapAndStartBridgeTokensViaM0`, `swapAndStartBridgeTokensViaMegaETHBridge`, `swapAndStartBridgeTokensViaMultichain`, `swapAndStartBridgeTokensViaOmniBridge`, `swapAndStartBridgeTokensViaOptimismBridge`, `swapAndStartBridgeTokensViaPaxosTransit`, `swapAndStartBridgeTokensViaPolygonBridge`, `swapAndStartBridgeTokensViaSuperset`, `swapAndStartBridgeTokensViaThorSwap`, `swapAndStartBridgeTokensViaUnit`, `swapAndStartBridgeTokensViaWormhole`, `swapTokensGeneric`, `TRANSIT_STATION`, `triggerRefund`, `updateAddressMappings` |
 | [1inch](../protocols/oneinch.md) | aggregationRouterV6 | `0x111111125421cA6dc452d289314280a0f8842A65` | `Oneinch.AggregationRouterV6` |
 | [OpenOcean](../protocols/openocean.md) | exchangeV2 | `0x6352a56caadC4F1E25CD6c75970Fa768A3304e64` | `Openocean.ExchangeV2` |
 | [Optimism Native Bridge](../protocols/optimism-bridge.md) | l2StandardBridge | `0x4200000000000000000000000000000000000010` | `OptimismBridge.L2StandardBridge` |
-| [ParaSwap](../protocols/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5` |
+| [ParaSwap](../protocols/paraswap.md) | augustusV5 | `0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57` | `Paraswap.AugustusV5`; not on this deployment: `buyOnAugustusRFQTryBatchFill`, `buyOnAugustusRFQTryBatchFillWithPermit`, `buyOnUniswap`, `buyOnUniswapFork`, `buyOnUniswapV2Fork`, `buyOnUniswapV2ForkWithPermit`, `partialSwapOnAugustusRFQ`, `partialSwapOnAugustusRFQNFT`, `partialSwapOnAugustusRFQNFTWithPermit`, `partialSwapOnAugustusRFQWithPermit`, `swapOnAugustusRFQ`, `swapOnAugustusRFQNFT`, `swapOnAugustusRFQNFTWithPermit`, `swapOnAugustusRFQTryBatchFill`, `swapOnAugustusRFQTryBatchFillWithPermit`, `swapOnAugustusRFQWithPermit`, `swapOnUniswap`, `swapOnUniswapFork`, `swapOnUniswapV2Fork`, `swapOnUniswapV2ForkWithPermit`, `swapOnZeroXv2`, `swapOnZeroXv2WithPermit`, `swapOnZeroXv4`, `swapOnZeroXv4WithPermit` |
 | [ParaSwap](../protocols/paraswap.md) | augustusV6 | `0x6A000F20005980200259B80c5102003040001068` | `Paraswap.AugustusV6` |
 | [Permit2](../protocols/permit2.md) | permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | `Permit2.Permit2` |
 | [Perpetual Protocol](../protocols/perpetual-protocol.md) | clearingHouse | `0x82ac2CE43e33683c58BE4cDc40975E73aA50f459` | `PerpetualProtocol.ClearingHouse` |
@@ -109,7 +111,7 @@ address.
 | [Synapse Protocol](../protocols/synapse.md) | synapseBridge | `0xAf41a65F786339e7911F4acDAD6BD49426F2Dc6b` | `Synapse.SynapseBridge` |
 | [Thales](../protocols/thales.md) | speedMarketsAMM | `0xE16B8a01490835EC1e76bAbbB3Cadd8921b32001` | `Thales.SpeedMarketsAMM` |
 | [Thales](../protocols/thales.md) | thalesAMM | `0x278B5A44397c9D8E52743fEdec263c4760dc1A1A` | `Thales.ThalesAMM` |
-| [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf` | `UniswapV2.Factory` |
+| [Uniswap V2](../protocols/uniswap-v2.md) | factory | `0x0c3c1c532F1e39EdF36BE9Fe0bE1410313E074Bf` | `UniswapV2.Factory`; not on this deployment: `INIT_CODE_HASH` |
 | [Uniswap V2](../protocols/uniswap-v2.md) | router | `0x4A7b5Da61326A6379179b40d00F57E5bbDC962c2` | `UniswapV2.Router` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | factory | `0x1F98431c8aD98523631AE4a59f267346ea31F984` | `UniswapV3.Factory` |
 | [Uniswap V3](../protocols/uniswap-v3.md) | nonfungiblePositionManager | `0xC36442b4a4522E871399CD717aBDD847Ab11FE88` | `UniswapV3.NonfungiblePositionManager` |
@@ -124,7 +126,7 @@ address.
 | [Velodrome](../protocols/velodrome.md) | routerV2 | `0xa062aE8A9c5e11aaA026fc2670B0D65cCc8B2858` | `Velodrome.RouterV2` |
 | [Wormhole](../protocols/wormhole.md) | coreBridge | `0xEe91C335eab126dF5fDB3797EA9d6aD93aeC9722` | `Wormhole.CoreBridge` |
 | [Wormhole](../protocols/wormhole.md) | tokenBridge | `0x1D68124e65faFC907325e3EDbF8c4d84499DAa8b` | `Wormhole.TokenBridge` |
-| [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy` |
+| [0x Protocol](../protocols/zerox.md) | exchangeProxy | `0xDEF1ABE32c034e558Cdd535791643C58a13aCC10` | `Zerox.ExchangeProxy`; not on this deployment: `_fillRfqOrder`, `_multiplexBatchSell`, `_multiplexMultiHopSell`, `_sellHeldTokenForTokenToUniswapV3`, `_sellTokenForTokenToUniswapV3`, `batchExecuteMetaTransactions`, `executeMetaTransaction`, `getMetaTransactionExecutedBlock`, `getMetaTransactionHash`, `getMetaTransactionHashExecutedBlock`, `multiplexBatchSellEthForToken`, `multiplexBatchSellTokenForEth`, `multiplexBatchSellTokenForToken`, `multiplexMultiHopSellEthForToken`, `multiplexMultiHopSellTokenForEth`, `multiplexMultiHopSellTokenForToken`, `sellEthForTokenToUniswapV3`, `sellTokenForEthToUniswapV3`, `sellTokenForTokenToUniswapV3`, `sellToLiquidityProvider`, `sellToPancakeSwap`, `sellToUniswap`, `transferTrappedTokensTo`, `uniswapV3SwapCallback` |
 
 ## Requesting support
 

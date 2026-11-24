@@ -29,6 +29,7 @@ export { LiquidityPoolABI } from "../../sdk/dist/protocols/etherfi/index.js";
 export { Permit2ABI } from "../../sdk/dist/protocols/permit2/index.js";
 export { RETHABI, RocketDepositPoolABI } from "../../sdk/dist/protocols/rocket-pool/index.js";
 export { StargatePoolABI } from "../../sdk/dist/protocols/stargate/index.js";
+export { DODOV2ProxyABI } from "../../sdk/dist/protocols/dodo/index.js";
 export { TokenMessengerABI } from "../../sdk/dist/protocols/cctp/index.js";
 export {
   UniswapV2FactoryABI,

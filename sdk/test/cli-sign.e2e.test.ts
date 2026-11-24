@@ -97,7 +97,12 @@ describeEvm("sauce sign, submitted by another account", () => {
     writeFileSync(file, SOURCE);
     base = await startChain("base");
     usdc = await base.plant(fixture("MockERC20"), registered(base.chain, "USDC"));
-    pot = await deployPot(base);
+    // The Pot OWNER signs for: its earlier release's where the chain has one (the legacy arm),
+    // else the installed release's, deployed here.
+    pot = base.potOf(OWNER.address);
+    if ((await base.publicClient.getCode({ address: pot })) === undefined) {
+      expect(await deployPot(base)).toBe(pot);
+    }
     await base.mint(usdc, pot, 10_000_000n);
     // The Pot pays the Kitchen's fee from its own balance, for each cook it runs.
     await base.testClient.setBalance({ address: pot, value: 10n * FEE });

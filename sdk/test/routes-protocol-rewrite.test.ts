@@ -497,17 +497,17 @@ describe("protocol accessors: fallback / named errors", () => {
     );
   });
 
-  it("an address-only descriptor (AaveV3.PoolAddressesProvider) -> located error", () => {
-    const source = `function main() { AaveV3.PoolAddressesProvider.method(1); }`;
+  it("an address-only descriptor (Paraswap.AugustusV6) -> located error", () => {
+    const source = `function main() { Paraswap.AugustusV6.method(1); }`;
     expect(() => compileSauceProgram("base", source)).toThrow(
-      /aave-v3\.PoolAddressesProvider has an address but no ABI vendored for this role \(kind: "address-only"\)/,
+      /paraswap\.AugustusV6 has an address but no ABI vendored for this role \(kind: "address-only"\)/,
     );
   });
 
   it("a method not in the vendored ABI -> refused, naming the contract and its methods", () => {
     const source = `function main() { AaveV3.Pool.nope(1); }`;
     expect(() => compileSauceProgram("base", source)).toThrow(
-      /`AaveV3\.Pool\.nope\(…\)`: `nope` is not in aave-v3\.Pool's vendored ABI \(known methods: supply, .*\)\.\n --> main\.js:1:31/,
+      /`AaveV3\.Pool\.nope\(…\)`: `nope` is not in aave-v3\.Pool's vendored ABI \(69 known methods; nearest: repay, borrow, supply, deposit, UMBRELLA\)\.\n --> main\.js:1:31/,
     );
   });
 
@@ -661,7 +661,7 @@ describe("protocol accessors: VALUE position -- an accessor used as an address, 
     for (const source of [
       "function main() { return AaveV3.Pool.getUserAccountData(pot); }",
       "function main(x: Uint256) { return x.toBytesBe(32); }",
-      "function main() { return AaveV3.PoolAddressesProvider.toBytesBe(32); }",
+      "function main() { return Paraswap.AugustusV6.toBytesBe(32); }",
     ]) {
       expect(rewriteProtocolAccessors(source, BASE).source).not.toContain(".address");
     }
@@ -840,10 +840,7 @@ describe("protocol accessors: every registry protocol, every contract kind", () 
       rewriteProtocolAccessors(`function main() { Erc4626.Vault.at(1, 2).deposit(1, 1); }`, BASE),
     ).toThrow(/takes exactly one argument/);
     expect(() =>
-      rewriteProtocolAccessors(
-        `function main() { AaveV3.PoolAddressesProvider.at(1).getPool(); }`,
-        BASE,
-      ),
+      rewriteProtocolAccessors(`function main() { Paraswap.AugustusV6.at(1).getPool(); }`, BASE),
     ).toThrow(/there is nothing to bind/);
   });
 
@@ -914,12 +911,9 @@ describe("protocol accessors: every registry protocol, every contract kind", () 
   });
 
   it("an address-only contract is its address in value position", () => {
-    const source = `function main() { return AaveV3.PoolAddressesProvider; }`;
+    const source = `function main() { return Paraswap.AugustusV6; }`;
     expect(bytes("base", source)).toEqual(
-      bytes(
-        "base",
-        `function main() { return ${deployedAt("aave-v3", "PoolAddressesProvider", BASE)}; }`,
-      ),
+      bytes("base", `function main() { return ${deployedAt("paraswap", "AugustusV6", BASE)}; }`),
     );
   });
 });

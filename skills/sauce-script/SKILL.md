@@ -94,14 +94,14 @@ function afterFee(amount: Uint256): Uint256 {
   return amount - amount / 1000;
 }
 
-// Supplies the USDC this Pot holds, less 0.1%, to Aave V3 for the Pot's owner: in a cook on the
-// owner's Pot, `ctx.msgSender()` is the owner who sent it, so the aTokens land in their wallet.
-// `pot` there would keep them in the Pot.
+// Supplies the USDC this Pot holds, less 0.1%, to Aave V3, keeping the aTokens in the Pot (`pot`).
+// To credit the owner's wallet instead, take it as a `main` parameter: `ctx.msgSender()` is the
+// owner only when the owner sends the cook, and a signed cook's sender is whoever submitted it.
 const held = pot.USDC;
 require(held >= 1000000, "below 1 USDC");
 const supplied = afterFee(held);
 USDC.approve(AaveV3.Pool, supplied);
-AaveV3.Pool.supply(USDC, supplied, ctx.msgSender(), 0);
+AaveV3.Pool.supply(USDC, supplied, pot, 0);
 ```
 
 ## The header
@@ -206,8 +206,10 @@ there.
 Call a contract by name, in this order of preference:
 
 1. **A namespace**, for a contract the chain's registry records: `UniswapV3.Factory.getPool(...)`,
-   `AaveV3.Pool.supply(...)`, typed by the registry's ABI, at the chain's address. Which
-   namespaces, members and aliases exist is `sauce-globals`'s.
+   `AaveV3.Pool.supply(...)`, typed by the contract's whole verified ABI, at the chain's address.
+   Which namespaces, members and aliases exist is `sauce-globals`'s; a function the chain's own
+   deployment does not run is refused for that chain, naming the chains that run it, and one it
+   declares otherwise is called there as it declares it.
    - **A contract a call returns**: where the registry records which contract an address a
      function returns is (a factory's pool, a pool's tokens, a vault's asset; the function's line
      in its `sauce-protocols` registry file says so), call that contract's methods on the result,
@@ -223,13 +225,18 @@ Call a contract by name, in this order of preference:
 2. **A registry ABI import**, where the chain has no namespace for it: the protocol's registry file
    in `sauce-protocols` gives the line, such as
    `import VaultABI from "./protocols/erc4626/VaultABI.json"`, then
-   `VaultABI.at(vault).convertToAssets(shares)`.
-3. **The program's own ABI**, for a contract no registry knows or a function its registry ABI does
-   not declare: a JSON ABI file beside the program, holding only the functions the program calls,
-   with the deployed contract's types from its verified source, imported by relative path as its
-   default export: `import IOracle from "./IOracle.json"`, then `IOracle.at(pool).observe(...)`. The
-   `sauce` command reads it from beside the file; through the MCP server, pass it in `modules`
-   (`{ "IOracle.json": "<its JSON>" }`).
+   `VaultABI.at(vault).convertToAssets(shares)`. The import is the registry's ABI for the
+   contract: the functions its registry file lists, and none of those it lists as left out, with
+   the same entries on every chain and nothing withheld for one chain's deployment. Like an
+   `IERC20` import, it refuses no function it lists. Only a namespace name refuses a function the
+   chain's deployment does not run, so call a contract the chain records through its namespace.
+3. **The program's own ABI**, for a contract no registry records, such as an NFT collection: a
+   JSON ABI file beside the program, holding only the functions the program calls, with the
+   deployed contract's types from its verified source or the interface it implements, imported by
+   relative path as its default export: `import IERC721 from "./IERC721.json"`, then
+   `IERC721.at(nft).ownerOf(tokenId)`. The `sauce` command reads it from beside the file; through
+   the MCP server, pass it in `modules` (`{ "IERC721.json": "<its JSON>" }`). A contract the
+   registry records needs none: its namespace already carries every function its deployment runs.
 
 Never call through `evm.static` or `evm.call` with a hex selector where one of these exists: the
 typed call encodes arguments and names outputs. Select the field you need for clarity, but any read
@@ -250,13 +257,49 @@ function main(vault: Address, shares: Uint256): Uint256 {
 }
 ```
 
+### A function called by its signature
+
+A namespace calls a function by name, picking among overloads by argument count. A function it
+leaves out by name (an overload taking as many arguments as the one it keeps, or a name the
+namespace keeps for itself, such as `available`) is called by its **canonical signature**: its
+name and parameter types, a tuple's in parentheses, with no names or spaces. Its contract's
+registry file in `sauce-protocols` lists each one with its exact spelling.
+
+- `Permit2.Permit2["permit(address,((address,uint160,uint48,uint48)[],address,uint256),bytes)"](…)`
+  on a namespace contract, `Base.Permit2.Permit2["…"](…)` qualified by chain, or on a `const`
+  holding it: `const f = UniswapV3.Factory; f["getPool(address,address,uint24)"](…)`;
+- `UniswapV3.Factory.at(factory)["getPool(address,address,uint24)"](…)` on another deployment;
+- `Beefy.Vault(vault)["available()"]()` on an interface, with the address in the same expression.
+
+The compiled program is the same as a call by name where the name reaches the function. Not
+through a protocol's default contract (`Permit2["…"](…)`), and not on a bound interface held in a
+`const`. A misspelled signature is refused, naming the nearest of the contract's own; one the
+chain's deployment does not run is refused for that chain, naming the chains that run it.
+
+```sauce chain=ethereum
+function main(
+  permitted: { token: Address; amount: Uint256 }[],
+  nonce: Uint256,
+  deadline: Uint256,
+  transfers: { to: Address; requestedAmount: Uint256 }[],
+  owner: Address,
+  signature: bytes,
+) {
+  // The batch overload takes as many arguments as the single one, so it is called by signature.
+  Permit2.Permit2[
+    "permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"
+  ]({ permitted, nonce, deadline }, transfers, owner, signature);
+}
+```
+
 ### Who receives what a call produces
 
 Every call comes from the Pot. A call that credits its caller, or names `pot` as its
 beneficiary, leaves the output in the Pot. A call that names a beneficiary (a lending market's
 `onBehalfOf`, a vault's `receiver`, a swap's `recipient`, a bridge's `to`) credits that address:
 make it a `main` parameter, the user's wallet or `pot` as the user chose (`sauce-overview`
-says to ask). In a cook on the user's own Pot `ctx.msgSender()` is its owner.
+says to ask). Never name `ctx.msgSender()` as a beneficiary or refund address: it is the owner
+only when the owner sends the cook, and under a signed cook it is whoever submitted it.
 
 ```sauce chain=base,ethereum
 // Supplies `amount` of the Pot's USDC to Aave V3 for `onBehalfOf`, who receives the aTokens: the
@@ -366,10 +409,11 @@ function main(recipient: Address, amount: Uint256, reserve: Uint256): void {
 }
 ```
 
-A `try` containing only one external call has the same boundary as `.catch(...)`: it catches the
-call's failure, not argument evaluation or decoding a successful reply. Any read of a bound call's
-output still decodes **all** its declared outputs. An unread result, even an unused variable,
-skips decoding/checks: empty/malformed replies and a no-code target can then pass. Check
+A `try` whose body is one external call catches that call's failure and, when the body reads the
+answer, its decoding and checks. It does not catch evaluation of the call's arguments. A value-form
+`.catch()` handles only the call's failure: a dirty successful answer reverts instead. Any read of
+a bound call's output still decodes **all** its declared outputs. An unread result, even an unused
+variable, skips decoding/checks: empty/malformed replies and a no-code target can then pass. Check
 `ctx.isContract` where required; token writes should use the SDK's checked token methods.
 
 `catch (error)` and `.catch((error) => { … })` receive at most 256 raw revert bytes; check their
@@ -476,9 +520,10 @@ add. For any message not here, search [references/builtins.md](references/builti
 ## Files
 
 - [examples/twap.sauce.ts](examples/twap.sauce.ts) finds a pool through `UniswapV3.Factory` and
-  reads its price history through its own ABI beside it,
-  [examples/IOracle.json](examples/IOracle.json), which declares the one function the registry's
-  pool ABI lacks, `observe`.
+  reads its price history through `UniswapV3.Pool`'s `observe`.
+- [examples/nft-handover.sauce.ts](examples/nft-handover.sauce.ts) hands over an NFT the Pot holds,
+  calling the collection, which no registry records, through its own ABI beside it,
+  [examples/IERC721.json](examples/IERC721.json).
 - [examples/saucescript.mts](examples/saucescript.mts) compiles a guarded program, asserts each
   rejection above, and pins what compiling for a chain adds.
 - [references/builtins.md](references/builtins.md) and

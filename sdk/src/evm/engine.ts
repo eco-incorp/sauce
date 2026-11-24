@@ -18,7 +18,6 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   getAddress,
-  getCreate2Address,
   hashTypedData,
   hexToBigInt,
   isAddress,
@@ -34,9 +33,9 @@ import {
   type PublicClient,
 } from "viem";
 
-import { v12PredictPot } from "../deployments/pot.js";
+import { potEngineOf, v12DefaultPotFamily, v12PotRelease } from "../deployments/pot.js";
 import { assertEngineRunsCompiler } from "../deployments/releases.js";
-import { v12PotDerivation } from "../deployments/v12-addresses.js";
+import { v12RouterAddress } from "../deployments/v12-addresses.js";
 
 /**
  * V12Pot — private Pots restrict `cook()` to their owner; Shared Pots allow any caller.
@@ -53,7 +52,7 @@ import { v12PotDerivation } from "../deployments/v12-addresses.js";
  * Shared Pots always fix it. Neither the Kitchen nor its owner can move a deployed Pot.
  */
 export const v12PotAbi = parseAbi([
-  "constructor()",
+  "constructor(address kitchen_, address owner_, bytes32 salt_, bool routerFixed, address startingRouter)",
   "fallback() external payable",
   "receive() external payable",
   "function cook(address engine, bytes program) payable returns (bytes)",
@@ -84,11 +83,14 @@ export const v12PotAbi = parseAbi([
   "error SharedRouterNotFixed()",
   "error RouterHasNoCode()",
   "error RouterUnset()",
+  "error WrongDeployer()",
 ]);
 
 /**
- * V12Kitchen — CREATE2 Pot factory behind a UUPS proxy. `deployPot` bakes `owner` into the Pot's
- * CREATE2 address.
+ * V12Kitchen — the Pot factory behind a UUPS proxy. From kitchen-evm 1.4.0 it places every Pot by
+ * CREATE3 (`predictPot`, `predictSharedPot`; `v12PredictPot` computes the same address with no
+ * chain): the address follows from the owner and the salt, not from the Pot's code. `deployPot`
+ * bakes `owner` into the Pot's address.
  *
  * `router()` is the Router Pots minted FROM NOW ON start on. The Kitchen's owner moves it with
  * `setRouter`; that moves no Pot address, no engine gate and no deployed Pot. The owner-only
@@ -108,7 +110,6 @@ export const v12KitchenAbi = parseAbi([
   "function owner() view returns (address)",
   "function pendingOwner() view returns (address)",
   "function potInitCodeHash() view returns (bytes32)",
-  "function potParameters() view returns (address owner, bytes32 salt, bool routerFixed)",
   "function predictPot(address owner, bytes32 salt) view returns (address)",
   "function predictPot(address owner, bytes32 salt, bool routerFixed) view returns (address)",
   "function predictSharedPot(bytes32 salt) view returns (address)",
@@ -129,16 +130,23 @@ export const v12KitchenAbi = parseAbi([
   "event RouterSet(address indexed router)",
   "event Upgraded(address indexed implementation)",
   "error AddressEmptyCode(address target)",
+  "error Create2EmptyBytecode()",
   "error ERC1967InvalidImplementation(address implementation)",
   "error ERC1967NonPayable()",
   "error FailedCall()",
+  "error FailedDeployment()",
   "error InsufficientBalance(uint256 requested, uint256 available)",
+  "error InsufficientBalance(uint256 balance, uint256 needed)",
   "error InvalidInitialization()",
   "error NotInitializing()",
+  "error OccupiedPotMismatch()",
   "error OwnableInvalidOwner(address owner)",
   "error OwnableUnauthorizedAccount(address account)",
   "error OwnershipIsPermanent()",
+  "error PotDeploymentFailed()",
+  "error PotNamespaceExhausted()",
   "error RouterHasNoCode()",
+  "error RouterUnset()",
   "error UUPSUnauthorizedCallContext()",
   "error UUPSUnsupportedProxiableUUID(bytes32 slot)",
   "error WithdrawalFailed()",
@@ -551,12 +559,25 @@ export type SignedCookPotCheck =
   { readonly ok: true; readonly owner: Address } | { readonly ok: false; readonly reason: string };
 
 /**
- * Whether `pot` answers `cookSigned`: a Private Pot minted under this release, fixed Router or not.
- * `cookSigned` is in the Pot's creation code, so it moved the Pot init-code hash: a Pot is this
- * release's when its address derives from its Kitchen and `gateSalt()` under the pinned hash, read,
- * not assumed. An older Pot keeps its bytecode and has no `cookSigned` (a call to one goes to its
- * Router, which reverts); its owner signs for a Pot minted under this release. A Shared Pot has no
- * owner to sign, and refuses every signed cook.
+ * `cookSigned` is in the Pot's creation code from kitchen-evm 1.3.0 (SDK 0.99.16); 1.4.0 Pots carry
+ * it too.
+ */
+const SIGNED_COOKS_FROM = "1.3.0";
+
+/** Whether version `a` is older than `b`: both `major.minor.patch`. */
+const olderThan = (a: string, b: string): boolean => {
+  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+  for (let i = 0; i < 3; i++) if (x![i] !== y![i]) return x![i]! < y![i]!;
+
+  return false;
+};
+
+/**
+ * Whether `pot` answers `cookSigned`: a Private Pot of kitchen-evm 1.3.0 or later, fixed Router or
+ * not, whose address derives from its owner, salt and Kitchen under a release this SDK knows. A Pot
+ * of an earlier release keeps its bytecode and has no `cookSigned` (a call to one goes to its
+ * Router, which reverts); its owner signs for a Pot of a later release. A Shared Pot has no owner
+ * to sign, and refuses every signed cook.
  */
 export async function checkSignedCookPot(
   client: Pick<PublicClient, "readContract" | "getCode">,
@@ -567,17 +588,17 @@ export async function checkSignedCookPot(
   }
   let owner: Address;
   let kitchen: Address;
-  let gateSalt: Hex;
+  let userSalt: Hex;
   try {
-    [owner, kitchen, gateSalt] = await Promise.all([
+    [owner, kitchen, userSalt] = await Promise.all([
       client.readContract({ address: pot, abi: v12PotAbi, functionName: "owner" }),
       client.readContract({ address: pot, abi: v12PotAbi, functionName: "kitchen" }),
-      client.readContract({ address: pot, abi: v12PotAbi, functionName: "gateSalt" }),
+      client.readContract({ address: pot, abi: v12PotAbi, functionName: "userSalt" }),
     ]);
   } catch {
     return {
       ok: false,
-      reason: `${pot} does not answer owner(), kitchen() and gateSalt(): it is not a Pot`,
+      reason: `${pot} does not answer owner(), kitchen() and userSalt(): it is not a Pot`,
     };
   }
   if (owner === zeroAddress) {
@@ -586,17 +607,22 @@ export async function checkSignedCookPot(
       reason: `${pot} is a Shared Pot: it has no owner to sign, and anyone may cook it directly`,
     };
   }
-  const derived = getCreate2Address({
-    from: kitchen,
-    salt: gateSalt,
-    bytecodeHash: v12PotDerivation().initCodeHash as Hex,
-  });
-  if (derived !== getAddress(pot)) {
+  const found = v12PotRelease({ kitchen, owner, salt: userSalt, pot });
+  if (found === undefined) {
     return {
       ok: false,
       reason:
-        `${pot} was minted before signed cooks (its address does not derive under this release's ` +
-        "Pot init-code hash) and has no cookSigned: sign for a Pot minted under this release",
+        `${pot} is not a Pot of any Kitchen release this SDK knows: its address does not derive ` +
+        "from its owner, salt and Kitchen",
+    };
+  }
+  const version = found.family.sets[0]!["kitchen-evm"].version;
+  if (olderThan(version, SIGNED_COOKS_FROM)) {
+    return {
+      ok: false,
+      reason:
+        `${pot} was minted by kitchen-evm ${version}, before signed cooks, and has no ` +
+        `cookSigned: sign for a Pot of kitchen-evm ${SIGNED_COOKS_FROM} or later`,
     };
   }
 
@@ -606,7 +632,7 @@ export async function checkSignedCookPot(
 /** Ready-to-use V12Kitchen handle: the viem ABI plus calldata encoders. */
 export const v12Kitchen = {
   abi: v12KitchenAbi,
-  /** Encode `deployPot(owner, salt)` calldata. `owner` is baked into the Pot's CREATE2 address. */
+  /** Encode `deployPot(owner, salt)` calldata. `owner` is baked into the Pot's address. */
   encodeDeployPot: (owner: Address, salt: Hex): Hex =>
     encodeFunctionData({ abi: v12KitchenAbi, functionName: "deployPot", args: [owner, salt] }),
   /** Encode `predictPot(owner, salt)` calldata (a view call returning the Pot address). */
@@ -614,7 +640,10 @@ export const v12Kitchen = {
     encodeFunctionData({ abi: v12KitchenAbi, functionName: "predictPot", args: [owner, salt] }),
 } as const;
 
-/** The one read {@link potRouterUpdate} needs from a client — viem's `PublicClient` has it. */
+/**
+ * The one method {@link potRouterUpdate} and {@link potEngine} need of a client: `readContract`,
+ * which viem's `PublicClient` has.
+ */
 export type PotRouterClient = Pick<PublicClient, "readContract">;
 
 /** The call that points a Pot at its Kitchen's current Router — for the Pot's OWNER to sign. */
@@ -624,49 +653,82 @@ export interface PotRouterUpdate {
 }
 
 /**
- * Whether `pot` runs its Kitchen's current Router, and if not, the call that switches it.
+ * Whether `pot` runs the Router this release pins, and if not, the call that switches it.
  *
  * Reads `pot.router()` and the Kitchen's `router()` through `client` — the caller's, since the SDK
- * holds no RPC endpoint — and returns `undefined` when they are the same Router, or the
- * `pot.setRouter(kitchenRouter)` call otherwise. It never sends anything, and the Router's address
- * never passes through the caller: the Kitchen names it.
+ * holds no RPC endpoint. It proposes `pot.setRouter(router)` only where the Kitchen names the
+ * Router THIS release pins (`v12RouterAddress()`) and the Pot is not on it, and returns `undefined`
+ * when the Pot is on the Kitchen's Router, and when the Kitchen names another: a Kitchen rolled past
+ * this SDK names a Router none of its releases qualified, and moving a Pot onto it is advice this
+ * SDK does not give (upgrade it to hear of that rollout). It never sends anything, and the Router's
+ * address never passes through the caller: it is the release's, which the Kitchen confirms.
  *
  * **Only the Pot's owner can make this call** — `setRouter` has `cook`'s gate and reverts
  * `NotOwner()` for anyone else — and nothing makes it on the owner's behalf: **the Kitchen cannot
  * move an existing Pot.** Its owner's `setRouter` changes the Router Pots minted afterwards start on,
  * never a deployed Pot's, so a Router rollout reaches an existing Pot only when its owner signs this.
  *
- * Throws for a Pot this SDK's release does not mint: one minted before the Router moved into Pot
- * storage has no `setRouter` at all and keeps its Router for good, so any call built for it would
- * revert. A Pot is this release's when its address derives from its owner and salt under the pinned
- * init-code hash, which is read, not assumed.
+ * Returns `undefined` for a Pot of an earlier Kitchen release: it keeps the Router it has, and the
+ * SDK pins no Router of an earlier release to propose. Returns `undefined` too for a Pot whose
+ * Router cannot change — a fixed-Router Pot or a Shared Pot, of any release — where `setRouter`
+ * would revert `RouterFixed()`. Throws for an address that is no Pot of a release the SDK knows: a
+ * Pot is a release's when its address derives from its owner and salt under that release's Pot
+ * identity, which is read, not assumed.
  */
 export async function potRouterUpdate(
   client: PotRouterClient,
   pot: Address,
 ): Promise<PotRouterUpdate | undefined> {
-  const [current, kitchen, owner, salt] = await Promise.all([
-    client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
+  const [kitchen, owner, salt] = await Promise.all([
     client.readContract({ address: pot, abi: v12PotAbi, functionName: "kitchen" }),
     client.readContract({ address: pot, abi: v12PotAbi, functionName: "owner" }),
     client.readContract({ address: pot, abi: v12PotAbi, functionName: "userSalt" }),
   ]);
-  if (v12PredictPot(owner, salt, kitchen) !== getAddress(pot)) {
+  const found = v12PotRelease({ kitchen, owner, salt, pot });
+  if (found === undefined) {
     throw new Error(
-      `potRouterUpdate: ${pot} is not a Pot of the pinned Kitchen release — its address does not ` +
-        "derive from its owner and salt under the release's Pot init-code hash. A Pot minted " +
-        "before the Router moved into Pot storage has no setRouter and keeps its Router for good.",
+      `potRouterUpdate: ${pot} is not a Pot of a Kitchen release this SDK knows — its address ` +
+        "does not derive from its owner and salt under any release's Pot identity.",
     );
   }
-  const target = await client.readContract({
-    address: kitchen,
-    abi: v12KitchenAbi,
-    functionName: "router",
-  });
+  if (found.family !== v12DefaultPotFamily() || found.kind !== "private") return undefined;
+  const [current, target] = await Promise.all([
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
+    client.readContract({ address: kitchen, abi: v12KitchenAbi, functionName: "router" }),
+  ]);
+  // Only the Router this release pins: what the Kitchen names now is the chain's word, not this
+  // release's, and a Pot is never pointed at a Router nobody qualified with it.
+  if (getAddress(target) !== getAddress(v12RouterAddress())) return undefined;
   if (getAddress(current) === getAddress(target)) return undefined;
 
   return {
     to: getAddress(pot),
     data: encodeFunctionData({ abi: v12PotAbi, functionName: "setRouter", args: [target] }),
   };
+}
+
+/**
+ * The engine a cook on `pot` must name: its release's, and for a fixed-Router or Shared Pot the one
+ * built for the Router it was minted with (the engine compiles in one fixed Router). Reads the Pot's
+ * `kitchen`, `owner`, `userSalt` and `router` through `client`: four `readContract` calls, and no
+ * code. Throws for an address no release this SDK knows derives, and for a fixed-Router or Shared
+ * Pot whose Router no known release built an engine for. A dynamic Pot is never refused for its
+ * Router: it cooks on its release's engine whichever Router it runs.
+ */
+export async function potEngine(client: PotRouterClient, pot: Address): Promise<Address> {
+  const [kitchen, owner, salt, router] = await Promise.all([
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "kitchen" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "owner" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "userSalt" }),
+    client.readContract({ address: pot, abi: v12PotAbi, functionName: "router" }),
+  ]);
+  const found = v12PotRelease({ kitchen, owner, salt, pot });
+  if (found === undefined) {
+    throw new Error(
+      `potEngine: ${pot} is not a Pot of a Kitchen release this SDK knows — its address does not ` +
+        "derive from its owner and salt under any release's Pot identity.",
+    );
+  }
+
+  return potEngineOf(found.family, found.kind, router);
 }

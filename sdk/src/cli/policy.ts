@@ -42,7 +42,9 @@
  *
  * Signing a cook for anyone to submit (`sauce sign`, {@link SendGuard.authorizeSignedCook}) is held
  * to `chains` and `to` (the Pot) as written, and refused outright by a policy that sets `native` or
- * any `tokens` limit: what a signed cook moves is known only when its submitter sends it.
+ * any `tokens` limit: what a signed cook moves is known only when its submitter sends it. `sauce
+ * sign` checks what does not depend on the Pot before reading the chain
+ * ({@link SendGuard.preflightSignedCook}), and the Pot once it is resolved.
  *
  * Every wallet unlocked is GUARDED, policy or not: {@link guardWallet} registers it by address, and
  * the two places every send of this command passes — `chain.ts#sendAndWait` on an EVM chain,
@@ -91,13 +93,10 @@ import {
   type PublicClient,
 } from "viem";
 
+import { decimalPlaces, tokenAmount, type TokenAmount } from "../amounts.js";
 import { requireChain, type CanonicalChain } from "../chains/canonical.js";
 import { nativeErc20 } from "../chains/index.js";
-import {
-  v12KitchenAddress,
-  v12SvmEngineProgramId,
-  v12SvmKitchenProgramId,
-} from "../deployments/index.js";
+import { v12KitchenAddress, v12SvmKitchenProgramId } from "../deployments/index.js";
 import { v12PredictPot } from "../deployments/pot.js";
 import { addressOn, getDescriptor } from "../descriptors/query.js";
 import { v12PotAbi } from "../evm/engine.js";
@@ -108,6 +107,7 @@ import {
   svmPublicKey,
   type SimulatedAccount,
 } from "../svm/index.js";
+import { svmEngineReleases } from "../svm/engine-release.js";
 import { CliError, UsageError } from "./args.js";
 import type { SignedCall, TxRequest } from "./chain.js";
 import { nativeOnce, nativeSymbol, tokenInfo, wordsOf } from "../evm/effects.js";
@@ -137,12 +137,9 @@ type Rpc = ReturnType<typeof createSolanaRpc>;
 // The policy file
 // ---------------------------------------------------------------------------------------------
 
-/** An amount as a policy writes it: whole tokens (`"1.5"`), or base units (`"1500000n"`). */
-type Amount = { readonly units: string } | { readonly base: bigint };
-
 interface Limit {
-  readonly perTransaction?: Amount;
-  readonly perDay?: Amount;
+  readonly perTransaction?: TokenAmount;
+  readonly perDay?: TokenAmount;
 }
 
 export interface Policy {
@@ -168,8 +165,6 @@ export class PolicyRefusal extends CliError {
   }
 }
 
-const AMOUNT = /^(?:\d+(?:\.\d+)?|\d+n)$/;
-
 /**
  * The decimals a policy's token key has wherever the registry records it — a symbol or an address,
  * on any chain — when they agree; `undefined` for the native coin (18 on an EVM chain, 9 on Solana)
@@ -193,18 +188,33 @@ function keyDecimals(key: string | undefined): number | undefined {
 }
 
 /**
- * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`).
- * `notes` gets what a bare integer of whole tokens that reads like base units says: at or above
- * 10^decimals, where the registry gives the token's decimals.
+ * A limit's amount: whole tokens (`"1.5"`), or base units with a trailing `n` (`"1500000n"`), as
+ * `tokenAmount` reads them. Whole tokens past the {@link SCALE} places every limit is compared at
+ * are refused: there they would be rounded, which can loosen the limit. `notes` gets what a bare
+ * integer of whole tokens that reads like base units says: at or above 10^decimals, where the
+ * registry gives the token's decimals.
  */
-function amountOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Amount {
-  if (typeof raw !== "string" || !AMOUNT.test(raw)) {
+function amountOf(
+  raw: unknown,
+  where: string,
+  key: string | undefined,
+  notes: string[],
+): TokenAmount {
+  const amount = typeof raw === "string" ? tokenAmount(raw) : undefined;
+  if (typeof raw !== "string" || amount === undefined) {
     throw new UsageError(
       `${where} is not an amount: a string of whole tokens ("1.5") or of base units ending in n ` +
         '("1500000n")',
     );
   }
-  if (raw.endsWith("n")) return { base: BigInt(raw.slice(0, -1)) };
+  if ("base" in amount) return amount;
+  const places = decimalPlaces(raw);
+  if (places > SCALE) {
+    throw new UsageError(
+      `${where}: "${raw}" has ${places} decimal places; a limit is compared at ${SCALE}, so it ` +
+        "cannot be written exactly",
+    );
+  }
   const decimals = keyDecimals(key);
   if (
     !raw.includes(".") &&
@@ -215,7 +225,7 @@ function amountOf(raw: unknown, where: string, key: string | undefined, notes: s
     notes.push(`${where}: "${raw}" is ${wordsOf(raw)} ${key}; for base units write "${raw}n"`);
   }
 
-  return { units: raw };
+  return amount;
 }
 
 function limitOf(raw: unknown, where: string, key: string | undefined, notes: string[]): Limit {
@@ -345,7 +355,8 @@ const SCALE = 36;
 const scaled = (amount: bigint, decimals: number): bigint =>
   amount * 10n ** BigInt(SCALE - Math.min(decimals, SCALE));
 
-const limitScaled = (limit: Amount, decimals: number): bigint =>
+/** Exact: `amountOf` refused whole tokens past {@link SCALE} places. */
+const limitScaled = (limit: TokenAmount, decimals: number): bigint =>
   "base" in limit ? scaled(limit.base, decimals) : parseUnits(limit.units, SCALE);
 
 /** `value` at {@link SCALE}, as whole units for a person. */
@@ -455,7 +466,7 @@ const DEPLOY_POT = toFunctionSelector("function deployPot(address owner, bytes32
 /**
  * The Pot `call` deploys, when it is the released Kitchen's `deployPot` of `wallet`'s own Pot with
  * no value; `undefined` for any other call. The Pot is the one cooking on it would reach: the
- * CREATE2 address over (wallet, salt) that `v12PredictPot` gives, and the Kitchen derives.
+ * address `v12PredictPot` gives for (wallet, salt), where the Kitchen deploys it.
  */
 export function ownPotDeployed(call: TxRequest, wallet: Address): Address | undefined {
   if (call.value !== 0n || getAddress(call.to) !== getAddress(v12KitchenAddress()))
@@ -1342,7 +1353,8 @@ export async function measureSvm(
   // Kitchen creates where lamports were sent ahead of it becomes the engine's: still the Pot, still
   // in the set.)
   const keys = [...ours];
-  const engine = v12SvmEngineProgramId();
+  // A Pot is an account any release's engine owns: the one that cooks it (`svm/engine-release.ts`).
+  const engines = svmEngineReleases();
   const held = (
     account: SvmAddress,
     state: SimulatedAccount | null,
@@ -1355,7 +1367,7 @@ export async function measureSvm(
       return commanded &&
         (program === undefined ||
           state.owner === program ||
-          (account !== wallet && state.owner === engine))
+          (account !== wallet && engines.has(state.owner)))
         ? state.lamports
         : 0n;
     }
@@ -1873,6 +1885,43 @@ export class SendGuard {
     });
   }
 
+  /** The `chains` refusal of a signed cook, as {@link authorizeSignedCook} words it. */
+  private signedCookChains(policy: Policy, chain: CanonicalChain): void {
+    const refuse = refuseBy(this.wallet.name, policy);
+    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
+      refuse(
+        "chains",
+        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this cook is on ${chain.slug}`,
+      );
+    }
+  }
+
+  /** The `native` and `tokens` refusals of a signed cook, as {@link authorizeSignedCook} words them. */
+  private signedCookLimits(policy: Policy): void {
+    const refuse = refuseBy(this.wallet.name, policy);
+    const unbounded =
+      "a signed cook runs when its submitter sends it, any time up to its deadline, on the " +
+      "chain's state then: what it moves cannot be measured when it is signed, nor counted in a " +
+      "day's total. Sign with a wallet whose policy limits only chains and to";
+    if (policy.native !== undefined) refuse("native", `native is limited, and ${unbounded}`);
+    const [token] = policy.tokens.keys();
+    if (token !== undefined)
+      refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
+  }
+
+  /**
+   * What {@link authorizeSignedCook} checks that does not depend on the Pot: the release's gate,
+   * then the policy's `chains`, `native` and `tokens`. `sauce sign` runs it before anything is read,
+   * so a wallet that may not sign at all is refused first; the Pot is held to `to` once it is known.
+   */
+  preflightSignedCook(chain: CanonicalChain): void {
+    this.gate(chain);
+    const policy = this.policy;
+    if (policy === undefined) return;
+    this.signedCookChains(policy, chain);
+    this.signedCookLimits(policy);
+  }
+
   /**
    * Authorizes this wallet to SIGN a cook on `pot`, on `chain`, for anyone to submit (`sauce sign`,
    * `sauce_sign`): the release's gate, then the policy's `chains` and `to` (the Pot), checked as
@@ -1888,24 +1937,12 @@ export class SendGuard {
     this.gate(chain);
     const policy = this.policy;
     if (policy === undefined) return;
-    const refuse = refuseBy(this.wallet.name, policy);
-    if (policy.chains !== undefined && !policy.chains.some((each) => each.id === chain.id)) {
-      refuse(
-        "chains",
-        `chains allows ${policy.chains.map((each) => each.slug).join(", ")}, and this cook is on ${chain.slug}`,
-      );
-    }
+    this.signedCookChains(policy, chain);
     if (policy.to !== undefined && !policy.to.includes(pot.toLowerCase())) {
+      const refuse = refuseBy(this.wallet.name, policy);
       refuse("to", `to allows ${policy.to.length} address(es), and this cook runs on Pot ${pot}`);
     }
-    const unbounded =
-      "a signed cook runs when its submitter sends it, any time up to its deadline, on the " +
-      "chain's state then: what it moves cannot be measured when it is signed, nor counted in a " +
-      "day's total. Sign with a wallet whose policy limits only chains and to";
-    if (policy.native !== undefined) refuse("native", `native is limited, and ${unbounded}`);
-    const [token] = policy.tokens.keys();
-    if (token !== undefined)
-      refuse(`tokens.${token}`, `tokens.${token} is limited, and ${unbounded}`);
+    this.signedCookLimits(policy);
   }
 
   /**

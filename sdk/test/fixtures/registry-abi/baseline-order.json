@@ -1,0 +1,1060 @@
+{
+  "note": "The functions each registry ABI export declared before the registry took its deployments' full ABIs (main at 92af3e34, each sdk/src/protocols/<slug>/<Export>.json), in that order: gen-registry-abis.mjs keeps each name's overloads listed here first, in this order, ahead of any it added, so a lookup of a name without its argument count (methodOf, selectorOf) still finds the overload it found then. registry-default-overload.test.ts holds every export to it. Written once from `git show 92af3e34:<path>`; never regenerated.",
+  "commit": "92af3e340a94cda16a7d6b30cc830e2a8f1e5f3e",
+  "exports": {
+    "aave-v2.LendingPoolABI": [
+      "deposit(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)"
+    ],
+    "aave-v3.PoolABI": [
+      "supply(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)",
+      "flashLoanSimple(address,address,uint256,bytes,uint16)",
+      "liquidationCall(address,address,address,uint256,bool)",
+      "getUserAccountData(address)"
+    ],
+    "aave-v4.AaveV4HubABI": [
+      "getAssetId(address)",
+      "getAssetCount()",
+      "getAssetLiquidity(uint256)",
+      "isUnderlyingListed(address)"
+    ],
+    "aave-v4.AaveV4SpokeABI": [
+      "supply(uint256,uint256,address)",
+      "withdraw(uint256,uint256,address)",
+      "borrow(uint256,uint256,address)",
+      "repay(uint256,uint256,address)",
+      "setUsingAsCollateral(uint256,bool,address)",
+      "getReserveId(address,uint256)",
+      "getReserveCount()",
+      "getUserSuppliedAssets(uint256,address)",
+      "getUserTotalDebt(uint256,address)"
+    ],
+    "abracadabra.CauldronABI": [
+      "addCollateral(address,bool,uint256)",
+      "removeCollateral(address,uint256)",
+      "borrow(address,uint256)",
+      "repay(address,bool,uint256)",
+      "userCollateralShare(address)",
+      "userBorrowPart(address)"
+    ],
+    "abracadabra.DegenBoxABI": [
+      "deposit(address,address,address,uint256,uint256)",
+      "withdraw(address,address,address,uint256,uint256)",
+      "balanceOf(address,address)"
+    ],
+    "across.AcrossHubPoolABI": ["liquidityUtilizationCurrent(address)", "pooledTokens(address)"],
+    "across.AcrossSpokePoolABI": [
+      "depositV3(address,address,address,address,uint256,uint256,uint256,address,uint32,uint32,uint32,bytes)",
+      "deposit(bytes32,bytes32,bytes32,bytes32,uint256,uint256,uint256,bytes32,uint32,uint32,uint32,bytes)"
+    ],
+    "aerodrome-slipstream.AeroMetarouterABI": ["execute(bytes,bytes[],uint256)"],
+    "aerodrome-slipstream.AerodromeSlipstreamPoolABI": [
+      "slot0()",
+      "liquidity()",
+      "fee()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "aerodrome-slipstream.SlipstreamCLFactoryABI": [
+      "getPool(address,address,int24)",
+      "allPoolsLength()",
+      "tickSpacingToFee(int24)"
+    ],
+    "aerodrome-slipstream.SlipstreamPositionManagerABI": ["factory()", "positions(uint256)"],
+    "aerodrome.AerodromePoolABI": [
+      "getReserves()",
+      "getAmountOut(uint256,address)",
+      "stable()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "aerodrome.AerodromePoolFactoryABI": ["getPool(address,address,bool)"],
+    "aerodrome.AerodromeRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool,address)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,bool,uint256,uint256,uint256,address,uint256)"
+    ],
+    "aevo.DepositContractABI": [
+      "depositERC20(address,address,uint256,uint32,bytes)",
+      "depositETH(uint32,bytes)"
+    ],
+    "alchemix.AlchemistABI": [
+      "deposit(address,uint256,address)",
+      "withdraw(address,uint256,address)",
+      "mint(uint256,address)",
+      "burn(uint256,address)",
+      "liquidate(address,uint256,uint256)",
+      "accounts(address)"
+    ],
+    "ambient.CrocSwapDexABI": [
+      "swap(address,address,uint256,bool,bool,uint128,uint16,uint128,uint128,uint8)",
+      "userCmd(uint16,bytes)"
+    ],
+    "arbitrum-bridge.ArbitrumL1GatewayRouterABI": [
+      "outboundTransfer(address,address,uint256,uint256,uint256,bytes)",
+      "getGateway(address)"
+    ],
+    "arrakis.ArrakisRouterABI": [
+      "addLiquidity((uint256,uint256,uint256,uint256,uint256,address,address,address))",
+      "removeLiquidity((uint256,uint256,uint256,address,address,address,bool))"
+    ],
+    "arrakis.ArrakisVaultABI": ["totalSupply()", "balanceOf(address)", "token0()", "token1()"],
+    "axelar.AxelarGasServiceABI": [
+      "payNativeGasForContractCall(address,string,string,bytes,address)"
+    ],
+    "axelar.AxelarGatewayABI": [
+      "callContract(string,string,bytes)",
+      "callContractWithToken(string,string,bytes,string,uint256)",
+      "sendToken(string,string,string,uint256)",
+      "tokenAddresses(string)"
+    ],
+    "axelar.AxelarITSABI": ["interchainTransfer(bytes32,string,bytes,uint256,bytes,uint256)"],
+    "balancer-v2.BalancerV2VaultABI": [
+      "swap((bytes32,uint8,address,address,uint256,bytes),(address,bool,address,bool),uint256,uint256)",
+      "batchSwap(uint8,(bytes32,uint256,uint256,uint256,bytes)[],address[],(address,bool,address,bool),int256[],uint256)",
+      "joinPool(bytes32,address,address,(address[],uint256[],bytes,bool))",
+      "exitPool(bytes32,address,address,(address[],uint256[],bytes,bool))",
+      "flashLoan(address,address[],uint256[],bytes)",
+      "getPoolTokens(bytes32)"
+    ],
+    "base-bridge.BaseL1StandardBridgeABI": [
+      "depositETH(uint32,bytes)",
+      "depositERC20(address,address,uint256,uint32,bytes)",
+      "depositETHTo(address,uint32,bytes)",
+      "depositERC20To(address,address,address,uint256,uint32,bytes)"
+    ],
+    "baseswap.BaseSwapRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)"
+    ],
+    "beefy.BeefyVaultABI": [
+      "deposit(uint256)",
+      "depositAll()",
+      "withdraw(uint256)",
+      "withdrawAll()",
+      "getPricePerFullShare()",
+      "balance()",
+      "balanceOf(address)",
+      "want()"
+    ],
+    "benqi.BenqiComptrollerABI": ["enterMarkets(address[])", "exitMarket(address)"],
+    "benqi.QiTokenABI": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)"
+    ],
+    "camelot.CamelotV2FactoryABI": ["getPair(address,address)"],
+    "camelot.CamelotV2PairABI": [
+      "getReserves()",
+      "getAmountOut(uint256,address)",
+      "stableSwap()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "camelot.CamelotV2RouterABI": [
+      "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)"
+    ],
+    "camelot.CamelotV3FactoryABI": ["poolByPair(address,address)"],
+    "camelot.CamelotV3PoolABI": [
+      "globalState()",
+      "liquidity()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "camelot.CamelotV3SwapRouterABI": [
+      "exactInputSingle((address,address,address,uint256,uint256,uint256,uint160))"
+    ],
+    "cbeth.CbETHABI": [
+      "mint(address,uint256)",
+      "exchangeRate()",
+      "balanceOf(address)",
+      "approve(address,uint256)",
+      "transfer(address,uint256)"
+    ],
+    "cctp.TokenMessengerABI": [
+      "depositForBurn(uint256,uint32,bytes32,address,bytes32,uint256,uint32)"
+    ],
+    "celer.CelerBridgeABI": [
+      "send(address,address,uint256,uint64,uint64,uint32)",
+      "sendNative(address,uint256,uint64,uint64,uint32)"
+    ],
+    "chainlink-ccip.CCIPRouterABI": [
+      "ccipSend(uint64,(bytes,bytes,(address,uint256)[],address,bytes))",
+      "getFee(uint64,(bytes,bytes,(address,uint256)[],address,bytes))",
+      "isChainSupported(uint64)"
+    ],
+    "chainlink.AggregatorV3ABI": ["latestRoundData()", "decimals()"],
+    "chainlink.FeedRegistryABI": ["latestRoundData(address,address)", "getFeed(address,address)"],
+    "circle-gateway.GatewayMinterABI": [
+      "gatewayMint(bytes,bytes)",
+      "isTokenSupported(address)",
+      "domain()"
+    ],
+    "circle-gateway.GatewayWalletABI": [
+      "deposit(address,uint256)",
+      "depositFor(address,address,uint256)",
+      "totalBalance(address,address)",
+      "availableBalance(address,address)",
+      "isTokenSupported(address)",
+      "domain()"
+    ],
+    "compound-v2.CErc20ABI": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)",
+      "balanceOfUnderlying(address)",
+      "borrowBalanceCurrent(address)"
+    ],
+    "compound-v2.ComptrollerABI": ["enterMarkets(address[])", "exitMarket(address)"],
+    "compound-v3.CometABI": [
+      "supply(address,uint256)",
+      "supplyTo(address,address,uint256)",
+      "withdraw(address,uint256)",
+      "withdrawTo(address,address,uint256)",
+      "balanceOf(address)",
+      "borrowBalanceOf(address)"
+    ],
+    "connext.EverclearSpokeABI": [
+      "newIntent(uint32[],address,address,address,uint256,uint256,uint48,bytes)"
+    ],
+    "convex.BaseRewardPoolABI": [
+      "getReward(address,bool)",
+      "earned(address)",
+      "balanceOf(address)",
+      "withdrawAndUnwrap(uint256,bool)"
+    ],
+    "convex.BoosterABI": [
+      "deposit(uint256,uint256,bool)",
+      "withdraw(uint256,uint256)",
+      "poolLength()",
+      "poolInfo(uint256)"
+    ],
+    "cowswap.GPv2SettlementABI": ["setPreSignature(bytes,bool)", "invalidateOrder(bytes)"],
+    "crvusd.CrvUSDERC20ABI": [
+      "balanceOf(address)",
+      "approve(address,uint256)",
+      "transfer(address,uint256)"
+    ],
+    "curve.CurveAddressProviderABI": ["get_registry()", "get_address(uint256)"],
+    "curve.CurveRouterNGABI": [
+      "exchange(address[11],uint256[5][5],uint256,uint256,address[5])",
+      "exchange(address[11],uint256[5][5],uint256,uint256,address[5],address)",
+      "get_dy(address[11],uint256[5][5],uint256,address[5])"
+    ],
+    "curve.CurveStableSwapABI": [
+      "exchange(int128,int128,uint256,uint256)",
+      "exchange_underlying(int128,int128,uint256,uint256)",
+      "add_liquidity(uint256[],uint256)",
+      "remove_liquidity(uint256,uint256[])",
+      "remove_liquidity_one_coin(uint256,int128,uint256)",
+      "get_dy(int128,int128,uint256)",
+      "get_virtual_price()"
+    ],
+    "curve.CurveThreePoolABI": [
+      "exchange(int128,int128,uint256,uint256)",
+      "add_liquidity(uint256[3],uint256)",
+      "remove_liquidity(uint256,uint256[3])",
+      "remove_liquidity_one_coin(uint256,int128,uint256)",
+      "get_dy(int128,int128,uint256)",
+      "get_virtual_price()"
+    ],
+    "debridge.DlnDestinationABI": [
+      "fulfillOrder((uint64,bytes,uint256,bytes,uint256,uint256,bytes,uint256,bytes,bytes,bytes,bytes,bytes,bytes),uint256,bytes32,bytes,address)"
+    ],
+    "debridge.DlnSourceABI": [
+      "createOrder((address,uint256,bytes,uint256,uint256,bytes,address,bytes,bytes,bytes,bytes),bytes,uint32,bytes)"
+    ],
+    "dodo.DODOV2ProxyABI": [
+      "dodoSwapV2TokenToToken(address,address,uint256,uint256,address[],uint256,bool,uint256)"
+    ],
+    "eigenlayer.DelegationManagerABI": [
+      "delegateTo(address,(bytes,uint256),bytes32)",
+      "undelegate(address)",
+      "isDelegated(address)"
+    ],
+    "eigenlayer.StrategyABI": [
+      "sharesToUnderlyingView(uint256)",
+      "underlyingToSharesView(uint256)"
+    ],
+    "eigenlayer.StrategyManagerABI": [
+      "depositIntoStrategy(address,address,uint256)",
+      "stakerDepositShares(address,address)"
+    ],
+    "ens.BaseRegistrarABI": ["nameExpires(uint256)", "reclaim(uint256,address)"],
+    "ens.ENSRegistryABI": [
+      "owner(bytes32)",
+      "resolver(bytes32)",
+      "setOwner(bytes32,address)",
+      "setResolver(bytes32,address)"
+    ],
+    "erc20.ERC20ABI": [
+      "transfer(address,uint256)",
+      "approve(address,uint256)",
+      "transferFrom(address,address,uint256)",
+      "balanceOf(address)",
+      "allowance(address,address)",
+      "totalSupply()",
+      "name()",
+      "symbol()",
+      "decimals()"
+    ],
+    "erc3156.FlashLenderABI": [
+      "flashLoan(address,address,uint256,bytes)",
+      "flashFee(address,uint256)",
+      "maxFlashLoan(address)"
+    ],
+    "erc4626.VaultABI": [
+      "deposit(uint256,address)",
+      "mint(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "totalAssets()",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)",
+      "previewDeposit(uint256)",
+      "previewMint(uint256)",
+      "previewWithdraw(uint256)",
+      "previewRedeem(uint256)",
+      "maxDeposit(address)",
+      "maxMint(address)",
+      "maxWithdraw(address)",
+      "maxRedeem(address)",
+      "asset()"
+    ],
+    "ethena.StakedUSDeABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "cooldownAssets(uint256)",
+      "cooldownShares(uint256)",
+      "unstake(address)"
+    ],
+    "ethena.USDeABI": ["approve(address,uint256)"],
+    "etherfi.EETHABI": ["balanceOf(address)", "approve(address,uint256)"],
+    "etherfi.LiquidityPoolABI": ["deposit()"],
+    "etherfi.WeETHABI": [
+      "wrap(uint256)",
+      "unwrap(uint256)",
+      "getEETHByWeETH(uint256)",
+      "getWeETHByeETH(uint256)",
+      "balanceOf(address)"
+    ],
+    "euler-v2.EVCABI": ["enableCollateral(address,address)", "enableController(address,address)"],
+    "euler-v2.EVaultABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "borrow(uint256,address)",
+      "repay(uint256,address)",
+      "redeem(uint256,address,address)"
+    ],
+    "fenix.FenixRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)"
+    ],
+    "fluid.FluidLendingABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "asset()"
+    ],
+    "fluid.FluidVaultABI": ["operate(uint256,int256,int256,address)"],
+    "frax-ether.FrxETHMinterABI": ["submitAndDeposit(address)"],
+    "frax-ether.SfrxETHABI": [
+      "deposit(uint256,address)",
+      "redeem(uint256,address,address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)",
+      "balanceOf(address)"
+    ],
+    "frax.FraxERC20ABI": [
+      "balanceOf(address)",
+      "approve(address,uint256)",
+      "transfer(address,uint256)"
+    ],
+    "gains-network.DiamondABI": [
+      "openTrade((address,uint32,uint16,uint24,bool,bool,uint8,uint8,uint120,uint64,uint64,uint64,bool,uint160,uint24),uint16,address)",
+      "closeTradeMarket(uint32,uint64)",
+      "updateSl(uint32,uint64)",
+      "updateTp(uint32,uint64)"
+    ],
+    "gamma.HypervisorABI": [
+      "withdraw(uint256,address,address,uint256[4])",
+      "balanceOf(address)",
+      "totalSupply()",
+      "getTotalAmounts()"
+    ],
+    "gamma.UniProxyABI": [
+      "deposit(uint256,uint256,address,address,uint256[4])",
+      "getDepositAmount(address,address,uint256)"
+    ],
+    "gamma.UniProxyLegacyABI": [
+      "deposit(uint256,uint256,address,address)",
+      "getDepositAmount(address,address,uint256)"
+    ],
+    "gelato.GelatoAutomateABI": [
+      "createTask(address,bytes,(uint8[],bytes[]),address)",
+      "cancelTask(bytes32)"
+    ],
+    "gho.GhoTokenABI": [
+      "transfer(address,uint256)",
+      "approve(address,uint256)",
+      "balanceOf(address)"
+    ],
+    "gmx-v1.PositionRouterABI": [
+      "createIncreasePosition(address[],address,uint256,uint256,uint256,bool,uint256,uint256,bytes32,address)",
+      "createDecreasePosition(address[],address,uint256,uint256,bool,address,uint256,uint256,uint256,bool,address)"
+    ],
+    "gmx-v1.RouterABI": ["approvePlugin(address)", "swap(address[],uint256,uint256,address)"],
+    "gmx-v1.VaultABI": [
+      "swap(address,address,address)",
+      "increasePosition(address,address,address,uint256,bool)",
+      "decreasePosition(address,address,address,uint256,uint256,bool,address)"
+    ],
+    "gmx-v2.ExchangeRouterABI": [
+      "createOrder(((address,address,address,address,address,address,address[]),(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256),uint8,uint8,bool,bool,bool,bytes32,bytes32[]))",
+      "cancelOrder(bytes32)",
+      "sendTokens(address,address,uint256)"
+    ],
+    "harvest.VaultABI": [
+      "deposit(uint256)",
+      "withdraw(uint256)",
+      "getPricePerFullShare()",
+      "underlyingBalanceWithInvestment()",
+      "balanceOf(address)"
+    ],
+    "hegic.HegicABI": ["payOff(uint256,address)"],
+    "hop.HopL1BridgeABI": ["sendToL2(uint256,address,uint256,uint256,uint256,address,uint256)"],
+    "hop.HopL2AmmWrapperABI": [
+      "swapAndSend(uint256,address,uint256,uint256,uint256,uint256,uint256,uint256)"
+    ],
+    "hyperlane.HyperlaneMailboxABI": [
+      "dispatch(uint32,bytes32,bytes)",
+      "quoteDispatch(uint32,bytes32,bytes)",
+      "process(bytes,bytes)",
+      "delivered(bytes32)"
+    ],
+    "instadapp.FlashAggregatorABI": [
+      "flashLoan(address[],uint256[],uint256,bytes,bytes)",
+      "getRoutes()"
+    ],
+    "kelp.LRTDepositPoolABI": [
+      "depositAsset(address,uint256,uint256,string)",
+      "getRsETHAmountToMint(address,uint256)"
+    ],
+    "kelp.RsETHABI": ["balanceOf(address)", "approve(address,uint256)"],
+    "kim.KimRouterABI": [
+      "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)"
+    ],
+    "kyberswap-aggregator.KyberSwapMetaAggregationRouterABI": [
+      "swap((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))"
+    ],
+    "kyberswap.KyberSwapElasticRouterABI": [
+      "swapExactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"
+    ],
+    "kyberswap.KyberSwapMetaAggregationRouterABI": [
+      "swap((address,address,bytes,(address,address,address[],uint256[],address[],uint256[],address,uint256,uint256,uint256,bytes),bytes))"
+    ],
+    "layerbank.LTokenABI": [
+      "balanceOf(address)",
+      "underlyingBalanceOf(address)",
+      "borrowBalanceOf(address)",
+      "exchangeRate()",
+      "underlying()"
+    ],
+    "layerbank.LayerBankCoreABI": [
+      "enterMarkets(address[])",
+      "exitMarket(address)",
+      "supply(address,uint256)",
+      "redeemToken(address,uint256)",
+      "redeemUnderlying(address,uint256)",
+      "borrow(address,uint256)",
+      "repayBorrow(address,uint256)"
+    ],
+    "layerzero.LayerZeroEndpointV2ABI": [
+      "send((uint32,bytes32,bytes,bytes,bool),address)",
+      "quote((uint32,bytes32,bytes,bytes,bool),address)"
+    ],
+    "level-finance.LiquidityPoolABI": [
+      "addLiquidity(address,address,uint256,uint256,address)",
+      "removeLiquidity(address,address,uint256,uint256,address)",
+      "swap(address,address,uint256,address,bytes)"
+    ],
+    "lido.LidoABI": ["submit(address)", "balanceOf(address)", "approve(address,uint256)"],
+    "lido.WstETHABI": [
+      "wrap(uint256)",
+      "unwrap(uint256)",
+      "getStETHByWstETH(uint256)",
+      "getWstETHByStETH(uint256)"
+    ],
+    "lido.WstETHBridgedABI": [
+      "name()",
+      "symbol()",
+      "decimals()",
+      "totalSupply()",
+      "balanceOf(address)",
+      "allowance(address,address)",
+      "approve(address,uint256)",
+      "transfer(address,uint256)",
+      "transferFrom(address,address,uint256)",
+      "increaseAllowance(address,uint256)",
+      "decreaseAllowance(address,uint256)",
+      "bridge()"
+    ],
+    "lifi.LiFiDiamondABI": [
+      "startBridgeTokensViaAcrossV4((bytes32,string,string,address,address,address,uint256,uint256,bool,bool),(bytes32,bytes32,bytes32,bytes32,uint256,uint128,bytes32,uint32,uint32,uint32,bytes))",
+      "extractBridgeData(bytes)"
+    ],
+    "linea-bridge.LineaL1MessageServiceABI": [
+      "sendMessage(address,uint256,bytes)",
+      "claimMessage(address,address,uint256,uint256,address,bytes,uint256)"
+    ],
+    "liquity-v1.BorrowerOperationsABI": [
+      "openTrove(uint256,uint256,address,address)",
+      "closeTrove()",
+      "adjustTrove(uint256,uint256,uint256,bool,address,address)",
+      "repayLUSD(uint256,address,address)"
+    ],
+    "liquity-v2.BoldTokenABI": [
+      "transfer(address,uint256)",
+      "approve(address,uint256)",
+      "balanceOf(address)"
+    ],
+    "lynex.LynexRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)"
+    ],
+    "maker.PotABI": ["join(uint256)", "exit(uint256)", "chi()", "dsr()"],
+    "maker.SavingsDaiABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)"
+    ],
+    "mantle-meth.METHABI": ["balanceOf(address)", "approve(address,uint256)"],
+    "mantle-meth.METHStakingABI": ["stake(uint256)", "mETHToETH(uint256)", "ethToMETH(uint256)"],
+    "maverick.MaverickV2FactoryABI": ["lookup(address,address,uint256,uint256)"],
+    "maverick.MaverickV2PoolABI": [
+      "getState()",
+      "fee(bool)",
+      "tickSpacing()",
+      "tokenA()",
+      "tokenB()"
+    ],
+    "maverick.MaverickV2RouterABI": [
+      "exactInputSingle(address,address,bool,uint256,uint256)",
+      "exactOutputSingle(address,address,bool,uint256,uint256)"
+    ],
+    "moonwell.MTokenABI": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)"
+    ],
+    "moonwell.MoonwellComptrollerABI": ["enterMarkets(address[])", "exitMarket(address)"],
+    "morpho-blue.MorphoABI": [
+      "supply((address,address,address,address,uint256),uint256,uint256,address,bytes)",
+      "withdraw((address,address,address,address,uint256),uint256,uint256,address,address)",
+      "borrow((address,address,address,address,uint256),uint256,uint256,address,address)",
+      "repay((address,address,address,address,uint256),uint256,uint256,address,bytes)",
+      "supplyCollateral((address,address,address,address,uint256),uint256,address,bytes)",
+      "withdrawCollateral((address,address,address,address,uint256),uint256,address,address)"
+    ],
+    "mux-protocol.LiquidityPoolABI": [
+      "depositCollateral(bytes32,uint256)",
+      "getAssetAddress(uint8)",
+      "getSubAccount(bytes32)"
+    ],
+    "mux-protocol.OrderBookABI": [
+      "cancelOrder(uint64)",
+      "placeLiquidityOrder(uint8,uint96,bool)",
+      "placePositionOrder3(bytes32,uint96,uint96,uint96,uint8,uint8,uint32,bytes32,(uint96,uint96,uint8,uint32))"
+    ],
+    "olympus.StakingABI": [
+      "stake(address,uint256,bool,bool)",
+      "unstake(address,uint256,bool,bool)",
+      "claim(address,bool)"
+    ],
+    "oneinch.AggregationRouterV6ABI": [
+      "swap(address,(address,address,address,address,uint256,uint256,uint256),bytes)",
+      "unoswap(uint256,uint256,uint256,uint256)"
+    ],
+    "openocean.OpenOceanExchangeV2ABI": [
+      "swap(address,(address,address,address,address,uint256,uint256,uint256,uint256,address,bytes),(uint256,uint256,uint256,bytes)[])"
+    ],
+    "optimism-bridge.OptimismL1StandardBridgeABI": [
+      "depositETH(uint32,bytes)",
+      "depositERC20(address,address,uint256,uint32,bytes)",
+      "depositETHTo(address,uint32,bytes)",
+      "depositERC20To(address,address,address,uint256,uint32,bytes)"
+    ],
+    "opyn.ControllerABI": [
+      "mintPowerPerpAmount(uint256,uint256,uint256)",
+      "burnPowerPerpAmount(uint256,uint256,uint256)",
+      "deposit(uint256)",
+      "withdraw(uint256,uint256)"
+    ],
+    "pancakeswap-v2.PancakeSwapV2FactoryABI": [
+      "getPair(address,address)",
+      "createPair(address,address)"
+    ],
+    "pancakeswap-v2.PancakeSwapV2PairABI": [
+      "getReserves()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "pancakeswap-v2.PancakeSwapV2RouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+      "getAmountsOut(uint256,address[])"
+    ],
+    "pancakeswap-v3.PancakeSwapV3FactoryABI": ["getPool(address,address,uint24)"],
+    "pancakeswap-v3.PancakeSwapV3NFPMABI": [
+      "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))"
+    ],
+    "pancakeswap-v3.PancakeSwapV3PoolABI": [
+      "slot0()",
+      "liquidity()",
+      "fee()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "pancakeswap-v3.PancakeSwapV3SmartRouterABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))"
+    ],
+    "paraswap.AugustusV5ABI": [
+      "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))"
+    ],
+    "pendle.PendleRouterABI": [
+      "addLiquiditySingleToken(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+      "removeLiquiditySingleToken(address,address,uint256,(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+      "swapExactTokenForPt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))",
+      "swapExactTokenForYt(address,address,uint256,(uint256,uint256,uint256,uint256,uint256),(address,uint256,address,address,(uint8,address,bytes,bool)),(address,uint256,((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],((uint256,uint256,uint256,uint8,address,address,address,address,uint256,uint256,uint256,bytes),bytes,uint256)[],bytes))"
+    ],
+    "permit2.Permit2ABI": [
+      "approve(address,address,uint160,uint48)",
+      "transferFrom(address,address,uint160,address)",
+      "permitTransferFrom(((address,uint256),uint256,uint256),(address,uint256),address,bytes)",
+      "nonceBitmap(address,uint256)",
+      "lockdown((address,address)[])"
+    ],
+    "perpetual-protocol.ClearingHouseABI": [
+      "openPosition((address,bool,bool,uint256,uint256,uint256,uint160,bytes32))",
+      "closePosition((address,uint160,uint256,uint256,bytes32))",
+      "getAccountValue(address)"
+    ],
+    "perpetual-protocol.VaultABI": [
+      "deposit(address,uint256)",
+      "withdraw(address,uint256)",
+      "getFreeCollateral(address)"
+    ],
+    "polygon-bridge.PolygonRootChainManagerABI": [
+      "depositEtherFor(address)",
+      "depositFor(address,address,bytes)",
+      "exit(bytes)"
+    ],
+    "premia.DiamondABI": ["trade(uint256,bool,uint256,address)", "exercise()", "settle()"],
+    "puffer.PufferVaultABI": [
+      "deposit(uint256,address)",
+      "redeem(uint256,address,address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)",
+      "balanceOf(address)"
+    ],
+    "pyth.PythOracleABI": [
+      "updatePriceFeeds(bytes[])",
+      "getPrice(bytes32)",
+      "getUpdateFee(bytes[])"
+    ],
+    "quickswap.QuickSwapV2FactoryABI": ["getPair(address,address)"],
+    "quickswap.QuickSwapV2PairABI": [
+      "getReserves()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "quickswap.QuickSwapV2RouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)"
+    ],
+    "quickswap.QuickSwapV3FactoryABI": ["poolByPair(address,address)"],
+    "quickswap.QuickSwapV3PoolABI": [
+      "globalState()",
+      "liquidity()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "quickswap.QuickSwapV3SwapRouterABI": [
+      "exactInputSingle((address,address,address,uint256,uint256,uint256,uint160))"
+    ],
+    "radiant.RadiantLendingPoolABI": [
+      "deposit(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)"
+    ],
+    "ramses.RamsesRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)"
+    ],
+    "reflexer.CoinJoinABI": ["join(address,uint256)", "exit(address,uint256)"],
+    "reflexer.ETHJoinABI": ["join(address,uint256)", "exit(address,uint256)"],
+    "reflexer.SAFEEngineABI": [
+      "modifySAFECollateralization(bytes32,address,address,address,int256,int256)",
+      "safes(bytes32,address)"
+    ],
+    "renzo.EzETHABI": ["balanceOf(address)", "approve(address,uint256)"],
+    "renzo.RestakeManagerABI": ["deposit(address,uint256)", "depositETH()"],
+    "rocket-pool.RETHABI": [
+      "getExchangeRate()",
+      "getRethValue(uint256)",
+      "getEthValue(uint256)",
+      "burn(uint256)",
+      "balanceOf(address)"
+    ],
+    "rocket-pool.RocketDepositPoolABI": ["deposit()"],
+    "sablier.LockupLinearABI": [
+      "createWithDurations((address,address,uint128,address,bool,bool,(uint40,uint40),(address,uint256)))",
+      "withdraw(uint256,address,uint128)",
+      "cancel(uint256)"
+    ],
+    "safe.SafeABI": [
+      "execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)",
+      "getOwners()",
+      "getThreshold()"
+    ],
+    "scroll-bridge.ScrollL1GatewayRouterABI": [
+      "depositETH(uint256,uint256)",
+      "depositERC20(address,uint256,uint256)"
+    ],
+    "scroll-bridge.ScrollL1MessengerABI": ["sendMessage(address,uint256,bytes,uint256)"],
+    "seaport.SeaportABI": [
+      "fulfillBasicOrder((address,uint256,uint256,address,address,address,uint256,uint256,uint8,uint256,uint256,bytes32,uint256,bytes32,bytes32,uint256,(uint256,address)[],bytes))",
+      "cancel((address,address,(uint8,address,uint256,uint256,uint256)[],(uint8,address,uint256,uint256,uint256,address)[],uint8,uint256,uint256,bytes32,uint256,bytes32,uint256)[])"
+    ],
+    "silo.SiloABI": [
+      "deposit(address,uint256,bool)",
+      "withdraw(address,uint256,bool)",
+      "borrow(address,uint256)",
+      "repay(address,uint256)"
+    ],
+    "silo.SiloRepositoryABI": ["getSilo(address)"],
+    "socket.SocketGatewayABI": ["executeRoute(uint32,bytes)"],
+    "sommelier.CellarABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "totalAssets()",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)"
+    ],
+    "spark.SparkPoolABI": [
+      "supply(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)"
+    ],
+    "spookyswap.SpookySwapRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)"
+    ],
+    "squid.SquidRouterABI": [
+      "bridgeCall(string,uint256,string,string,bytes,address,bool)",
+      "callBridgeCall(address,uint256,(uint8,address,uint256,bytes,bytes)[],string,string,string,bytes,address,bool)"
+    ],
+    "stader.ETHxABI": ["balanceOf(address)", "approve(address,uint256)"],
+    "stader.StakePoolManagerABI": ["deposit(address)", "getExchangeRate()"],
+    "stargate.StargatePoolABI": [
+      "send((uint32,bytes32,uint256,uint256,bytes,bytes,bytes),(uint256,uint256),address)",
+      "quoteOFT((uint32,bytes32,uint256,uint256,bytes,bytes,bytes))"
+    ],
+    "superfluid.CFAForwarderABI": [
+      "createFlow(address,address,address,int96,bytes)",
+      "updateFlow(address,address,address,int96,bytes)",
+      "deleteFlow(address,address,address,bytes)"
+    ],
+    "sushiswap-v2.SushiSwapV2FactoryABI": [
+      "getPair(address,address)",
+      "createPair(address,address)"
+    ],
+    "sushiswap-v2.SushiSwapV2PairABI": [
+      "getReserves()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "sushiswap-v2.SushiSwapV2RouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+      "getAmountsOut(uint256,address[])"
+    ],
+    "swell.RswETHABI": ["deposit()", "rswETHToETHRate()", "balanceOf(address)"],
+    "swell.SwETHABI": ["deposit()", "swETHToETHRate()", "balanceOf(address)"],
+    "synapse.SynapseBridgeABI": [
+      "deposit(address,uint256,address,uint256)",
+      "depositAndSwap(address,uint256,address,uint256,uint8,uint8,uint256,uint256)",
+      "redeem(address,uint256,address,uint256)"
+    ],
+    "syncswap.SyncSwapRouterABI": [
+      "swap(((address,bytes,address,bytes)[],address,uint256)[],uint256,uint256)"
+    ],
+    "synthetix-v3.CoreProxyABI": [
+      "deposit(uint128,address,uint256)",
+      "withdraw(uint128,address,uint256)",
+      "delegateCollateral(uint128,uint128,address,uint256,uint256)"
+    ],
+    "synthetix-v3.PerpsMarketProxyABI": [
+      "commitOrder((uint128,uint128,int128,uint128,uint256,bytes32,address))",
+      "modifyCollateral(uint128,uint128,int256)"
+    ],
+    "synthra-v3.SynthraV3FactoryABI": [
+      "getPool(address,address,uint24)",
+      "createPool(address,address,uint24)"
+    ],
+    "synthra-v3.SynthraV3NonfungiblePositionManagerABI": [
+      "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
+      "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))",
+      "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))",
+      "collect((uint256,address,uint128,uint128))"
+    ],
+    "synthra-v3.SynthraV3PoolABI": [
+      "slot0()",
+      "liquidity()",
+      "fee()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "synthra-v3.SynthraV3QuoterV2ABI": [
+      "quoteExactInputSingle((address,address,uint256,uint24,uint160))"
+    ],
+    "synthra-v3.SynthraV3SwapRouter02ABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "exactInput((bytes,address,uint256,uint256))",
+      "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "exactOutput((bytes,address,uint256,uint256))"
+    ],
+    "thales.PositionalMarketABI": ["exerciseOptions()"],
+    "thales.SpeedMarketsAMMABI": [
+      "createNewMarket((address,bytes32,uint64,uint64,int64,uint64,uint8,uint8,address,uint256,address,uint256))"
+    ],
+    "thales.ThalesAMMABI": ["buyFromAMM(address,uint8,uint256,uint256,uint256)"],
+    "thena.ThenaRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)"
+    ],
+    "thruster.ThrusterV3SwapRouterABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"
+    ],
+    "tokemak.AutopoolABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "totalAssets()",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)"
+    ],
+    "trader-joe.LBFactoryABI": ["getLBPairInformation(address,address,uint256)"],
+    "trader-joe.LBPairABI": [
+      "getTokenX()",
+      "getTokenY()",
+      "getBinStep()",
+      "getActiveId()",
+      "getReserves()",
+      "getBin(uint24)",
+      "getPriceFromId(uint24)",
+      "getSwapIn(uint128,bool)",
+      "getSwapOut(uint128,bool)",
+      "swap(bool,address)"
+    ],
+    "trader-joe.LBRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(uint256[],uint8[],address[]),address,uint256)",
+      "swapTokensForExactTokens(uint256,uint256,(uint256[],uint8[],address[]),address,uint256)",
+      "addLiquidity((address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,int256[],uint256[],uint256[],address,address,uint256))"
+    ],
+    "uniswap-v2.UniswapV2FactoryABI": ["getPair(address,address)", "createPair(address,address)"],
+    "uniswap-v2.UniswapV2PairABI": [
+      "getReserves()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "uniswap-v2.UniswapV2RouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+      "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+      "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+      "getAmountsOut(uint256,address[])"
+    ],
+    "uniswap-v3.UniswapV3FactoryABI": [
+      "getPool(address,address,uint24)",
+      "createPool(address,address,uint24)"
+    ],
+    "uniswap-v3.UniswapV3NonfungiblePositionManagerABI": [
+      "mint((address,address,uint24,int24,int24,uint256,uint256,uint256,uint256,address,uint256))",
+      "increaseLiquidity((uint256,uint256,uint256,uint256,uint256,uint256))",
+      "decreaseLiquidity((uint256,uint128,uint256,uint256,uint256))",
+      "collect((uint256,address,uint128,uint128))"
+    ],
+    "uniswap-v3.UniswapV3PoolABI": [
+      "slot0()",
+      "liquidity()",
+      "fee()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "uniswap-v3.UniswapV3QuoterV2ABI": [
+      "quoteExactInputSingle((address,address,uint256,uint24,uint160))"
+    ],
+    "uniswap-v3.UniswapV3SwapRouter02ABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "exactInput((bytes,address,uint256,uint256))",
+      "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))",
+      "exactOutput((bytes,address,uint256,uint256))"
+    ],
+    "uniswap-v3.UniswapV3SwapRouterABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+      "exactInput((bytes,address,uint256,uint256,uint256))",
+      "exactOutputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+      "exactOutput((bytes,address,uint256,uint256,uint256))"
+    ],
+    "uniswap-v4.UniswapV4PoolManagerABI": [
+      "initialize((address,address,uint24,int24,address),uint160)",
+      "swap((address,address,uint24,int24,address),(bool,int256,uint160),bytes)",
+      "modifyLiquidity((address,address,uint24,int24,address),(int24,int24,int256,bytes32),bytes)",
+      "extsload(bytes32)",
+      "extsload(bytes32,uint256)"
+    ],
+    "uniswap-v4.UniswapV4PositionManagerABI": ["modifyLiquidities(bytes,uint256)"],
+    "uniswap-v4.UniswapV4StateViewABI": [
+      "getSlot0(bytes32)",
+      "getLiquidity(bytes32)",
+      "getTickInfo(bytes32,int24)",
+      "getTickLiquidity(bytes32,int24)",
+      "getTickFeeGrowthOutside(bytes32,int24)",
+      "getTickBitmap(bytes32,int16)",
+      "getFeeGrowthGlobals(bytes32)",
+      "getFeeGrowthInside(bytes32,int24,int24)",
+      "getPositionInfo(bytes32,bytes32)",
+      "getPositionInfo(bytes32,address,int24,int24,bytes32)",
+      "getPositionLiquidity(bytes32,bytes32)",
+      "poolManager()"
+    ],
+    "uniswap-v4.UniswapV4UniversalRouterABI": [
+      "execute(bytes,bytes[],uint256)",
+      "execute(bytes,bytes[])"
+    ],
+    "unitflow-v3.UnitFlowV3FactoryABI": [
+      "getPool(address,address,uint24)",
+      "feeAmountTickSpacing(uint24)"
+    ],
+    "unitflow-v3.UnitFlowV3PoolABI": [
+      "slot0()",
+      "liquidity()",
+      "fee()",
+      "tickSpacing()",
+      "token0()",
+      "token1()"
+    ],
+    "unitflow-v3.UnitFlowV3QuoterABI": [
+      "quoteExactInputSingle(address,address,uint24,uint256,uint160)"
+    ],
+    "unitflow-v3.UnitFlowV3RouterABI": [
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+      "factory()"
+    ],
+    "velodrome.VelodromePoolABI": [
+      "getReserves()",
+      "getAmountOut(uint256,address)",
+      "stable()",
+      "token0()",
+      "token1()",
+      "swap(uint256,uint256,address,bytes)"
+    ],
+    "velodrome.VelodromePoolFactoryABI": ["getPool(address,address,bool)"],
+    "velodrome.VelodromeRouterABI": [
+      "swapExactTokensForTokens(uint256,uint256,(address,address,bool,address)[],address,uint256)",
+      "addLiquidity(address,address,bool,uint256,uint256,uint256,uint256,address,uint256)",
+      "removeLiquidity(address,address,bool,uint256,uint256,uint256,address,uint256)"
+    ],
+    "venus.VBNBABI": [
+      "mint()",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow()",
+      "balanceOfUnderlying(address)"
+    ],
+    "venus.VTokenABI": [
+      "mint(uint256)",
+      "redeem(uint256)",
+      "redeemUnderlying(uint256)",
+      "borrow(uint256)",
+      "repayBorrow(uint256)",
+      "balanceOfUnderlying(address)"
+    ],
+    "venus.VenusComptrollerABI": ["enterMarkets(address[])", "exitMarket(address)"],
+    "vertex.ClearinghouseABI": ["withdrawCollateral((bytes32,uint32,uint128,uint64))"],
+    "vertex.EndpointABI": [
+      "depositCollateral(bytes12,uint32,uint128)",
+      "submitSlowModeTransaction(bytes)"
+    ],
+    "wormhole.WormholeCoreBridgeABI": ["publishMessage(uint32,bytes,uint8)", "messageFee()"],
+    "wormhole.WormholeTokenBridgeABI": [
+      "transferTokens(address,uint256,uint16,bytes32,uint256,uint32)",
+      "completeTransfer(bytes)",
+      "wrappedAsset(uint16,bytes32)"
+    ],
+    "yearn-v3.YearnV3VaultABI": [
+      "deposit(uint256,address)",
+      "withdraw(uint256,address,address)",
+      "redeem(uint256,address,address)",
+      "convertToShares(uint256)",
+      "convertToAssets(uint256)",
+      "totalAssets()",
+      "pricePerShare()",
+      "balanceOf(address)",
+      "approve(address,uint256)"
+    ],
+    "zerolend.ZeroLendPoolABI": [
+      "supply(address,uint256,address,uint16)",
+      "withdraw(address,uint256,address)",
+      "borrow(address,uint256,uint256,uint16,address)",
+      "repay(address,uint256,uint256,address)"
+    ],
+    "zerox.ExchangeProxyABI": ["transformERC20(address,address,uint256,uint256,(uint32,bytes)[])"],
+    "zksync-bridge.ZkSyncDiamondProxyABI": [
+      "requestL2Transaction(address,uint256,bytes,uint256,uint256,bytes[],address)",
+      "l2TransactionBaseCost(uint256,uint256,uint256)"
+    ]
+  }
+}

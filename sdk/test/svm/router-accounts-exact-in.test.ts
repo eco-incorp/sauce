@@ -407,6 +407,8 @@ ROLES.denali = () => ({
   tokenProgramB: "tp2",
   oracle: "oracle",
   globalConfig: "global",
+  eventAuthority: "eventAuthority",
+  program: "program",
 });
 ROLES.gavel = () => ({
   program: "prog",

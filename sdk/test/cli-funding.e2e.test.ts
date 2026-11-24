@@ -2,7 +2,8 @@
  * `sauce run --fund` and `sauce simulate --fund` against a chain: the tokens a program spends pulled
  * into its Pot in the same cook, by each `--fund-mode`, on a local anvil running the released gated
  * stack (`cli-anvil.ts`) with canonical Permit2 installed at its address — its runtime read from
- * Ethereum once into `fixtures/cli/Permit2.json`, so nothing here reaches a network.
+ * Ethereum by `fetch-contract-code` into `fixtures/cli/Permit2.json` (gitignored), held to the
+ * committed pin `Permit2.pin.json`, so nothing here reaches a network.
  *
  * The tokens, each at the address the program names it by:
  *   - USDC: a standard OpenZeppelin ERC-20 (no EIP-2612), at the registry's USDC;
@@ -58,6 +59,7 @@ import {
   type LocalChain,
   type Run,
 } from "./cli-anvil.js";
+import { releaseArm } from "./release-arm.js";
 
 const PERMIT2_FIXTURE = JSON.parse(readFileSync(join(CLI_FIXTURES, "Permit2.json"), "utf8")) as {
   address: Address;
@@ -73,11 +75,28 @@ const tokenCreation = (name: string, symbol: string, dir?: string): Hex =>
 const permit2Abi = parseAbi(["function nonceBitmap(address, uint256) view returns (uint256)"]);
 const nonces = parseAbi(["function nonces(address) view returns (uint256)"]);
 
+/**
+ * What the command adds when it cooks a Pot of an earlier release on that release's own engine (what
+ * the legacy arm's fixed accounts have, A2): one note for an owner's Pot, one for a Pot named by its
+ * address. The installed release's Pot gets neither, so the default arm filters nothing: a note
+ * there is a finding, and the empty-note assertions below keep their strength.
+ */
+const EARLIER_POT_NOTES =
+  releaseArm("evm") !== "default"
+    ? [
+        /^Pot 0x[0-9a-fA-F]{40} is 0x[0-9a-fA-F]{40}'s [^\n]* needs another salt \(--salt <label>\)\.\n/m,
+        /^Pot 0x[0-9a-fA-F]{40} is a [^\n]* Pot: the cook names its own engine, 0x[0-9a-fA-F]{40}\.\n/m,
+      ]
+    : [];
+
 /** What a run printed to stderr besides the warning every `--private-key` signer gets. */
 const notes = (run: Run): string =>
-  run.stderr.replace(
-    "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
-    "",
+  EARLIER_POT_NOTES.reduce(
+    (text, note) => text.replace(note, ""),
+    run.stderr.replace(
+      "warning: --private-key puts the key in your shell history and in the process list; prefer --keystore or --wallet\n",
+      "",
+    ),
   );
 
 /** Every word the suite's runs printed, to look for key material in. */
@@ -178,7 +197,12 @@ describeEvm(
       tether = getAddress(await local.plant(tokenCreation("NoReturnERC20", "TETHER")));
       for (const token of [usdc, usdt, pusdt, falsePull, tether])
         await local.mint(token, OWNER.address, MINTED);
-      pot = await deployPot(local);
+      // The Pot OWNER's runs cook on: its earlier release's where the chain has one (the legacy
+      // arm), else the installed release's, deployed here.
+      pot = local.potOf(OWNER.address);
+      if ((await local.publicClient.getCode({ address: pot })) === undefined) {
+        expect(await deployPot(local)).toBe(pot);
+      }
     }, 120_000);
 
     afterAll(async () => {
@@ -283,7 +307,7 @@ describeEvm(
             rpcUrl: local.rpcUrl,
             account: OWNER,
             approver: asking(unasked),
-            fund: ((client, at, owner) =>
+            fund: (async (client, at, owner) => () =>
               planFunding({
                 chain: local.chain,
                 client,
@@ -967,6 +991,112 @@ describeEvm(
         });
       }
     }, 120_000);
+
+    // `sauce run` reads the decimals of a token named by its address, and holds the amount to them,
+    // before it signs or sends anything: an amount the token cannot hold is refused with the Pot
+    // still undeployed, whether --yes approved its deployment or a person would have.
+    it.each(["--yes", "a person at the terminal"])(
+      "refuses a --fund amount its token cannot hold before deploying the Pot (%s): nothing is asked or sent",
+      async (how) => {
+        // A signer of its own, with gas and no Pot. TETHER has 6 decimals and is named by address.
+        const key = generatePrivateKey();
+        const signer = privateKeyToAccount(key).address;
+        await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
+        const questions: string[] = [];
+        const refused = await sauceWith(
+          how === "--yes"
+            ? {}
+            : {
+                canAsk: () => true,
+                confirm: async (question) => {
+                  questions.push(question);
+
+                  return true;
+                },
+              },
+          ...["run", program, "--rpc-url", local.rpcUrl, "--private-key", key, "--salt", "exact"],
+          ...["--fund", `${tether}:1.2345678`, ...(how === "--yes" ? ["--yes"] : [])],
+          ...["--args", tether, RECIPIENT, "1000000"],
+        ).then(record);
+        expect(refused.code).toBe(2);
+        expect(refused.stderr).toContain(
+          `--fund ${tether}:1.2345678: 1.2345678 ${tether} has 7 decimal places; ${tether} has ` +
+            "6, so it cannot be written exactly",
+        );
+        expect(questions).toEqual([]);
+        expect(await local.publicClient.getTransactionCount({ address: signer })).toBe(0);
+        expect(
+          await local.publicClient.getCode({
+            address: v12PredictPot(signer, potSalt("exact")) as Address,
+          }),
+        ).toBeUndefined();
+      },
+      60_000,
+    );
+
+    // And the owner's balance of each funded token, and of the native coin, before it signs or
+    // sends anything: a shortfall is refused with the Pot still undeployed, in the funding's words.
+    it.each(["--yes", "a person at the terminal"])(
+      "refuses a token balance below its --fund amount before deploying the Pot (%s): nothing is asked or sent",
+      async (how) => {
+        // A signer of its own, with gas, 1 USDC and no Pot, funding 2 USDC.
+        const key = generatePrivateKey();
+        const signer = privateKeyToAccount(key).address;
+        await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
+        await local.mint(usdc, signer, 1_000_000n);
+        const questions: string[] = [];
+        const refused = await sauceWith(
+          how === "--yes"
+            ? {}
+            : {
+                canAsk: () => true,
+                confirm: async (question) => {
+                  questions.push(question);
+
+                  return true;
+                },
+              },
+          ...["run", program, "--rpc-url", local.rpcUrl, "--private-key", key, "--salt", "short"],
+          ...["--fund", "USDC:2", ...(how === "--yes" ? ["--yes"] : [])],
+          ...["--args", usdc, RECIPIENT, "1000000"],
+        ).then(record);
+        expect(refused.code).toBe(1);
+        expect(refused.stderr).toContain(
+          `${signer} holds 1000000 of USDC (base units), below the 2000000 --fund USDC:2 needs`,
+        );
+        expect(questions).toEqual([]);
+        expect(await local.publicClient.getTransactionCount({ address: signer })).toBe(0);
+        expect(
+          await local.publicClient.getCode({
+            address: v12PredictPot(signer, potSalt("short")) as Address,
+          }),
+        ).toBeUndefined();
+      },
+      60_000,
+    );
+
+    it("refuses a native --fund amount above the owner's balance before deploying the Pot", async () => {
+      // 100 ETH, funding 1000: checked before the deployment's gas is spent, so the balance it
+      // names is the whole 100.
+      const key = generatePrivateKey();
+      const signer = privateKeyToAccount(key).address;
+      await local.testClient.setBalance({ address: signer, value: 10n ** 20n });
+      const refused = await sauceWith(
+        {},
+        ...["run", program, "--rpc-url", local.rpcUrl, "--private-key", key, "--salt", "short"],
+        ...["--fund", "ETH:1000", "--yes", "--args", usdc, RECIPIENT, "1"],
+      ).then(record);
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain(
+        `${signer} holds ${10n ** 20n} wei, below the ${10n ** 21n} --fund sends with the cook`,
+      );
+      expect(await local.publicClient.getTransactionCount({ address: signer })).toBe(0);
+      expect(
+        await local.publicClient.getCode({
+          address: v12PredictPot(signer, potSalt("short")) as Address,
+        }),
+      ).toBeUndefined();
+    }, 60_000);
 
     it("signs with a keystore: deploys its Pot, approves Permit2 and funds the cook with --auto-approve", async () => {
       const signer = privateKeyToAccount(KEYSTORE_KEY).address;

@@ -59,6 +59,10 @@
       "types": "./sdk/dist/svm/index.d.ts",
       "default": "./sdk/dist/svm/index.js"
     },
+    "./svm/client": {
+      "types": "./sdk/dist/svm/client.d.ts",
+      "default": "./sdk/dist/svm/client.js"
+    },
     "./svm/engine": {
       "types": "./sdk/dist/svm/engine-public.d.ts",
       "default": "./sdk/dist/svm/engine-public.js"
@@ -89,6 +93,7 @@
   },
   "files": [
     "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
     "sdk/dist",
     "sdk/runtime",
     "actions/dist",
@@ -96,6 +101,7 @@
     "dev-tools/dist/testing",
     "actions/action-program.schema.json",
     "sdk/src/protocols",
+    "sdk/src/svm/venues/hylo",
     "skills",
     "docs/**/*.md",
     "docs/examples/*.ts"
@@ -122,7 +128,7 @@
     "@solana/kit": "^8.5.0",
     "@sveltejs/acorn-typescript": "1.0.13",
     "acorn": "8.16.0",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.1",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.4",
     "viem": "^2.45.3"
   },
   "peerDependencies": {

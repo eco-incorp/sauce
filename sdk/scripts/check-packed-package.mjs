@@ -3,6 +3,7 @@
 // dependencies or a separately installed compiler hiding a broken bundle.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
   chmodSync,
@@ -23,8 +24,16 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import {
+  decodeFunctionData,
+  encodeAbiParameters,
+  getContractAddress,
+  getCreate2Address,
+  keccak256,
+} from "viem";
 
 import { documentedExports } from "../../actions/scripts/documented-exports.mjs";
+import { auditSourceMaps } from "./lib/source-maps.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // Taken from the SDK's own devDependency rather than written out here, so this consumer typechecks
@@ -124,7 +133,27 @@ try {
       stdio: ["ignore", "pipe", "inherit"],
     },
   );
-  const [{ filename }] = JSON.parse(output);
+  const [{ filename, files: packed }] = JSON.parse(output);
+  // A map ships only as a `.d.ts.map` whose every source ships too, so Go to Definition lands in a
+  // shipped `.ts`. No other map ships, and no `sourceMappingURL` in a packed file names a map the
+  // package does not: found as Node finds one (anywhere, after code too, `//` or `/*`, `#` or `@`),
+  // every one held to the rule, the last, which Node takes, and each before it; an inline `data:`
+  // map is refused, and so is a reference (a directive's URL, a map's source root or source) that is
+  // not a literal relative path inside the package. The SDK build's prune (`prune-source-maps.mjs`)
+  // applies the same rule, `lib/source-maps.mjs`, to the same npm list.
+  const packedPaths = new Set(packed.map((file) => file.path));
+  const refused = auditSourceMaps(root, packedPaths);
+  assert.deepEqual(
+    refused.slice(0, 10),
+    [],
+    "the package ships a source map only as a .d.ts.map whose sources it ships, and no " +
+      `sourceMappingURL naming another: ${refused.length} refused (the first ten listed)`,
+  );
+  const declarationMaps = [...packedPaths].filter((path) => path.endsWith(".d.ts.map")).length;
+  console.log(
+    `Packed: ${packedPaths.size} files; ${declarationMaps} declaration maps, each naming only ` +
+      "sources the package ships, and no other map or sourceMappingURL",
+  );
   writeFileSync(join(work, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(
     "npm",
@@ -155,18 +184,96 @@ try {
   const name = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).name;
   const installedRoot = join(work, "node_modules", name);
   const installedManifest = JSON.parse(readFileSync(join(installedRoot, "package.json"), "utf8"));
+  const pinned = JSON.parse(
+    readFileSync(join(installedRoot, "sdk/dist/deployments/releases.json"), "utf8"),
+  );
+  const compiler = installedManifest.dependencies["sauce-compiler"].split("@").at(-1);
+  const available = pinned.releases.find((row) => row.compiler === compiler);
+  assert.ok(available, `installed compiler ${compiler} needs a release row`);
+  // The installed row is the package's defaults: it names no `deployedCompiler`, and every raw
+  // release asset it pins ships under `releases/<folder>/<tag>/<asset>`, the folder of the first
+  // row naming its four releases (SDK 1.1.0's opt-in path, kept), and hashes to its digest. The
+  // earlier releases' test artifacts never ship.
+  const folder = pinned.releases.find((row) =>
+    ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].every(
+      (c) => row[c].version === available[c].version,
+    ),
+  ).compiler;
+  assert.equal(
+    available.deployedCompiler,
+    undefined,
+    `the ${compiler} row names no deployedCompiler: the installed row is the default`,
+  );
+  assert.ok(
+    !existsSync(join(installedRoot, "sdk/dist/artifacts/legacy")),
+    "the earlier releases' test artifacts (src/artifacts/legacy) do not ship",
+  );
+  for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"]) {
+    const { version, assets } = available[component];
+    const tag = `${component}-v${version}`;
+    for (const [asset, digest] of Object.entries(assets)) {
+      const bytes = readFileSync(
+        join(installedRoot, "sdk/dist/artifacts/releases", folder, tag, asset),
+      );
+      const actual =
+        asset === "runtime.creation.hex"
+          ? keccak256(bytes.toString("utf8").trim())
+          : createHash("sha256").update(bytes).digest("hex");
+      assert.equal(actual, digest, `${tag}/${asset} ships unchanged in the package`);
+    }
+  }
+  // SDK 1.1.0's documented `releases/2.6.3/` keeps shipping that release, each asset held to its
+  // own row's digest, beside the installed row's folder: both, and no other.
+  for (const kept of ["2.6.3"].filter((compiler) => compiler !== folder)) {
+    const row = pinned.releases.find((candidate) => candidate.compiler === kept);
+    assert.ok(
+      row,
+      `releases.json has the ${kept} row whose raw assets ship under releases/${kept}`,
+    );
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"]) {
+      const { version, assets } = row[component];
+      const tag = `${component}-v${version}`;
+      for (const [asset, digest] of Object.entries(assets)) {
+        const bytes = readFileSync(
+          join(installedRoot, "sdk/dist/artifacts/releases", kept, tag, asset),
+        );
+        const actual =
+          asset === "runtime.creation.hex"
+            ? keccak256(bytes.toString("utf8").trim())
+            : createHash("sha256").update(bytes).digest("hex");
+        assert.equal(actual, digest, `${kept}'s ${tag}/${asset} ships unchanged in the package`);
+      }
+    }
+  }
+  assert.deepEqual(
+    readdirSync(join(installedRoot, "sdk/dist/artifacts/releases")).sort(),
+    ["2.6.3", "2.6.4"],
+    "the raw assets ship in the installed row's folder and in SDK 1.1.0's, and nowhere else",
+  );
   execFileSync(
     process.execPath,
     [join(root, "docs/scripts/check-docs.mjs"), "--package-root", installedRoot],
     { cwd: work, stdio: "inherit" },
   );
   assert.equal(installedManifest.license, "SEE LICENSE IN LICENSE.md");
-  assert.equal(
-    readFileSync(join(installedRoot, "LICENSE.md"), "utf8"),
-    readFileSync(join(root, "LICENSE.md"), "utf8"),
-    "the installed package must ship the repository license verbatim",
+  // The Hylo venue's quote math is MPL-2.0 (THIRD_PARTY_NOTICES.md), whose section 3.2 requires its
+  // Source Code Form to be available with the executable form, so the package ships the .ts file.
+  const mplSource = "sdk/src/svm/venues/hylo/index.ts";
+  for (const file of ["LICENSE.md", "THIRD_PARTY_NOTICES.md", mplSource]) {
+    assert.equal(
+      readFileSync(join(installedRoot, file), "utf8"),
+      readFileSync(join(root, file), "utf8"),
+      `the installed package must ship the repository's ${file} verbatim`,
+    );
+  }
+  assert.match(
+    readFileSync(join(installedRoot, mplSource), "utf8"),
+    /Mozilla Public License, v\. 2\.0/,
+    `${mplSource} carries its MPL-2.0 notice`,
   );
-  console.log("Clean package install: license metadata and full license text ship");
+  console.log(
+    "Clean package install: license metadata, license text, third-party notices and the MPL source ship",
+  );
 
   // What a library import loads is a dependency; what only the `sauce` command loads, for one
   // command each, is an optional peer of any version, which no install brings and no project's own
@@ -312,6 +419,11 @@ try {
       `(${actionValues.length} runtime, ${actionTypes.length} type-only)`,
   );
 
+  // What the default path cooks and swaps with: the program the CLI runs on the kit's local chain,
+  // and the home that run records its Pot in (never the one the plain-install check holds empty).
+  const seven = join(work, "seven.sauce.ts");
+  writeFileSync(seven, "function main(): Uint256 {\n  return 7;\n}\n");
+  const cliHome = home("default-path");
   writeFileSync(
     join(work, "smoke.mjs"),
     `
@@ -320,7 +432,8 @@ try {
     import { existsSync, readFileSync } from 'node:fs';
     import { dirname, join, resolve } from 'node:path';
     import { fileURLToPath } from 'node:url';
-    import { decodeAbiParameters, encodeAbiParameters, keccak256 } from 'viem';
+    import { createWalletClient, decodeAbiParameters, encodeAbiParameters, getContractAddress, getCreate2Address, http, keccak256, parseAbi } from 'viem';
+    import { privateKeyToAccount } from 'viem/accounts';
     import { compile, resolveSdkModule } from '${name}/compiler';
     import { settleSource } from '${name}/recipes';
     import { SETTLE_PROGRAM, SETTLE_WIRE } from '${name}/verify';
@@ -363,6 +476,12 @@ try {
     const written = routerSvmDataTemplate('defituna', { aToB: true, minOut: 1n });
     assert.equal(Buffer.from(written.prefix).toString('hex'), 'f8c69e91e17587c8', 'routerSvmDataTemplate writes DefiTuna');
     console.log('Clean package install: the Solana router account orders and data templates resolve through ./svm');
+    // The Kitchen client's implementation is a separate subpath; ./svm re-exports its types only.
+    const svmBarrel = await import('${name}/svm');
+    const svmClient = await import('${name}/svm/client');
+    assert.equal(typeof svmClient.createSauceSvmClient, 'function', 'createSauceSvmClient resolves through ./svm/client');
+    assert.ok(!('createSauceSvmClient' in svmBarrel), 'the ./svm barrel exports no RPC client');
+    console.log('Clean package install: the Kitchen client resolves through ./svm/client and not through ./svm');
     ${
       shipsEngine
         ? `
@@ -386,7 +505,11 @@ try {
     assert.match(dep.v12KitchenAddress(), /^0x[0-9a-fA-F]{40}$/, 'evm kitchen address resolves');
     assert.match(dep.v12SvmEngineProgramId(), /^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'svm engine program id resolves');
     assert.match(dep.v12SvmKitchenProgramId(), /^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'svm kitchen program id resolves');
-    assert.ok(dep.v12PotDerivation().initCodeHash, 'pot derivation resolves');
+    const d = dep.v12PotDerivation();
+    assert.equal(d.scheme, 'create3', 'the release the package defaults to places Pots by CREATE3');
+    assert.equal(dep.v12ReleaseSet().compiler, '${compiler}', 'the installed compiler row is the default release');
+    assert.equal(dep.v12EngineAddress().toLowerCase(), dep.v12ReleaseSet()['v12-evm'].engine.toLowerCase(), 'the default EVM engine is the installed row engine');
+    assert.equal(dep.v12SvmEngineProgramId(), dep.v12ReleaseSet()['v12-svm'].engine, 'the default SVM engine is the installed row engine');
     console.log('Clean package install: the deployed addresses ship and resolve through ./deployments');`
         : `console.log('Clean package install: deployed addresses not in this tree (no credential to fetch addresses.json) — skipped');`
     }
@@ -420,12 +543,147 @@ try {
     if (anvil && ${shipsAddresses}) {
       const chain = await testing.local();
       try {
+        // What the kit stands up is the release the package is for, at its own addresses, and an
+        // account Pot is where that release places it: the SDK prediction, the Kitchen's own answer
+        // and a CREATE3 computed here from the published derivation by viem alone.
+        assert.equal(chain.engine.toLowerCase(), dep.v12EngineAddress().toLowerCase(), 'the kit runs the default engine');
+        assert.equal(chain.router.toLowerCase(), dep.v12RouterAddress().toLowerCase(), 'the kit runs the default Router');
+        const { v12PredictPot } = await import('${name}');
+        const { v12KitchenAbi } = await import('${name}/evm/engine');
+        const ZERO_SALT = '0x' + '00'.repeat(32);
+        const create3 = (owner) =>
+          getContractAddress({
+            from: getCreate2Address({
+              from: d.deployer,
+              salt: keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'bytes32' }], [owner, ZERO_SALT])),
+              bytecodeHash: d.potProxyInitCodeHash,
+            }),
+            nonce: 1n,
+          });
+        const first = chain.account(0);
+        const kitchenSays = await chain.client.readContract({ address: dep.v12KitchenAddress(), abi: v12KitchenAbi, functionName: 'predictPot', args: [first.address, ZERO_SALT] });
+        for (const [what, address] of [
+          ['the SDK prediction', v12PredictPot(first.address)],
+          ['the Kitchen predictPot', kitchenSays],
+          ['the CREATE3 of the published derivation', create3(first.address)],
+        ]) {
+          assert.equal(first.pot.toLowerCase(), address.toLowerCase(), 'the kit account Pot is ' + what);
+        }
         const result = await chain.run({ source: 'function main(a: Uint256): Uint256 {\\n  return a * 2;\\n}\\n' }, { args: [21n] });
         assert.equal(result.returned, 42n, 'a program cooks on the testing kit from a clean install');
+        const potCode = await chain.client.getCode({ address: first.pot });
+        assert.equal((potCode.length - 2) / 2, 2886, 'the Pot that cook deployed is the release Pot, 2886 bytes');
+
+        // A V3 swap on the default path, through the release Router: two mock tokens and a mock pool
+        // (the repository fixtures: this check runs from the repository, the package ships no
+        // tests), the Pot holding the input. The pool received 1000 of it, the Pot 2000 of the output.
+        const fixture = (path) => JSON.parse(readFileSync(path, 'utf8'));
+        const mockErc20 = fixture(${JSON.stringify(join(root, "sdk/test/std/token/fixtures/MockERC20.json"))});
+        const mockPool = fixture(${JSON.stringify(join(root, "sdk/test/evm/fixtures/MockV3Pool.json"))});
+        const wallet = createWalletClient({ account: privateKeyToAccount(first.privateKey), transport: http(chain.rpcUrl) });
+        const mined = async (hash) => {
+          const receipt = await chain.client.waitForTransactionReceipt({ hash });
+          assert.equal(receipt.status, 'success');
+
+          return receipt;
+        };
+        const deploy = async (creationCode) =>
+          (await mined(await wallet.sendTransaction({ chain: null, data: creationCode, gas: 10_000_000n }))).contractAddress;
+        const deployed = [await deploy(mockErc20.creationCode), await deploy(mockErc20.creationCode)];
+        const [tokenIn, tokenOut] = BigInt(deployed[0]) < BigInt(deployed[1]) ? deployed : [deployed[1], deployed[0]];
+        const pool = await deploy(
+          mockPool.creationCode +
+            encodeAbiParameters(
+              [{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'uint256' }],
+              [tokenIn, tokenOut, 3000, 2n * 10n ** 18n],
+            ).slice(2),
+        );
+        const erc20 = parseAbi(['function mint(address to, uint256 amount)', 'function balanceOf(address account) view returns (uint256)']);
+        for (const [token, to] of [[tokenIn, first.pot], [tokenOut, pool]]) {
+          await mined(await wallet.writeContract({ chain: null, address: token, abi: erc20, functionName: 'mint', args: [to, 10_000n] }));
+        }
+        const balanceOf = (token, holder) => chain.client.readContract({ address: token, abi: erc20, functionName: 'balanceOf', args: [holder] });
+        await chain.run({
+          source:
+            'import { uniswapV3 } from "@sauce/router";\\nfunction main() {\\n  uniswapV3(' +
+            [pool, tokenIn, tokenOut].map((address) => BigInt(address).toString()).join(', ') +
+            ', 1000, 0, 0, pot);\\n}\\n',
+        });
+        assert.equal(await balanceOf(tokenIn, pool), 1000n, 'the swap paid 1000 of the input into the pool');
+        assert.equal(await balanceOf(tokenOut, first.pot), 2000n, 'and the Pot received 2000 of the output');
+        console.log('Clean package install: ./testing stands up the default release (engine, Router, CREATE3 account Pots), cooks on it, and a V3 swap pays through the release Router');
+
+        // The release Router answers HyperSwap V3's callback. A call no swap is in flight for reverts
+        // UnauthorizedCallback() where the Router has the name, and with no data where it has not:
+        // this Router has no fallback, so a name no Router has is the control.
+        const router = dep.v12RouterAddress();
+        const callbackArgs = encodeAbiParameters([{ type: 'int256' }, { type: 'int256' }, { type: 'bytes' }], [1n, 0n, '0x']).slice(2);
+        const probe = async (selector, data) => {
+          try {
+            await chain.client.call({ account: '0x000000000000000000000000000000000000dEaD', to: router, data: selector + data });
+          } catch (error) {
+            // A revert first: an error that is no revert says nothing of the Router.
+            const reverted = error.walk((cause) => cause.name === 'ExecutionRevertedError');
+            if (!reverted) throw error;
+            const found = reverted.walk((cause) => typeof cause.data === 'string');
+
+            return found ? found.data : '0x';
+          }
+
+          return 'succeeded';
+        };
+        assert.ok((await probe('0xfa85398b', callbackArgs)).startsWith('0xf5c6c81a'), 'the release Router answers hyperswapV3SwapCallback');
+        assert.ok((await probe('0xfa461e33', callbackArgs)).startsWith('0xf5c6c81a'), 'and uniswapV3SwapCallback');
+        assert.equal(await probe('0xdeadbeef', ''), '0x', 'a name no Router has reverts with no data: the Router has no fallback');
+        console.log('Clean package install: the release Router answers hyperswapV3SwapCallback');
+
+        // A HyperSwap-style pool, which calls that callback back, is paid by the Pot through the same Router.
+        const hyperPool = await deploy(
+          mockPool.creationCode +
+            encodeAbiParameters(
+              [{ type: 'address' }, { type: 'address' }, { type: 'uint24' }, { type: 'uint256' }],
+              [tokenIn, tokenOut, 3000, 2n * 10n ** 18n],
+            ).slice(2),
+        );
+        await mined(await wallet.writeContract({ chain: null, address: hyperPool, abi: parseAbi(['function setCallbackSelector(bytes4 selector)']), functionName: 'setCallbackSelector', args: ['0xfa85398b'] }));
+        for (const [token, to] of [[tokenIn, first.pot], [tokenOut, hyperPool]]) {
+          await mined(await wallet.writeContract({ chain: null, address: token, abi: erc20, functionName: 'mint', args: [to, 10_000n] }));
+        }
+        const [poolBefore, potBefore] = [await balanceOf(tokenIn, hyperPool), await balanceOf(tokenOut, first.pot)];
+        await chain.run({
+          source:
+            'import { uniswapV3 } from "@sauce/router";\\nfunction main() {\\n  uniswapV3(' +
+            [hyperPool, tokenIn, tokenOut].map((address) => BigInt(address).toString()).join(', ') +
+            ', 1000, 0, 0, pot);\\n}\\n',
+        });
+        assert.equal((await balanceOf(tokenIn, hyperPool)) - poolBefore, 1000n, 'the HyperSwap-style pool was paid 1000 of the input');
+        assert.equal((await balanceOf(tokenOut, first.pot)) - potBefore, 2000n, 'and the Pot received 2000 of the output');
+        console.log('Clean package install: a HyperSwap-style pool is paid through the release Router');
+
+        // The installed bin on that chain, with no flag naming a release: it names the Pot the Kitchen
+        // places, deploys it and cooks on it.
+        const sauce = (...args) =>
+          JSON.parse(
+            execFileSync(process.execPath, [${JSON.stringify(join(installedRoot, installedManifest.bin.sauce))}, '--no-update-check', ...args], {
+              encoding: 'utf8',
+              env: { ...process.env, HOME: ${JSON.stringify(cliHome)} },
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+          );
+        const second = chain.account(1);
+        const status = sauce('pot', '--owner', second.address, '--chain', 'base', '--rpc-url', chain.rpcUrl);
+        assert.equal(status.pot.toLowerCase(), v12PredictPot(second.address).toLowerCase(), 'sauce pot names the Pot the SDK predicts');
+        assert.equal(status.deployment.pot.deployed, false, 'and finds it not deployed yet');
+        const ran = sauce('run', ${JSON.stringify(seven)}, '--chain', 'base', '--rpc-url', chain.rpcUrl, '--private-key', second.privateKey, '-y', '--json');
+        assert.equal(ran.pot.toLowerCase(), status.pot.toLowerCase(), 'sauce run cooks on that Pot');
+        assert.equal(ran.deployPot.status, 'success', 'after deploying it');
+        assert.equal(ran.cook.status, 'success', 'and the cook succeeded');
+        const secondCode = await chain.client.getCode({ address: status.pot });
+        assert.equal((secondCode.length - 2) / 2, 2886, 'the Pot has the release code at the predicted address');
+        console.log('Clean package install: the installed sauce pot predicts, then sauce run deploys and cooks on, the Pot the Kitchen places, on the kit local chain');
       } finally {
         await chain.stop();
       }
-      console.log('Clean package install: ./testing runs a program on a local chain with the packaged stack');
     } else {
       console.log('Clean package install: ./testing resolves (no anvil, or no engine artifacts, to run it here)');
     }
@@ -553,6 +811,27 @@ try {
     `${name} ${installedManifest.version}\n`,
     `npx ${name} runs the package's sauce bin`,
   );
+  assert.match(sauce("--help"), /Usage:/, "the installed sauce command shows help");
+  for (const version of ["22.20.0", "23.11.0"]) {
+    const refused = spawnSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `Object.defineProperty(process.versions, "node", { value: ${JSON.stringify(version)} });
+         await import(${JSON.stringify(pathToFileURL(join(installedRoot, installedManifest.bin.sauce)).href)});`,
+        "--",
+        "--version",
+      ],
+      { cwd: work, encoding: "utf8", env: smokeEnv },
+    );
+    assert.equal(refused.status, 1, `the installed command refuses Node ${version}`);
+    assert.equal(refused.stdout, "");
+    assert.match(refused.stderr, /Node\.js 24/);
+    assert.ok(refused.stderr.includes(version));
+    assert.ok(refused.stderr.includes("@eco-incorp/sauce@latest"));
+  }
+  console.log("Clean package install: supported help/version and unsupported Node refusal pass");
   // The update check, from the install: a fresh cache in a home of its own naming a newer version
   // is noticed on stderr, after stdout's own output, and starts no refresh (the cache is a minute
   // old), so nothing reads the registry. The refresh's script ships beside the bin.
@@ -615,6 +894,11 @@ try {
   );
   assert.equal(compiled.compiler.version, installedCompiler.version);
   assert.equal(compiled.engine.release, "v12-evm");
+  assert.equal(
+    compiled.engine.version,
+    "1.5.0",
+    "compile names the release this package is for, with no flag asking for it",
+  );
   const pot = JSON.parse(sauce("pot", "--owner", owner, "--chain", "base", "--offline"));
   assert.equal(pot.to, pot.kitchen, "sauce pot prints the Kitchen.deployPot transaction");
   const tx = JSON.parse(
@@ -632,6 +916,44 @@ try {
     "the batch is the one transaction",
   );
   assert.equal(tx.to, pot.pot, "sauce tx cooks on the Pot sauce pot predicts");
+  // The Pot is the CREATE3 one the Kitchen places, computed here from the published derivation by
+  // viem alone, and the cook names the default engine.
+  const defaults = await import(
+    pathToFileURL(join(installedRoot, installedManifest.exports["./deployments"].default)).href
+  );
+  const { v12PotAbi } = await import(
+    pathToFileURL(join(installedRoot, installedManifest.exports["./evm/engine"].default)).href
+  );
+  const derivation = defaults.v12PotDerivation();
+  const create3 = getContractAddress({
+    from: getCreate2Address({
+      from: derivation.deployer,
+      salt: keccak256(
+        encodeAbiParameters(
+          [{ type: "address" }, { type: "bytes32" }],
+          [owner, `0x${"00".repeat(32)}`],
+        ),
+      ),
+      bytecodeHash: derivation.potProxyInitCodeHash,
+    }),
+    nonce: 1n,
+  });
+  assert.equal(
+    pot.pot.toLowerCase(),
+    create3.toLowerCase(),
+    "sauce pot names the CREATE3 Pot the published derivation gives",
+  );
+  const cook = decodeFunctionData({ abi: v12PotAbi, data: tx.data });
+  assert.equal(cook.functionName, "cook");
+  assert.equal(
+    cook.args[0].toLowerCase(),
+    defaults.v12EngineAddress().toLowerCase(),
+    "sauce tx cooks on the default engine",
+  );
+  console.log(
+    `Clean package install: with no flag naming a release, sauce pot names the CREATE3 Pot ${pot.pot}, ` +
+      `sauce tx cooks it on engine ${cook.args[0]}, and compile names v12-evm ${compiled.engine.version}`,
+  );
   assert.ok(tx.data.includes(bytecode.slice(2)), "the cook carries the compiled program");
   assert.ok(tx.data.includes(recipient.slice(2)), "and main's arguments after it");
   assert.equal(

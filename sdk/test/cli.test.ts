@@ -247,7 +247,7 @@ describe("sauce (no command)", () => {
     const run = await sauce("deploy");
     expect(run.code).toBe(2);
     expect(run.stderr).toMatch(
-      /unknown command 'deploy'\. Commands: compile, actions, simulate, run, /,
+      /unknown command 'deploy'\. Commands: compile, where, actions, simulate, run, /,
     );
     expect((await sauce("--version")).stdout).toBe(`${MANIFEST.name} ${MANIFEST.version}\n`);
   });
@@ -761,14 +761,15 @@ describe("sauce compile", () => {
     expect(missing.stderr).toContain(
       "  authority (readonly_signer)  pot (the Pot, which the Kitchen",
     );
-    // That file, filled in, is taken as it is: the cook gets past its accounts to the endpoint.
+    // That file, filled in, is taken as it is: the cook gets past its accounts to the endpoint. The
+    // first thing it reads there is the Pot, to see which engine owns it (the Kitchen's fee follows).
     const filled = file(
       "accounts.json",
       skeleton.replace(/<token>/g, "USDC").replace('"dest":"pot:USDC"', '"dest":"owner:USDC"'),
     );
     const given = await sauce(...cook, "--accounts", filled, ...unreachable);
     expect(given.stderr).not.toContain("cannot derive");
-    expect(given.stderr).toContain("reading the Kitchen's fee config failed");
+    expect(given.stderr).toMatch(/reading the Pot \w+ failed/);
   });
 
   it("takes a Solana key as the 32 bytes of hex it prints one in, wherever it takes base58", async () => {
@@ -1179,6 +1180,18 @@ describe("sauce tx", () => {
     expect(run.stderr).toMatch(
       /--fund: the owner's transfer into the Pot comes before the cook\. Sent as one batch \(sendCalls, a smart wallet's single approval\), the Pot is funded and cooked on at once, or not at all\./,
     );
+  });
+
+  it("carries a native-only --fund in the single cook's value", async () => {
+    const run = await sauce(
+      ...["tx", pay(), "--chain", "ethereum", "--owner", OWNER, ...PAY_DEFINES, "--value", "1234"],
+      ...["--fund", "ETH:0.000000000000001"],
+    );
+    expect(run.code).toBe(0);
+    const out = JSON.parse(run.stdout) as { to: Address; value: string };
+    // No transfer to plan, so the plan is the cook alone, carrying the fee and the ETH.
+    expect(out.to).toBe(v12PredictPot(OWNER, DEFAULT_POT_SALT));
+    expect(out.value).toBe(`0x${(1234n + 1000n).toString(16)}`);
   });
 
   it("refuses a --fund it cannot plan: a token twice, a token's decimals with no endpoint, Solana", async () => {

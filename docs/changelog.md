@@ -2,7 +2,7 @@
 
 **Reference** · [Documentation](README.md) · [Deployments](reference/deployments.md)
 
-> What changed in each 0.99.x release of the SDK: in SauceScript, the language you write programs
+> What changed in each SDK release: in SauceScript, the language you write programs
 > in, and in the compiler, engines and Kitchens that release shipped. Newest first. A program that
 > compiled before can stop compiling, or behave differently, after an upgrade: the entries say
 > where.
@@ -29,6 +29,13 @@ label and still disagree, so match versions, never labels. From 0.99.7 the SDK k
 table, one row per compiler version, and refuses to build a cook for an engine that a row pairs with
 a different compiler.
 
+A major version of one of those packages is not a major version of the SDK. The SDK's own major
+version changes only when something you would notice breaks: a SauceScript program that no longer
+compiles or behaves differently, a removed or renamed export, command, flag or MCP tool, or a chain
+the command stops accepting. An engine or compiler major that the SDK absorbs, with none of that, comes
+in an SDK minor or patch, and the entry's `### Compiler and engines` section says what the component
+release changed.
+
 SDK 0.99.0 and 0.99.1 named the compiler by range, `^2.2.0` and `^2.2.1`, so an install got the
 newest 2.x compiler on npm that day: 2.2.1 from 2026-09-17, 2.3.0 from 2026-09-23, 2.4.0 from
 2026-09-30 and 2.5.0 from 2026-10-06. Such an install compiles the language of that compiler, not
@@ -43,38 +50,50 @@ kitchen-svm its public instruction APIs. No package promises the bytecode a prog
 derived from a version.
 
 Pot addresses can change even within a 1.x release: kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed
-the Pot address family. Derive addresses with the SDK rather than from a version number. Existing
-Pots and programs retain their original pairing; an upgrade does not move their funds or migrate
-them. [Deployments](reference/deployments.md) lists the SDK's current release addresses.
+the Pot address family. kitchen-evm 1.4.0 made new Pots CREATE3. Derive addresses with the SDK
+rather than from a version number. Existing Pots keep their address. A kitchen-evm 1.3.0 Pot, and a
+fixed-Router or Shared Pot, cook on the engine of their release where that engine runs the
+compiler's programs; a dynamic Pot of the current Kitchen, whichever release minted it, cooks on
+the installed engine. An upgrade does not move their funds or migrate them.
+[Deployments](reference/deployments.md) lists the SDK's current
+release addresses.
 
-The SDK is still below 1.0, and it has made breaking changes in patch releases. Read each release's
+The SDK's 0.99.x releases included breaking changes in patch versions. Read each release's
 **Now refused**, **Removed** and **Also breaking** items before you upgrade, even for a patch.
 
 ## Which versions work together
 
 Each SDK release and the five releases it pins:
 
-| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ---------- | -------- | ------- | ----------- | ------- | ----------- |
-| Unreleased | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ------- | -------- | ------- | ----------- | ------- | ----------- |
+| 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+
+**None** marks compiler 2.6.2, which no SDK release installs. Its row is the set SDK 1.1.0's
+network defaults used by mistake (see 1.2.0); it is kept because its engines still run Pots made
+under it.
 
 From 0.99.9 on, the SDK also pins kitchen-evm 1.1.0's Router, for Uniswap V3 and V4 quotes only:
 the 1.2.0 Router has no quote method. For 0.99.0 and 0.99.1 the compiler column gives the version
@@ -94,10 +113,484 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK Unreleased
+## SDK 1.2.0 — 2026-11-24
+
+Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
+1.1.0: compiler 2.6.4 (from 2.6.3), and kitchen-evm 1.5.0 and v12-evm 1.5.0 (both from 1.4.0): a
+Router that also answers HyperSwap V3's swap callback, and the engine built for it. v12-svm and
+kitchen-svm are the releases 1.1.0 pinned; what moved for them is that the SDK now uses them.
+
+SDK 1.1.0 pinned these releases but kept every default on the ones before: engine 1.3.0, CREATE2
+Pot addresses and Solana engine 1.4.0. On 2026-11-20, before 1.1.0 was published, every observed
+EVM chain with the Kitchen switched to kitchen-evm 1.4.0, which places new Pots by CREATE3. So with
+1.1.0, and with 1.0.0:
+
+- online, `sauce pot`, `sauce tx` and `sauce simulate` for an owner with no Pot refused, and told
+  you to upgrade to a newer SDK that did not exist yet;
+- offline and unsigned, `sauce pot` and `sauce tx`, and in TypeScript `v12PredictPot(owner)`,
+  gave a CREATE2 address where no Pot can ever be deployed. A cook sent there succeeds, runs
+  nothing and leaves its value at that address, and tokens sent there are lost;
+- Pots of the new Kitchen were not recognised: `sauce pot import` refused them,
+  `checkSignedCookPot` said they predate signed cooks, and `potRouterUpdate` proposed the new
+  Router for old Pots.
+
+1.2.0 fixes this. Every new Pot, prediction and default is the release the chains run: the Kitchen
+and its new Router and engine on EVM chains, engine 1.4.1 for new Pots on Solana. A Pot you already have
+keeps working: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0; a Solana Pot of v12-svm 1.4.0 cooks
+on 1.4.0, a new one on 1.4.1, and a Pot of v12-svm 1.2.0 or 1.3.0 (on 2026-11-22, at slot
+472365757, the only created Pots on mainnet-beta were 1.3.0's) cooks on the installed engine, as
+earlier SDKs cooked every Pot: inside the program `ctx.self()` is that engine, so a check that the
+Pot's owner is `ctx.self()` fails, and so does a write to the Pot's storage. If you funded an
+address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
+[Upgrading](guides/upgrading.md#moving-to-sdk-120).
+
+### SauceScript
+
+- **Changed (EVM): `abi.decode` cuts a dirty `"Address"` to its low 160 bits and reads a dirty
+  `"bool"` as true, instead of reverting.** With SDK 1.1.0 a decode reverted where it ran on a
+  `"bool"` word other than `0` or `1`, or an `"Address"` word with a bit set above its low 160,
+  whether or not the program read it. Now an `"Address"` field (a single field, or a field of a
+  `{…}` record at any depth, a record that is an array's element included) is its word's low 160
+  bits, and reading a `"bool"` field or a `"bool[]"` element gives `1` for any nonzero word, as
+  before 1.1.0. An element of an `"Address[]"` (also `"Address[][]"` or `"{Address[]}"`) is still
+  checked as in 1.1.0: a dirty one reverts where the decode runs, and a `try` block that runs the
+  decode catches it. A decoded value passed on whole (`abi.encode(decoded)`, `return decoded;`, a
+  `bool[]` or record given whole to a contract call, a record a closure captures in its
+  `parcel.args`) carries each word as it arrived. To refuse a dirty word, decode it as `"Uint256"`
+  and check it (`require(word >> 160 == 0)`). Entry parameters and a contract call's `bool`,
+  `address` and fixed-bytes answers are checked as in 1.1.0.
+- **Changed (EVM): a swap at a HyperSwap V3 pool pays the pool.** `@sauce/router`'s `uniswapV3`
+  (and the `uniswapV3Swap` action) on a Pot whose Router is this release's: HyperSwap V3's pools
+  call back `hyperswapV3SwapCallback`, which no earlier Router answers, so the swap reverted and
+  `tryUniswapV3` returned 0. A Pot minted before its chain's switch keeps the Router it has; a
+  Pot minted after starts on the new one.
+
+### Compiler and engines
+
+- **Compiler 2.6.3 → 2.6.4:** pairs with v12-evm 1.5.0 and kitchen-evm 1.5.0 (2.6.3's were 1.4.0)
+  and the same Solana releases as 2.6.3. Its programs run on v12-evm 1.5.0 and v12-svm 1.4.1, and
+  on v12-evm 1.4.0, v12-evm 1.3.0 and v12-svm 1.4.0 for Pots of those
+  releases. It changes how an EVM `abi.decode` reads `"bool"` and `"Address"` leaves (see
+  SauceScript above) and drops what checking them cost: about 13 to 17 bytes and about a thousand
+  gas a leaf, read or not. The compiler measured a WETH-to-USDC swap cook on Ethereum whose program
+  decodes 14 `"Address"` leaves: 2,802 bytes became 2,620, and 360,994 gas became 347,527. A
+  program whose `abi.decode` reads no `"bool"` or `"Address"` compiles to the bytes 2.6.3 gave it:
+  every example and recipe this package ships does, the 426-byte settlement program included (same
+  hash). The compiler's JavaScript API is unchanged.
+- **kitchen-evm 1.4.0 → 1.5.0 (now the default; SDK 1.1.0's defaults were 1.3.0):** New Pots are
+  CREATE3 (1.4.0's change, described under 1.1.0), and start on a new Router that also answers
+  HyperSwap V3's swap callback, `hyperswapV3SwapCallback`. The Kitchen, its implementation and the
+  Pot are 1.4.0's, so no Pot address moves. A Pot minted before its chain's switch keeps the Router
+  it has: a dynamic Pot until its owner changes it, a fixed-Router or Shared Pot for good. On a
+  fixed-Router or Shared Pot that already exists with the 1.4.0 Router,
+  `Kitchen.deployPot(owner, salt, true)` and `deploySharedPot(salt)` now revert
+  `OccupiedPotMismatch()`: check code before deploying.
+- **v12-evm 1.4.0 → 1.5.0 (now the default; 1.1.0's was 1.3.0):** Engine 1.4.0, built for the new
+  Router. An engine runs a fixed-Router or Shared Pot only when it was built for that Pot's Router,
+  so the SDK cooks those Pots minted on the 1.4.0 Router on engine 1.4.0, and every other
+  new-Kitchen Pot on 1.5.0. It refuses a kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0
+  Pot, so the SDK names the engine of the Pot it cooks on. Compiler 2.6.4's output runs on all
+  three, and on v12-evm 1.3.0 for kitchen-evm 1.3.0 Pots (`alsoRunsOn` in its row) with no
+  recompile. That Pot keeps engine 1.3.0's behaviour, which is not engine 1.4.0's: signature checks
+  now require a complete `ecrecover` reply and the exact ERC-1271 return word, and newly allocated
+  memory is cleared after reuse, so a fresh array does not expose values from an earlier caught
+  call. A program that relies on either should run on a Pot of the current release, which needs
+  another salt (`--salt <label>`).
+- **v12-svm 1.4.1 (now the default):** The engine a Solana Pot that does not exist yet is created
+  under and cooked on. A Solana Pot's address does not depend on the engine, and the Kitchen binds
+  no engine to a Pot: a cook that names another release's engine runs, and the chain refuses
+  neither, unlike on EVM, where an engine refuses another release's Pots. So the SDK chooses the
+  engine from the Pot's owner program, where that engine runs this compiler's output, and takes
+  none from anywhere its release table does not hold, a plan's cursor included. Compiler 2.6.4's
+  output also runs on v12-svm 1.4.0 (`alsoRunsOn`), so a Pot made under 1.4.0 keeps cooking on
+  1.4.0. Pots of v12-svm 1.2.0 and 1.3.0 do not run it: they cook on 1.4.1, and the command says
+  so with each cook.
+
+### The `sauce` command and the MCP server
+
+- **Changed (EVM): `--owner` and `--wallet` mean the Pot that is there.** Online, an owner who
+  already has a deployed Pot at that salt from an earlier release whose engine runs this SDK's
+  programs (today kitchen-evm 1.3.0's) cooks on that Pot, through its own engine. The command says
+  it is an earlier release's Pot and that a Pot of the current release needs another salt. When
+  several are deployed, the oldest release's wins: anyone may deploy a Pot for any owner, so a
+  newer one deployed by someone else never displaces a funded older one. With no such Pot, the
+  owner's Pot is the current release's CREATE3 one. Offline the chain cannot say, and the Pot
+  store is no stand-in for it, since it also keeps Pots that landed on a fork or another network
+  with the chain's id: the owner's Pot is the CREATE3 one, with a note that an earlier Pot cannot
+  be seen offline. Where the store records an earlier release's Pot for that chain, owner and
+  salt, `sauce tx` (with `--fund` or `--value` too), `sauce sign` (`--cancel` too) and the MCP
+  `sauce_tx` and `sauce_signed_cook` refuse before they build anything, naming the record's
+  file, its transaction and block hash and both addresses, until `--pot <address>` names one or
+  an endpoint is given; `sauce pot --offline` and `sauce_pot` show both and build nothing.
+- **Changed (EVM): `--pot <address>` names its own engine.** Online, the engine is the one of the
+  release that made the Pot, and the command says so. Offline, it comes from the Pot store's
+  record of that Pot when the record is the Pot's own (its chain and Pot are the ones named, and
+  it is filed under its Pot's name; any other record is ignored, with a note naming its file, and
+  a record that cannot be read is a note too); with no record it is the installed engine, with a note. A
+  cook on the wrong engine reverts whole, so no funds are stranded.
+- **Changed (EVM): a fixed-Router or Shared Pot cooks on the engine built for its Router.** The
+  Router is fixed when the Pot is minted, and an engine runs such a Pot only if it was built for
+  it, so online the command reads the Pot's `router()` and names that engine, and `sauce pot
+import` records it with its release in the Pot store. Offline, a record's engine decides only
+  for a fixed-Router or Shared Pot, and only when it is one of the family's; a dynamic Pot cooks on
+  the installed engine, offline as online, whatever an earlier SDK's record names. A fixed-Router
+  or Shared Pot whose Router no release this SDK knows built an engine for is refused, naming the
+  Router.
+- **Added (EVM): `sauce pot` and the MCP `sauce_pot` say which Router a deployed Pot runs.** The
+  result carries `router`, and where it is not the Router this chain's Kitchen now gives new Pots,
+  a note says that a pool calling back a name only the newer Router answers (HyperSwap V3's
+  `hyperswapV3SwapCallback` is one) cannot pay that Pot.
+- **Changed: `sauce pot` and `sauce pot list` know every release.** `sauce pot` says which engine
+  cooks the Pot and lists an owner's deployed Pot of an earlier release; `sauce pot import`
+  records a kitchen-evm 1.4.0 Pot, which it refused before ("no release this sauce knows minted
+  it"). A record of a 1.4.0 Pot carries the Pot proxy's and the profile's hashes and its engine,
+  and a record SDK 1.1.0 wrote for one is identified when read.
+- **Changed: `sauce verify` takes cooks on the engines the installed row's `alsoRunsOn` lists**
+  (v12-evm 1.3.0 and v12-svm 1.4.0 today), as well as the installed release's own.
+- **Changed (EVM): a wallet whose policy names only its earlier-release Pot signs for it.**
+  `sauce sign` checks the policy's gate, chains and limits before it reads anything, and the
+  policy's `to` once it knows which Pot signs, so a Pot guessed first is no longer refused.
+- **Changed (Solana): a cook goes to the engine that owns its Pot, where that engine runs this
+  compiler's output.** New Pots are created under v12-svm 1.4.1. A Pot of v12-svm 1.2.0 or 1.3.0,
+  whose engines do not run it, is cooked on the installed engine, as below. The local copy a
+  simulation runs in loads each program with the code its cluster is shown to run, held to the
+  release's digest, and refuses rather than run other code.
+- **Solana: which Pot addresses are cooked.** A Pot owned by an engine that runs this compiler's
+  output (v12-svm 1.4.1, and 1.4.0 through `alsoRunsOn`) cooks on that engine. A Pot of v12-svm 1.2.0
+  or 1.3.0 cooks on the installed engine, where `ctx.self()` is not the Pot's owner, a check of the
+  Pot's account owner against it fails and the Pot's storage cannot be written; the command says so
+  with each cook. An address with no account at it, or only lamports (the System Program's, no
+  data), is a Pot no engine owns yet: it is cooked as it is, on the installed engine, and nothing
+  creates it, as SDK 1.1.0 did. `sauce pot` and the MCP `sauce_pot` report it as not created, with
+  a note, and `sauce pot --deploy` creates it (the Kitchen's `create_pot` tops up the rent). An
+  account owned by a program this SDK does not know as an engine (a later release's, say) is
+  refused, naming the owner.
+- **Changed (Solana): `sauce pot` and the MCP `sauce_pot` say which engine a cook names and which
+  owns the Pot.** `engine` is the engine a cook on the Pot names, as on an EVM chain: the engine that
+  owns the Pot's account where that engine runs this SDK's programs, else the installed one (SDK
+  1.1.0 always gave the installed one). The new `ownerEngine` is the engine that owns the account,
+  whether or not cooks name it. Where the account's owner is a program this SDK does not know as an
+  engine, no cook is built on it, so the result has no `engine`, and the new `ownerProgram` names
+  that program. An address no engine owns yet has neither `ownerEngine` nor `ownerProgram`, and its
+  `engine` is the installed one, as for any Pot not created yet.
+- **Solana: a cook that stops, and a plan resumed from its cursor, say what the Pot is.** The note
+  on a Pot of v12-svm 1.2.0 or 1.3.0 (cooked on the installed engine, so a check that the Pot's
+  owner is `ctx.self()` fails) and on an address that holds only lamports came with the result of
+  a cook that was sent. It now also comes with the error of a `sauce run` that stops before its
+  cook is sent (a setup transaction that failed, a wait, a cook that would fail its simulation,
+  an endpoint that did not simulate it), with every step of a plan, so `sauce send --cursor` and
+  the MCP `sauce_send` and `sauce_wallet_send` say it, and in a tool's error result, after the
+  message. A plan made while the Pot was missing, whose address was funded since, says that its
+  step that creates the Pot is dropped.
+
+### SDK
+
+- **Changed: `v12PredictPot(owner, salt?)` predicts the current release's Pot, CREATE3.** It
+  predicted CREATE2 by default before. `{ compiler }` is optional now, and the compiler of an
+  earlier row predicts that release's Pot, where it threw before. `{ routerFixed: true }` and the
+  zero owner (a Shared Pot) are as before.
+- **Changed: `v12ReleaseSet()` is the installed compiler's own row, the SDK's defaults.**
+  `v12DeployedReleaseSet()` and `v12OptInReleaseSet()` stay, kept for compatibility, and return the
+  same row. A row's `deployedCompiler` is gone: a row's own releases are its defaults.
+- **Added: `engineRunsCompiler(target, engine, compiler?)`.** An engine runs a compiler's output
+  when that compiler's row names it or lists its version in `alsoRunsOn`; `assertEngineRunsCompiler`
+  reads it, so `v12Pot.encodeCook` with engine 1.3.0 and compiler 2.6.4 passes.
+- **Changed: `v12PotDerivation()` gains `scheme`, `potProxyInitCodeHash`, `potProfileHash` and
+  `fixedRouter`.** Its `initCodeHash` is what the Kitchen's `potInitCodeHash()` reports, the hash of
+  the Pot's creation code. From kitchen-evm 1.4.0 (`scheme: "create3"`) CREATE2 under it is not a
+  Pot's address and funds sent there are lost: use `v12PredictPot`. `V12EngineGate.json` and
+  `V12Deployments.json` gain the same fields.
+- **Changed: `checkSignedCookPot` takes a Private Pot of kitchen-evm 1.3.0 or 1.4.0** and refuses
+  an earlier one by its release's version. `potRouterUpdate` proposes the Router this release pins,
+  and only for a Pot of the current release whose Kitchen names that Router: it returns nothing for
+  a Pot of an earlier release, a fixed-Router or Shared Pot, or a Kitchen that names another
+  Router, and still throws for an address no known release derives.
+- **Added: `potEngine(client, pot)`** in `/evm/engine`: the engine a cook on that Pot must name,
+  which for a fixed-Router or Shared Pot is the one built for its Router.
+- `v12RouterAddress()` and `v12PotDerivation().fixedRouter` are the new Router.
+- The release files SDK 1.1.0 shipped as opt-in artifacts under `sdk/dist/artifacts/releases/2.6.3/`
+  still ship there, unchanged. They are kitchen-evm 1.4.0's and v12-evm 1.4.0's, which the SDK still
+  cooks fixed-Router and Shared Pots on. This release's own raw files ship beside them under
+  `releases/2.6.4/`.
+
+### Fixed
+
+- `potParameters` is gone from `v12KitchenAbi`: the live Kitchen reverts on it. The kitchen-evm 1.4.0
+  Kitchen's errors, the Pot's five-argument constructor and `WrongDeployer` are in the ABIs.
+- `sauce inspect` names the Pot of a three-argument `deployPot` and of `deploySharedPot`.
+
+### The testing kit
+
+- **Fixed: on a fork of a chain that runs kitchen-evm 1.4.0, the kit uses the live stack.** SDK
+  1.1.0's kit deployed kitchen-evm 1.3.0's stack over it. The kit now finds the stack it pins live
+  (every contract has code, the Kitchen reports the Pot hash and the Router, and a Pot is placed
+  where `v12PredictPot` says) and deploys nothing over it.
+- **Changed: a test account's Pot is the release's CREATE3 address**, as `v12PredictPot` gives it.
+- **Changed: on a fork of a chain whose Kitchen still hands out the 1.4.0 Router, the kit deploys
+  the new Router and engine and switches the Kitchen to them**, as the release's own rollout does.
+- **Changed (Solana):** the kit's bank loads the packaged engine and Kitchen only when the cluster
+  is shown to run them, and cooks a Pot on the engine that owns it where that engine runs this
+  compiler's output, else on the installed engine, as the command does; `SolanaCookResult.engine`
+  says which. The engine has a mainnet and a devnet build, which read different chain ids, so a
+  recording now names the build it was made on and its digest, and a replay runs exactly that
+  build: a package whose build has another digest refuses the replay, and a recording from before
+  recordings named a build was made on mainnet's and replays on it.
+
+## SDK 1.1.0 — 2026-11-20
+
+Compiler 2.6.3, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
+1.0.0: compiler 2.6.3 (from 2.6.1), and v12-evm 1.4.0, kitchen-evm 1.4.0 and v12-svm 1.4.1 as
+opt-in artifacts. The network defaults keep v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and
+kitchen-svm 1.1.0. The defaults were wrong on the day it shipped: see SDK 1.2.0.
+
+The SDK uses compiler 2.6.3 from the 2.6 maintenance line. Classes and Anchor IDL/Borsh
+support from the compiler's main line are not included.
+
+The SDK includes the EVM engine and Kitchen/Router 1.4.0, SVM engine 1.4.1, and unchanged
+SVM Kitchen 1.1.0 as opt-in release artifacts under `sdk/dist/artifacts/releases/2.6.3/`.
+Network defaults still use the prior documented deployments. Existing CREATE2 Pots retain
+their bindings; the CREATE3 artifacts do not change where the CLI predicts or sends by default.
+Use [`v12PredictPot(owner, salt, { compiler: "2.6.3", routerFixed: true })`](api/routes.md#fixed-router-shared-and-earlier-releases-pots)
+to predict an opt-in fixed-Router Pot. The same helper predicts mutable-Router and shared
+CREATE3 Pots. Omitting the release selection still uses CREATE2.
+
+`v12ReleaseSet()` with no argument still returns the release the network defaults come from, as
+before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
+`v12ReleaseSet(compiler)` with that compiler's version.
+
+### SauceScript
+
+- **Changed (EVM): `.gas(n)` caps the call it is written on.** When that call's receiver made an
+  external call of its own in the same expression (a contract call or a raw `evm.*` call), as in
+  `({ quote: C.at(a).quote(), pool: C.at(p) }).pool.swap(amount).gas(n)`, the cap went on the
+  receiver's call (`quote()` there) and the call written ran with all the gas left, whether or not
+  its result was read. The cap is now on the call written. The receiver's call runs with no cap, so
+  a cap tuned for it now bounds the call written, which can run out of it, and a receiver call that
+  must stay bounded needs its own `.gas()`:
+  `({ quote: C.at(a).quote().gas(50000), pool: C.at(p) }).pool.swap(amount).gas(n)`. A cap
+  expression that makes calls now runs after the receiver and the arguments, in source order. A
+  receiver bound to a name first, one read from another call's answer
+  (`C.at(C.at(a).pool()).swap(amount)`) and an argument that makes a call were not affected.
+- **Now refused (EVM): a `.gas()` on something that is not a call.** It used to cap a call that ran
+  before it. Each of these is now refused (`.gas()` must follow a contract call, `evm.call`,
+  `evm.static` or `evm.delegate`): a cast of a field that sits beside a call in its object literal
+  (`Uint256(({ x: C.at(a).one(), v: n }).v).gas(n)`); a member selected from an object literal whose
+  other members make calls
+  (`Uint256(({ first: C.at(a).one(), later: C.at(b).one() }).first).gas(n)` capped the first call
+  and ran the next one uncapped); and a cast of a right shift whose right side is not a constant
+  (`Uint256(C.at(a).one() >> C.at(b).one()).gas(n)`, and a shift by a run-time local, by an
+  expression or by a `const` bound to an expression). Put the cap on the calls themselves. A cast
+  of a call, or of a call shifted by a literal (`Uint256(C.at(a).one()).gas(n)`), still caps that
+  call.
+- **Changed (EVM): a contract call's dirty `bool`, `address` or fixed-bytes answer reverts when it
+  is read.** A declared `bool` output that is anything but `0` or `1`, an `address` output with any
+  bit set above its low 160, and a `bytesN` (N below 32) or `function` output with any bit set below
+  its top N bytes (24 for a `function`) now revert, as Solidity's own ABI decoder does. Before, a
+  `bool` was passed on as the callee sent it (an answer of `2` made `flag + 1` 3), an `address` was
+  cut to its low 160 bits (`2^160 + 0xbeef` read as `0xbeef`, an account the callee never named; an
+  element of an `address[]` kept the whole word) and a `bytesN` dropped whatever sat below its top
+  bytes. The `bool` and `address` check covers a single output, a field of a tuple or a struct and
+  an element of an array, and reading any part of a result checks all of it; a fixed-bytes value is
+  read only as a method's sole output. The check is made where the call is decoded, so a `try` that
+  holds the call catches the revert, and one that only reads a result made outside it does not. A
+  result nothing reads is still not decoded or checked, and a `bytes32` fills its slot, so it has
+  nothing to check.
+- **Changed (both): `abi.decode` and entry parameters reject a dirty `bool` or `address` word.** A
+  decoded `"bool"` read as `1` for any nonzero word, and a `bool` entry parameter was narrowed to
+  `1` the same way; a decoded `"Address"` was masked to its low 20 bytes (`2^160 + 0xbeef` read as
+  `0xbeef`), and an `Address` entry parameter passed on whatever the caller sent. Each now reverts
+  on a `bool` word that is not `0` or `1` and an `Address` word with a bit set above its low 160.
+  On an EVM chain `abi.decode` checks a `"bool"` or `"Address"` that is a single field, a field of
+  a `{…}` tuple at any depth or an element of a `"bool[]"` or `"Address[]"`, and checks the whole
+  decoded value where it is decoded, whether or not any part is read. A statement `.catch()` on an
+  authored decode, `abi.decode(evm.call(…), […]).catch(() => { … });`, keeps only the call and
+  decodes nothing. An entry parameter is checked before the body runs, at the top level and inside
+  an array or a struct parameter, an `interface` the module declares included. A `bool` entry
+  parameter is checked on Solana too, where an `Address` is a public key and is not checked. On an
+  EVM chain an `Address` field of an `interface` the module imports is not checked either: declare
+  the interface in the module, or spell the type inline. SDK 1.2.0 takes the `abi.decode` half
+  back, but for an `"Address"` that is an array's element.
+- **Now refused (EVM): a `.catch(() => { return n; })` on a `bool` call whose fallback `n` is not
+  `0` or `1`.** It compiled and answered `n` when the call failed, a value a `bool` never holds. The
+  error is
+  ``the `.catch()` fallback must be a constant scalar that fits the declared ABI result width``.
+  An `address` call's fallback already had to fit in 160 bits, and a fixed-bytes call's its width;
+  both still do. A fallback replaces only a call that failed: a call that succeeded with a dirty
+  answer reverts rather than taking it.
+- **Added (EVM): more `.catch()`, `try` and `.gas()` forms compile.** A statement
+  `.catch(() => { … })`, or a `try` around nothing but the call, on a call whose one declared output
+  is an integer narrower than 256 bits (a `uint8` or an `int8`, alone, in a struct or in an array),
+  or whose several outputs include one (`getReserves()`), was refused and now compiles: the result is
+  discarded and the handler runs only when the call reverts. So does a statement
+  `.catch(() => { … })` on a call that is the one member of an object literal, a `uint256` output
+  included. A `.gas()` now compiles on a receiver whose own call already has one, and on a receiver
+  whose first step is a computed `.at()` address (`({ p: C.at(a + 1) }).p.w().gas(n)`).
+- **Added** (EVM): **every protocol namespace carries its contract's full verified ABI.** A registry
+  ABI was the few functions a program was expected to call; it is now every function the contract's
+  deployments declare in their verified source and dispatch, and every event and error their code
+  carries: 9,307 functions over 240 contracts and interfaces, from 744 over 232, with 2,359 events
+  (from 2) and 1,573 errors (from 11). A program calls a recorded contract's other functions by name,
+  its own reads and admin functions included (`AaveV3.Pool.getReserveAToken(USDC)`,
+  `BalancerV2.Vault.queryBatchSwap(…)`, `MorphoBlue.Morpho.idToMarketParams(id)`), with no ABI
+  file of its own. Only what the SDK cannot expose is left out, such as the second of two overloads
+  that take the same number of arguments or a name the SDK reads as its own; each protocol's
+  reference page lists what its ABIs leave out. A name that gained overloads keeps the ones it had
+  first, so a lookup without an argument count is unchanged: `selectorOf(router, "execute")` is
+  still `0x3593564c` beside the new `execute(bytes,bytes[])`, and `AaveV3.Pool`'s `supply` still the
+  four-argument one beside the L2 `supply(bytes32)`.
+- **Added** (EVM): **new contracts.** `AaveV3.PoolAddressesProvider`, an address only before, has
+  its ABI; `AaveV3.Oracle` is new, and so are the `AaveV3.AToken` and `AaveV3.VariableDebtToken`
+  interfaces, `CompoundV3.CometRewards`, the `MorphoBlue.Oracle` interface and the `Pendle.Market`
+  and `Pendle.SY` interfaces. A program calls their methods on what a function returns:
+  `AaveV3.PoolAddressesProvider.getPriceOracle().getAssetPrice(USDC)`, or
+  `AaveV3.Pool.getReserveVariableDebtToken(USDC)` held in a `const` and its `approveDelegation`
+  called.
+- **Now refused** (EVM): **a function the chain's own deployment does not run.** Deployments of one
+  contract can run different releases, and the registry records which functions each one's code
+  dispatches. A call to one the chain's deployment does not run is refused when the program
+  compiles, naming the chains that run it, where it used to compile. Calls that compiled before
+  and are refused now: `Cbeth.CbETH.exchangeRate` on Base,
+  `Lifi.LiFiDiamond.startBridgeTokensViaAcrossV4` on Gnosis, Fantom and Avalanche, and
+  `Paraswap.AugustusV5.simpleSwap` on Base. The message: "`Cbeth.CbETH.exchangeRate(…)`:
+  `exchangeRate` is in cbeth.CbETH's ABI, but its deployment on base does not run it (as
+  declared); it is on: ethereum." Each protocol's reference page lists what each deployment does
+  not run. Only a namespace call is refused: an explicit twin import, or a contract a caller
+  gives, is the registry's ABI for the contract (the functions its reference page lists, and none
+  of those it lists as left out), with the same entries on every chain and nothing withheld for
+  one chain's deployment.
+- **Added** (EVM): **a function is called by its signature.** A namespace contract's function is
+  called by its canonical signature, its name and parameter types with a tuple's in parentheses
+  and no names or spaces:
+  `Permit2.Permit2["permitTransferFrom(((address,uint256)[],uint256,uint256),(address,uint256)[],address,bytes)"](permit, transfers, owner, signature)`,
+  chain-qualified (`Base.Permit2.Permit2["…"](…)`), on a `const` holding the contract, after
+  `.at(address)`, or on an interface in the same expression (`Beefy.Vault(vault)["available()"]()`).
+  It compiles to the same program as the call by name, and it reaches what a call by name cannot:
+  the 21 overloads that take as many arguments as the one an ABI keeps (Permit2's batch `permit`,
+  `permitTransferFrom` and `permitWitnessTransferFrom`, Uniswap V4's `extsload(bytes32[])`, …) and
+  the 2 functions whose name an accessor keeps (Beefy's `Vault.available()`, ENS's
+  `BaseRegistrar.available(uint256)`). Each protocol's reference page lists them under each ABI with
+  their spelling; the ABI's twin import does not carry them. A call by name to one of them is
+  refused, naming the spelling ("It is called by its signature:
+  `Ens.BaseRegistrar["available(uint256)"](…)`."). A signature the contract does not have is
+  refused, naming the nearest five ("`permitTransferFrom(uint256)` is not the signature of a
+  function of permit2.Permit2 (15 functions; nearest: …)"), and so is one the chain's deployment
+  does not run ("`getPool(address,address,uint24)` is a function of
+  aerodrome-slipstream.CLFactory, called by its signature, but its deployment on base does not run
+  it (as declared); it is on: arc."). Through a protocol's default contract (`Permit2["…"](…)`) or
+  on a bound interface held in a `const`, a call by signature is refused.
+- **Changed** (EVM): **a function the chain's deployment declares otherwise is called as it
+  declares it.** Where a chain's deployment runs a function with the ABI's arguments and other
+  outputs or mutability, a program compiled for that chain calls it as that deployment's verified
+  source declares it. `Cbeth.CbETH.mint` on Base no longer decodes a `bool` that Base's deployment
+  does not return, and `CompoundV3.CometRewards.rewardConfig` returns three fields on Ethereum and
+  Polygon, where reading `multiplier` fails to compile ("`multiplier` is not a field of this tuple
+  — its named fields are `token`, `rescaleFactor`, `shouldUpscale`"), and four elsewhere. The ABI,
+  its twin and the TypeScript types keep the ABI's declaration; a TypeScript call made on such a
+  chain decodes the deployment's, and its `toSauceScript()` is refused. Each protocol's reference
+  page lists these per deployment.
+- **Changed**: a method a contract does not have is refused with a shorter list. A contract with
+  more than six methods is listed by its count and the five names nearest the one written:
+  "`getPol` is not in uniswap-v3.Factory's vendored ABI (7 known methods; nearest: getPool,
+  createPool, owner, setOwner, parameters). Did you mean `getPool`?". One with six or fewer still
+  lists every method ("known methods: price").
+
+### Compiler and engines
+
+- **Compiler 2.6.1 → 2.6.3:** The SauceScript bullets above describe the changed gas caps, ABI
+  checks, refusals and forms that now compile. Recompiling adds checks, bytes and gas/CU cost;
+  already-compiled programs are unchanged. Recompiled EVM settlement programs are now 426 bytes,
+  not the historical 410 bytes shipped in SDK 0.99.16–1.0.0. Default verifiers do not recognize the
+  other version: validators fail with `TOKENS_OFFSET`, and observer helpers can return `null`
+  silently. Upgrade verifiers to accept both explicit `{ hash, bytes }` pins **before** moving
+  producers. See [settlement migration](guides/verification.md#compiler-upgrades-and-historical-pins).
+  Bare package imports now resolve per importer; an ambient package uses the entry program's
+  mapping, not a dependency's mapping for the same name. The SDK still refuses a bare `pot` if
+  that ambient package exports `pot`.
+- **v12-evm 1.3.0 → 1.4.0 (opt-in):** The engine authenticates the CREATE3 Pot profile and must
+  be selected with its matching Kitchen and Router; keep the old engine for existing CREATE2
+  Pots. Signature checks now require a complete `ecrecover` reply and the exact ERC-1271 return
+  word. Newly allocated memory is cleared after reuse, so a fresh array does not expose values
+  from an earlier caught call. The network defaults do not select this engine.
+- **kitchen-evm 1.3.0 → 1.4.0 (opt-in):** New private, fixed-Router and shared Pots use CREATE3;
+  existing CREATE2 Pots keep their addresses and bindings. Before funding a prediction or
+  upgrading a Kitchen, follow the [CREATE3 checks](api/routes.md#fixed-router-shared-and-earlier-releases-pots),
+  including deploying any funded but undeployed CREATE2 Pot first. The old constructor-only
+  `potParameters()` method is removed. The Router preserves a V3 or Maverick V2 leg's spend
+  receipt and an outer flash callback's authorization when the pool runs another leg. The
+  network defaults keep the prior Kitchen and Router.
+- **v12-svm 1.4.0 → 1.4.1 (opt-in):** Instruction decoding is cheaper per cook; the instruction
+  format, account order and opcode semantics are unchanged. The Solana Kitchen remains 1.1.0,
+  and network defaults keep engine 1.4.0.
+
+### The `sauce` command and the MCP server
+
+- **Added: `sauce units` turns an amount in whole tokens into the smallest unit a program's `main`
+  takes, and back.** `sauce units --chain base 1.5 USDC` prints `1500000`, the integer `--args`
+  takes; `1500000n USDC` goes the other way, with the trailing `n` that `--fund` uses for base
+  units. The token is a symbol in any case, an address or a Solana mint, and its decimals come from
+  the registries the compile reads, so the number is the one the program sees on that chain; a
+  token the chain has no symbol for is named by its address or mint with `--decimals`. An amount
+  that would need rounding (a nonzero digit past the token's decimals) is refused, never rounded,
+  and a bare integer at or above 10^decimals (`1500000 USDC`) is read as whole tokens, with the
+  note `--fund` gives.
+  `--json` prints one object. The MCP server has it as `sauce_units`.
+- **Added: `sauce where <file>` lists the chains a SauceScript program compiles on.** It compiles
+  the file for every chain Sauce knows, the same compile `sauce compile` runs, reading no chain and
+  needing no key; an actions document is refused, and `sauce compile <file> --chain <slug>`
+  compiles those. It lists each chain the program compiles on with its size, then the chains it
+  does not compile on, grouped by the first reason, most often a token or protocol that chain has
+  no name for. `--chains base,ethereum` limits the run to the chains named, `--supported` keeps the
+  chains transactions are built and sent on, `--source-dir` works as it does for `sauce compile`,
+  and `--json` prints each chain's result.
+- **Changed: `sauce globals --json` lists methods only for the namespace or interface `--protocol`
+  names**, as the text output does. Every other contract and interface keeps its name, address and
+  the rest. On Base the whole listing was 1.6 MB, most of it methods, and is now 49 KB; on Ethereum
+  it was 3.0 MB and is now 191 KB. `sauce_globals` drops an interface's methods the same way unless
+  `protocol` names it, as it already dropped a contract's: 33 KB on Base, from 322 KB.
+
+### The agent skills and the manual
+
+- **Changed**: the examples call every contract the registry records through its namespace. The
+  ABI files beside the Aave V3, Compound III, Morpho Blue, Pendle, Uniswap V3 position, Balancer
+  V2 batch swap and TWAP examples are gone; each program makes the same calls.
+  `compound-repay.sauce.ts` no longer takes the CometRewards address as its first argument: it
+  calls `CompoundV3.CometRewards`. `sauce-script`'s example of a program's own ABI is
+  `nft-handover.sauce.ts`, for an ERC-721 collection, which no registry records.
+
+### SDK
+
+- **Moved import:** `createSauceSvmClient` is now imported from `@eco-incorp/sauce/svm/client`, not
+  `@eco-incorp/sauce/svm`. Change value imports to
+  `import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client"`. `/svm` still re-exports the
+  client's types (`SauceSvmClient`, `SauceSvmClientConfig`, `CookVia`, the `*Opts` types,
+  `StagedBuffer`, `StagedArgs`, `EnsuredLookupTable`) as types only, so type imports need no change.
+  This prevents a `/svm` import from loading Sauce's Kitchen client implementation, which constructs
+  its own RPC clients when called; other barrel modules still load `@solana/kit` and its
+  dependencies.
+
+**Also breaking:** `createSauceSvmClient` is imported from `@eco-incorp/sauce/svm/client`, no longer
+from `@eco-incorp/sauce/svm`; type imports from `/svm` are unchanged.
+
+## SDK 1.0.0 — 2026-10-27
+
+Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.18:
+nothing moves.
+
+The first public release. Its code is 0.99.18's; only the version number changes.
+
+## SDK 0.99.18 — 2026-10-27
 
 Compiler 2.6.1, v12-evm 1.3.0, kitchen-evm 1.3.0, v12-svm 1.4.0 and kitchen-svm 1.1.0, as 0.99.17:
 nothing moves.
+
+- **Maintenance only:** test fixture fetchers require an explicit public-only `--rpc-config` for
+  online setup; CI supplies it through the repository Actions variable `CHAIN_FIXTURE_RPC_CONFIG`.
+  Offline replay and cache verification remain config-free; shipped runtime behavior is unchanged.
+  Invalid materialized program files are removed and repaired from a verified raw cache when
+  available, otherwise fetched and checked against the same pin. Offline setup refuses any missing
+  or invalid program without a verified cache entry; missing programs are never skipped.
+  Hylo and its stability-pool test programs were re-read after their mainnet upgrades and held
+  to the unchanged real-execution vectors before their fixture pins were refreshed.
 
 ### SauceScript
 
@@ -152,11 +645,37 @@ nothing moves.
   to send the deployment, fund the Pot, then send the cook (or plan with `--fund`). `sauce sign`'s
   warning that a Pot with no code cannot pay the Kitchen's fee now says to send `deployPot` before
   funding it. The README, the quick start (which now deploys the Pot with `sauce pot --deploy`
-  before sending it USDC), the guides and the `sauce-cli` skill no longer say to send tokens to a
-  Pot's address before it exists.
+  before sending it USDC), the guides, `sauce run --help` and the `sauce-cli` skill no longer say to
+  send tokens to a Pot's address before it exists, or that a Pot is never deployed by hand.
+- **Fixed: `sauce tx --fund ETH:<amount>` with no token to fund carries the amount in the cook's
+  value.** A plan that was the cook alone (no transfer and no deployment to plan) took the Kitchen's
+  fee as its value and dropped the native amount, so the cook ran without it.
+- **Fixed: `sauce mcp --http` starts its RPC guard again after a start that failed.** The guard's
+  loopback forwarder kept its first start, failed or not, so one failure to listen made every later
+  tool call given an `rpcUrl` fail until the server was restarted.
 
 ### The registry
 
+- **Added** (EVM testnets): **CCTP and Circle Gateway on Arc Testnet, Base Sepolia and Ethereum
+  Sepolia.** A program compiled for one of them names `Cctp.TokenMessenger`,
+  `CircleGateway.GatewayWallet` and `CircleGateway.GatewayMinter`, which resolve to Circle's
+  testnet contracts there, not the mainnet ones: TokenMessengerV2
+  `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA`, GatewayWallet
+  `0x0077777d7EBA4688BDeF3E311b846F25870A19B9` and GatewayMinter
+  `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B`, at the same address on all three. Each chain's
+  CCTP domain is its mainnet's (Arc Testnet 26, Base Sepolia 6, Ethereum Sepolia 0), and the
+  chain pages list it. The `cctpBridge` action takes `"Cctp.TokenMessenger"` on them too. Every
+  address is Circle's own, pinned by on-chain evidence like every registry row. Solana Devnet is
+  not covered: the SDK has no Solana path for CCTP or Gateway.
+- **Fixed** (EVM): four bridge templates no longer name `ctx.msgSender()` as a refund or authority
+  address. That is the Pot's owner only when the owner sends the cook; under a signed cook it is
+  whoever submitted it. Stargate's `bridge` and LayerZero's `sendMessage` refund the excess fee to
+  the Pot, and deBridge's `bridge` gives the Pot the order's `givePatchAuthoritySrc` (its
+  `orderAuthorityAddressDst` stays `receiver`, an address on the destination chain). The zkSync
+  bridge's `depositETH` refunds L2 gas, and a failed deposit's value, to its `recipient`: zkSync
+  aliases a refund recipient with code on L1, so the Pot would strand it at an L2 address nobody
+  controls. The `sauce-protocols` documents say the same, and the `sauce-script` skill's Aave
+  example keeps its aTokens in the Pot instead of crediting `ctx.msgSender()`.
 - **Fixed** (EVM): LI.FI's `bridge` template refunds to the Pot. Its Across V4 deposit named
   `receiver`, the destination's recipient, as `refundAddress`, so a deposit no relayer filled by
   `fillDeadline` was refunded on the source chain to that address, which the Pot's owner may not
@@ -235,6 +754,26 @@ nothing moves.
   chain when it sends. It is now refused with "the client is on chain N, but this call is …". One
   extra `eth_chainId` request per write.
 
+### The testing kit
+
+- **Fixed** (EVM): a live `fork()` keeps `rpcUrl` off anvil's command line. It passed the URL to
+  anvil as `--fork-url`, so the URL, and any key in it, showed in the process list while the fork
+  ran, and in the error a failed start quotes. A live fork now reads the endpoint through the proxy
+  a recording uses, configured over its stdin, and anvil sees only that proxy's loopback URL.
+- **Fixed** (EVM): an `rpcUrl` with credentials in it (`https://user:pass@host/…`) records. They go
+  as a Basic `Authorization` header, which Node's `fetch` requires, and a live fork takes them the
+  same way. Neither a URL the proxy cannot parse nor an endpoint's answer that echoes the header is
+  ever quoted in its output or in a failed recording's error.
+- **Fixed** (EVM): a live fork's requests go upstream once, as anvil sent them, so anvil's own
+  timeout and retries apply, and its proxy exits with the process that started it.
+
+**Also breaking:** a network fork (record or live) reaches its endpoint directly, never through
+`HTTP_PROXY`/`HTTPS_PROXY`, and anvil sends its loopback hop to the kit's proxy through
+`HTTP_PROXY` when that is set: set `NO_PROXY=127.0.0.1` for a test run behind a proxy.
+
+**Also breaking:** a live EVM `fork()` takes an http(s) `rpcUrl` only, as recording always did; a
+WebSocket (`ws://`, `wss://`) or IPC endpoint, which anvil's `--fork-url` took, is refused.
+
 ### Solana Testnet
 
 - **Added** (Solana): **Solana Testnet** (`solana-testnet`, also `testnet`), a supported chain of
@@ -250,7 +789,8 @@ nothing moves.
   name is refused on it. The built-in public endpoint is Solana's own, which is slow to read
   accounts (up to a minute for one request), so the command waits up to 120 s for each of its
   answers where every other endpoint gets 8 s: a simulation with no `--rpc-url` takes a minute or
-  two there.
+  two there. A send still gives 8 s to the accounts it reads only to report what it moved, since
+  a blockhash lives about a minute; past that it sends without that report.
 - The chain pages and the agent skills mark Solana Testnet as a testnet, and every message naming
   the supported chains names it after the mainnets.
 
@@ -261,6 +801,13 @@ nothing moves.
   price with a `priceLimit` of `0` fails the cook paying the lower-key token (dividing by zero; on
   Phoenix, paying the base), and otherwise skips the pool, returning `0` having moved nothing, which
   `minOut` does not catch. Only the `…AtLimit` forms read `0` as the pool's own bound.
+- **Added**: example programs for Uniswap V3 exact-output swaps, a multi-hop path, and opening and
+  managing a position (adding only to a position the Pot owns); Aave V3 credit delegation;
+  Compound III borrow and repay; Morpho Blue borrow and repay; Pendle PT and YT trades, and minting
+  and redeeming; and a Balancer V2 batch swap and flash cycle. They are in `sauce-swaps` and
+  `sauce-protocols`, and each runs on Ethereum's state.
+- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
+  them.
 
 ### Solana venues in TypeScript
 
@@ -274,6 +821,21 @@ nothing moves.
   `checked_ceil_div` fails on that case, but the fragment gave a positive quote, so a swap scored
   from it was sent with `min_out` 1 and aborted on-chain, burning the fee. `referenceQuote`
   already refused it.
+- **Fixed** (Solana): the Huma adapter now checks the pool's status everywhere, not only in
+  `referenceQuote`. `fetchPoolConfig` refuses a pool that is not On, so a route drops it, and the
+  quote it emits reads the live status byte and quotes `0` unless the pool is On. Before, a pool
+  switched Off was still quoted, and the deposit or withdrawal built for it failed on chain, costing
+  the transaction fee.
+- **Fixed** (Solana): Denali's swap passes the event authority and the program, which its upgraded
+  program requires. Denali's program was upgraded at slot 454,575,418 to take Anchor's event-CPI
+  accounts after the swap's twelve: the event authority (`3uT9abA5xgW3a499E4Qq5b19Dhy7jMmWFBEkcrW4twXd`,
+  the program's `["__event_authority"]` PDA), then the program itself, both read-only. With only the
+  twelve, the program fails before it moves anything (`AccountNotEnoughKeys`). `@sauce/router`'s
+  `denali` now takes a slot of seven, `[program, pool, vaultA, vaultB, oracle, globalConfig,
+eventAuthority]`, and passes both. `routerSvmAccountOrder("denali", …)` ends with
+  `eventAuthority` and `program`, which a list for `denaliCpi` or `denaliData` must carry. The
+  address is exported as `DENALI_EVENT_AUTHORITY` from `@eco-incorp/sauce/svm`. The instruction data
+  is unchanged.
 
 - **Fixed** (Solana): `fetchInvariantPoolConfig`'s Y→X window takes every initialized tick the
   swap crosses. Walking up, it resumed the search one tick spacing past the tick it had found, and
@@ -310,6 +872,31 @@ nothing moves.
   and `svmPhoenixSlot` and `svmDlmmSlot` take the venue's program first. `SVM_KEYED_VENUES`,
   `SVM_PRICE_LIMIT_VENUES` and `SVM_SLOT_VENUES` are replaced by
   `svmKeyedVenue(namespace, cluster)`, `svmPriceLimitVenues(cluster)` and `svmSlotVenues(cluster)`.
+
+### License
+
+- **Changed: the package is licensed under the Eco, Inc. Proprietary License 1.1**, which replaces
+  the Eco, Inc. Proprietary License 1.0 for every version published, earlier ones included. It
+  separates the SDK Components (the SDK, the command, the MCP server, the agent skills, the
+  documentation, the examples and the interface definitions of the compiler, the engines and the
+  Kitchens) from the Core Components (the compiler, the engines, the Kitchens and the contracts
+  themselves), and its Additional Use Grant lets you use, modify and distribute the SDK
+  Components, and run and redistribute unmodified Core Components, solely to create, compile,
+  test, simulate and execute programs for use with the Authorized Contracts: the contracts Eco,
+  Inc. publishes at docs.eco.com or in the package's [deployments reference](reference/deployments.md),
+  and every Pot. Annex A names the files of the package that are Core Components.
+  [LICENSE.md](../LICENSE.md) is the license itself.
+- **Added: `THIRD_PARTY_NOTICES.md`** lists the third-party code, math and interface definitions
+  the package carries, with each one's source, license and copyright holder, and the license
+  texts. The Hylo venue's quote module, a transliteration of Hylo's SDK, carries the Mozilla
+  Public License 2.0 notice that license requires, and the package ships its source,
+  `sdk/src/svm/venues/hylo/index.ts`.
+- **Changed: the Solana venue modules' third-party sources are attributed, and DLMM, HumidiFi
+  and Manifest helpers are rewritten from specifications.** `THIRD_PARTY_NOTICES.md` adds the
+  sources of the Meteora DBC and DAMM v2, Crema, Jupiter Perps, Bonkswap, Carrot and Mercurial
+  modules, each under its license, and the venue files' comments name them. The DLMM bin math
+  (shared by Meteora DLMM and Saros DLMM), HumidiFi's swap-data encoding and Manifest's order-book
+  walk are new implementations written from specifications, with the same results.
 
 ## SDK 0.99.17 — 2026-10-27
 
@@ -528,11 +1115,6 @@ cook cannot run there`, as `tx`, `simulate` and `run` already did, rather than t
   each, forgetting the least recently used first, and `fetchPoolConfig` forgets a pair it refuses.
   Before, each key minted stayed in memory for the life of the process. A key that is no longer
   held fails with `unknown discovery key`; minting it again restores it.
-
-### The agent skills and the manual
-
-- **Removed**: the examples ported from protocols' Solidity examples, and the guide that compared
-  them.
 
 **Also breaking:**
 

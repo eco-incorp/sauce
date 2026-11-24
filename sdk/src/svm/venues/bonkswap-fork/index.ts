@@ -25,7 +25,8 @@
  *     `version:"0.1.1"`, 12 live `Pool` pools measured same date, no
  *     `PoolV2` type in its IDL at all.
  *   - Also cross-checked against the official BonkLabs Jupiter-AMM-interface
- *     integration (github.com/BonkLabs/bonkswap-amm-integration, public,
+ *     integration (github.com/BonkLabs/bonkswap-amm-integration, licensed
+ *     under ISC as declared in its package.json, see THIRD_PARTY_NOTICES.md;
  *     TypeScript, `amm.ts`) for the reference quote math and account roles —
  *     see ./ladder.ts's header for the ONE place that reference gets the
  *     real program's rounding wrong (proven via real-CPI, not assumed).

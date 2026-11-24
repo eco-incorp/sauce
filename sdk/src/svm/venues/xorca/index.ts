@@ -1,10 +1,9 @@
 /**
  * XOrca (SvmRoute ladder fragment) — Orca's liquid-staking wrapper: stake
  * ORCA into a single global vault and mint xORCA shares at the vault's live
- * ratio. No on-chain IDL is published, but the program (`orca-so/xorca` on
- * GitHub, Pinocchio + shank-generated) is open source; this adapter is a
- * direct, byte-verified port of its instruction/state layout and math, NOT a
- * reverse-engineered approximation.
+ * ratio. No on-chain IDL is published; the account and instruction layout
+ * below was confirmed against the deployed program's live accounts and real
+ * mainnet transactions.
  *
  * ── Why only ONE direction is a venue (see file header item below) ──
  *
@@ -64,25 +63,6 @@
  * and that `State.bump`/`State.vault_bump` decoded from the live account
  * (250/254) equal the bumps those PDA derivations produce.
  *
- * ── Quote math — an EXACT port, not an approximation (`util/math.rs`) ──
- *
- * `convert_orca_to_xorca(orcaIn, nonEscrowedOrca, xorcaSupply)`:
- *   nonEscrowedOrca == 0 || xorcaSupply == 0 -> return orcaIn (1:1 bootstrap,
- *     dead in practice — the live pool has ~7.45M ORCA / ~4.77M xORCA, see
- *     below — kept for completeness, never reachable via this ladder's
- *     `qXorca` because both denominators below already carry the +100
- *     virtual offset and can never be 0).
- *   else -> floor(orcaIn * (xorcaSupply + 100) / (nonEscrowedOrca + 100))
- * `nonEscrowedOrca = vault.amount - state.escrowed_orca_amount` (the vault
- * ATA's live SPL balance minus the ORCA currently reserved for pending
- * `Unstake` claims — `escrowed_orca_amount` is NOT itself a vault-balance
- * concept, it lives on the `State` account).
- * VIRTUAL_XORCA_SUPPLY = VIRTUAL_NON_ESCROWED_ORCA_AMOUNT = 100 (raw base
- * units, ERC-4626-style inflation-attack offset) — negligible at the pool's
- * real scale (millions of raw-unit-scaled tokens) but ported EXACTLY, not
- * dropped, so this fragment's output matches the deployed program to the
- * LAST WEI, not just approximately.
- *
  * Because minting shares does not touch any OTHER trader's counterparty
  * reserve (staking is impact-FREE: after a stake of x, vault and supply both
  * grow by the same relative amount, so the very next wei stakes at the exact
@@ -106,21 +86,6 @@
  * rate (out/in) is IDENTICAL to 10 significant figures across all four sizes
  * (640,440.7245 per 1e6 in, every time), confirming the analytical
  * flat-curve claim above, not just asserting it.
- *
- * Cross-checked against 3 REAL mainnet `Stake` transactions (getTransaction,
- * 2026-07-31), applying THIS SAME formula to the CURRENT (not historical)
- * snapshot above (state moves only via subsequent stakes/unstakes, so a
- * residual is expected and is the ENTIRE explanation for the gap — see the
- * relative errors, all three sub-0.005%, growing with how many slots have
- * elapsed since each transaction, exactly as vault drift would predict):
- *   staked=1,304,812        observed_mint=835,664         predicted=835,654    (-10,    -0.0012%, slot 436440052, ~newest)
- *   staked=48,000,000       observed_mint=30,742,058      predicted=30,741,154 (-904,   -0.0029%, slot 436425717)
- *   staked=10,787,576,727   observed_mint=6,909,119,305   predicted=6,908,803,454 (-315,851, -0.0046%, slot 436385363, ~oldest/most drift)
- * The residual growing monotonically with transaction age (not with size) is
- * exactly the signature of state drift, not formula error — this is the
- * strongest available evidence the port is bit-exact without a full
- * historical-state replay (public RPC does not serve arbitrary historical
- * account snapshots).
  *
  * ── CU (`the consuming app SVM CU-budget module`'s `CU_FAMILIES.xorca`) ──
  *

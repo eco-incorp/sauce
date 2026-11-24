@@ -49,11 +49,13 @@ export {
 export type { MeteoraDlmmPoolConfig, DlmmWindow, DlmmBin } from "./meteora-dlmm/index.js";
 export {
   priceFromId as dlmmPriceFromId,
+  binArrayIndex as dlmmBinArrayIndex,
+} from "./meteora-dlmm/bin-math.js";
+export {
   pow as dlmmPow,
   amountOut as dlmmAmountOut,
   amountIn as dlmmAmountIn,
-  binArrayIndex as dlmmBinArrayIndex,
-} from "./meteora-dlmm/bin-math.js";
+} from "./dlmm-math.js";
 export * from "./manifest/index.js";
 export * from "./meteora-damm-v2/index.js";
 export * from "./saber-stableswap/index.js";
@@ -219,6 +221,7 @@ export {
   DENALI_PROGRAM_ID,
   DENALI_ORACLE_PROGRAM_ID,
   DENALI_GLOBAL_CONFIG,
+  DENALI_EVENT_AUTHORITY,
   OFF_MINT_A as DENALI_OFF_MINT_A,
   OFF_MINT_B as DENALI_OFF_MINT_B,
   OFF_VAULT_A as DENALI_OFF_VAULT_A,

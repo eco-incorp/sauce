@@ -140,6 +140,41 @@ describe("the chain a send is for", () => {
     ).rejects.toThrow("the plan's cursor is solana-devnet's, not solana's");
   });
 
+  it("refuses a plan that names an engine no release runs, before any endpoint is reached", async () => {
+    const solana = requireChain("solana");
+    const cursorNaming = (engine: SvmAddress): string =>
+      encodeCursor({
+        chain: solana,
+        owner: getBase58Decoder().decode(new Uint8Array(32).fill(7)) as SvmAddress,
+        salt: `0x${"11".repeat(32)}`,
+        via: "kitchen",
+        engine,
+        tail: [],
+        lookupTables: [],
+        pot: "there",
+        tokenAccounts: [],
+        payload: new Uint8Array([1]),
+        labels: [],
+      });
+    // The engine a cook names signs for the Pot into whatever program it is: a key no release names,
+    // and the engine of a release whose programs this SDK's do not run (v12-svm 1.3.0's).
+    const unknown = getBase58Decoder().decode(new Uint8Array(32).fill(9)) as SvmAddress;
+    const older = "2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT" as SvmAddress;
+    for (const [engine, why] of [
+      [unknown, /engine \w+ is not an engine release this SDK knows/],
+      [older, /engine 2HH8\w+ \(v12-svm 1\.3\.0\), which runs compiler/],
+    ] as const) {
+      await expect(
+        sendCommand({
+          chain: solana,
+          rpcUrl: "http://127.0.0.1:9/",
+          transactions: [],
+          cursor: cursorNaming(engine),
+        }),
+      ).rejects.toThrow(why);
+    }
+  });
+
   // solana-devnet is a supported chain: a signed Solana transaction sent there passes the support
   // gate and goes on to the endpoint, where (nothing listening) it fails, sending nothing.
   it("lets a signed send on solana-devnet past the support gate", async () => {

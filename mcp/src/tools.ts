@@ -37,6 +37,7 @@ import {
   type CanonicalChain,
   CHAIN_SUPPORT_NEW_ISSUE_URL,
   chainSupport,
+  CliError,
   type CliFiles,
   type CommandOutput,
   compileCommand,
@@ -76,7 +77,9 @@ import {
   parseWei,
   plannedTransactions,
   poolsCommand,
+  cookPotOf,
   potCommand,
+  potRouterStatus,
   potState,
   POT_UNCHECKED,
   potTarget,
@@ -106,13 +109,16 @@ import {
   type SvmCookInput,
   svmPoolsCommand,
   svmPotCommand,
-  svmPotExists,
+  svmPotFacts,
+  svmPotState,
+  svmPotWithFacts,
   svmPotTokenAccounts,
   svmSimulateCommand,
   svmTxCommand,
   svmVerifyCommand,
   tokenGiven,
   txCommand,
+  unitsCommand,
   UsageError,
   verifyCommand,
   withoutShebang,
@@ -453,10 +459,10 @@ const TOKEN_AMOUNTS = z
   .optional()
   .describe(
     "Each <TOKEN|address>:<amount>: a symbol the chain registers or a 0x token address, and " +
-      "the amount in whole tokens (USDC:1.5 is 1.5 USDC, exact through the token's decimals; " +
-      "USDC:1500000 is 1.5 million USDC, which notes point out), or in base units with a " +
-      "trailing n as a bigint is written (USDC:1500000n is 1.5 USDC); ETH:<amount> is the " +
-      "chain's native currency.",
+      "the amount in whole tokens (USDC:1.5 is 1.5 USDC, exact through the token's decimals, and " +
+      "USDC:1.2345678 refused, never rounded; USDC:1500000 is 1.5 million USDC, which notes point " +
+      "out), or in base units with a trailing n as a bigint is written (USDC:1500000n is 1.5 " +
+      "USDC); ETH:<amount> is the chain's native currency.",
   );
 
 /** How many rehearsals one `sauce_simulate` call may hold. */
@@ -1203,6 +1209,7 @@ export const TOOL_NAMES = [
   "sauce_chains",
   "sauce_globals",
   "sauce_price",
+  "sauce_units",
   "sauce_pools",
   "sauce_compile",
   "sauce_actions",
@@ -1279,13 +1286,23 @@ export function toolRegistrar(server: McpServer, context: ToolContext): ToolRegi
           if (error instanceof PreviewChainError) return refusedResult(error.refusal, reach.scrub);
           // A public endpoint's failure (a rate limit) is the one an endpoint of your own fixes.
           const said = reach.publicNotes();
+          // What the failure's setting adds (`CliError#notes`), as the command prints it after it.
+          const noted =
+            error instanceof CliError
+              ? error.notes.map((note) => errorText(note, reach.scrub))
+              : [];
 
           return {
             isError: true,
             content: [
               {
                 type: "text",
-                text: [errorText(error, reach.scrub), ...said, ...kept.map(reach.scrub)].join("\n"),
+                text: [
+                  errorText(error, reach.scrub),
+                  ...noted,
+                  ...said,
+                  ...kept.map(reach.scrub),
+                ].join("\n"),
               },
             ],
           };
@@ -1392,7 +1409,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "Lists the names a program on one chain may use without declaring them — use it before " +
         "writing a program, to call tokens and protocols by name instead of by address: token " +
         "symbols with their addresses and decimals, protocol namespaces with each contract's " +
-        "address (with `protocol`, also its methods), on Solana the venue namespaces " +
+        "address, the interfaces a program binds to an address (with `protocol`, the methods of " +
+        "the namespace or interface it names), on Solana the venue namespaces " +
         "(`venues`: Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut) " +
         "and eight more, the pool found by key where the venue finds pools by key " +
         "(Orca.Whirlpool.pool(USDC, WSOL, 4)), each pool's accounts derived as the cook is " +
@@ -1450,8 +1468,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
           ...(args.search === undefined ? {} : { search: args.search }),
         }),
       );
-      const protocols = output.json.protocols as
-        Array<{ contracts?: Array<Record<string, unknown>> }> | undefined;
+      // The command lists methods only for the namespace or interface `protocol` names: every
+      // namespace's and interface's together are over a megabyte on Base.
       const tokens = output.json.tokens as unknown[] | undefined;
       // A page of tokens: `stocks` on Ethereum is over a thousand.
       const offset = args.offset ?? 0;
@@ -1470,24 +1488,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
                   }
                 : {}),
             };
-      // Every namespace's methods are tens of kilobytes: they come with `protocol`, for one.
-      return {
-        ...output,
-        json: {
-          ...output.json,
-          ...page,
-          ...(protocols === undefined
-            ? {}
-            : {
-                protocols: protocols.map((namespace) => ({
-                  ...namespace,
-                  contracts: (namespace.contracts ?? []).map(
-                    ({ methods: _methods, ...contract }) => contract,
-                  ),
-                })),
-              }),
-        },
-      };
+      return { ...output, json: { ...output.json, ...page } };
     },
   );
 
@@ -1649,6 +1650,61 @@ export function registerTools(server: McpServer, context: ToolContext): void {
 
       return { json, notes: now.notes };
     },
+  );
+
+  tool(
+    "sauce_units",
+    {
+      title: "Turn an amount into a token's smallest unit, or back",
+      description:
+        "An amount of one token in whole tokens and in its smallest unit, the integer a " +
+        "program's main takes as args: 1.5 USDC is 1500000 on Base (6 decimals). `amount` is " +
+        "whole tokens (1.5, 1000) or base units ending in n (1500000n), as fund writes them; a " +
+        "bare integer at or above 10^decimals is read as whole tokens and noted. The decimals " +
+        "come from the registries the compile resolves (a symbol in any case: usdc is USDC); a " +
+        "token the chain has no symbol for is named by its 0x address or Solana mint, with " +
+        "`decimals`. An amount that would need rounding (a digit other than 0 past the " +
+        "token's decimals: 1.5000000 USDC is exact, 1.2345678 USDC is not), or more than the " +
+        "chain's token amounts hold, is refused, never rounded. Reads nothing.",
+      input: {
+        chain: chainRef,
+        amount: z
+          .string()
+          .min(1)
+          .max(100)
+          .describe("Whole tokens (1.5), or the smallest unit ending in n (1500000n)."),
+        token: z
+          .string()
+          .min(1)
+          .max(64)
+          .describe(
+            "A symbol the chain registers (USDC, in any case), or a token's 0x address or " +
+              "Solana mint with `decimals`.",
+          ),
+        decimals: z
+          .number()
+          .int()
+          .min(0)
+          .max(99)
+          .optional()
+          .describe("The token's decimals, for a token named by address or mint."),
+      },
+      output: {
+        chain: z.string(),
+        token: z.string(),
+        decimals: z.number(),
+        amount: z.string(),
+        baseUnits: z.string(),
+      },
+      annotations: PURE,
+    },
+    (args) =>
+      unitsCommand({
+        chain: parseChain(String(args.chain), "chain"),
+        amount: args.amount,
+        token: args.token,
+        ...(args.decimals === undefined ? {} : { decimals: args.decimals }),
+      }),
   );
 
   tool(
@@ -2178,7 +2234,8 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       description:
         "A Pot is the owner's on-chain account that runs their programs and holds their " +
         "tokens. Its address is known before it exists: the released Kitchen derives it from " +
-        "(owner, salt). Returns `pot` and the unsigned deployment — on an EVM chain " +
+        "(owner, salt) — the current release's Pot, or an earlier release's Pot the owner already " +
+        "has there, which cooks keep using. Returns `pot` and the unsigned deployment — on an EVM chain " +
         "Kitchen.deployPot as { to, data, value }, which any account may send (the Pot is the " +
         "owner's either way); on Solana the Kitchen's create_pot `instruction`, which the owner " +
         "signs. With an endpoint it also says `deployed` (null without one) — when true, do not " +
@@ -2186,7 +2243,11 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         "fee (the least a cook's value can be) and the Pot's balance of the native currency and " +
         "of every token the chain registers but its tokenized stocks; on Solana the Pot's " +
         "associated token account for each registered mint but the tokenized stocks, whether it " +
-        "exists, and its balance. On a preview chain the Pot " +
+        "exists, and its balance. Without an endpoint, where the Pot store records an earlier " +
+        "release's Pot for the owner and salt, nothing says which of the two is theirs: the result " +
+        "has `candidates` (this release's Pot and the earlier one, with the record's file, " +
+        "transaction and block hash), no `pot` and no deployment, and sauce_tx and " +
+        "sauce_signed_cook refuse until `pot` names one or an endpoint is given. On a preview chain the Pot " +
         "is predicted and read, and the deployment is left out: `refused` says why, and how to " +
         `request the chain. ${UNSIGNED} ${SUPPORTED_ONLY}`,
       input: {
@@ -2201,10 +2262,18 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         rpcUrl: RPC_URL,
       },
       output: {
-        pot: z.string(),
+        pot: z.string().optional(),
         owner: z.string(),
         salt: z.string(),
         deployed: z.boolean().nullable(),
+        // The engine a cook on the Pot names, the Router a deployed Pot runs, and (Solana) the engine
+        // that owns an existing Pot's account (`ownerEngine`, which cooks name only where it runs this
+        // SDK's programs) or, where that is no engine this SDK knows, the program that does
+        // (`ownerProgram`: no cook is built on it, so it has no `engine`).
+        engine: z.string().optional(),
+        ownerEngine: z.string().optional(),
+        router: z.string().optional(),
+        ownerProgram: z.string().optional(),
         refused: REFUSED.optional(),
       },
       annotations: READS_CHAIN,
@@ -2220,30 +2289,47 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       if (chain.kind === "svm") {
         const target = { chain, owner: parsePubkey("owner", args.owner), ...salt };
         const output = await svmPotCommand(target);
-        const deployed = rpcUrl === undefined ? null : await svmPotExists(target, rpcUrl);
+        const state = rpcUrl === undefined ? undefined : await svmPotState(target, rpcUrl);
+        const deployed = state === undefined ? null : state.created;
+        const facts =
+          state === undefined ? undefined : svmPotFacts(String(output.json.pot), state.read);
         const tokenAccounts = reading ? await svmPotTokenAccounts(target, rpcUrl!) : undefined;
 
         return {
           json: {
-            ...output.json,
+            // `engine` is the engine a cook on the Pot names, as for a Pot of the EVM chains: where
+            // an account exists its own facts say it (the owner where it runs this SDK's programs,
+            // the installed engine where it does not, none where no engine this SDK knows owns it),
+            // and the prediction's installed engine stands for a Pot not created yet.
+            ...(facts === undefined ? output.json : svmPotWithFacts(output.json, facts)),
             deployed,
             ...(tokenAccounts === undefined ? {} : { tokenAccounts }),
           },
           notes: [
             ...(output.notes ?? []),
             ...(deployed === null ? [unchecked] : deployed ? [deployedNote] : []),
+            // What owns the Pot's address, as `sauce pot` says it: lamports only, an unknown program,
+            // an earlier engine.
+            ...(facts?.notes ?? []),
           ],
         };
       }
       const owner = parseAddress("owner", args.owner);
-      const output = potCommand({ chain, owner, ...salt });
-      const pot = output.json.pot as Address;
       const client = rpcUrl === undefined ? undefined : await connect(rpcUrl, chain);
-      const state = client === undefined ? undefined : await potState(client, pot);
+      const at = await cookPotOf(chain, { owner, ...salt }, client);
+      const output = potCommand({ chain, owner, ...salt }, at);
+      const routerStatus = await potRouterStatus(client, at);
+      const pot = at.pot;
+      const state =
+        at.deployed === undefined
+          ? undefined
+          : { deployed: at.deployed, ...(at.owner === undefined ? {} : { owner: at.owner }) };
       const deployed = state === undefined ? null : state.deployed;
       const fee = client === undefined ? undefined : await kitchenFee(client, chain);
-      // The deployment returned is refused where the Kitchen would put the Pot elsewhere.
-      if (client !== undefined && state !== undefined) {
+      // The deployment returned is refused where the Kitchen would put the Pot elsewhere. An earlier
+      // release's Pot (its output names its `release`) has none, and `cookPotOf` has told it from
+      // the chain already.
+      if (client !== undefined && state !== undefined && output.json.release === undefined) {
         await requirePot(client, chain, { owner, ...salt, pot, deployed: state.deployed });
       }
       const held =
@@ -2255,6 +2341,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
       return {
         json: {
           ...output.json,
+          ...(routerStatus.router === undefined ? {} : { router: routerStatus.router }),
           deployed,
           ...(fee === undefined
             ? {}
@@ -2282,6 +2369,7 @@ export function registerTools(server: McpServer, context: ToolContext): void {
         },
         notes: [
           ...(output.notes ?? []),
+          ...routerStatus.notes,
           ...(deployed === null ? [unchecked, POT_UNCHECKED] : deployed ? [deployedNote] : []),
           ...(held === undefined || nativeToken === undefined
             ? []

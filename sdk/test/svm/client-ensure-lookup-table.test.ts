@@ -9,7 +9,6 @@ import { address, generateKeyPairSigner, getAddressDecoder, some } from "@solana
 import type { Address } from "@solana/kit";
 import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-table";
 import {
-  createSauceSvmClient,
   deriveExecutionFeeConfigPda,
   derivePotPda,
   lookupTableAddresses,
@@ -17,6 +16,7 @@ import {
   TRANSACTION_SIZE_LIMIT,
   type AccountResolution,
 } from "../../src/svm/index.js";
+import { createSauceSvmClient } from "../../src/svm/client.js";
 import { getTransactionSize } from "../../src/svm/transaction.js";
 
 const RPC_URL = "http://127.0.0.1:65535/";

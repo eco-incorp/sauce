@@ -7,7 +7,9 @@
  * The ONE exception is the `sauce` command's and its MCP server's list of public endpoints,
  * `sdk/src/cli/public-rpcs.ts`, which they read a chain through when given none: exactly that file
  * may hold RPC URLs, and nothing a browser loads may import it — no module outside `sdk/src/cli/`,
- * and no package export (`cli/` is in none).
+ * and no package export (`cli/` is in none). Beside it, CI's workflow may write the public test
+ * fixture endpoints on the one line a fork's run takes them from (`FORK_FIXTURE_RPCS`); nothing
+ * ships a workflow.
  *
  * This guard scans the TRACKED source that ships or that a developer copies from — `sdk/src` (the
  * `sauce` command in `sdk/src/cli` included), `sdk/scripts`, `actions/src`, `dev-tools/src`,
@@ -29,7 +31,7 @@
  * The npm registry is the `sauce` command's one other network access, and one module names it and
  * reads it, `sdk/src/cli/npm-registry.ts`: for `sauce update` when it runs, and for the update
  * check's refresh (`update-check.ts`), in a process of its own. Only the command's own modules
- * import either, and only its executable (`main.ts`) creates the check, so neither a browser nor a
+ * import either, and only its process wiring (`start.ts`) creates the check, so neither a browser nor a
  * library import ever reaches the registry. npm reaches it too, as the user's npm configuration
  * says, where the command runs npm: `sauce init --install`, the package managers of `sauce update`,
  * and `npm ci` into a runtime folder (`runtime.ts`, which only the executable gives the process).
@@ -74,6 +76,16 @@ const CHILD_PROCESS =
 const SKIP = new Set(["pnpm-lock.yaml"]);
 /** The `sauce` command's public endpoints: the one file that may hold RPC URLs. */
 const PUBLIC_RPCS = "sdk/src/cli/public-rpcs.ts";
+/**
+ * CI's fixture endpoints for a fork's run, which GitHub gives no repository variable: the
+ * `CHAIN_FIXTURE_RPC_CONFIG` variable's public, keyless JSON as a literal, on the workflow's one line
+ * that resolves it, taken only under the condition `.github/actions/setup` takes the public engine
+ * artifacts on, and the variable everywhere else.
+ */
+const FORK_FIXTURE_RPCS = {
+  file: ".github/workflows/ci.yml",
+  line: /^ {2}CHAIN_FIXTURE_RPC_CONFIG: \$\{\{ \(github\.event\.pull_request\.head\.repo\.fork == true \|\| github\.repository_owner != 'eco-incorp'\) && '\{[^']*\}' \|\| vars\.CHAIN_FIXTURE_RPC_CONFIG \}\}$/,
+};
 /** Shipped code, the `sauce` command included: must not read the environment at all. */
 const SHIPPED_ROOTS = ["sdk/src", "actions/src", "dev-tools/src"];
 /** Where the registry may be named and read, and who may import the modules that read it. */
@@ -86,16 +98,16 @@ const REGISTRY_READERS = {
     "sdk/src/cli/update.ts",
   ],
   "update-check": [
-    "sdk/src/cli/main.ts",
+    "sdk/src/cli/start.ts",
     "sdk/src/cli/mcp.ts",
     "sdk/src/cli/run.ts",
     "sdk/src/cli/update-refresh.ts",
   ],
-  update: ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts"],
+  update: ["sdk/src/cli/start.ts", "sdk/src/cli/run.ts"],
   "update-refresh": [],
 } as const;
-/** Every workspace's shipped source, the MCP server's included: what may import a registry reader. */
-const IMPORTING_ROOTS = [...["sdk/src", "actions/src", "dev-tools/src"], "mcp/src"];
+/** Every workspace's shipped source, the MCP server's included. */
+const IMPORTING_ROOTS = [...SHIPPED_ROOTS, "mcp/src"];
 /** Shipped files the environment scan must include, so a move cannot take the command out of it. */
 const SHIPPED_REQUIRED = ["sdk/src/cli/main.ts", "sdk/src/cli/run.ts", "sdk/src/cli/commands.ts"];
 /**
@@ -238,10 +250,18 @@ describe("the SDK ships no RPC endpoints", () => {
   });
 
   it("no scanned file embeds an RPC-shaped URL, but the command's list of public ones", () => {
+    // CI's fork-only fixture line is allowed where it is, and is what it claims to be.
+    const ci = sources.get(FORK_FIXTURE_RPCS.file)!.split("\n");
+    const forkLines = ci.flatMap((line, index) =>
+      FORK_FIXTURE_RPCS.line.test(line) ? [index + 1] : [],
+    );
+    expect(forkLines).toHaveLength(1);
+    const forkLine = `${FORK_FIXTURE_RPCS.file}:${forkLines[0]}: `;
     const found = [...sources]
       .filter(([file]) => file !== PUBLIC_RPCS)
       .flatMap(([file, text]) => rpcFindings(text).map((finding) => `${file}:${finding}`));
-    expect(found).toEqual([]);
+    expect(found.filter((finding) => !finding.startsWith(forkLine))).toEqual([]);
+    expect(found.some((finding) => finding.startsWith(forkLine))).toBe(true);
     // The exception is scanned, and is what it claims to be: not an empty file that moved.
     expect(rpcFindings(sources.get(PUBLIC_RPCS)!).length).toBeGreaterThan(30);
   });
@@ -314,11 +334,10 @@ describe("the SDK ships no RPC endpoints", () => {
       "sdk/src/cli/update-check.ts",
       "sdk/src/cli/update.ts",
     ]);
-    // The runtime folder's installer is the process's only where the executable gives it.
     const importers = [...shipped]
       .filter(([, text]) => /from\s+["']\.\/runtime\.js["']/.test(text))
       .map(([file]) => file);
-    expect(importers).toEqual(["sdk/src/cli/main.ts"]);
+    expect(importers).toEqual(["sdk/src/cli/start.ts"]);
   });
 
   it("shipped code names the npm registry only in the module that reads it", () => {
@@ -334,9 +353,8 @@ describe("the SDK ships no RPC endpoints", () => {
     for (const [module, expected] of Object.entries(REGISTRY_READERS)) {
       const imports = new RegExp(String.raw`(?:from|import\()\s*["'][^"']*/${module}(?:\.js)?["']`);
       const found = [...shipped].filter(([, text]) => imports.test(text)).map(([file]) => file);
-      expect([module, found.sort()]).toEqual([module, [...expected]]);
+      expect([module, found.sort()]).toEqual([module, [...expected].sort()]);
     }
-    // The registry's only reads: `sauce update`'s packument, and the refresh's latest version.
     const reads = [...shipped].flatMap(([file, text]) =>
       [...text.matchAll(/\b(readPackument|readLatest|startDetached)\(/g)]
         .filter((match) => !/function\s+$/.test(text.slice(0, match.index)))
@@ -347,16 +365,14 @@ describe("the SDK ships no RPC endpoints", () => {
       "sdk/src/cli/update-check.ts: startDetached",
       "sdk/src/cli/update.ts: readPackument",
     ]);
-    // The check and the updater are created by the executable alone: a module that imports
-    // `run.ts` (a test, the skills checker) gets neither, so it reaches no registry.
     const created = [...shipped].flatMap(([file, text]) =>
       [...text.matchAll(/\b(nodeUpdateCheck|nodeUpdater)\(/g)]
         .filter((match) => !/function\s+$/.test(text.slice(0, match.index)))
         .map((match) => `${file}: ${match[1]}`),
     );
     expect(created.sort()).toEqual([
-      "sdk/src/cli/main.ts: nodeUpdateCheck",
-      "sdk/src/cli/main.ts: nodeUpdater",
+      "sdk/src/cli/start.ts: nodeUpdateCheck",
+      "sdk/src/cli/start.ts: nodeUpdater",
     ]);
   });
 

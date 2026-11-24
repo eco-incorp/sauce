@@ -1,6 +1,587 @@
 {
   "abi": [
     {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "collect",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "amount0Requested",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1Requested",
+          "type": "uint128"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "collect",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "amount0Requested",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1Requested",
+          "type": "uint128"
+        },
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "collectFees",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint128"
+        },
+        {
+          "name": "amount1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "factory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "factoryRegistry",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "fee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "feeGrowthGlobal0X128",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "feeGrowthGlobal1X128",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "flash",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "gauge",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "gaugeFees",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "token0",
+          "type": "uint128"
+        },
+        {
+          "name": "token1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getRewardGrowthInside",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "_rewardGrowthGlobalX128",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rewardGrowthInside",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "increaseObservationCardinalityNext",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "observationCardinalityNext",
+          "type": "uint16"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "initialize",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_factory",
+          "type": "address"
+        },
+        {
+          "name": "_token0",
+          "type": "address"
+        },
+        {
+          "name": "_token1",
+          "type": "address"
+        },
+        {
+          "name": "_tickSpacing",
+          "type": "int24"
+        },
+        {
+          "name": "_factoryRegistry",
+          "type": "address"
+        },
+        {
+          "name": "_sqrtPriceX96",
+          "type": "uint160"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "lastUpdated",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "liquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "maxLiquidityPerTick",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "amount",
+          "type": "uint128"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "uint256"
+        },
+        {
+          "name": "amount1",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "nft",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "observations",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "blockTimestamp",
+          "type": "uint32"
+        },
+        {
+          "name": "tickCumulative",
+          "type": "int56"
+        },
+        {
+          "name": "secondsPerLiquidityCumulativeX128",
+          "type": "uint160"
+        },
+        {
+          "name": "initialized",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "observe",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "secondsAgos",
+          "type": "uint32[]"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tickCumulatives",
+          "type": "int56[]"
+        },
+        {
+          "name": "secondsPerLiquidityCumulativeX128s",
+          "type": "uint160[]"
+        }
+      ]
+    },
+    {
+      "name": "periodFinish",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "positions",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidity",
+          "type": "uint128"
+        },
+        {
+          "name": "feeGrowthInside0LastX128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthInside1LastX128",
+          "type": "uint256"
+        },
+        {
+          "name": "tokensOwed0",
+          "type": "uint128"
+        },
+        {
+          "name": "tokensOwed1",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "rewardGrowthGlobalX128",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rewardRate",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rewardReserve",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "rollover",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setGaugeAndPositionManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_gauge",
+          "type": "address"
+        },
+        {
+          "name": "_nft",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
       "name": "slot0",
       "type": "function",
       "stateMutability": "view",
@@ -33,7 +614,60 @@
       ]
     },
     {
-      "name": "liquidity",
+      "name": "snapshotCumulativesInside",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tickCumulativeInside",
+          "type": "int56"
+        },
+        {
+          "name": "secondsPerLiquidityInsideX128",
+          "type": "uint160"
+        },
+        {
+          "name": "secondsInside",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "stake",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "stakedLiquidityDelta",
+          "type": "int128"
+        },
+        {
+          "name": "tickLower",
+          "type": "int24"
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24"
+        },
+        {
+          "name": "positionUpdate",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "stakedLiquidity",
       "type": "function",
       "stateMutability": "view",
       "inputs": [],
@@ -45,14 +679,129 @@
       ]
     },
     {
-      "name": "fee",
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "zeroForOne",
+          "type": "bool"
+        },
+        {
+          "name": "amountSpecified",
+          "type": "int256"
+        },
+        {
+          "name": "sqrtPriceLimitX96",
+          "type": "uint160"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amount0",
+          "type": "int256"
+        },
+        {
+          "name": "amount1",
+          "type": "int256"
+        }
+      ]
+    },
+    {
+      "name": "syncReward",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "_rewardRate",
+          "type": "uint256"
+        },
+        {
+          "name": "_rewardReserve",
+          "type": "uint256"
+        },
+        {
+          "name": "_periodFinish",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "tickBitmap",
       "type": "function",
       "stateMutability": "view",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "",
+          "type": "int16"
+        }
+      ],
       "outputs": [
         {
           "name": "",
-          "type": "uint24"
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ticks",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "",
+          "type": "int24"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "liquidityGross",
+          "type": "uint128"
+        },
+        {
+          "name": "liquidityNet",
+          "type": "int128"
+        },
+        {
+          "name": "stakedLiquidityNet",
+          "type": "int128"
+        },
+        {
+          "name": "feeGrowthOutside0X128",
+          "type": "uint256"
+        },
+        {
+          "name": "feeGrowthOutside1X128",
+          "type": "uint256"
+        },
+        {
+          "name": "rewardGrowthOutsideX128",
+          "type": "uint256"
+        },
+        {
+          "name": "tickCumulativeOutside",
+          "type": "int56"
+        },
+        {
+          "name": "secondsPerLiquidityOutsideX128",
+          "type": "uint160"
+        },
+        {
+          "name": "secondsOutside",
+          "type": "uint32"
+        },
+        {
+          "name": "initialized",
+          "type": "bool"
         }
       ]
     },
@@ -89,6 +838,268 @@
         {
           "name": "",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "unstakedFee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint24"
+        }
+      ]
+    },
+    {
+      "name": "updateRewardsGrowthGlobal",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "Burn",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tickLower",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Collect",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "tickLower",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CollectFees",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Flash",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "paid0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "paid1",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "IncreaseObservationCardinalityNext",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "observationCardinalityNextOld",
+          "type": "uint16",
+          "indexed": false
+        },
+        {
+          "name": "observationCardinalityNextNew",
+          "type": "uint16",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Initialize",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160",
+          "indexed": false
+        },
+        {
+          "name": "tick",
+          "type": "int24",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Mint",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tickLower",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "tickUpper",
+          "type": "int24",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "amount0",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Swap",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount0",
+          "type": "int256",
+          "indexed": false
+        },
+        {
+          "name": "amount1",
+          "type": "int256",
+          "indexed": false
+        },
+        {
+          "name": "sqrtPriceX96",
+          "type": "uint160",
+          "indexed": false
+        },
+        {
+          "name": "liquidity",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "tick",
+          "type": "int24",
+          "indexed": false
         }
       ]
     }

@@ -42,8 +42,19 @@ function main() {
 
 ### `CFAForwarderABI`
 
-`import CFAForwarderABI from "./protocols/superfluid/CFAForwarderABI.json";` Speaks for: cfaForwarder.
+`import CFAForwarderABI from "./protocols/superfluid/CFAForwarderABI.json";` Speaks for: cfaForwarder. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Superfluid` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
 - `createFlow(address token, address sender, address receiver, int96 flowrate, bytes userData) returns (bool)`
-- `updateFlow(address token, address sender, address receiver, int96 flowrate, bytes userData) returns (bool)`
 - `deleteFlow(address token, address sender, address receiver, bytes userData) returns (bool)`
+- `getAccountFlowInfo(address token, address account) view returns (uint256 lastUpdated, int96 flowrate, uint256 deposit, uint256 owedDeposit)`
+- `getAccountFlowrate(address token, address account) view returns (int96 flowrate)`
+- `getBufferAmountByFlowrate(address token, int96 flowrate) view returns (uint256 bufferAmount)`
+- `getFlowInfo(address token, address sender, address receiver) view returns (uint256 lastUpdated, int96 flowrate, uint256 deposit, uint256 owedDeposit)`
+- `getFlowOperatorPermissions(address token, address sender, address flowOperator) view returns (uint8 permissions, int96 flowrateAllowance)`
+- `getFlowrate(address token, address sender, address receiver) view returns (int96 flowrate)`
+- `grantPermissions(address token, address flowOperator) returns (bool)`
+- `revokePermissions(address token, address flowOperator) returns (bool)`
+- `setFlowrate(address token, address receiver, int96 flowrate) returns (bool)`
+- `setFlowrateFrom(address token, address sender, address receiver, int96 flowrate) returns (bool)`
+- `updateFlow(address token, address sender, address receiver, int96 flowrate, bytes userData) returns (bool)`
+- `updateFlowOperatorPermissions(address token, address flowOperator, uint8 permissions, int96 flowrateAllowance) returns (bool)`

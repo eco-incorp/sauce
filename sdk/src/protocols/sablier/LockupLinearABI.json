@@ -1,6 +1,111 @@
 {
   "abi": [
     {
+      "name": "admin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "approve",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "burn",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "cancel",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "cancelMultiple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamIds",
+          "type": "uint256[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "claimProtocolRevenues",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "comptroller",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
       "name": "createWithDurations",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -72,6 +177,794 @@
       ]
     },
     {
+      "name": "createWithRange",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "recipient",
+              "type": "address"
+            },
+            {
+              "name": "totalAmount",
+              "type": "uint128"
+            },
+            {
+              "name": "asset",
+              "type": "address"
+            },
+            {
+              "name": "cancelable",
+              "type": "bool"
+            },
+            {
+              "name": "transferable",
+              "type": "bool"
+            },
+            {
+              "name": "range",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "start",
+                  "type": "uint40"
+                },
+                {
+                  "name": "cliff",
+                  "type": "uint40"
+                },
+                {
+                  "name": "end",
+                  "type": "uint40"
+                }
+              ]
+            },
+            {
+              "name": "broker",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "account",
+                  "type": "address"
+                },
+                {
+                  "name": "fee",
+                  "type": "uint256"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "getApproved",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getAsset",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getCliffTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "cliffTime",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "getDepositedAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depositedAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getEndTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "endTime",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "getRange",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "range",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "start",
+              "type": "uint40"
+            },
+            {
+              "name": "cliff",
+              "type": "uint40"
+            },
+            {
+              "name": "end",
+              "type": "uint40"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getRecipient",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getRefundedAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "refundedAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getSender",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "sender",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getStartTime",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "startTime",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "getStream",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "stream",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "sender",
+              "type": "address"
+            },
+            {
+              "name": "startTime",
+              "type": "uint40"
+            },
+            {
+              "name": "cliffTime",
+              "type": "uint40"
+            },
+            {
+              "name": "isCancelable",
+              "type": "bool"
+            },
+            {
+              "name": "wasCanceled",
+              "type": "bool"
+            },
+            {
+              "name": "asset",
+              "type": "address"
+            },
+            {
+              "name": "endTime",
+              "type": "uint40"
+            },
+            {
+              "name": "isDepleted",
+              "type": "bool"
+            },
+            {
+              "name": "isStream",
+              "type": "bool"
+            },
+            {
+              "name": "isTransferable",
+              "type": "bool"
+            },
+            {
+              "name": "amounts",
+              "type": "tuple",
+              "components": [
+                {
+                  "name": "deposited",
+                  "type": "uint128"
+                },
+                {
+                  "name": "withdrawn",
+                  "type": "uint128"
+                },
+                {
+                  "name": "refunded",
+                  "type": "uint128"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getWithdrawnAmount",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "withdrawnAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "isApprovedForAll",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "name": "operator",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isCancelable",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isCold",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isDepleted",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isStream",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isTransferable",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "isWarm",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "MAX_FEE",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "name",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "nextStreamId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "ownerOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "protocolRevenues",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "revenues",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "refundableAmountOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "refundableAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "renounce",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "safeTransferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "safeTransferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setApprovalForAll",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "operator",
+          "type": "address"
+        },
+        {
+          "name": "approved",
+          "type": "bool"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setComptroller",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newComptroller",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setNFTDescriptor",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newNFTDescriptor",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "statusOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "status",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "streamedAmountOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "streamedAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "supportsInterface",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "interfaceId",
+          "type": "bytes4"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "symbol",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "tokenURI",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "transferAdmin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAdmin",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferFrom",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "wasCanceled",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "result",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "type": "function",
       "stateMutability": "nonpayable",
@@ -92,16 +985,604 @@
       "outputs": []
     },
     {
-      "name": "cancel",
+      "name": "withdrawableAmountOf",
       "type": "function",
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
       "inputs": [
         {
           "name": "streamId",
           "type": "uint256"
         }
       ],
+      "outputs": [
+        {
+          "name": "withdrawableAmount",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "withdrawMax",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        }
+      ],
       "outputs": []
+    },
+    {
+      "name": "withdrawMaxAndTransfer",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        },
+        {
+          "name": "newRecipient",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "withdrawMultiple",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "streamIds",
+          "type": "uint256[]"
+        },
+        {
+          "name": "to",
+          "type": "address"
+        },
+        {
+          "name": "amounts",
+          "type": "uint128[]"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "Approval",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ApprovalForAll",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "approved",
+          "type": "bool",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "BatchMetadataUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_fromTokenId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "_toTokenId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CancelLockupStream",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "senderAmount",
+          "type": "uint128",
+          "indexed": false
+        },
+        {
+          "name": "recipientAmount",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "ClaimProtocolRevenues",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "admin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "protocolRevenues",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "CreateLockupLinearStream",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256",
+          "indexed": false
+        },
+        {
+          "name": "funder",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amounts",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "deposit",
+              "type": "uint128"
+            },
+            {
+              "name": "protocolFee",
+              "type": "uint128"
+            },
+            {
+              "name": "brokerFee",
+              "type": "uint128"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "cancelable",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "transferable",
+          "type": "bool",
+          "indexed": false
+        },
+        {
+          "name": "range",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "start",
+              "type": "uint40"
+            },
+            {
+              "name": "cliff",
+              "type": "uint40"
+            },
+            {
+              "name": "end",
+              "type": "uint40"
+            }
+          ],
+          "indexed": false
+        },
+        {
+          "name": "broker",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "MetadataUpdate",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "_tokenId",
+          "type": "uint256",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "RenounceLockupStream",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "SetComptroller",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "admin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldComptroller",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newComptroller",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "SetNFTDescriptor",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "admin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldNFTDescriptor",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newNFTDescriptor",
+          "type": "address",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "Transfer",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "from",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "tokenId",
+          "type": "uint256",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "TransferAdmin",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAdmin",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAdmin",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "WithdrawFromLockupStream",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256",
+          "indexed": true
+        },
+        {
+          "name": "to",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "asset",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "amount",
+          "type": "uint128",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "name": "DelegateCall",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "PRBMath_MulDiv_Overflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "uint256"
+        },
+        {
+          "name": "denominator",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "PRBMath_MulDiv18_Overflow",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "x",
+          "type": "uint256"
+        },
+        {
+          "name": "y",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Base_NoProtocolRevenues",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "asset",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_BrokerFeeTooHigh",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "brokerFee",
+          "type": "uint256"
+        },
+        {
+          "name": "maxFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_DepositAmountZero",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SablierV2Lockup_EndTimeNotInTheFuture",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "currentTime",
+          "type": "uint40"
+        },
+        {
+          "name": "endTime",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_NotTransferable",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "tokenId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_ProtocolFeeTooHigh",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "protocolFee",
+          "type": "uint256"
+        },
+        {
+          "name": "maxFee",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_StreamCanceled",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_StreamDepleted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_StreamNotDepleted",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_Unauthorized",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        },
+        {
+          "name": "caller",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_WithdrawAmountZero",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamId",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_WithdrawArrayCountsNotEqual",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "streamIdsCount",
+          "type": "uint256"
+        },
+        {
+          "name": "amountsCount",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2Lockup_WithdrawToZeroAddress",
+      "type": "error",
+      "inputs": []
+    },
+    {
+      "name": "SablierV2LockupLinear_CliffTimeNotLessThanEndTime",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "cliffTime",
+          "type": "uint40"
+        },
+        {
+          "name": "endTime",
+          "type": "uint40"
+        }
+      ]
+    },
+    {
+      "name": "SablierV2LockupLinear_StartTimeGreaterThanCliffTime",
+      "type": "error",
+      "inputs": [
+        {
+          "name": "startTime",
+          "type": "uint40"
+        },
+        {
+          "name": "cliffTime",
+          "type": "uint40"
+        }
+      ]
     }
   ]
 }

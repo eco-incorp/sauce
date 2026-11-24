@@ -56,22 +56,71 @@ function main() {
 
 ### `PotABI`
 
-`import PotABI from "./protocols/maker/PotABI.json";` Speaks for: pot.
+`import PotABI from "./protocols/maker/PotABI.json";` Speaks for: pot. The import is the registry's ABI for this contract, the functions listed here and none of those left out below: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Maker` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `join(uint256 wad)`
-- `exit(uint256 wad)`
+- `cage()`
 - `chi() view returns (uint256)`
+- `deny(address guy)`
+- `drip() returns (uint256 tmp)`
 - `dsr() view returns (uint256)`
+- `exit(uint256 wad)`
+- `file(bytes32 what, address addr)`
+- `join(uint256 wad)`
+- `live() view returns (uint256)`
+- `pie(address) view returns (uint256)`
+- `Pie() view returns (uint256)`
+- `rely(address guy)`
+- `rho() view returns (uint256)`
+- `vat() view returns (address)`
+- `vow() view returns (address)`
+- `wards(address) view returns (uint256)`
+
+Left out of this ABI by name, and called by their signature through the namespace:
+
+- `Maker.Pot["file(bytes32,uint256)"](…)`: `file(bytes32 what, uint256 data)`; an overload of file(bytes32,address), which takes as many arguments: a call by name picks its overload by argument count, so this one is called by its signature.
 
 ### `SavingsDaiABI`
 
-`import SavingsDaiABI from "./protocols/maker/SavingsDaiABI.json";` Speaks for: sDAI.
+`import SavingsDaiABI from "./protocols/maker/SavingsDaiABI.json";` Speaks for: sDAI. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Maker` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
-- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
-- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
-- `convertToShares(uint256 assets) view returns (uint256)`
+- `allowance(address, address) view returns (uint256)`
+- `approve(address spender, uint256 value) returns (bool)`
+- `asset() view returns (address)`
+- `balanceOf(address) view returns (uint256)`
 - `convertToAssets(uint256 shares) view returns (uint256)`
+- `convertToShares(uint256 assets) view returns (uint256)`
+- `dai() view returns (address)`
+- `daiJoin() view returns (address)`
+- `decimals() view returns (uint8)`
+- `decreaseAllowance(address spender, uint256 subtractedValue) returns (bool)`
+- `deploymentChainId() view returns (uint256)`
+- `deposit(uint256 assets, address receiver) returns (uint256 shares)`
+- `DOMAIN_SEPARATOR() view returns (bytes32)`
+- `increaseAllowance(address spender, uint256 addedValue) returns (bool)`
+- `maxDeposit(address) pure returns (uint256)`
+- `maxMint(address) pure returns (uint256)`
+- `maxRedeem(address owner) view returns (uint256)`
+- `maxWithdraw(address owner) view returns (uint256)`
+- `mint(uint256 shares, address receiver) returns (uint256 assets)`
+- `name() view returns (string)`
+- `nonces(address) view returns (uint256)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, bytes signature)`
+- `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`
+- `PERMIT_TYPEHASH() view returns (bytes32)`
+- `pot() view returns (address)`
+- `previewDeposit(uint256 assets) view returns (uint256)`
+- `previewMint(uint256 shares) view returns (uint256)`
+- `previewRedeem(uint256 shares) view returns (uint256)`
+- `previewWithdraw(uint256 assets) view returns (uint256)`
+- `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)`
+- `symbol() view returns (string)`
+- `totalAssets() view returns (uint256)`
+- `totalSupply() view returns (uint256)`
+- `transfer(address to, uint256 value) returns (bool)`
+- `transferFrom(address from, address to, uint256 value) returns (bool)`
+- `vat() view returns (address)`
+- `version() view returns (string)`
+- `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)`
 
 ## Next
 

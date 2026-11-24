@@ -26,6 +26,111 @@ export const ArrakisRouterABI = [
     ],
   },
   {
+    name: "addLiquidityPermit2",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params_",
+        type: "tuple",
+        components: [
+          {
+            name: "addData",
+            type: "tuple",
+            components: [
+              { name: "amount0Max", type: "uint256" },
+              { name: "amount1Max", type: "uint256" },
+              { name: "amount0Min", type: "uint256" },
+              { name: "amount1Min", type: "uint256" },
+              { name: "amountSharesMin", type: "uint256" },
+              { name: "vault", type: "address" },
+              { name: "receiver", type: "address" },
+              { name: "gauge", type: "address" },
+            ],
+          },
+          {
+            name: "permit",
+            type: "tuple",
+            components: [
+              {
+                name: "permitted",
+                type: "tuple[]",
+                components: [
+                  { name: "token", type: "address" },
+                  { name: "amount", type: "uint256" },
+                ],
+              },
+              { name: "nonce", type: "uint256" },
+              { name: "deadline", type: "uint256" },
+            ],
+          },
+          { name: "signature", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+      { name: "sharesReceived", type: "uint256" },
+    ],
+  },
+  {
+    name: "blacklist",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "vault_", type: "address" },
+      { name: "toBlacklist_", type: "address[]" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "getWhitelist",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "vault_", type: "address" }],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "initialize",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "owner_", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "mintRestrictedVaults",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [
+      { name: "supplyCap", type: "uint256" },
+      { name: "hasWhitelist", type: "bool" },
+    ],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  { name: "pause", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  {
+    name: "paused",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "permit2",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
     name: "removeLiquidity",
     type: "function",
     stateMutability: "nonpayable",
@@ -49,15 +154,313 @@ export const ArrakisRouterABI = [
       { name: "amount1", type: "uint256" },
     ],
   },
+  {
+    name: "removeLiquidityPermit2",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "params_",
+        type: "tuple",
+        components: [
+          {
+            name: "removeData",
+            type: "tuple",
+            components: [
+              { name: "burnAmount", type: "uint256" },
+              { name: "amount0Min", type: "uint256" },
+              { name: "amount1Min", type: "uint256" },
+              { name: "vault", type: "address" },
+              { name: "receiver", type: "address" },
+              { name: "gauge", type: "address" },
+              { name: "receiveETH", type: "bool" },
+            ],
+          },
+          {
+            name: "permit",
+            type: "tuple",
+            components: [
+              {
+                name: "permitted",
+                type: "tuple",
+                components: [
+                  { name: "token", type: "address" },
+                  { name: "amount", type: "uint256" },
+                ],
+              },
+              { name: "nonce", type: "uint256" },
+              { name: "deadline", type: "uint256" },
+            ],
+          },
+          { name: "signature", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+    ],
+  },
+  {
+    name: "renounceOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "resolver",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "setMintRules",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "vault_", type: "address" },
+      { name: "supplyCap_", type: "uint256" },
+      { name: "hasWhitelist_", type: "bool" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "swapAndAddLiquidity",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params_",
+        type: "tuple",
+        components: [
+          {
+            name: "swapData",
+            type: "tuple",
+            components: [
+              { name: "swapPayload", type: "bytes" },
+              { name: "amountInSwap", type: "uint256" },
+              { name: "amountOutSwap", type: "uint256" },
+              { name: "swapRouter", type: "address" },
+              { name: "zeroForOne", type: "bool" },
+            ],
+          },
+          {
+            name: "addData",
+            type: "tuple",
+            components: [
+              { name: "amount0Max", type: "uint256" },
+              { name: "amount1Max", type: "uint256" },
+              { name: "amount0Min", type: "uint256" },
+              { name: "amount1Min", type: "uint256" },
+              { name: "amountSharesMin", type: "uint256" },
+              { name: "vault", type: "address" },
+              { name: "receiver", type: "address" },
+              { name: "gauge", type: "address" },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+      { name: "sharesReceived", type: "uint256" },
+      { name: "amount0Diff", type: "uint256" },
+      { name: "amount1Diff", type: "uint256" },
+    ],
+  },
+  {
+    name: "swapAndAddLiquidityPermit2",
+    type: "function",
+    stateMutability: "payable",
+    inputs: [
+      {
+        name: "params_",
+        type: "tuple",
+        components: [
+          {
+            name: "swapAndAddData",
+            type: "tuple",
+            components: [
+              {
+                name: "swapData",
+                type: "tuple",
+                components: [
+                  { name: "swapPayload", type: "bytes" },
+                  { name: "amountInSwap", type: "uint256" },
+                  { name: "amountOutSwap", type: "uint256" },
+                  { name: "swapRouter", type: "address" },
+                  { name: "zeroForOne", type: "bool" },
+                ],
+              },
+              {
+                name: "addData",
+                type: "tuple",
+                components: [
+                  { name: "amount0Max", type: "uint256" },
+                  { name: "amount1Max", type: "uint256" },
+                  { name: "amount0Min", type: "uint256" },
+                  { name: "amount1Min", type: "uint256" },
+                  { name: "amountSharesMin", type: "uint256" },
+                  { name: "vault", type: "address" },
+                  { name: "receiver", type: "address" },
+                  { name: "gauge", type: "address" },
+                ],
+              },
+            ],
+          },
+          {
+            name: "permit",
+            type: "tuple",
+            components: [
+              {
+                name: "permitted",
+                type: "tuple[]",
+                components: [
+                  { name: "token", type: "address" },
+                  { name: "amount", type: "uint256" },
+                ],
+              },
+              { name: "nonce", type: "uint256" },
+              { name: "deadline", type: "uint256" },
+            ],
+          },
+          { name: "signature", type: "bytes" },
+        ],
+      },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+      { name: "sharesReceived", type: "uint256" },
+      { name: "amount0Diff", type: "uint256" },
+      { name: "amount1Diff", type: "uint256" },
+    ],
+  },
+  {
+    name: "swapper",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "transferOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newOwner", type: "address" }],
+    outputs: [],
+  },
+  { name: "unpause", type: "function", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  {
+    name: "updateSwapExecutor",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "swapper_", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "weth",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "whitelist",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "vault_", type: "address" },
+      { name: "toWhitelist_", type: "address[]" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "Initialized",
+    type: "event",
+    inputs: [{ name: "version", type: "uint8", indexed: false }],
+  },
+  {
+    name: "LogBlacklist",
+    type: "event",
+    inputs: [
+      { name: "vault", type: "address", indexed: false },
+      { name: "blacklisted", type: "address[]", indexed: false },
+    ],
+  },
+  {
+    name: "LogSetVault",
+    type: "event",
+    inputs: [
+      { name: "vault", type: "address", indexed: false },
+      { name: "supplyCap", type: "uint256", indexed: false },
+      { name: "hasWhitelist", type: "bool", indexed: false },
+    ],
+  },
+  {
+    name: "LogWhitelist",
+    type: "event",
+    inputs: [
+      { name: "vault", type: "address", indexed: false },
+      { name: "whitelisted", type: "address[]", indexed: false },
+    ],
+  },
+  {
+    name: "OwnershipTransferred",
+    type: "event",
+    inputs: [
+      { name: "previousOwner", type: "address", indexed: true },
+      { name: "newOwner", type: "address", indexed: true },
+    ],
+  },
+  { name: "Paused", type: "event", inputs: [{ name: "account", type: "address", indexed: false }] },
+  {
+    name: "Swapped",
+    type: "event",
+    inputs: [
+      { name: "zeroForOne", type: "bool", indexed: false },
+      { name: "amount0Diff", type: "uint256", indexed: false },
+      { name: "amount1Diff", type: "uint256", indexed: false },
+      { name: "amountOutSwap", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "Unpaused",
+    type: "event",
+    inputs: [{ name: "account", type: "address", indexed: false }],
+  },
 ] as const;
 
 export const ArrakisVaultABI = [
   {
-    name: "totalSupply",
+    name: "addPools",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "feeTiers_", type: "uint24[]" }],
+    outputs: [],
+  },
+  {
+    name: "allowance",
     type: "function",
     stateMutability: "view",
-    inputs: [],
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "approve",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
   },
   {
     name: "balanceOf",
@@ -65,6 +468,304 @@ export const ArrakisVaultABI = [
     stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "blacklistRouters",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "routers_", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    name: "burn",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "burnAmount_", type: "uint256" },
+      { name: "receiver_", type: "address" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+    ],
+  },
+  {
+    name: "decimals",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8" }],
+  },
+  {
+    name: "decreaseAllowance",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "subtractedValue", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "factory",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "getPools",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "getRanges",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        components: [
+          { name: "lowerTick", type: "int24" },
+          { name: "upperTick", type: "int24" },
+          { name: "feeTier", type: "uint24" },
+        ],
+      },
+    ],
+  },
+  {
+    name: "getRouters",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address[]" }],
+  },
+  {
+    name: "increaseAllowance",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "addedValue", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "init0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "init1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "initialize",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "name_", type: "string" },
+      { name: "symbol_", type: "string" },
+      {
+        name: "params_",
+        type: "tuple",
+        components: [
+          { name: "feeTiers", type: "uint24[]" },
+          { name: "token0", type: "address" },
+          { name: "token1", type: "address" },
+          { name: "owner", type: "address" },
+          { name: "init0", type: "uint256" },
+          { name: "init1", type: "uint256" },
+          { name: "manager", type: "address" },
+          { name: "routers", type: "address[]" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "manager",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "managerBalance0",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "managerBalance1",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "managerFeeBPS",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint16" }],
+  },
+  {
+    name: "mint",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "mintAmount_", type: "uint256" },
+      { name: "receiver_", type: "address" },
+    ],
+    outputs: [
+      { name: "amount0", type: "uint256" },
+      { name: "amount1", type: "uint256" },
+    ],
+  },
+  {
+    name: "name",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
+  },
+  {
+    name: "owner",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "rebalance",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "rebalanceParams_",
+        type: "tuple",
+        components: [
+          {
+            name: "burns",
+            type: "tuple[]",
+            components: [
+              { name: "liquidity", type: "uint128" },
+              {
+                name: "range",
+                type: "tuple",
+                components: [
+                  { name: "lowerTick", type: "int24" },
+                  { name: "upperTick", type: "int24" },
+                  { name: "feeTier", type: "uint24" },
+                ],
+              },
+            ],
+          },
+          {
+            name: "mints",
+            type: "tuple[]",
+            components: [
+              { name: "liquidity", type: "uint128" },
+              {
+                name: "range",
+                type: "tuple",
+                components: [
+                  { name: "lowerTick", type: "int24" },
+                  { name: "upperTick", type: "int24" },
+                  { name: "feeTier", type: "uint24" },
+                ],
+              },
+            ],
+          },
+          {
+            name: "swap",
+            type: "tuple",
+            components: [
+              { name: "payload", type: "bytes" },
+              { name: "router", type: "address" },
+              { name: "amountIn", type: "uint256" },
+              { name: "expectedMinReturn", type: "uint256" },
+              { name: "zeroForOne", type: "bool" },
+            ],
+          },
+          { name: "minBurn0", type: "uint256" },
+          { name: "minBurn1", type: "uint256" },
+          { name: "minDeposit0", type: "uint256" },
+          { name: "minDeposit1", type: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    name: "removePools",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "pools_", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    name: "renounceOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "restrictedMint",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "setInits",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "init0_", type: "uint256" },
+      { name: "init1_", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "setManager",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "manager_", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "setManagerFeeBPS",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "managerFeeBPS_", type: "uint16" }],
+    outputs: [],
+  },
+  {
+    name: "setRestrictedMint",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "minter_", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "symbol",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "string" }],
   },
   {
     name: "token0",
@@ -79,5 +780,246 @@ export const ArrakisVaultABI = [
     stateMutability: "view",
     inputs: [],
     outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "totalSupply",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "transferFrom",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "transferOwnership",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newOwner", type: "address" }],
+    outputs: [],
+  },
+  {
+    name: "uniswapV3MintCallback",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "amount0Owed_", type: "uint256" },
+      { name: "amount1Owed_", type: "uint256" },
+      { name: "", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "whitelistRouters",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "routers_", type: "address[]" }],
+    outputs: [],
+  },
+  {
+    name: "withdrawManagerBalance",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    name: "Approval",
+    type: "event",
+    inputs: [
+      { name: "owner", type: "address", indexed: true },
+      { name: "spender", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "Initialized",
+    type: "event",
+    inputs: [{ name: "version", type: "uint8", indexed: false }],
+  },
+  {
+    name: "LogAddPools",
+    type: "event",
+    inputs: [{ name: "feeTiers", type: "uint24[]", indexed: false }],
+  },
+  {
+    name: "LogBlacklistRouters",
+    type: "event",
+    inputs: [{ name: "routers", type: "address[]", indexed: false }],
+  },
+  {
+    name: "LogBurn",
+    type: "event",
+    inputs: [
+      { name: "receiver", type: "address", indexed: true },
+      { name: "burnAmount", type: "uint256", indexed: false },
+      { name: "amount0Out", type: "uint256", indexed: false },
+      { name: "amount1Out", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LogCollectedFees",
+    type: "event",
+    inputs: [
+      { name: "fee0", type: "uint256", indexed: false },
+      { name: "fee1", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LogMint",
+    type: "event",
+    inputs: [
+      { name: "receiver", type: "address", indexed: true },
+      { name: "mintAmount", type: "uint256", indexed: false },
+      { name: "amount0In", type: "uint256", indexed: false },
+      { name: "amount1In", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LogRebalance",
+    type: "event",
+    inputs: [
+      {
+        name: "rebalanceParams",
+        type: "tuple",
+        components: [
+          {
+            name: "burns",
+            type: "tuple[]",
+            components: [
+              { name: "liquidity", type: "uint128" },
+              {
+                name: "range",
+                type: "tuple",
+                components: [
+                  { name: "lowerTick", type: "int24" },
+                  { name: "upperTick", type: "int24" },
+                  { name: "feeTier", type: "uint24" },
+                ],
+              },
+            ],
+          },
+          {
+            name: "mints",
+            type: "tuple[]",
+            components: [
+              { name: "liquidity", type: "uint128" },
+              {
+                name: "range",
+                type: "tuple",
+                components: [
+                  { name: "lowerTick", type: "int24" },
+                  { name: "upperTick", type: "int24" },
+                  { name: "feeTier", type: "uint24" },
+                ],
+              },
+            ],
+          },
+          {
+            name: "swap",
+            type: "tuple",
+            components: [
+              { name: "payload", type: "bytes" },
+              { name: "router", type: "address" },
+              { name: "amountIn", type: "uint256" },
+              { name: "expectedMinReturn", type: "uint256" },
+              { name: "zeroForOne", type: "bool" },
+            ],
+          },
+          { name: "minBurn0", type: "uint256" },
+          { name: "minBurn1", type: "uint256" },
+          { name: "minDeposit0", type: "uint256" },
+          { name: "minDeposit1", type: "uint256" },
+        ],
+        indexed: false,
+      },
+      { name: "swapDelta0", type: "uint256", indexed: false },
+      { name: "swapDelta1", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LogRemovePools",
+    type: "event",
+    inputs: [{ name: "pools", type: "address[]", indexed: false }],
+  },
+  {
+    name: "LogRestrictedMint",
+    type: "event",
+    inputs: [{ name: "minter", type: "address", indexed: false }],
+  },
+  {
+    name: "LogSetInits",
+    type: "event",
+    inputs: [
+      { name: "init0", type: "uint256", indexed: false },
+      { name: "init1", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LogSetManager",
+    type: "event",
+    inputs: [{ name: "newManager", type: "address", indexed: false }],
+  },
+  {
+    name: "LogSetManagerFeeBPS",
+    type: "event",
+    inputs: [{ name: "managerFeeBPS", type: "uint16", indexed: false }],
+  },
+  {
+    name: "LogWhitelistRouters",
+    type: "event",
+    inputs: [{ name: "routers", type: "address[]", indexed: false }],
+  },
+  {
+    name: "LogWithdrawManagerBalance",
+    type: "event",
+    inputs: [
+      { name: "amount0", type: "uint256", indexed: false },
+      { name: "amount1", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "LPBurned",
+    type: "event",
+    inputs: [
+      { name: "user", type: "address", indexed: true },
+      { name: "burnAmount0", type: "uint256", indexed: false },
+      { name: "burnAmount1", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    name: "OwnershipTransferred",
+    type: "event",
+    inputs: [
+      { name: "previousOwner", type: "address", indexed: true },
+      { name: "newOwner", type: "address", indexed: true },
+    ],
+  },
+  {
+    name: "Transfer",
+    type: "event",
+    inputs: [
+      { name: "from", type: "address", indexed: true },
+      { name: "to", type: "address", indexed: true },
+      { name: "value", type: "uint256", indexed: false },
+    ],
   },
 ] as const;

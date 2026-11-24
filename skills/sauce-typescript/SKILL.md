@@ -38,18 +38,18 @@ simulate) at `node_modules/@eco-incorp/sauce/docs/guides/typescript-quick-start.
 - **The builders are not gated** by chain, but follow the supported-chains rule (`sauce-overview`):
   build and send a cook or a Pot's deployment only for a supported chain.
 
-| Need                                  | Import                                                                                      |
-| ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Compile for a chain, encode arguments | `routes` from `@eco-incorp/sauce`                                                           |
-| The Pot and its cook                  | `v12PredictPot`, `DEFAULT_POT_SALT`, `kitchenExecutionFee` (root); `v12Pot` (`/evm/engine`) |
-| A cook the owner signs, anyone sends  | `signedCookTypedData`, `encodeCookSigned`, `checkSignedCookPot` (`/evm/engine`)             |
-| Release addresses                     | `@eco-incorp/sauce/deployments`                                                             |
-| The raw compiler                      | `@eco-incorp/sauce/compiler`                                                                |
-| The protocol registry                 | root (`getProtocol`, `contracts`), `@eco-incorp/sauce/protocols/<slug>`                     |
-| Action programs                       | `@eco-incorp/sauce/actions`                                                                 |
-| Verification                          | `@eco-incorp/sauce/verify`, `/svm/verify`                                                   |
-| Solana                                | `@eco-incorp/sauce/svm`; `/svm/engine-artifacts` (Node only)                                |
-| Testing                               | `@eco-incorp/sauce/testing` (Node only)                                                     |
+| Need                                  | Import                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Compile for a chain, encode arguments | `routes` from `@eco-incorp/sauce`                                                                |
+| The Pot and its cook                  | `v12PredictPot`, `DEFAULT_POT_SALT`, `kitchenExecutionFee` (root); `v12Pot` (`/evm/engine`)      |
+| A cook the owner signs, anyone sends  | `signedCookTypedData`, `encodeCookSigned`, `checkSignedCookPot` (`/evm/engine`)                  |
+| Release addresses                     | `@eco-incorp/sauce/deployments`                                                                  |
+| The raw compiler                      | `@eco-incorp/sauce/compiler`                                                                     |
+| The protocol registry                 | root (`getProtocol`, `contracts`), `@eco-incorp/sauce/protocols/<slug>`                          |
+| Action programs                       | `@eco-incorp/sauce/actions`                                                                      |
+| Verification                          | `@eco-incorp/sauce/verify`, `/svm/verify`                                                        |
+| Solana                                | `@eco-incorp/sauce/svm`; `/svm/client` (the Kitchen client); `/svm/engine-artifacts` (Node only) |
+| Testing                               | `@eco-incorp/sauce/testing` (Node only)                                                          |
 
 ## Compile a program for a chain, and cook it
 
@@ -108,7 +108,10 @@ export async function cookTransactions(
   only where it has no code yet.
 - A Pot swaps through the Router its Kitchen handed it when it was minted. `potRouterUpdate(client,
 pot)` from `/evm/engine` reads both, and returns the `setRouter` call for the Pot's owner to send
-  when the Kitchen has a newer one.
+  when its Kitchen names the Router this package pins and the Pot is not on it; where the Kitchen
+  names another Router it returns nothing. A fixed-Router or Shared Pot keeps its Router for good
+  and runs only on the engine built for it: `potEngine(client, pot)` from `/evm/engine` names the
+  engine a cook on it must name.
 
 ## A cook the owner signs and another account sends
 
@@ -234,8 +237,9 @@ address in `deployments` is recorded, not proof of live code.
 - **Settlement verification** (`/verify`, `/svm/verify`): `validateSettleProgram`,
   `decodeSettleCall` (a cook's calldata), historical pins. It identifies the program and its
   parameters; the Pot, engine and every other call stay yours to check (`sauce verify` runs it).
-- **Solana** (`/svm`):
-  - the Kitchen client, `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`,
+- **Solana** (`/svm`, and `/svm/client` for the client):
+  - the Kitchen client, `createSauceSvmClient({ rpcUrl, payer, programId, kitchen, maxExecutionFee })`
+    from `@eco-incorp/sauce/svm/client` (`/svm` exports its types, not the function),
     with no default endpoint (`via: "engine"` for a direct cook; `executionFee()` quotes the fee to
     set `maxExecutionFee` from). The SVM route helpers (`buildSauceSvmCall`, `buildSauceSvmCalls`)
     do not produce an instruction the engine accepts: build execution with the Kitchen client.

@@ -17,6 +17,7 @@ and the map of the other skills. Every other fact has one owner in the map: load
 | Any Sauce task                                   | Read this skill first, then the skill [The skill map](#the-skill-map) names |
 | Unsure which skill owns a topic                  | [Routes by need](#routes-by-need)                                           |
 | A command refuses a chain                        | [Supported and preview chains](#supported-and-preview-chains)               |
+| Choosing a chain: a testnet or mainnet           | [Which chain](#which-chain)                                                 |
 | Syntax, names, flags, addresses, a protocol, ... | Not here: each has an owner in the map                                      |
 
 ## Core model
@@ -101,6 +102,32 @@ or [open one](https://github.com/eco-incorp/sauce/issues/new?template=chain-supp
 chain and its id, what runs there, the protocols and tokens it needs, and the expected volume and
 timing. The refusal carries both links, prefilled for its chain.
 
+## Which chain
+
+- **Use the chain the user names.** With none named, ask. A testnet is the place to prototype:
+  its coin and tokens have no value.
+- **What a testnet has.** Arc Testnet, Base Sepolia and Ethereum Sepolia each have `USDC`, CCTP
+  (`Cctp.TokenMessenger`) and Circle Gateway (`CircleGateway.GatewayWallet`,
+  `CircleGateway.GatewayMinter`); Arc Testnet has `EURC` too. None of them has a DEX, a lending
+  market or an oracle. A program that moves USDC, bridges it or deposits it into Gateway runs on
+  a testnet as it would on mainnet.
+- **A swap, a pool or a lending market needs mainnet.** Compile it for `arc` (or `base`,
+  `ethereum`) and simulate it there with `sauce simulate`, which signs and sends nothing: on Arc
+  Testnet its names do not exist, and compiling fails (`sauce-chains`). One file serves both
+  chains when every name it uses exists on both and every pool, market id or other address is a
+  `main` parameter.
+- **An assumed balance is an assumption.** `sauce simulate --assume-balance` gives the Pot that
+  balance for the simulation only. A passing simulation then shows the program works if the Pot
+  holds it, not that the user does: say so whenever you report one, with the lines under
+  `Assumed for this simulation only`.
+- **Arc's USDC has two scales, one balance.** The ERC-20 `USDC` has 6 decimals (`pot.USDC`, every
+  token amount in `--args`); the native coin has 18 (`pot.balance`, a cook's value, gas). The
+  Kitchen's fee is the cook's value, paid from the owner's wallet; a native fee the program itself
+  pays (a bridge's or a messenger's) comes out of the Pot's one balance. Give amounts at the two
+  scales as separate arguments, and spend a given amount or a measured delta, never `pot.USDC`
+  whole. A transaction for Arc or Arc Testnet needs a `maxFeePerGas` of at least 20 gwei
+  (`sauce-cli`).
+
 ## From a file to a transaction
 
 A program names what its chain supplies, with no import: token symbols such as `USDC`, protocol
@@ -158,7 +185,8 @@ the owner rather than repeat it.
 
 ### `sauce-overview`
 
-- **Owns**: the model, the protocol with a user, the rules, supported and preview chains, this map.
+- **Owns**: the model, the protocol with a user, the rules, supported and preview chains, which
+  chain to use (a testnet or mainnet), this map.
 - **Load**: first, for any Sauce task.
 
 ### `sauce-script`

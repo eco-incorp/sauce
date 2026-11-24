@@ -63,7 +63,6 @@ import { dirname, join, posix, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getAddressDecoder, getAddressEncoder } from "@solana/kit";
-import { toFunctionSelector } from "viem";
 
 const SDK = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** The repository's skills directory. */
@@ -71,8 +70,10 @@ export const SKILLS_DIR = join(SDK, "..", "skills");
 /** The manual's generated reference. */
 export const DOCS_REFERENCE_DIR = join(SDK, "..", "docs", "reference");
 const TARGETS = join(SDK, "test", "fixtures", "registry-abi", "targets.json");
-/** What each deployment's code dispatches, captured from the chain: a selector the evidence records
- *  as `null` is one the deployed code does not dispatch, so a call to it reverts there. */
+/** What each export's deployments declare that its ABI leaves out, and why
+ *  (`scripts/gen-registry-abis.mjs`). */
+const OMITTED = join(SDK, "test", "fixtures", "registry-abi", "omitted.json");
+/** What each captured contract dispatches, selector by selector (`scripts/capture-registry-abi.mjs`). */
 const EVIDENCE = join(SDK, "test", "fixtures", "registry-abi", "evidence.json");
 /** The SauceScript reference: hand-written in its skill, and copied into the manual as it is. */
 const BUILTINS = join(SKILLS_DIR, "sauce-script", "references", "builtins.md");
@@ -310,13 +311,59 @@ export async function skillsReferences(api, documented) {
   const served = (slug, name) =>
     compiler.resolveSdkModule(`./protocols/${slug}/${name}.json`) !== undefined;
   const targets = JSON.parse(readFileSync(TARGETS, "utf8")).protocols;
-  // Per deployment and ABI export, the selectors its code dispatches (and `null` for those it lacks).
-  const dispatched = new Map(
-    JSON.parse(readFileSync(EVIDENCE, "utf8")).instances.map((i) => [
-      `${i.protocol}|${i.abi}|${i.chainId}|${i.address.toLowerCase()}`,
-      i.selectors ?? {},
-    ]),
+  const omittedFile = JSON.parse(readFileSync(OMITTED, "utf8"));
+  const omitted = omittedFile.exports;
+  // An interface binds to whatever address a program gives it, so the contracts it reaches can
+  // differ. Read from the captured instances of each interface export: one whose instances do not
+  // all dispatch the same of the functions it lists is flagged. Only the listed functions count:
+  // the evidence records every function any instance declares, and a `standard` or `common`
+  // interface lists only those every instance runs.
+  const listedSelectors = new Map(
+    sdk.contracts
+      .listInterfaces()
+      .map((d) => [`${d.protocol}|${d.abiExport}`, d.methods.map((m) => m.selector.toLowerCase())]),
   );
+  const dispatched = new Map(); // `${slug}|${export}` -> per instance, the listed selectors it runs
+  for (const instance of JSON.parse(readFileSync(EVIDENCE, "utf8")).instances) {
+    const key = `${instance.protocol}|${instance.abi}`;
+    const listed = listedSelectors.get(key);
+    if (listed === undefined) continue;
+    const run = listed.filter((selector) => (instance.selectors[selector] ?? null) !== null);
+    dispatched.set(key, [...(dispatched.get(key) ?? []), new Set(run)]);
+  }
+  const instancesDiffer = (slug, name) => {
+    const sets = dispatched.get(`${slug}|${name}`) ?? [];
+
+    return sets.some((set) => set.size !== sets[0].size || [...set].some((s) => !sets[0].has(s)));
+  };
+  // Per role deployment, the functions of its ABI it does not run as declared: withheld on its
+  // chain, so a program compiled for that chain cannot call them; and those it declares otherwise,
+  // which a program compiled for that chain calls as it declares them (`contracts.generated.ts`).
+  const withheld = new Map();
+  const shapes = new Map();
+  // The functions a contract's ABI leaves out for their name or arity alone, which a program calls
+  // by their signature (`ContractLink.bySignature`): the contracts of each export that carry them,
+  // and per role deployment those its chain does not run as declared.
+  const bySignatureLinks = new Map();
+  const bySignatureAbsent = new Map();
+  for (const link of sdk.contracts.CONTRACT_LINKS) {
+    for (const [chainId, signatures] of Object.entries(link.withheld ?? {})) {
+      withheld.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, signatures);
+    }
+    for (const [chainId, functions] of Object.entries(link.shapes ?? {})) {
+      shapes.set(`${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`, functions);
+    }
+    for (const [chainId, signatures] of Object.entries(link.bySignatureWithheld ?? {})) {
+      bySignatureAbsent.set(
+        `${link.protocol}|${link.roleKey}|${link.abiExport}|${chainId}`,
+        signatures,
+      );
+    }
+    if ((link.bySignature ?? []).length > 0) {
+      const key = `${link.protocol}|${link.abiExport}`;
+      bySignatureLinks.set(key, [...(bySignatureLinks.get(key) ?? []), link]);
+    }
+  }
   const globals = globalsIndex(sdk, support);
   const canonical = [...sdk.CANONICAL_CHAINS].sort((a, b) => a.id - b.id);
   const byId = new Map(canonical.map((chain) => [chain.id, chain]));
@@ -367,22 +414,32 @@ export async function skillsReferences(api, documented) {
         if (typeof address !== "string") continue;
         const named = contracts.find((c) => c.address.toLowerCase() === address.toLowerCase());
         const abi = exportFor(role, deployment.chainId);
-        // The ABI's functions this deployment's code does not dispatch: a bridged token without the
-        // L1 token's functions, say. The page says so beside the deployment.
-        const selectors = dispatched.get(
-          `${info.slug}|${abi}|${deployment.chainId}|${address.toLowerCase()}`,
-        );
+        // The ABI's functions this deployment does not run as declared: a bridged token without
+        // the L1 token's functions, an older release. The page says so beside the deployment.
         const absent =
-          abi === undefined || selectors === undefined
+          abi === undefined
             ? []
             : [
                 ...new Set(
-                  exports
-                    .find((e) => e.name === abi)
-                    .functions.filter((f) => selectors[toFunctionSelector(f)] === null)
-                    .map((f) => f.name),
+                  (withheld.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map(
+                    (signature) => signature.slice(0, signature.indexOf("(")),
+                  ),
                 ),
               ];
+        // The ABI's functions this deployment declares otherwise: an older release returning
+        // fewer fields. The page gives its declaration beside the deployment.
+        const declared =
+          abi === undefined
+            ? []
+            : (shapes.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []).map((f) => ({
+                name: f.name,
+                text: functionText(f),
+              }));
+        // The ABI's functions called by signature that this deployment does not run as declared.
+        const bySignatureWithheld =
+          abi === undefined
+            ? []
+            : (bySignatureAbsent.get(`${info.slug}|${role}|${abi}|${deployment.chainId}`) ?? []);
         deployed.push({
           chain: chain.slug,
           role,
@@ -390,6 +447,8 @@ export async function skillsReferences(api, documented) {
           namespace: named === undefined ? undefined : `${namespace.name}.${named.name}`,
           abi,
           absent,
+          declared,
+          bySignatureWithheld,
         });
       }
     }
@@ -414,6 +473,44 @@ export async function skillsReferences(api, documented) {
         name: e.name,
         served: e.served,
         roles: [...new Set(evidence[e.name]?.roles ?? [])],
+        // What the deployments declare that this ABI leaves out, and why: the functions left out
+        // for their name or arity alone (they carry their ABI item) are called by signature.
+        omitted: (omitted[`${info.slug}.${e.name}`] ?? []).filter((o) => o.function === undefined),
+        bySignature: (omitted[`${info.slug}.${e.name}`] ?? [])
+          .filter((o) => o.function !== undefined)
+          .map((o) => {
+            const carrying = (bySignatureLinks.get(`${info.slug}|${e.name}`) ?? []).filter((l) =>
+              l.bySignature.some(
+                (f) => `${f.name}(${(f.inputs ?? []).map(canonicalOf).join(",")})` === o.signature,
+              ),
+            );
+            if (carrying.length === 0 || namespace === undefined) {
+              throw new Error(
+                `${info.slug}.${e.name}: ${o.signature} is called by signature, but no contract of a namespace carries it`,
+              );
+            }
+
+            return {
+              signature: o.signature,
+              text: functionText(o.function),
+              reason: o.reason,
+              // How a program calls it on each contract of the export: a singleton by its
+              // namespace member, an interface bound to the address it is given.
+              spellings: carrying.map((l) =>
+                l.kind === "interface"
+                  ? `${namespace.name}.${l.contract}(<address>)["${o.signature}"](…)`
+                  : `${namespace.name}.${l.contract}["${o.signature}"](…)`,
+              ),
+            };
+          }),
+        // Deployments whose verified ABI is carried, in part, from an earlier capture.
+        partial: (omittedFile.partial?.[`${info.slug}.${e.name}`] ?? []).flatMap((c) => {
+          const [chainId, address] = c.deployment.split(":");
+          const chain = byId.get(Number(chainId));
+          return chain === undefined ? [] : [{ chain: chain.slug, address, date: c.date }];
+        }),
+        // An interface export whose captured instances dispatch different functions.
+        instancesDiffer: instancesDiffer(info.slug, e.name),
         functions: e.functions.map((f) => ({
           text: functionText(f),
           returned: returnedNote(sdk, info.slug, e.name, f),
@@ -467,6 +564,44 @@ export async function skillsReferences(api, documented) {
   // Solana cluster, so it is rendered once (deployments.json, deployments.md) and never per chain.
   const release = deployments.v12DeployedAddresses();
   const { contracts } = release.evm;
+  // The earlier releases whose Pots the SDK still cooks, each on its own engine: what the installed
+  // row's `alsoRunsOn` lists, with the engine and Kitchen the release table pins for it.
+  const earlier = Object.entries(deployments.v12ReleaseSet().alsoRunsOn ?? {}).flatMap(
+    ([component, versions]) =>
+      versions.map((version) => {
+        const row = deployments.V12_RELEASE_SETS.find(
+          (candidate) => candidate[component].version === version && candidate[component].engine,
+        );
+        if (row === undefined) {
+          throw new Error(
+            `no release table row pins ${component} ${version}, which alsoRunsOn lists`,
+          );
+        }
+
+        const kitchen = row["kitchen-evm"];
+
+        return {
+          component,
+          version,
+          engine: row[component].engine,
+          kitchenEvm: component === "v12-evm" ? kitchen.version : undefined,
+          // The Pots that run on this engine and no other: what the manual's table names beside it.
+          pots:
+            component === "v12-svm"
+              ? "Solana Pots whose owner program is this engine"
+              : kitchen.potProxyInitCodeHash === undefined
+                ? `kitchen-evm ${kitchen.version} Pots`
+                : `fixed-Router and Shared Pots whose Router is ${kitchen.fixedRouter}`,
+          // The same, for the skills' file, which keeps no version number.
+          about:
+            component === "v12-svm"
+              ? "Solana Pots whose owner program is this engine"
+              : kitchen.potProxyInitCodeHash === undefined
+                ? "Pots the Kitchen placed by CREATE2 just before it moved to CREATE3, which only this engine runs"
+                : `Fixed-Router and Shared Pots minted while the Kitchen handed out the Router ${kitchen.fixedRouter}, which only this engine runs`,
+        };
+      }),
+  );
 
   return {
     globals,
@@ -485,11 +620,16 @@ export async function skillsReferences(api, documented) {
         quoteRouter: contracts.quoteRouter.address,
         quoteRouterGeneration: contracts.quoteRouter.generation,
         potInitCodeHash: release.evm.pot.initCodeHash,
+        potScheme: release.evm.pot.scheme,
+        potProxyInitCodeHash: release.evm.pot.potProxyInitCodeHash,
+        potProfileHash: release.evm.pot.potProfileHash,
+        fixedRouter: release.evm.pot.fixedRouter,
       },
       svm: {
         engine: release.svm.programs.engine.programId,
         kitchen: release.svm.programs.kitchen.programId,
       },
+      earlier,
     },
     support: {
       supported: support.supportedChains().map((chain) => ({ slug: chain.slug, name: chain.name })),
@@ -643,9 +783,12 @@ const CHAIN_NOTES = {
     "`0x3600000000000000000000000000000000000000` has 6. Sending native value and calling",
     "`USDC.transfer` move the same money.",
     "",
-    "- A Pot that spends its whole `USDC` balance and also pays a native fee (a bridge's or a",
-    "  messenger's fee, the Kitchen's execution fee) runs out: the fee comes from the same balance.",
+    "- A Pot that spends its whole `USDC` balance and also pays a native fee from the program",
+    "  (a bridge's or a messenger's fee) runs out: that fee comes from the same balance.",
     "  Leave room for it.",
+    "- An ordinary cook's Kitchen fee is attached value from the owner's wallet: native USDC",
+    "  at 18 decimals, paid on to the Kitchen before the program runs. An owner-signed cook may",
+    "  instead pay it from funds already in the Pot.",
     "- `balanceOf` is the native balance divided by 10^12 and rounded down, so less than 10^12 wei",
     "  reads as 0. Compare a native amount with a token amount only after converting one to the",
     "  other's scale.",
@@ -668,6 +811,11 @@ const CHAIN_NOTES = {
     "`0x3600000000000000000000000000000000000000` at 6, one balance, with the same minimum base fee.",
     "Every note on the [Arc](arc.md) page holds here too. Its USDC and EURC come from Circle's",
     "faucet.",
+    "",
+    "Arc Testnet has no DEX, lending market or oracle in the registry: it is for USDC and EURC",
+    "moves, CCTP and Circle Gateway. For a pool, a swap, Morpho, Aave or Aerodrome, compile and",
+    "simulate on `arc`. `USDC` has the same address on both; `EURC` differs, and `WETH` and `USYC`",
+    "exist only on `arc`.",
   ],
   base: [
     "Base's own documentation: `eth_call` and `eth_estimateGas` against the `pending` block tag see",
@@ -869,7 +1017,10 @@ const spelling = (d) =>
     : d.abi !== undefined
       ? `${code(`${d.abi}.at(${d.address})`)}`
       : "no registry ABI") +
-  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "");
+  (d.absent?.length ? `; not on this deployment: ${d.absent.map(code).join(", ")}` : "") +
+  (d.declared?.length
+    ? `; declared otherwise by this deployment: ${d.declared.map((f) => code(f.name)).join(", ")}`
+    : "");
 
 function renderGlobals(data) {
   const { globals } = data;
@@ -1390,7 +1541,7 @@ function renderDeploymentsJson(data) {
       router: {
         address: evm.router,
         about:
-          "The Router a new Pot starts on. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2) run through the Pot's Router.",
+          "The Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to. The swaps a pool calls back for (Uniswap V3 and V4, Maverick V2, HyperSwap V3) run through the Pot's Router.",
       },
       quoteRouter: {
         address: evm.quoteRouter,
@@ -1398,19 +1549,35 @@ function renderDeploymentsJson(data) {
           "A quote service for Uniswap V3 and V4 swaps, called with eth_call, holding no tokens. No Pot's Router.",
       },
       pot: {
-        address: "CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)",
+        address: "CREATE(CREATE2(kitchen, gateSalt, potProxyInitCodeHash), 1)",
+        gateSalt:
+          "keccak256(abi.encode(owner, salt)), with true after the salt for a fixed Router or a Shared Pot",
+        potProxyInitCodeHash: evm.potProxyInitCodeHash,
+        potProfileHash: evm.potProfileHash,
+        fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 keeps its release's engine, and so does a fixed-Router or Shared Pot minted while the Kitchen handed out an earlier Router (earlierEngines). A fixed-Router or Shared Pot minted on the Router above cooks on the engine above, and so does every dynamic Pot placed by CREATE3, of any age.",
       },
+      earlierEngines: data.deployments.earlier
+        .filter((one) => one.component === "v12-evm")
+        .map(({ engine, about }) => ({ address: engine, about })),
     },
     svm: {
       engine: {
         programId: svm.engine,
         key: svmKey(svm.engine),
         about:
-          "The engine program, which owns every Pot: ctx.self() in a program on Solana. key is the 32-byte value a program holds.",
+          "The engine program new Pots are created under and cooked on. ctx.self() in a program on Solana is the engine running the cook: this one, or an older engine from earlierEngines for a Pot that engine created. key is the 32-byte value a program holds.",
       },
+      earlierEngines: data.deployments.earlier
+        .filter((one) => one.component === "v12-svm")
+        .map((one) => ({
+          programId: one.engine,
+          key: svmKey(one.engine),
+          about:
+            "An older engine whose programs this SDK's also run on. A Pot it created is cooked on it, and ctx.self() in that program is this engine. A Pot owned by an engine that does not run them is cooked on the engine above. key is the 32-byte value a program holds.",
+        })),
       kitchen: {
         programId: svm.kitchen,
         key: svmKey(svm.kitchen),
@@ -1426,7 +1593,7 @@ function renderDeploymentsJson(data) {
 /** The same release for a reader of the manual: the one page that lists its addresses, and its
  *  versions. */
 function renderDeploymentsPage(data) {
-  const { compiler, releases, evm, svm } = data.deployments;
+  const { compiler, releases, evm, svm, earlier } = data.deployments;
   const lines = [
     HEADER,
     "",
@@ -1449,9 +1616,9 @@ function renderDeploymentsPage(data) {
     "",
     "## The release",
     "",
-    "The compiler this package pins, and the four components its programs run on. They pair by exact",
-    "version, in both directions:",
-    "[which engine runs a program](../api/compiler.md#which-engine-runs-a-program).",
+    "The compiler the SDK pins and the engine and Kitchen versions it uses by default; the",
+    "[changelog](../changelog.md) and [compiler compatibility](../api/compiler.md#which-engine-runs-a-program)",
+    "say what each release changed and which engines run a compiler's programs.",
     "",
     "| Component | Version |",
     "| --- | --- |",
@@ -1468,20 +1635,53 @@ function renderDeploymentsPage(data) {
     `| Engine | \`${evm.engine}\` | the interpreter that runs a program: a cook is the Pot's \`cook(engine, program)\` | \`v12EngineAddress()\` |`,
     `| Kitchen | \`${evm.kitchen}\` | creates Pots (\`deployPot(owner, salt)\`) and sets the fee every cook pays (\`executionFee()\`) | \`v12KitchenAddress()\` |`,
     `| Kitchen implementation | \`${evm.kitchenImplementation}\` | behind the Kitchen, an upgradeable proxy: call the Kitchen | \`v12KitchenImplementationAddress()\` |`,
-    `| Router | \`${evm.router}\` | the Router a new Pot starts on, through which the swaps a pool calls back for run | \`v12RouterAddress()\` |`,
+    `| Router | \`${evm.router}\` | the Router a new Pot starts on, and the one a fixed-Router or Shared Pot minted now is fixed to; the swaps a pool calls back for run through it | \`v12RouterAddress()\` |`,
     `| Quote Router | \`${evm.quoteRouter}\` | generation ${evm.quoteRouterGeneration}: quotes Uniswap V3 and V4 swaps through \`eth_call\`, holding no tokens; no Pot's Router | \`v12QuoteRouterAddress()\` |`,
     "",
     "### Pots",
     "",
-    "The Kitchen deploys an owner's Pot under a 32-byte salt, zero unless another is chosen, at",
-    "`CREATE2(kitchen, keccak256(abi.encode(owner, salt)), initCodeHash)`, with the Pot init-code",
-    "hash:",
+    "The Kitchen places an owner's Pot under a 32-byte salt, zero unless another is chosen, by CREATE3:",
+    "a proxy is created at `CREATE2(kitchen, gateSalt, potProxyInitCodeHash)`, and the Pot is the",
+    "contract that proxy creates first, `CREATE(proxy, 1)`. `gateSalt` is",
+    "`keccak256(abi.encode(owner, salt))`, and `keccak256(abi.encode(owner, salt, true))` for a Pot with",
+    "a fixed Router or a Shared Pot (the zero address as owner), so the three differ for one owner and",
+    "salt.",
     "",
-    `\`${evm.potInitCodeHash}\``,
+    "| What | Value |",
+    "| --- | --- |",
+    `| Pot proxy init-code hash | \`${evm.potProxyInitCodeHash}\` |`,
+    `| Pot profile hash | \`${evm.potProfileHash}\` |`,
+    `| Fixed Router | \`${evm.fixedRouter}\` |`,
+    `| Pot creation code hash, which the Kitchen's \`potInitCodeHash()\` reports | \`${evm.potInitCodeHash}\` |`,
     "",
     "`v12PredictPot(owner, salt)` computes a Pot's address, `v12PotDerivation()` returns the formula",
-    "and the hash, and `sauce pot --owner <address>` prints an owner's Pot.",
+    "and the hashes, and `sauce pot --owner <address>` prints an owner's Pot.",
     "",
+    ...(earlier.length === 0
+      ? []
+      : [
+          "### Pots of earlier releases",
+          "",
+          "Every Pot keeps its address when a release changes the Router or the engine. The engine a",
+          "cook on it names depends on the Pot:",
+          "",
+          "- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 (kitchen-evm 1.3.0's), and",
+          "  a fixed-Router or Shared Pot minted with an earlier Router, keep the engine of their release.",
+          "  The SDK cooks each on the engine this table names.",
+          "- A Pot of a Kitchen release before that one (kitchen-evm 1.0.0 to 1.2.0), placed by CREATE2",
+          "  too, is not in the table: its engine does not run this SDK's programs, and the SDK refuses",
+          "  to cook it.",
+          "- Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,",
+          "  cooks on the installed engine, whichever Router it runs.",
+          "",
+          "| Engine | Version | Address | Its Pots |",
+          "| --- | --- | --- | --- |",
+          ...earlier.map(
+            (one) =>
+              `| ${one.component === "v12-evm" ? "EVM engine" : "Solana engine"}, \`${one.component}\` | ${one.version} | \`${one.engine}\` | ${one.pots} |`,
+          ),
+          "",
+        ]),
     "## Solana",
     "",
     "| Program | Program id | Key, the value a program holds | In TypeScript |",
@@ -1489,8 +1689,12 @@ function renderDeploymentsPage(data) {
     `| Engine | \`${svm.engine}\` | \`${svmKey(svm.engine)}\` | \`v12SvmEngineProgramId()\` |`,
     `| Kitchen | \`${svm.kitchen}\` | \`${svmKey(svm.kitchen)}\` | \`v12SvmKitchenProgramId()\` |`,
     "",
-    "The engine owns every Pot, and a program on Solana reads it as `ctx.self()`. A Pot is the",
-    'Kitchen\'s program address for the seeds `"pot"`, the owner and the 32-byte salt.',
+    "A Pot is owned by the engine that created it. The SDK creates new Pots under the engine above and",
+    "cooks a Pot on the engine that owns it where that engine runs this SDK's programs (the Solana",
+    "engine listed under the earlier releases); a Pot of an engine that does not run them is cooked on",
+    "the engine above. The Kitchen binds no engine to a Pot, so that choice is the SDK's, and a program on",
+    "Solana reads the engine running the cook as `ctx.self()`. A Pot's address does not depend on the",
+    'engine: it is the Kitchen\'s program address for the seeds `"pot"`, the owner and the 32-byte salt.',
     "",
   ];
 
@@ -1742,17 +1946,100 @@ function renderProtocolRegistry(p, data, site, documents = {}) {
         (e.served
           ? `\`import ${e.name} from "./protocols/${p.slug}/${e.name}.json";\``
           : "Not served for import: a program calls it by selector.") +
-          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : ""),
+          (e.roles.length ? ` Speaks for: ${e.roles.join(", ")}.` : "") +
+          // An import is the registry's ABI, the same on every chain: only a namespace name is
+          // held to the chain's deployment.
+          (e.served && e.roles.length
+            ? " The import is the registry's ABI for this contract, the functions listed here" +
+              (e.omitted.length || e.bySignature.length
+                ? " and none of those left out below"
+                : "") +
+              ": the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment" +
+              (p.namespace
+                ? `. Call the contract through the \`${p.namespace.name}\` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.`
+                : ".")
+            : ""),
         "",
         ...e.functions.map((f) => `- \`${f.text}\`${f.returned}`),
         "",
+        // An interface reaches whatever contract a program binds it to, and they differ.
+        ...(e.instancesDiffer
+          ? [
+              "Not every contract reached through this interface runs every function listed: the contracts the registry checked it against do not all dispatch the same ones. A call to one the contract does not run does not run the function, and whether it reverts is up to that code.",
+              "",
+            ]
+          : []),
         // Where a deployment of a role this ABI speaks for lacks some of its functions.
         ...p.deployed
           .filter((d) => d.abi === e.name && d.absent.length)
           .flatMap((d) => [
-            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them: ${d.absent.map(code).join(", ")}. Do not call them there: the call does not run the function, and whether it reverts is up to that code.`,
+            `Not on ${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), whose code does not dispatch them or does not declare them as listed here: ${d.absent.map(code).join(", ")}. Do not call them there: a program compiled for ${chainsBySlug.get(d.chain).name} is refused them, and a call made another way does not run the function, and whether it reverts is up to that code.`,
             "",
           ]),
+        // Where a deployment of a role this ABI speaks for declares some of its functions otherwise.
+        ...p.deployed
+          .filter((d) => d.abi === e.name && d.declared.length)
+          .flatMap((d) => {
+            const chain = chainsBySlug.get(d.chain).name;
+            return [
+              `Declared otherwise by ${chain}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)}), and called as it declares them by a program compiled for ${chain}${p.namespace ? ` through the \`${p.namespace.name}\` namespace` : ""}:`,
+              "",
+              ...d.declared.map((f) => `- \`${f.text}\``),
+              "",
+              (e.served
+                ? `The import above declares them as listed for this ABI, which that deployment does not run as declared${p.namespace ? `: on ${chain}, call them through the namespace` : ""}.`
+                : `That deployment does not run them as listed for this ABI.`) +
+                (site === DOCS_SITE
+                  ? ` The TypeScript SDK's types declare them as listed for this ABI too, while a call made on ${chain} through its accessor decodes the deployment's declaration, so a result field the two do not share is absent at run time.`
+                  : ""),
+              "",
+            ];
+          }),
+        // What a program calls by signature: the functions this ABI leaves out for their name or
+        // arity alone, and the deployments that do not run each.
+        ...(e.bySignature.length
+          ? [
+              "Left out of this ABI by name, and called by their signature through the namespace:",
+              "",
+              ...e.bySignature.map((o) => {
+                const absent = p.deployed.filter(
+                  (d) => d.abi === e.name && d.bySignatureWithheld.includes(o.signature),
+                );
+                const where = absent.map(
+                  (d) =>
+                    `${chainsBySlug.get(d.chain).name}'s ${d.role} (${addressCode(chainsBySlug.get(d.chain).kind, d.address)})`,
+                );
+                const chains = [...new Set(absent.map((d) => chainsBySlug.get(d.chain).name))];
+
+                return (
+                  `- ${o.spellings.map(code).join(", ")}: \`${o.text}\`; ${o.reason}.` +
+                  (absent.length
+                    ? ` Not run by ${where.join(", ")}: a program compiled for ${chains.join(", ")} is refused it.`
+                    : "")
+                );
+              }),
+              "",
+            ]
+          : []),
+        // What the deployments declare that this ABI leaves out, and why.
+        ...(e.omitted.length
+          ? [
+              "Left out of this ABI, though its deployments declare them:",
+              "",
+              // The name apart from its parameter types: a name the SDK reserves is not a call.
+              ...e.omitted.map((o) => {
+                const at = o.signature.indexOf("(");
+                return `- \`${o.signature.slice(0, at)}\` taking \`${o.signature.slice(at)}\`: ${o.reason}.`;
+              }),
+              "",
+            ]
+          : []),
+        // A deployment whose verified ABI no source could give, kept from an earlier capture that
+        // took only what the registry declared then: this ABI may lack what it runs.
+        ...e.partial.flatMap((c) => [
+          `On ${chainsBySlug.get(c.chain).name}, no source could give the verified ABI of ${addressCode(chainsBySlug.get(c.chain).kind, c.address)} when the registry was checked, so what it declares is kept from a check of ${c.date} that recorded only the functions, events and errors the registry declared then: this ABI may lack functions that deployment runs.`,
+          "",
+        ]),
       );
     }
   }

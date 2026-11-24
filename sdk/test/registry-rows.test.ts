@@ -91,15 +91,18 @@ describe("Lido: each chain's wstETH has the ABI it implements", () => {
     expect(targets.lido!.WstETHBridgedABI).toMatchObject({ roles: ["wstETH"], chains: [42161] });
   });
 
-  it("declares the bridged token's functions: ERC-20, allowance steps and its bridge", () => {
+  it("declares the bridged token's functions: ERC-20, allowance steps, its bridge and initializer", () => {
     expect(fnNames(WstETHBridgedABI)).toEqual([
       "allowance",
       "approve",
       "balanceOf",
       "bridge",
+      "bridgeBurn",
+      "bridgeMint",
       "decimals",
       "decreaseAllowance",
       "increaseAllowance",
+      "initialize",
       "name",
       "symbol",
       "totalSupply",
@@ -107,8 +110,9 @@ describe("Lido: each chain's wstETH has the ABI it implements", () => {
       "transferFrom",
     ]);
     // None of WstETH's wrapping or rate functions, which the bridged token does not have.
-    const wrapped = new Set(fnNames(WstETHABI));
-    expect(fnNames(WstETHBridgedABI).filter((name) => wrapped.has(name))).toEqual([]);
+    const wrapping = ["wrap", "unwrap", "getStETHByWstETH", "getWstETHByStETH", "stEthPerToken"];
+    expect(wrapping.every((name) => fnNames(WstETHABI).includes(name))).toBe(true);
+    expect(fnNames(WstETHBridgedABI).filter((name) => wrapping.includes(name))).toEqual([]);
   });
 
   it("names WstETH on Ethereum and WstETHBridged on Arbitrum, each with its own methods", () => {

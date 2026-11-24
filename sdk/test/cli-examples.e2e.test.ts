@@ -338,7 +338,12 @@ describeEvm("the sauce-cli skill's programs, run by the command on a local Base"
     it("`sauce tx` prints the unsigned cook, and the owner who sends it buys", async () => {
       await fresh();
       // An owner whose key the test holds, its Pot deployed and holding the budget.
-      const keyedPot = await deployPot(base, KEYED.address);
+      // The Pot of KEYED the command cooks on: its earlier release's where the chain has one (the
+      // legacy arm), else the installed release's, deployed here.
+      const keyedPot = base.potOf(KEYED.address);
+      if ((await base.publicClient.getCode({ address: keyedPot })) === undefined) {
+        expect(await deployPot(base, KEYED.address)).toBe(keyedPot);
+      }
       await base.mint(usdc, keyedPot, 100_000_000n);
       const tx = jsonOf(
         await sauce("tx", BUY, "--chain", "base", "--owner", KEYED.address, ...rpc(), ...buyArgs()),

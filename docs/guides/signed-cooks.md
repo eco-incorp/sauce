@@ -37,7 +37,9 @@ The command compiles the program, appends `main`'s arguments, reads the chain, a
 Before signing, the command checks that the Pot takes signed cooks. If the Pot has no code yet, it
 still signs, and adds the Pot's deployment for the sender to send first. A Pot named only by
 `--pot` with no code, a Pot created before signed cooks, and a Shared Pot are refused, with the
-reason. `--offline` reads nothing, so it then needs `--max-fee`.
+reason. `--offline` reads nothing, so it then needs `--max-fee`, and an owner whose Pot store
+records an earlier release's Pot is refused until `--pot` names a Pot
+([why](troubleshooting.md#the-pot-store-records-an-earlier-releases-pot-for-this-owner-and-salt)).
 
 ### What it prints
 

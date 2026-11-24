@@ -55,11 +55,26 @@ function main() {
 
 ### `CCIPRouterABI`
 
-`import CCIPRouterABI from "./protocols/chainlink-ccip/CCIPRouterABI.json";` Speaks for: router.
+`import CCIPRouterABI from "./protocols/chainlink-ccip/CCIPRouterABI.json";` Speaks for: router. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `ChainlinkCcip` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
+- `acceptOwnership()`
+- `applyRampUpdates((uint64 destChainSelector, address onRamp)[] onRampUpdates, (uint64 sourceChainSelector, address offRamp)[] offRampRemoves, (uint64 sourceChainSelector, address offRamp)[] offRampAdds)`
 - `ccipSend(uint64 destinationChainSelector, (bytes receiver, bytes data, (address token, uint256 amount)[] tokenAmounts, address feeToken, bytes extraArgs) message) payable returns (bytes32 messageId)`
+- `getArmProxy() view returns (address)`
 - `getFee(uint64 destinationChainSelector, (bytes receiver, bytes data, (address token, uint256 amount)[] tokenAmounts, address feeToken, bytes extraArgs) message) view returns (uint256 fee)`
+- `getOffRamps() view returns ((uint64 sourceChainSelector, address offRamp)[])`
+- `getOnRamp(uint64 destChainSelector) view returns (address)`
+- `getSupportedTokens(uint64 chainSelector) view returns (address[])`
+- `getWrappedNative() view returns (address)`
 - `isChainSupported(uint64 chainSelector) view returns (bool)`
+- `isOffRamp(uint64 sourceChainSelector, address offRamp) view returns (bool)`
+- `MAX_RET_BYTES() view returns (uint16)`
+- `owner() view returns (address)`
+- `recoverTokens(address tokenAddress, address to, uint256 amount)`
+- `routeMessage((bytes32 messageId, uint64 sourceChainSelector, bytes sender, bytes data, (address token, uint256 amount)[] destTokenAmounts) message, uint16 gasForCallExactCheck, uint256 gasLimit, address receiver) returns (bool success, bytes retData, uint256 gasUsed)`
+- `setWrappedNative(address wrappedNative)`
+- `transferOwnership(address to)`
+- `typeAndVersion() view returns (string)`
 
 ## Next
 

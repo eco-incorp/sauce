@@ -57,12 +57,34 @@ function main() {
 
 ### `HyperlaneMailboxABI`
 
-`import HyperlaneMailboxABI from "./protocols/hyperlane/HyperlaneMailboxABI.json";` Speaks for: mailbox.
+`import HyperlaneMailboxABI from "./protocols/hyperlane/HyperlaneMailboxABI.json";` Speaks for: mailbox. The import is the registry's ABI for this contract, the functions listed here: the same entries on every chain, nothing withheld or declared otherwise for one chain's deployment. Call the contract through the `Hyperlane` namespace to have a function a chain's deployment does not run refused, and one it declares otherwise called as it declares it.
 
-- `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) payable returns (bytes32)`
-- `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) view returns (uint256)`
-- `process(bytes _metadata, bytes _message) payable`
+- `defaultHook() view returns (address)`
+- `defaultIsm() view returns (address)`
 - `delivered(bytes32 _id) view returns (bool)`
+- `deployedBlock() view returns (uint256)`
+- `dispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) payable returns (bytes32)`
+- `dispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes hookMetadata) payable returns (bytes32)`
+- `dispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes metadata, address hook) payable returns (bytes32)`
+- `initialize(address _owner, address _defaultIsm, address _defaultHook, address _requiredHook)`
+- `latestDispatchedId() view returns (bytes32)`
+- `localDomain() view returns (uint32)`
+- `nonce() view returns (uint32)`
+- `owner() view returns (address)`
+- `process(bytes _metadata, bytes _message) payable`
+- `processedAt(bytes32 _id) view returns (uint48)`
+- `processor(bytes32 _id) view returns (address)`
+- `quoteDispatch(uint32 _destinationDomain, bytes32 _recipientAddress, bytes _messageBody) view returns (uint256)`
+- `quoteDispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes defaultHookMetadata) view returns (uint256 fee)`
+- `quoteDispatch(uint32 destinationDomain, bytes32 recipientAddress, bytes messageBody, bytes metadata, address hook) view returns (uint256 fee)`
+- `recipientIsm(address _recipient) view returns (address)`
+- `renounceOwnership()`
+- `requiredHook() view returns (address)`
+- `setDefaultHook(address _hook)`
+- `setDefaultIsm(address _module)`
+- `setRequiredHook(address _hook)`
+- `transferOwnership(address newOwner)`
+- `VERSION() view returns (uint8)`
 
 ## Next
 

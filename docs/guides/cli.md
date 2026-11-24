@@ -15,9 +15,15 @@ table below, and [the command reference](../reference/cli.md) prints every flag.
 ## Install
 
 ```sh
-npm install -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce --version
 ```
+
+This installs the global `sauce` command. Use both `@latest` and `--engine-strict`: on unsupported
+Node versions, unversioned npm installs can select an obsolete release that provides
+`sauce-dev-tools`, not `sauce`. `@latest` selects the current release; `--engine-strict` refuses
+installation when Node does not meet its requirement. Upgrade to Node.js 24 or newer first, then
+rerun the install ([Troubleshooting](troubleshooting.md#installation-or-startup-fails)).
 
 `sauce --version` prints the version. The command needs no other tool and no configuration, and it
 reads no environment variable but one named as a password's source: by `--password-env`, or in
@@ -27,15 +33,18 @@ does and every flag it takes.
 ### Run it from a project
 
 In a project that depends on the package (one `sauce init` wrote, or one where you ran
-`npm i -D -E @eco-incorp/sauce`), `npx sauce <command>` runs the version the project's
-`package.json` pins. A global `sauce` run in that project runs the global version instead.
+`npm install --engine-strict -D -E @eco-incorp/sauce@latest`), `npx sauce <command>` runs the
+version the project's `package.json` pins. A global `sauce` run there runs the global version instead.
 `sauce skills status` reports skills that were installed from another version than the command's.
+
+This is a local development dependency, not a global CLI install. For application imports,
+install the [local TypeScript library](typescript-quick-start.md#1-make-a-project) instead.
 
 ### Run it without installing
 
-`npx -y @eco-incorp/sauce <command>` fetches the package and runs it. Never run a bare `npx sauce`
-outside a project that depends on the package: npx then fetches and runs npm's unrelated `sauce`
-package instead.
+With Node.js 24 or newer, `npx --engine-strict -y @eco-incorp/sauce@latest <command>` fetches the
+current package and runs it. Never run a bare `npx sauce` outside a project that depends on the
+package: npx then fetches and runs npm's unrelated `sauce` package instead.
 
 ### Runtime packages
 
@@ -64,7 +73,7 @@ To start a new project, let the command make it:
 ```sh
 sauce init my-app
 cd my-app
-npm install
+npm install --engine-strict
 ```
 
 `sauce init` writes:
@@ -195,7 +204,10 @@ because a provider's URL often carries a key.
 The built-in endpoints are one to three keyless ones per chain, each checked to serve the chain and
 state overrides. When one cannot be reached, refuses, rate-limits or fails, the next takes over.
 Kava, ZetaChain and Evmos have none. `--offline` reads no chain at all: `sauce tx` then needs
-`--value`, and `sauce pot` only predicts.
+`--value`, and `sauce pot` only predicts. `--owner` then means the current release's Pot, and where
+the Pot store records an earlier release's Pot for that owner and salt, `sauce tx` and `sauce sign`
+build nothing until `--pot <address>` names a Pot: offline, nothing tells a record of a fork's Pot
+from the chain's ([Troubleshooting](troubleshooting.md#the-pot-store-records-an-earlier-releases-pot-for-this-owner-and-salt)).
 
 ## Keep the command current
 

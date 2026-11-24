@@ -68,14 +68,21 @@ What Sauce is not:
 
 ## Start
 
+Install the global CLI with Node.js 24 or newer (`node --version` checks it):
+
 ```sh
-npm install -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce --version
 ```
 
-You need Node.js 24 or newer. Then do the [quick start](docs/guides/quick-start.md): write the
-program above, try it for free, and run it on Base, in about ten minutes. Only the last step spends
-money: a little ETH for the fee and 1 USDC, on Base.
+Use both `@latest` and `--engine-strict`: unversioned npm installs on an unsupported Node version
+can select an obsolete release that provides `sauce-dev-tools`, not `sauce`. `@latest` selects the
+current release; `--engine-strict` refuses an unsupported runtime instead of installing it.
+Upgrade Node first, then rerun the install above.
+
+Then do the [quick start](docs/guides/quick-start.md): write the program above, try it for free,
+and run it on Base, in about ten minutes. Only the last step spends money: a little ETH for the
+fee and 1 USDC, on Base.
 
 ## The learning path
 
@@ -124,11 +131,12 @@ the chain, but the `sauce` command builds and sends no transaction. [Chains](doc
 
 ## From your application
 
-Install it in a project instead, and the same compiler and registries are a TypeScript library.
-It runs in Node.js and in a browser.
+Install it locally in your project instead, and the same compiler and registries are a TypeScript
+library. Use Node.js 24 or newer for installation and Node execution; the library also runs in a
+browser. A local library install does not put `sauce` on your global `PATH`.
 
 ```sh
-npm install @eco-incorp/sauce
+npm install --engine-strict @eco-incorp/sauce@latest viem
 ```
 
 This compiles a program for Base offline: it approves Aave V3's pool for `amount` of USDC and
@@ -174,3 +182,9 @@ that ahead of time, and is optional.
 [the MCP server](docs/guides/mcp.md) covers each agent and the wallets it can keep for one.
 `sauce skills install` copies the package's [agent skills](docs/guides/skills.md), instructions
 written for an agent, into your project.
+
+## License
+
+Sauce is licensed under the [Eco, Inc. Proprietary License 1.1](LICENSE.md), which is not an open
+source license. The third-party material in the package, and its licenses, are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

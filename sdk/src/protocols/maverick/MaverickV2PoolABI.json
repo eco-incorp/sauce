@@ -1,6 +1,248 @@
 {
   "abi": [
     {
+      "name": "accessor",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "addLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "subaccount",
+          "type": "uint256"
+        },
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "kind",
+              "type": "uint8"
+            },
+            {
+              "name": "ticks",
+              "type": "int32[]"
+            },
+            {
+              "name": "amounts",
+              "type": "uint128[]"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tokenAAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "tokenBAmount",
+          "type": "uint256"
+        },
+        {
+          "name": "binIds",
+          "type": "uint32[]"
+        }
+      ]
+    },
+    {
+      "name": "adminAction",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "action",
+          "type": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "balanceOf",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "name": "subaccount",
+          "type": "uint256"
+        },
+        {
+          "name": "binId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lpToken",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "binIdByTickKind",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tick",
+          "type": "int32"
+        },
+        {
+          "name": "kind",
+          "type": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32"
+        }
+      ]
+    },
+    {
+      "name": "factory",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "fee",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "tokenAIn",
+          "type": "bool"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "flashLoan",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "amountA",
+          "type": "uint256"
+        },
+        {
+          "name": "amountB",
+          "type": "uint256"
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lendingFeeA",
+          "type": "uint128"
+        },
+        {
+          "name": "lendingFeeB",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "getBin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "binId",
+          "type": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "bin",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "mergeBinBalance",
+              "type": "uint128"
+            },
+            {
+              "name": "tickBalance",
+              "type": "uint128"
+            },
+            {
+              "name": "totalSupply",
+              "type": "uint128"
+            },
+            {
+              "name": "kind",
+              "type": "uint8"
+            },
+            {
+              "name": "tick",
+              "type": "int32"
+            },
+            {
+              "name": "mergeId",
+              "type": "uint32"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "getCurrentTwa",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "int256"
+        }
+      ]
+    },
+    {
       "name": "getState",
       "type": "function",
       "stateMutability": "view",
@@ -51,18 +293,250 @@
       ]
     },
     {
-      "name": "fee",
+      "name": "getTick",
       "type": "function",
       "stateMutability": "view",
       "inputs": [
         {
-          "name": "tokenAIn",
-          "type": "bool"
+          "name": "tick",
+          "type": "int32"
         }
       ],
       "outputs": [
         {
+          "name": "tickState",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "reserveA",
+              "type": "uint128"
+            },
+            {
+              "name": "reserveB",
+              "type": "uint128"
+            },
+            {
+              "name": "totalSupply",
+              "type": "uint128"
+            },
+            {
+              "name": "binIdsByTick",
+              "type": "uint32[4]"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "kinds",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_kinds",
+          "type": "uint8"
+        }
+      ]
+    },
+    {
+      "name": "lendingFeeRateD18",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
           "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "lookback",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "migrateBinUpStack",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "binId",
+          "type": "uint32"
+        },
+        {
+          "name": "maxRecursion",
+          "type": "uint32"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "permissionedLiquidity",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_permissionedLiquidity",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "permissionedPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_permissionedPool",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "permissionedSwap",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "_permissionedSwap",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeA",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "protocolFeeB",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128"
+        }
+      ]
+    },
+    {
+      "name": "removeLiquidity",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "subaccount",
+          "type": "uint256"
+        },
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "binIds",
+              "type": "uint32[]"
+            },
+            {
+              "name": "amounts",
+              "type": "uint128[]"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "tokenAOut",
+          "type": "uint256"
+        },
+        {
+          "name": "tokenBOut",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
+      "name": "setFee",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newFeeAIn",
+          "type": "uint256"
+        },
+        {
+          "name": "newFeeBIn",
+          "type": "uint256"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "swap",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "params",
+          "type": "tuple",
+          "components": [
+            {
+              "name": "amount",
+              "type": "uint256"
+            },
+            {
+              "name": "tokenAIn",
+              "type": "bool"
+            },
+            {
+              "name": "exactOutput",
+              "type": "bool"
+            },
+            {
+              "name": "tickLimit",
+              "type": "int32"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "type": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "amountIn",
+          "type": "uint256"
+        },
+        {
+          "name": "amountOut",
           "type": "uint256"
         }
       ]
@@ -92,6 +566,18 @@
       ]
     },
     {
+      "name": "tokenAScale",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ]
+    },
+    {
       "name": "tokenB",
       "type": "function",
       "stateMutability": "view",
@@ -100,6 +586,18 @@
         {
           "name": "",
           "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "tokenBScale",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
         }
       ]
     }

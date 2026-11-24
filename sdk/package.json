@@ -38,6 +38,10 @@
       "types": "./dist/svm/index.d.ts",
       "default": "./dist/svm/index.js"
     },
+    "./svm/client": {
+      "types": "./dist/svm/client.d.ts",
+      "default": "./dist/svm/client.js"
+    },
     "./svm/engine": {
       "types": "./dist/svm/engine-public.d.ts",
       "default": "./dist/svm/engine-public.js"
@@ -60,18 +64,23 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-sauce-script-types.mjs && node scripts/gen-skills-references.mjs && node scripts/gen-skills-actions.mjs",
+    "build": "node scripts/gen-embedded-sources.mjs && node scripts/sync-engine-artifacts.mjs && tsc && node scripts/copy-verify-assets.mjs && node scripts/gen-sauce-script-types.mjs && node scripts/gen-skills-references.mjs && node scripts/gen-skills-actions.mjs && node scripts/prune-source-maps.mjs",
     "gen-sauce-script-types": "node scripts/gen-sauce-script-types.mjs",
     "typecheck": "node scripts/gen-embedded-sources.mjs && tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
     "sync-engine-artifacts": "node scripts/sync-engine-artifacts.mjs",
+    "fetch-program-fixtures": "node scripts/fetch-program-fixtures.mjs",
+    "fetch-contract-code": "node scripts/fetch-contract-code.mjs",
     "gen-route-globals": "node scripts/gen-route-globals.mjs",
     "gen-source-globals": "node scripts/gen-source-globals.mjs",
+    "gen-registry-abis": "node scripts/gen-registry-abis.mjs",
     "gen-builtins": "node scripts/gen-builtins.mjs",
     "gen-embedded-sources": "node scripts/gen-embedded-sources.mjs",
     "gen-skills-references": "node scripts/gen-skills-references.mjs",
     "gen-skills-actions": "node scripts/gen-skills-actions.mjs",
     "gen-runtime-lock": "node scripts/gen-runtime-lock.mjs",
     "test": "node scripts/gen-embedded-sources.mjs && NODE_OPTIONS=--experimental-vm-modules jest --config jest.config.cjs",
+    "test:evm-legacy": "node scripts/gen-embedded-sources.mjs && node scripts/run-arm-suites.mjs evm sdk",
+    "test:svm-legacy": "node scripts/gen-embedded-sources.mjs && node scripts/run-arm-suites.mjs svm sdk",
     "sync-stock-tokens": "node scripts/sync-stock-tokens.mjs"
   },
   "dependencies": {
@@ -83,7 +92,7 @@
     "@solana-program/token": "^0.17.0",
     "@solana/kit": "^8.5.0",
     "litesvm": "1.6.0",
-    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.1",
+    "sauce-compiler": "npm:@eco-incorp/sauce-compiler@2.6.4",
     "viem": "^2.45.1"
   },
   "devDependencies": {

@@ -15,13 +15,16 @@
  *     -> `Token(Erc4626.Vault(vault).asset()).transfer(to, amount)`                  a token's write
  *   `Erc4626.Vault(vault).asset().decimals()`
  *     -> `Erc20.ERC20(Erc4626.Vault(vault).asset()).decimals()`                      a token's read
+ *   `UniswapV3.Factory["getPool(address,address,uint24)"](a, b, 500).liquidity()`
+ *     -> `UniswapV3.Pool(<the call>).liquidity()`                                   a call by signature
  *
  * So a chained program IS the explicit one, byte for byte: nothing new reaches the compiler. A
- * token's writes take `Token(...)`, whose lowering (the token pass) is `@sauce/token`'s SafeERC20
- * write, never the ABI's unchecked `transfer`. `const pool = UniswapV3.Factory.getPool(...)` keeps
- * the address, and each `pool.<method>(...)` is rewritten the same way, so `pool` stays a value the
- * program may compare, pass or return. That `const` must be the program's only declaration of the
- * name, the whole-program rule the other passes apply, so every `pool` is that one.
+ * function called by its canonical signature returns what it does by name. A token's writes take
+ * `Token(...)`, whose lowering (the token pass) is `@sauce/token`'s SafeERC20 write, never the
+ * ABI's unchecked `transfer`. `const pool = UniswapV3.Factory.getPool(...)` keeps the address, and
+ * each `pool.<method>(...)` is rewritten the same way, so `pool` stays a value the program may
+ * compare, pass or return. That `const` must be the program's only declaration of the name, the
+ * whole-program rule the other passes apply, so every `pool` is that one.
  *
  * It runs BEFORE the token pass (`sauce-route.ts`), whose `Token(...)` lowering a token's writes
  * rely on, and claims only CALLS: `pool.USDC`, a member that is not called, is the token pass's
@@ -36,14 +39,16 @@
  * call that "does not name a function".
  */
 import type { CanonicalChain } from "../chains/canonical.js";
+import { outputAt } from "../descriptors/derive.js";
 import { DESCRIPTORS } from "../descriptors/registry.js";
 import type { ContractDescriptor, DescriptorMethod } from "../descriptors/types.js";
 import { ERC20ABI } from "../protocols/erc20/abis.js";
 import { countDeclarations, walk, type AstNode } from "./ast-walk.js";
 import { isChainKey, resolveNamespace } from "./accessor-index.js";
 import { pascalOfSlug } from "./builder.js";
+import { bySignatureHint, methodListing } from "./method-refusals.js";
 import { parseSauce } from "./parse.js";
-import { decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
+import { calledBy, decomposeMemberChain, resolveContractReference } from "./protocol-rewrite.js";
 import {
   collectValuePositionExclusions,
   methodCall,
@@ -98,21 +103,16 @@ interface Binding {
   readonly index?: number;
 }
 
-/** The output parameter `path` leads to: the one output, or a field of the record returned. */
-function outputAt(method: DescriptorMethod, path: readonly string[]) {
-  const { outputs } = method;
-  if (path.length === 0) return outputs.length === 1 ? outputs[0] : undefined;
-  let fields =
-    outputs.length === 1 && outputs[0]!.type === "tuple"
-      ? (outputs[0] as { components?: typeof outputs }).components
-      : outputs;
-  let found: (typeof outputs)[number] | undefined;
-  for (const name of path) {
-    found = fields?.find((field) => field.name === name);
-    if (found === undefined) return undefined;
-    fields = (found as { components?: typeof outputs }).components;
-  }
-  return found;
+/** A function called by its canonical signature, `<object>["<signature>"](…)` (`protocol-rewrite.ts`,
+ *  shape H): its object and the signature. */
+function signatureCall(
+  node: AstNode,
+): { readonly object: AstNode; readonly signature: string } | undefined {
+  if (node.type !== "CallExpression" || (node as { optional?: boolean }).optional) return undefined;
+  const callee = (node as { callee?: AstNode }).callee;
+  const signature = calledBy(callee)?.signature;
+  if (signature === undefined || (callee as { optional?: boolean }).optional) return undefined;
+  return { object: (callee as unknown as { object: AstNode }).object, signature };
 }
 
 /** The registry contracts whose ABI has `method`, the way a program calls each at an address. */
@@ -237,6 +237,12 @@ export function rewriteContractResults(
         overloads.find((m) => m.inputs.length === args) ??
         (overloads.length === 1 ? overloads[0] : undefined);
       if (owner !== undefined && method !== undefined) found = { owner, method, path: [] };
+    } else if (signatureCall(node) !== undefined) {
+      // By its signature, the function the name would reach, its `returns` with it.
+      const { object, signature } = signatureCall(node)!;
+      const owner = receiver(object);
+      const method = owner?.methods.find((m) => m.signature === signature);
+      if (owner !== undefined && method !== undefined) found = { owner, method, path: [] };
     } else if (
       node.type === "MemberExpression" &&
       !(node as { computed?: boolean }).computed &&
@@ -266,8 +272,10 @@ export function rewriteContractResults(
     const fields =
       whole.path.length === 0 && outputs.length > 1
         ? outputs
-        : (outputAt(whole.method, whole.path) as { components?: typeof outputs } | undefined)
-            ?.components;
+        : (
+            outputAt(whole.method.outputs, whole.path) as
+              { components?: typeof outputs } | undefined
+          )?.components;
     const name = fields?.[binding.index]?.name;
     return name ? { ...whole, path: [...whole.path, name] } : undefined;
   }
@@ -320,10 +328,24 @@ export function rewriteContractResults(
     }
     const call = `${spelled(object)}.${method}(...)`;
     if (!contract.methods.some((m) => m.name === method)) {
-      const methods = [...new Set(contract.methods.map((m) => m.name))].join(", ");
+      const methods = methodListing(
+        contract.methods.map((m) => m.name),
+        method,
+        "its methods",
+      );
+      // A function its ABI leaves out by name is called by signature on the contract bound to the
+      // result, as written by hand.
+      const hint = bySignatureHint(
+        contract.kind === "interface"
+          ? `${named(contract)}(${spelled(object)})`
+          : `${named(contract)}.at(${spelled(object)})`,
+        method,
+        contract,
+      );
       fail(
         `'${call}': ${spelled(object)} is ${isToken(contract) ? "a token" : `a ${named(contract)}`}, ` +
-          `whose ABI has no '${method}' (its methods: ${methods})`,
+          `whose ABI has no '${method}' ${methods}` +
+          (hint === "" ? "" : `.${hint}`),
       );
     }
     const write = isToken(contract) && Object.hasOwn(SAFE_WRITES, method);
@@ -356,7 +378,9 @@ export function rewriteContractResults(
     // A contract the program names or binds is the token pass's holder.
     if (reference(object) !== undefined || bound(object) !== undefined) return;
     const output = result(object);
-    if (output === undefined || outputAt(output.method, output.path)?.type !== "address") return;
+    if (output === undefined || outputAt(output.method.outputs, output.path)?.type !== "address") {
+      return;
+    }
     // Over the whole member, as `token-rewrite.ts#balanceSplices` does: a parenthesized receiver's
     // `(` and `)` lie outside `object`, between it and the member's own bounds.
     const span = n.end - n.start;
@@ -393,7 +417,7 @@ export function rewriteContractResults(
       }
       return;
     }
-    if (outputAt(output.method, output.path)?.type !== "address") return;
+    if (outputAt(output.method.outputs, output.path)?.type !== "address") return;
     const spellings = spellingsOf(method, output.owner.protocol);
     fail(
       `'${spelled(object)}.${method}(...)': ${spelled(object)} is an address, and the registry does ` +

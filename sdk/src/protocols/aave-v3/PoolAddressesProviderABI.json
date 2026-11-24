@@ -1,0 +1,488 @@
+{
+  "abi": [
+    {
+      "name": "getACLAdmin",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getACLManager",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getAddress",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getMarketId",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "getPool",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPoolConfigurator",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPoolDataProvider",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPriceOracle",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "getPriceOracleSentinel",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "owner",
+      "type": "function",
+      "stateMutability": "view",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address"
+        }
+      ]
+    },
+    {
+      "name": "renounceOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [],
+      "outputs": []
+    },
+    {
+      "name": "setACLAdmin",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAclAdmin",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setACLManager",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newAclManager",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setAddress",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        },
+        {
+          "name": "newAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setAddressAsProxy",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32"
+        },
+        {
+          "name": "newImplementationAddress",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setMarketId",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newMarketId",
+          "type": "string"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolConfiguratorImpl",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPoolConfiguratorImpl",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolDataProvider",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newDataProvider",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPoolImpl",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPoolImpl",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceOracle",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPriceOracle",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "setPriceOracleSentinel",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newPriceOracleSentinel",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "transferOwnership",
+      "type": "function",
+      "stateMutability": "nonpayable",
+      "inputs": [
+        {
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "name": "ACLAdminUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ACLManagerUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AddressSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "AddressSetAsProxy",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "proxyAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "oldImplementationAddress",
+          "type": "address",
+          "indexed": false
+        },
+        {
+          "name": "newImplementationAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "MarketIdSet",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldMarketId",
+          "type": "string",
+          "indexed": true
+        },
+        {
+          "name": "newMarketId",
+          "type": "string",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "previousOwner",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newOwner",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolConfiguratorUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolDataProviderUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PoolUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PriceOracleSentinelUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "PriceOracleUpdated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "oldAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "newAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    },
+    {
+      "name": "ProxyCreated",
+      "type": "event",
+      "inputs": [
+        {
+          "name": "id",
+          "type": "bytes32",
+          "indexed": true
+        },
+        {
+          "name": "proxyAddress",
+          "type": "address",
+          "indexed": true
+        },
+        {
+          "name": "implementationAddress",
+          "type": "address",
+          "indexed": true
+        }
+      ]
+    }
+  ]
+}

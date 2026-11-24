@@ -31,11 +31,15 @@ picture first, in five minutes, if you want it. The tutorial takes about ten min
 Install the `sauce` command:
 
 ```sh
-npm install -g @eco-incorp/sauce
+npm install --global --engine-strict @eco-incorp/sauce@latest
 sauce --version
 ```
 
 It prints the version you installed. Work in any empty folder from here on.
+
+The explicit `@latest` prevents npm from selecting an obsolete compatible release; `--engine-strict`
+refuses unsupported Node versions. If installation fails, upgrade Node first and reinstall
+([Troubleshooting](troubleshooting.md#installation-or-startup-fails)).
 
 ## 2. Make a wallet
 

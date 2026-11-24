@@ -124,6 +124,7 @@
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
 import { readUintLE } from "../math.js";
+import { binPrice } from "../dlmm-math.js";
 import type { OwnedAccountLoader, PoolConfig } from "../types.js";
 import { accountDataLoader } from "../../loader.js";
 import { TOKEN_2022_PROGRAM_ID, classifyMintProgram } from "../../token-program.js";
@@ -255,45 +256,9 @@ export function pairArrayIndexes(activeId: number): [number, number] {
   return offset < BINS_PER_ARRAY / 2 ? [current - 1, current] : [current, current + 1];
 }
 
-/** priceFromId: (1 + binStep/1e4)^(binId - CENTER_BIN_ID) in Q64.64 (pow, exact transcription). */
-const ONE_Q64 = 1n << 64n;
-const U128_MAX = (1n << 128n) - 1n;
-const BASIS_POINT_MAX = 10_000n;
-const MAX_EXPONENTIAL = 0x80000;
-
-function powQ64(base: bigint, exp: number): bigint | null {
-  let invert = exp < 0;
-  if (exp === 0) return ONE_Q64;
-  const e = Math.abs(exp);
-  if (e >= MAX_EXPONENTIAL) return null;
-  let squaredBase = base;
-  let result = ONE_Q64;
-  if (squaredBase >= result) {
-    squaredBase = U128_MAX / squaredBase;
-    invert = !invert;
-  }
-  const step = (bit: number): boolean => {
-    if ((e & bit) > 0) {
-      result = (result * squaredBase) >> 64n;
-      if (result > U128_MAX) return false;
-    }
-    return true;
-  };
-  if (!step(0x1)) return null;
-  for (let bit = 0x2; bit <= 0x40000; bit <<= 1) {
-    squaredBase = (squaredBase * squaredBase) >> 64n;
-    if (squaredBase > U128_MAX) return null;
-    if (!step(bit)) return null;
-  }
-  if (result === 0n) return null;
-  if (invert) result = U128_MAX / result;
-  return result;
-}
-
+/** A bin's price: (1 + binStep / 10000) ^ (binId - CENTER_BIN_ID), in Q64.64. */
 export function priceFromId(binId: number, binStep: number): bigint {
-  const bps = (BigInt(binStep) << 64n) / BASIS_POINT_MAX;
-  const base = ONE_Q64 + bps;
-  const price = powQ64(base, binId - CENTER_BIN_ID);
+  const price = binPrice(binId - CENTER_BIN_ID, binStep);
   if (price === null)
     throw new Error(`saros-dlmm priceFromId: pow overflow for bin ${binId} step ${binStep}`);
   return price;

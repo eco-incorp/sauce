@@ -13,8 +13,10 @@ from TypeScript before ([Compile from TypeScript](compiling.md)).
 
 ## Install
 
+With Node.js 24 or newer, install the library locally in your project:
+
 ```sh
-npm install @eco-incorp/sauce @solana/kit
+npm install --engine-strict @eco-incorp/sauce@latest @solana/kit
 ```
 
 `@solana/kit` is Solana's TypeScript library: the examples here take its `Address`, its RPC client
@@ -86,7 +88,7 @@ same manifest for a program that declares its `Account` parameters itself.
 
 ## Create the client
 
-`createSauceSvmClient` builds, signs and sends cooks. Its configuration:
+`createSauceSvmClient` builds, signs and sends cooks. Import it from `@eco-incorp/sauce/svm/client`; `@eco-incorp/sauce/svm` re-exports its types without loading Sauce's Kitchen client implementation. Other barrel modules still import `@solana/kit`, so this separation does not remove kit's RPC-related dependencies from Node's module graph. Its configuration:
 
 | Field             | Required | What it is                                                                                                    |
 | ----------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
@@ -108,7 +110,8 @@ sign past a budget you set, and signs the quote as the cap:
 ```ts
 import { address, createSolanaRpc, type TransactionSigner } from "@solana/kit";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "@eco-incorp/sauce/deployments";
-import { createSauceSvmClient, fetchExecutionFee, type CookVia } from "@eco-incorp/sauce/svm";
+import { fetchExecutionFee, type CookVia } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client";
 
 export async function createReleasedClient(
   rpcUrl: string,
@@ -138,11 +141,8 @@ nothing.
 ## Simulate a cook
 
 ```ts
-import {
-  createSauceSvmClient,
-  type AccountResolution,
-  type SauceSvmClientConfig,
-} from "@eco-incorp/sauce/svm";
+import type { AccountResolution, SauceSvmClientConfig } from "@eco-incorp/sauce/svm";
+import { createSauceSvmClient } from "@eco-incorp/sauce/svm/client";
 import type { routes } from "@eco-incorp/sauce";
 
 export async function simulateProgram(
