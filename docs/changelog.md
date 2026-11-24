@@ -271,7 +271,8 @@ import` records it with its release in the Pot store. Offline, a record's engine
   1.1.0 always gave the installed one). The new `ownerEngine` is the engine that owns the account,
   whether or not cooks name it. Where the account's owner is a program this SDK does not know as an
   engine, no cook is built on it, so the result has no `engine`, and the new `ownerProgram` names
-  that program. An address no engine owns yet has none of the three.
+  that program. An address no engine owns yet has neither `ownerEngine` nor `ownerProgram`, and its
+  `engine` is the installed one, as for any Pot not created yet.
 - **Solana: a cook that stops, and a plan resumed from its cursor, say what the Pot is.** The note
   on a Pot of v12-svm 1.2.0 or 1.3.0 (cooked on the installed engine, so a check that the Pot's
   owner is `ctx.self()` fails) and on an address that holds only lamports came with the result of
