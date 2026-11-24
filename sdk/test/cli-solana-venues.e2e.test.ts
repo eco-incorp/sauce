@@ -69,6 +69,13 @@ const KITCHEN = address(v12SvmKitchenProgramId());
 const ENGINE = address(v12SvmEngineProgramId());
 /** USDC is the higher-key token of the pair: paying it, the pools' price rises. */
 const PAYS_LOWER = key(USDC) < key(WSOL);
+/**
+ * Where a pool's own direction is not the keys' (`allIn`'s `paysA`: paying the pool's token A), by
+ * pool. Crema keeps its pair in creation order, and mainnet's USDT/USDC pool holds USDT, the higher
+ * key, as its token A, so paying USDC is its token B to A and its price rises. Every other pool of
+ * the matrix keeps its pair by key.
+ */
+const POOL_PAYS_A: Readonly<Record<string, boolean>> = { "crema-usdt-usdc": false };
 /** Meteora DLMM's program and its SOL/USDC pool, whose fixture holds the bins its swap walks. */
 const DLMM = address("LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo");
 const DLMM_POOL = address("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6");
@@ -205,6 +212,13 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
   afterAll(() => {
     shim?.restore();
     if (work !== undefined) rmSync(work, { recursive: true, force: true });
+  });
+
+  // A test may move the bank's clock past a pool's dump: each one starts from the suite's own.
+  afterEach(() => {
+    const clock = harness.svm.getClock();
+    clock.unixTimestamp = BigInt(manifest.unixTimestamp) + 60n;
+    harness.svm.setClock(clock);
   });
 
   it.each([
@@ -428,6 +442,7 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
     ["Cropper.Whirlpool", "cropper-sol-usdc", WSOL],
     ["Defituna.Fusion", "defituna-sol-usdc", WSOL],
     ["Crema.CLMM", "crema-sol-usdc", WSOL],
+    ["Crema.CLMM", "crema-usdt-usdc", USDT],
   ] as const)(
     "%s.swap at %s, given only the pool and the mint bought, lands what it bought in the Pot",
     async (namespace, name, buy) => {
@@ -438,8 +453,15 @@ describeSvm("Solana's venue namespaces through the sauce command, every account 
           `  return ${namespace}.swap(pool, USDC, buy, amountIn, priceLimit, 1);\n}\n`,
       );
       const p = pool(name);
+      // A pool dumped after the fixture's own slot (the manifest says when), 7MPnn7… among them, is
+      // one Crema refuses at an earlier clock (InvalidTime): the bank's clock goes past the dump.
+      const clock = harness.svm.getClock();
+      if (p.unixTimestamp !== undefined && clock.unixTimestamp <= BigInt(p.unixTimestamp)) {
+        clock.unixTimestamp = BigInt(p.unixTimestamp) + 60n;
+        harness.svm.setClock(clock);
+      }
       const amount = 5n * 10n ** 6n;
-      const priceLimit = (allIn(p, key(USDC) < key(buy)) * 10003n) / 10000n;
+      const priceLimit = (allIn(p, POOL_PAYS_A[name] ?? key(USDC) < key(buy)) * 10003n) / 10000n;
       const args = ["--args", p.pool, buy, String(amount), String(priceLimit)];
       const mint = harness.svm.getAccount(buy);
       if (!mint.exists) throw new Error(`the fixture has no mint ${buy}`);

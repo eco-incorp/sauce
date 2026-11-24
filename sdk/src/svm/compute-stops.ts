@@ -125,7 +125,10 @@ export interface SvmStopPool {
   readonly fee: bigint;
   /** The slot's three tick arrays, in walk order; undefined for the System program in a place. */
   readonly arrays: readonly (Uint8Array | undefined)[];
-  /** Paying the lower-key token, the price falls. */
+  /**
+   * Paying the pool's token A (the lower key for every venue but Crema, which keeps its pair's own
+   * order), the price falls.
+   */
   readonly paysA: boolean;
   /** The swap's `priceLimit`, where the cook knows it: none is walked to the window's edge. */
   readonly priceLimit?: bigint;
@@ -527,15 +530,16 @@ function charged(pool: SvmStopPool, n: number): number {
  * Undefined where none does, a tick past what the router's arithmetic reaches.
  */
 export function svmStopLimit(tick: number, fee: bigint, paysA: boolean): bigint | undefined {
-  // Paying the lower-key token the price falls: it is to stay at or above the sqrt price a tick
-  // above `tick`. Paying the other it rises, and is to stay at or below the one a tick below.
+  // Paying the pool's token A (the lower key on every venue but Crema) the price falls: it is to
+  // stay at or above the sqrt price a tick above `tick`. Paying the other it rises, and is to stay
+  // at or below the one a tick below.
   const bound = raydiumSqrtPriceAtTick(paysA ? tick + 1 : tick - 1);
   const keeps = (limit: bigint): boolean => {
     const own = svmOwnLimit(limit, fee, paysA);
     return paysA ? own >= bound : own <= bound;
   };
-  // The own limit falls as priceLimit rises paying the lower-key token, and rises with it otherwise:
-  // the loosest priceLimit that keeps is the greatest one.
+  // The own limit falls as priceLimit rises paying token A, and rises with it otherwise: the
+  // loosest priceLimit that keeps is the greatest one.
   let low = 2n;
   let high = 1n << 190n;
   if (!keeps(low)) return undefined;
@@ -556,8 +560,9 @@ const deepBits = (deep: number | undefined): bigint =>
 
 /**
  * The stop that skips a pool, whatever its price: a start bound past every tick the walk's way (the
- * least an i32 tick reads as paying the lower-key token, as the price falls, the greatest the other
- * way), which every pool's price has moved past, and no limit.
+ * least an i32 tick reads as paying the pool's token A, as the price falls, which is the lower key
+ * on every venue but Crema, the greatest the other way), which every pool's price has moved past,
+ * and no limit.
  */
 export function svmSkipStop(paysA: boolean): bigint {
   return (paysA ? 1n : (1n << 32n) - 1n) << 192n;

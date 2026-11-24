@@ -12,6 +12,7 @@ import {
   type SvmAccountNameContext,
 } from "../../src/svm/account-names.js";
 import { SVM_SLOT_PARTS, svmPoolSlot, svmSlotAccounts } from "../../src/svm/pool-slot.js";
+import { fetchCremaPoolConfig } from "../../src/svm/venues/index.js";
 import { memoizedGetProgramDerivedAddress } from "../../src/svm/venues/pda-memo.js";
 import type { OwnedAccountLoader } from "../../src/svm/venues/types.js";
 import { BYTES, SNAPSHOT, pool, USDC, USDT, WSOL, key } from "./venue-fixture.js";
@@ -98,6 +99,43 @@ describe("svmPoolSlot", () => {
         expect(svmSlotAccounts(slot).slice(6)).toEqual(expected);
       }
     }
+  });
+
+  // Crema keeps its pair in the order its pool was created in, so USDT, the higher key, is the token
+  // A of mainnet's USDT/USDC pool: paying USDT is its window down, paying USDC its window up. Its
+  // map marks two of the five arrays the fixture holds, 3465, the price's own, and 3466 above it.
+  // The window pads its three places with arrays that exist and that the map does not mark (3464
+  // and 3463 down, 3467 up), which Crema refuses (`InvalidTickArrayAccount`): the slot names the
+  // marked ones, then the System program.
+  it("crema-usdt-usdc: a pool that keeps its higher key first has a slot of the tick arrays its map marks and no others", async () => {
+    const p = pool("crema-usdt-usdc");
+    const SYSTEM = address("11111111111111111111111111111111");
+    for (const [pay, ticks] of [
+      [USDT, [p.payA[0], SYSTEM, SYSTEM]],
+      [USDC, [p.payB[0], p.payB[1], SYSTEM]],
+    ] as const) {
+      const slot = await svmPoolSlot(load, p.pool, pay);
+      expect(svmSlotAccounts(slot)).toEqual([
+        p.program,
+        p.pool,
+        p.config,
+        p.vaultA,
+        p.vaultB,
+        p.extra,
+        ...ticks,
+      ]);
+      // Never the arrays that exist beside the marked ones: 3464 and 3463 down, 3467 up.
+      for (const unmarked of [p.payA[1]!, p.payA[2]!, p.payB[2]!])
+        expect(slot.ticks).not.toContain(unmarked);
+    }
+  });
+
+  it("crema-usdt-usdc: its windows say how many of their arrays the map marks beside how many exist", async () => {
+    const p = pool("crema-usdt-usdc");
+    const cfg = await fetchCremaPoolConfig(load, p.pool);
+    expect([cfg.windows.aToB.tickArrays, cfg.windows.bToA.tickArrays]).toEqual([p.payA, p.payB]);
+    expect([cfg.windows.aToB.readable, cfg.windows.bToA.readable]).toEqual([3, 3]);
+    expect([cfg.windows.aToB.marked, cfg.windows.bToA.marked]).toEqual([1, 2]);
   });
 
   it("refuses a pool no price-limit venue owns, and a token its pair does not hold", async () => {

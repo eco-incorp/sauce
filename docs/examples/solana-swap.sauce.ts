@@ -1,9 +1,9 @@
 // Solana: buy WSOL with up to `amountIn` of the Pot's USDC at Orca's SOL/USDC whirlpool of tick
-// spacing 4, never paying more than `priceLimit` for any unit, and send what arrived to `to`. The
-// pool is found by its key, as an EVM program finds a Uniswap pool by its fee, and compiling adds
-// every account the swap takes to main — the pool's nine, read from the pool when the cook is
-// built, and the Pot's own — so the command is given none. A pool already past `priceLimit` is
-// skipped (`swap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
+// spacing 4, never paying more than `priceLimit` for any unit (to its sqrt price rounding), and
+// send what arrived to `to`. The pool is found by its key, as an EVM program finds a Uniswap pool
+// by its fee, and compiling adds every account the swap takes to main — the pool's nine, read from
+// the pool when the cook is built, and the Pot's own — so the command is given none. A pool already
+// past `priceLimit` is skipped (`swap` returns 0, nothing moves); below `minOut` the cook reverts.
 //
 //   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <to> <amountIn> <priceLimit> <minOut>

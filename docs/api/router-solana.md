@@ -81,7 +81,11 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   market's authority, `extra` its event heap, its ticks its bids, asks and the System program);
   Manifest's `config` is the System program, which its swap takes. An Orca pool's `extra`, its oracle, must be writable at a price, where its swap is `swap_v2`, which declares it writable whatever the fee, and at its own limit for an adaptive fee and for a pool with a Token-2022 mint. Crema refuses a tick array its
   map does not mark and Invariant takes only the ticks it crosses, so each is passed the slot's first
-  tick array and each after it until a System program.
+  tick array and each after it until a System program. A Crema slot names only the arrays its map
+  marks, so a direction whose map marks none is three System programs there, and `crema`,
+  `cremaStopped` and `cremaAtLimit` skip the pool, returning `0`. Crema keeps its pair in the order
+  its pool was created in, not the keys': its token A is not always the lower key, and its functions
+  take the direction that pays token A, or the other, from the pool's own order.
 - **`trader`** is `[authority, source, payMint, buyMint, tokenProgram, token2022, memo]`: the
   authority that signs (the Pot, through the Kitchen), the token account paid from, the two mints,
   the SPL Token and Token-2022 programs and the memo program. Both are arrays because a function
@@ -90,8 +94,12 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
 - **`amountIn`** is the most the pool may take. The rest of it stays in `source`.
 - **`priceLimit`** is the most one unit bought may cost, fee included: payToken base units per
   buyToken base unit, times 1e18. The function reads the pool's fee and gives the pool its own
-  limit, so its last unit, fee paid, costs `priceLimit`: a concentrated-liquidity pool's sqrt price
-  limit moved by `√(1 − fee)`, a Phoenix order's price `priceLimit ÷ (1 + fee)` in ticks.
+  limit, so its last unit, fee paid, costs `priceLimit` to within the rounding of the pool's sqrt
+  price: a concentrated-liquidity pool's sqrt price limit moved by `√(1 − fee)`, a Phoenix order's
+  price `priceLimit ÷ (1 + fee)` in ticks. The roots are rounded down, which keeps the pool's limit
+  inside the exact one paying its token B (the price rises), so the pool stops a little sooner, and
+  can move it past the exact one paying its token A (the price falls) by a few steps of its Q64.64
+  sqrt price: there the last unit can cost a hair more than `priceLimit`.
 - **`limit`** is the pool's own: the sqrt price its swap takes as the pool keeps it (a Q64.64 root;
   on Invariant a root times 10^24), Phoenix's order price in its market's ticks, OpenBook's in its
   lots (`priceLots`, then `orders`, the most resting orders it may match). No fee is read for it, so
@@ -99,7 +107,8 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   fees of its own trade at a limit, and a limit computed to keep a walk inside the tick arrays a slot
   carries keeps it there however the fee moves. `0` is no limit: the program's own bound on Raydium's
   code, Orca and DefiTuna, an order at any price on Phoenix and OpenBook, and on Invariant only selling
-  token X. Cropper's and Crema's programs take no `0`; give them their own bound. Invariant's
+  token X. Cropper's and Crema's programs take no `0`; give them their own bound (`cremaAtLimit`
+  refuses a `0`, `Crema takes no zero limit`). Invariant's
   program does not stop at its limit: a swap that reaches it with input left is refused (custom
   error `0x1778`), and the whole transaction with it, so there `amountIn` must fit inside the limit.
 - **`minOut`** is the least a swap that ran may deliver; below it the whole program reverts. At a
@@ -116,8 +125,8 @@ Each of the eight concentrated-liquidity functions also has a Stopped form, the 
 limit held to a `stop` as well. The stop's low 192 bits are a tighter `priceLimit`, and the swap
 takes the lower of the two (`0` none). Bits 192 to 223 carry a start bound, a tick: the swap skips
 the pool if its price has moved further than that from the stop. A bound past every tick the walk's
-way skips the pool whatever its price: `1` paying the pool's lower-key token, `2^32 - 1` paying the
-other.
+way skips the pool whatever its price: `1` paying the pool's lower-key token (on Crema, its token A,
+whichever key it is), `2^32 - 1` paying the other.
 
 On Raydium's code and Crema, bits 224 to 255 carry a deep tick (`0` none). Their swap at a price
 stops where the furthest tick array its slot gives begins, because past that array's last
@@ -127,7 +136,9 @@ array, to a tick inside it. The Stopped form reads the tick where the command re
 array (Raydium's code), a dynamic one (Byreal's) or Crema's, and checks it there. A tick no longer
 initialized leaves the swap where it would have stopped. A place that holds another tick reverts
 (`deep: the tick array is not laid out as Raydium's`, or `Crema's`), and so does a tick no array
-of the slot holds. A tick is read as the window reads ticks, its sign bit flipped.
+of the slot holds; Crema's pool that its own state rules out (no liquidity, a price already at or
+past its limit, dust) is skipped before either is read. A tick is read as the window reads ticks,
+its sign bit flipped.
 
 ```text
 orcaWhirlpoolStopped(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, recipient: Account, stop): Uint256
@@ -146,6 +157,15 @@ reverts rather than skips: a slot naming another program, a pool of another venu
 (`not a Crema pool`, …), a pool that is not the pair, and a limit an order cannot
 carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
 itself as the pool is a missing slot, which is skipped.
+
+A pool that cannot trade for its own state is skipped before its pair is looked at, and returns `0`
+whatever pair it was given; among those cases are no input (before even the pool's owner), a paused
+pool or one whose swaps are off, and a Stopped form's start bound its price has passed. Crema's pair
+is checked before its price or its liquidity can skip the swap, and before its tick arrays are
+scanned, so a pool that is not the pair is refused even where it is idle or its window has no room.
+`cremaAtLimit` refuses a limit of `0` (`Crema takes no zero limit`) and a floor past 64 bits
+(`minOut past 64 bits`) whatever the window holds, as it refuses a limit past 128 bits; only what it
+skips first (no input, a paused pool) escapes them.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
 function that takes a slot checks before anything moves and returns `0`, having moved nothing, for a
@@ -171,7 +191,8 @@ limit, fails the transaction.
 import { orcaWhirlpool } from "@sauce/router";
 
 // One Orca pool: up to amountIn of payMint for buyMint, never more than priceLimit a unit with the
-// fee, and at least minOut, else the whole transaction reverts.
+// fee (to the rounding of the pool's sqrt price), and at least minOut, else the whole transaction
+// reverts.
 function main(
   program: Account,
   pool: Account<Writable>,
@@ -412,6 +433,15 @@ every account they lay out.
 Stabble CLMM runs Raydium's code and its forms cost what Raydium's do. The forms' cost does not grow
 with the ticks a swap crosses; the venue's does, as [compute](../concepts/solana-model.md#compute)
 explains.
+
+Crema's forms at a price add one cost the others lack: they read the slot's last tick array, a
+position at a time from the array's far end toward the price, to place the window's last safe tick
+(`cremaStop`). Each read is about 3,200 to 3,500 units and there are at most 64, so a swap there
+costs up to about 220,000 units more than another venue's, wherever the price lies when the cook
+lands. A pool whose own state rules out a trade (no liquidity, its price already at or past the
+limit, an input too small to buy a unit) is judged before that scan and costs about what another
+venue's does. `cremaAtLimit` reads no array. `sauce tx` charges a Crema swap what it charges every
+venue's swap, so it does not reserve the scan: a plan near the compute cap can run out of units.
 
 ## Exact input
 

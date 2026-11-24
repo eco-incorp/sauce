@@ -2736,8 +2736,9 @@ function docsIntros(data) {
       "to the next. You name one price, and one transaction does the rest.",
     [SOLANA_DISTRIBUTED_SWAP_GUIDE]:
       "The same order on Solana: buy a lot of a token, never paying more than a set price for any " +
-      "of it, spread over the pools of several Solana exchanges. Each pool sells what it can below " +
-      "your price, and what you have not spent moves on to the next, in one transaction.",
+      "of it (to within each pool's rounding), spread over the pools of several Solana exchanges. " +
+      "Each pool sells what it can below your price, and what you have not spent moves on to the " +
+      "next, in one transaction.",
   };
   for (const chain of data.chains) {
     intros[site.chain(chain.slug)] =

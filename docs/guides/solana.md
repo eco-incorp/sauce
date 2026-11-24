@@ -104,11 +104,11 @@ A swap at one pool of a venue whose swap stops at a price limit is that venue's 
 
 ```ts
 // Solana: buy WSOL with up to `amountIn` of the Pot's USDC at Orca's SOL/USDC whirlpool of tick
-// spacing 4, never paying more than `priceLimit` for any unit, and send what arrived to `to`. The
-// pool is found by its key, as an EVM program finds a Uniswap pool by its fee, and compiling adds
-// every account the swap takes to main — the pool's nine, read from the pool when the cook is
-// built, and the Pot's own — so the command is given none. A pool already past `priceLimit` is
-// skipped (`swap` returns 0, and nothing moves); below `minOut` the whole transaction reverts.
+// spacing 4, never paying more than `priceLimit` for any unit (to its sqrt price rounding), and
+// send what arrived to `to`. The pool is found by its key, as an EVM program finds a Uniswap pool
+// by its fee, and compiling adds every account the swap takes to main — the pool's nine, read from
+// the pool when the cook is built, and the Pot's own — so the command is given none. A pool already
+// past `priceLimit` is skipped (`swap` returns 0, nothing moves); below `minOut` the cook reverts.
 //
 //   sauce run solana-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <to> <amountIn> <priceLimit> <minOut>
@@ -137,7 +137,7 @@ function main(to: Address, amountIn: Uint256, priceLimit: Uint256, minOut: Uint2
 }
 ```
 
-Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has a `swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)`. It returns what arrived. Where the pool cannot trade (there is no pool at the key, or it is empty, paused, or already past `priceLimit`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `priceLimit` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18.
+Each namespace is the protocol, then its program, as on an EVM chain: `Raydium.CLMM`, `Pancakeswap.CLMM`, `Byreal.CLMM`, `Stabble.CLMM`, `Orca.Whirlpool`, `Cropper.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM` and `Phoenix.Market`. Each has a `swap(pool, tokenIn, tokenOut, amountIn, priceLimit, minOut)`. It returns what arrived. Where the pool cannot trade (there is no pool at the key, or it is empty, paused, or already past `priceLimit`), it returns 0 and moves nothing. Below `minOut` the whole transaction reverts. `priceLimit` is the most one unit bought may cost, fee included: pay base units per buy base unit, times 10^18. The pool's sqrt price is rounded, so paying the pool's token A (the one whose price falls) the last unit can cost a hair more.
 
 Meteora DLMM's own swap has no price limit, so `Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)` takes no `priceLimit`: it pays all of `amountIn`, or the whole transaction fails, and reverts below `minOut`. Its pool is named by its address.
 

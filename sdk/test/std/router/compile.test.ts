@@ -683,6 +683,7 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
     "limit past 64 bits",
     "limit past 128 bits",
     "limit past its field",
+    "Crema takes no zero limit",
     "debit",
   ];
   const reasons = (name: string): Record<string, number> => {
@@ -760,6 +761,11 @@ describe("@sauce/router (SVM): the reasons its checks revert with", () => {
       ...(limit === undefined ? {} : { [limit]: 2 }),
       // and a sqrt price limit wider than its field, whatever the pool's state, checked first too.
       ...(wide > 0 ? { "limit past 128 bits": wide + 1 } : {}),
+      // Crema's takes no limit of 0, and refuses a floor past its field, before it skips a pool
+      // for its own state, its own check beside the data's.
+      ...(venue === "Crema"
+        ? { "minOut past 64 bits": floors + 1, "Crema takes no zero limit": 1 }
+        : {}),
     });
     const cpi = `${base}Cpi`;
     // `…Cpi` writes its data itself (Orca's two swaps' under one floor check), Phoenix's excepted.

@@ -179,6 +179,11 @@ const POOLS = [
   },
   { name: "crema-sol-usdc", venue: "crema", pool: "DV569UDdnjkYWJDnpJfJZE4HyzYKYyRGowtdPQrFUZpm" },
   {
+    name: "crema-usdt-usdc",
+    venue: "crema",
+    pool: "7MPnn7k6uYSMcW7VvB8GUcEedLApmsAG1Fesfufv7rBk",
+  },
+  {
     name: "phoenix-sol-usdc",
     venue: "phoenix",
     pool: "4DoNfFBfF7UokCC2FQzriy7yHK6DY6NVdYpuekQ5pRgg",

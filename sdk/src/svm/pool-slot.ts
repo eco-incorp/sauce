@@ -91,8 +91,8 @@ export const SVM_SLOT_VENUES: readonly SvmPriceLimitVenue[] = [
 
 /**
  * A concentrated-liquidity layout: its pool account's size and discriminator (the first 8 bytes,
- * Anchor's hash of the account's name), and where it keeps the pair (lower key first), its
- * liquidity, price and tick.
+ * Anchor's hash of the account's name), and where it keeps the pair (lower key first, but Crema's in
+ * the order its pool was created in), its liquidity, price and tick.
  */
 export const SVM_CLMM_LAYOUT: Readonly<
   Record<
@@ -219,14 +219,15 @@ const keyAt = (data: Uint8Array, offset: number): Address =>
   getAddressDecoder().decode(data.subarray(offset, offset + 32));
 
 /**
- * The nine accounts a concentrated-liquidity pool's slot takes, paying its lower-key token or not.
- * `data` is the pool's own account.
+ * The nine accounts a concentrated-liquidity pool's slot takes, paying its token A or not: its
+ * lower-key token, but on Crema, which keeps its pair in the order its pool was created in, the
+ * pool's own token A, whichever key it is. `data` is the pool's own account.
  */
 export async function svmClmmSlot(
   venue: SvmPriceLimitVenue,
   pool: Address,
   data: Uint8Array,
-  paysLower: boolean,
+  paysA: boolean,
   load: OwnedAccountLoader,
 ): Promise<SvmSlot> {
   const program = venue.program;
@@ -238,11 +239,11 @@ export async function svmClmmSlot(
       vaultA: keyAt(data, 137),
       vaultB: keyAt(data, 169),
       extra: keyAt(data, 201),
-      ticks: await raydiumTickArrays(program, pool, data, paysLower, accountDataLoader(load)),
+      ticks: await raydiumTickArrays(program, pool, data, paysA, accountDataLoader(load)),
     };
   }
   const window = (windows: { aToB: { tickArrays: Address[] }; bToA: { tickArrays: Address[] } }) =>
-    (paysLower ? windows.aToB : windows.bToA).tickArrays as unknown as [Address, Address, Address];
+    (paysA ? windows.aToB : windows.bToA).tickArrays as unknown as [Address, Address, Address];
   const { mintA, mintB } =
     SVM_CLMM_LAYOUT[venue.layout as Exclude<SvmPoolLayout, "phoenix" | "dlmm">];
   const unread =
@@ -283,13 +284,12 @@ export async function svmClmmSlot(
   if (venue.layout === "crema") {
     const cfg = await fetchCremaPoolConfig(load, pool);
     // Crema refuses a tick array its map does not mark, and `cpiCrema` passes the slot's leading
-    // arrays up to the first System program: an array past the readable prefix is that sentinel.
-    const { tickArrays, readable } = paysLower ? cfg.windows.aToB : cfg.windows.bToA;
-    const ticks = tickArrays.map((array, index) => (index < readable ? array : SYSTEM)) as [
-      Address,
-      Address,
-      Address,
-    ];
+    // arrays up to the first System program: an array past the readable prefix, or past the arrays
+    // the map marks (the window pads with arrays that exist and that it does not), is that sentinel.
+    const { tickArrays, readable, marked } = paysA ? cfg.windows.aToB : cfg.windows.bToA;
+    const ticks = tickArrays.map((array, index) =>
+      index < Math.min(readable, marked) ? array : SYSTEM,
+    ) as [Address, Address, Address];
     return {
       program,
       pool,
@@ -541,11 +541,11 @@ export async function svmPoolSlot(
     throw new Error(`${pool} is ${data.length} bytes, not a ${venue.name} pool's ${layout.size}`);
   }
   if (!layout.discriminator.every((byte, i) => data[i] === byte)) throw notAPool("pool");
-  const lower = keyAt(data, layout.mintA);
-  const higher = keyAt(data, layout.mintB);
-  if (pay !== lower && pay !== higher) {
-    throw new Error(`${venue.name} pool ${pool} trades ${lower} and ${higher}, not ${pay}`);
+  const tokenA = keyAt(data, layout.mintA);
+  const tokenB = keyAt(data, layout.mintB);
+  if (pay !== tokenA && pay !== tokenB) {
+    throw new Error(`${venue.name} pool ${pool} trades ${tokenA} and ${tokenB}, not ${pay}`);
   }
 
-  return svmClmmSlot(venue, pool, data, pay === lower, load);
+  return svmClmmSlot(venue, pool, data, pay === tokenA, load);
 }

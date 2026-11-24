@@ -65,31 +65,32 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
-| 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
-| None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.2.0      | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.1.0      | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| None       | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 **None** marks compiler 2.6.2, which no SDK release installs. Its row is the set SDK 1.1.0's
 network defaults used by mistake (see 1.2.0); it is kept because its engines still run Pots made
@@ -112,6 +113,71 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## Unreleased
+
+Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. Same compiler
+and engines as 1.2.0.
+
+### SauceScript
+
+- **Fixed (Solana): `Crema.CLMM.swap` and `@sauce/router`'s `crema`, `cremaStopped` and
+  `cremaAtLimit` trade on a pool that keeps its pair higher key first.** A Crema pool keeps its two
+  tokens in the order it was created in, so its token A is not always the lower key. On 14 of
+  mainnet's 27 Crema pools, 6 of them live, USDT/USDC among them, it is the higher one. The swap took
+  the direction from the keys, so on such a pool paying token B (USDC at USDT/USDC) failed the whole
+  cook, with the engine's `Overflow` (custom program error 51); paying token A (USDT) returned `0`
+  having moved nothing; and `cremaAtLimit` reverted `pool is not the pair`. The direction, the price
+  and the limit now follow the pool's own order: paying token A lowers the price, and the price is
+  token B per token A. A pool that keeps its pair by key, SOL/USDC among them, trades as it did. A
+  Crema swap's slot also holds only the tick arrays the pool's map marks now. It was padded with
+  arrays that exist but that the map does not mark, which Crema refuses (`InvalidTickArrayAccount`),
+  so a Crema swap built from it failed at USDT/USDC whichever way it traded. A direction whose map
+  marks no tick array is a slot of the System program in its three places, and its swap is skipped,
+  returning `0` having moved nothing.
+- **Fixed (Solana): `cremaAtLimit` refuses a limit of `0` and a floor past 64 bits whatever its
+  window holds.** On 1.2.0 a limit of `0` reached Crema's program, which refuses it and fails the
+  whole transaction without a reason. It reverts `Crema takes no zero limit` itself now, before it
+  looks at the window, as it does a limit past 128 bits, and a floor past 64 bits reverts
+  `minOut past 64 bits` there too, so both are refused even where the pool is idle or its window has
+  no room. What it skips first, no input and a paused pool, is skipped as before.
+- **Fixed (Solana): `crema` and `cremaStopped` skip a pool whose slot the price has left.** Paying
+  a pool's token A, a slot whose last tick array starts above the pool's price (liquidity opened
+  below it, or a price that fell through the slot's arrays between building and landing) failed the
+  whole cook with the engine's `Overflow` (custom program error 51), where the other direction
+  returned `0`. It returns `0` having moved nothing.
+- **Changed (Solana): `crema` and `cremaStopped` read a pool's price, liquidity and fee before its
+  tick array.** A pool that cannot trade for what it alone shows (its price already at or past the
+  limit, no liquidity, an input too small to buy a unit) returns `0` before the router reads the
+  slot's last tick array, up to 64 reads of about 3,200 to 3,500 compute units each, and a pool that
+  is not the pair is refused even where its window has no room. A Crema pool that cannot trade no
+  longer meets the deep tick's checks either.
+- **Fixed (Solana): paying a pool's token A, the last unit can cost a hair more than
+  `priceLimit`; the documentation said it never did.** The router rounds the roots of the limit
+  down, which keeps it inside the exact one paying token B and can move it past the exact one
+  paying token A, by a few steps of the pool's Q64.64 square-root price. It is the same on every
+  concentrated-liquidity venue. The reference, the guides and the skills now say where the limit can
+  be passed. No code changed.
+
+### The `sauce` command and the MCP server
+
+- **Fixed (Solana): `sauce pools` and the MCP `sauce_pools` list a Crema pool that keeps its pair
+  higher key first.** They asked Crema's program for the pair in key order alone, so USDT/USDC was
+  missing from the listing. They ask both orders now, price each side by the pool's own order, and
+  give the pool's slot the tick arrays its map marks.
+- **Not changed (Solana): `sauce tx` budgets compute as on 1.2.0, while Crema's router costs change.**
+  `sauce tx` charges a Crema swap what it charges every venue's. Crema's router reads the slot's
+  last tick array before it swaps, a position at a time, up to 64 positions of about 3,200 to 3,500
+  compute units each, so a plan near the compute cap can run out of compute, as on 1.2.0. Reserving
+  that cost needs `sauce tx` to budget swaps in rank order, which this release does not do. Only the
+  budgeting is unchanged. In a test cook that mixes Crema and Orca swaps near the compute cap, each
+  `cremaAtLimit` call cost 4,124 more compute units than on 1.2.0 and each `crema` swap 1,432 fewer;
+  in a cook with one swap, `crema` and `cremaStopped` cost 1,434 to 1,535 fewer and `cremaAtLimit`
+  1,552 to 1,574 more. A program that mixes Crema with another concentrated-liquidity venue at a
+  price is 632 bytes larger, and one that calls only Crema, or Crema with Phoenix, 29 bytes. A
+  program close to the cook's 1,400,000 compute units can land on 1.2.0 and fail on 1.3.0, so re-run
+  `sauce simulate` before sending it. `sauce simulate` and `sauce run` measure each cook's own
+  units.
 
 ## SDK 1.2.0 — 2026-11-24
 

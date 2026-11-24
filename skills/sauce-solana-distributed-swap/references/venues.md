@@ -20,7 +20,10 @@ the command reads them from the pool as it builds the cook. Offsets are bytes fr
 An account a venue does not take is the System program, `11111111111111111111111111111111`, and so
 is every account of an empty slot. The concentrated-liquidity venues keep the pair in the order of
 the two mints' 32-byte keys, the lower first: paying the lower-key token pushes the price down,
-paying the other pushes it up, and the tick arrays the swap walks depend on which.
+paying the other pushes it up, and the tick arrays the swap walks depend on which. Crema is the
+exception: it keeps its pair in the order the pool was created in, so its token A may be the higher
+key. Paying token A pushes its price down, paying token B pushes it up, and its price is the square
+root of token B per token A.
 
 ## Raydium CLMM, PancakeSwap CLMM, Byreal and Stabble CLMM
 
@@ -108,11 +111,18 @@ A pool of 748 bytes and its `swap` (`Crema.CLMM.swap`, `crema`):
 | liquidity, sqrt price (Q64.64), tick | 174 (u128), 190 (u128), 206 (i32) |
 | paused                               | 747; not zero means paused        |
 
+A pool keeps its pair in the order it was created in, so mint A (at 40) is the lower key on some
+pools and the higher on others: USDT/USDC keeps USDT, the higher key, as its token A. A swap follows
+the pool's own order, never the keys'.
+
 The slot: `config` = the `clmm_config`, `vaultA`/`vaultB` = the two vaults, `extra` = the tick-array
 map, the program address of `["tick_array_map", pool]`. The tick arrays: the program address of
 `["tick_array", pool, index]`, `index` a little-endian u16, each spanning 64 ticks times the
 spacing; the array holding the price and the next two **allocated** ones in the walk's direction,
-as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod spacing)`).
+as the map's bitmap marks them (array 0 starts at tick `−443636 + (443636 mod spacing)`). Crema
+refuses an array its map does not mark, whether or not the account exists, so the slot names only
+the marked ones and the System program in each place past them. A direction whose map marks none is
+three System programs, and the swap skips the pool.
 
 ## Phoenix
 
@@ -165,8 +175,9 @@ there, and refuses the fee alone where both are, naming each, for the spacing to
 
 A venue's pools are its program's accounts, so `getProgramAccounts` on the venue's program finds
 them, with the pool's size and the pair at its mints' offsets as filters: for the
-concentrated-liquidity venues the lower key at the first offset and the higher at the second, for
-Phoenix the base and quote in either order. Then read each pool's liquidity, price and fee at the
+concentrated-liquidity venues the lower key at the first offset and the higher at the second
+(Crema's pools keep either one first, so ask both orders), for Phoenix the base and quote in
+either order. Then read each pool's liquidity, price and fee at the
 offsets above, drop the empty ones and those whose fee is more than one rate, and keep the deepest
 and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how a program finds it.
 
@@ -180,4 +191,6 @@ and cheapest. `sauce pools` does all of this, and gives each pool's `byKey`: how
 
 A pool's price, back in whole tokens: `(sqrtPrice ÷ 2^64)^2 × 10^(lowerDecimals − higherDecimals)`
 higher-key tokens per lower-key token. Paying the higher-key token, its price fee included is that
-divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`.
+divided by `1 − fee`; paying the lower-key token, `1 ÷ (price × (1 − fee))`. Crema's is in the
+pool's own order, `(sqrtPrice ÷ 2^64)^2 × 10^(decimalsA − decimalsB)` token B per token A: that
+divided by `1 − fee` paying token B, `1 ÷ (price × (1 − fee))` paying token A.
