@@ -313,6 +313,14 @@ describe("the release gate's probe of the Router's callbacks", () => {
     expect(await callThatFails(rpcError("0x"))).toEqual({ revertData: "0x" });
     // A failure that is no revert says nothing of the Router: thrown, never read as an answer.
     await expect(callThatFails(new Error("fetch failed"))).rejects.toThrow();
+    // An RPC error that is no revert says nothing of the Router either, whatever `data` it carries:
+    // an empty one must not pass for the revert with no data that the control asks for.
+    const limited = new RpcRequestError({
+      body: { method: "eth_call" },
+      url: "https://rpc.example.invalid",
+      error: { code: -32005, message: "request limit reached", data: "0x" },
+    });
+    await expect(callThatFails(limited)).rejects.toThrow();
   });
 });
 

@@ -353,16 +353,17 @@ export async function kitchenCoverage({ ids, routerIds, canonical, hasCode, reas
 }
 
 /**
- * What an `eth_call` that threw says of the contract, for the Router probe: `{ revertData }`, the
- * data the node's RPC error carries (the first cause with a string `data`: viem wraps that error
- * twice, and its wrappers carry none), or `"0x"` for a revert that carries none. A failure that is
- * no revert (a network error, a timeout) says nothing of the Router, and is thrown.
+ * What an `eth_call` that threw says of the contract, for the Router probe: `{ revertData }`. It is
+ * a revert first: viem names one (`ExecutionRevertedError`) and only what sits under it is read, so
+ * an RPC error that is no revert, whatever `data` it carries, says nothing of the Router and is
+ * thrown, as a network error or a timeout is. The data is the first cause under the revert with a
+ * string `data` (viem wraps the RPC error twice and the revert itself carries none), or `"0x"` for
+ * a revert with none.
  */
 export function revertOutcome(error) {
-  const carried = error?.walk?.((cause) => typeof cause.data === "string");
-  if (carried !== undefined && carried !== null) return { revertData: carried.data };
   const reverted = error?.walk?.((cause) => cause.name === "ExecutionRevertedError");
   if (reverted === undefined || reverted === null) throw error;
+  const carried = reverted.walk?.((cause) => typeof cause.data === "string");
 
-  return { revertData: "0x" };
+  return { revertData: carried?.data ?? "0x" };
 }

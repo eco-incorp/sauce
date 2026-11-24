@@ -622,7 +622,10 @@ try {
           try {
             await chain.client.call({ account: '0x000000000000000000000000000000000000dEaD', to: router, data: selector + data });
           } catch (error) {
-            const found = error.walk((cause) => typeof cause.data === 'string');
+            // A revert first: an error that is no revert says nothing of the Router.
+            const reverted = error.walk((cause) => cause.name === 'ExecutionRevertedError');
+            if (!reverted) throw error;
+            const found = reverted.walk((cause) => typeof cause.data === 'string');
 
             return found ? found.data : '0x';
           }
