@@ -127,11 +127,10 @@ function privateCache(root: string, installed: Row, local: { quoteRouter: QuoteR
     join(cache, quoteTag, "manifest.json"),
     JSON.stringify({ abis: { sha256: digest } }),
   );
-  writeFileSync(
-    join(cache, quoteTag, "addresses.json"),
-    JSON.stringify({ version: local.quoteRouter.version, contracts: { router } }),
-  );
+  const addresses = JSON.stringify({ version: local.quoteRouter.version, contracts: { router } });
+  writeFileSync(join(cache, quoteTag, "addresses.json"), addresses);
   local.quoteRouter.assets["abis.json"] = digest;
+  local.quoteRouter.assets["addresses.json"] = createHash("sha256").update(addresses).digest("hex");
 }
 
 /** The fields of V12Deployments.json a scenario changes. */
@@ -580,6 +579,37 @@ describe("the private release packages, read from their cache", () => {
       const result = f.run();
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("releases.json records the kitchen-evm");
+      expect(tree(f.root)).toEqual(before);
+    } finally {
+      rmSync(f.root, { recursive: true, force: true });
+    }
+  });
+
+  // The quote Router's own `addresses.json` is pinned by digest like every other release asset the
+  // sync reads, and held to it on EVERY read of the cache, not only after a download.
+  it("pins the quote Router's addresses.json by digest in the table", () => {
+    expect(table.quoteRouter.assets["addresses.json"]).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("refuses a cached quote Router addresses.json its row does not pin, changing nothing", () => {
+    const f = fixture(undefined, "private");
+    try {
+      f.seed();
+      const cached = f.at(
+        `node_modules/.cache/sauce-engine-releases/kitchen-evm-v${table.quoteRouter.version}/addresses.json`,
+      );
+      // The same file with another address for the quote Router: it parses, carries the right
+      // version and a Router salt of the right generation. All that is wrong with it is that it is
+      // not the file the row pins.
+      const held = JSON.parse(readFileSync(cached, "utf8"));
+      held.contracts.router.address = OTHER;
+      writeFileSync(cached, JSON.stringify(held));
+      const before = tree(f.root);
+      const result = f.run();
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain(
+        `kitchen-evm-v${table.quoteRouter.version}/addresses.json failed its digest`,
+      );
       expect(tree(f.root)).toEqual(before);
     } finally {
       rmSync(f.root, { recursive: true, force: true });

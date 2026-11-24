@@ -281,7 +281,8 @@
   "quoteRouter": {
     "version": "1.1.0",
     "assets": {
-      "abis.json": "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19"
+      "abis.json": "0cf29af5c11222f2842f0425895f905ea8c7b4338171c8a046aff5cc13fa9b19",
+      "addresses.json": "66bdd14bc844b733839103e1ce4a2ddeadb1c0b392b1c03c8eefa071c910f1f5"
     }
   }
 }

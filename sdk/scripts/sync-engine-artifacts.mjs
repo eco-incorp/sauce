@@ -220,6 +220,22 @@ const QUOTE_ROUTER_ABIS = {
   digest: RELEASE_TABLE.quoteRouter.assets["abis.json"],
   ...ASSET_FORMATS["abis.json"],
 };
+// The quote Router's release addresses (`addresses.json`: its address and salt), pinned like every
+// asset of the row's own releases, so a cached copy cannot stand in for it: `releases.json`'s
+// `quoteRouter.assets` holds both digests.
+const QUOTE_ROUTER_ADDRESSES = {
+  tag: QUOTE_ROUTER_ABIS.tag,
+  asset: "addresses.json",
+  digest: RELEASE_TABLE.quoteRouter.assets["addresses.json"],
+  ...ASSET_FORMATS["addresses.json"],
+};
+if (!/^[0-9a-f]{64}$/.test(QUOTE_ROUTER_ADDRESSES.digest ?? "")) {
+  console.error(
+    `[sync-engine-artifacts] releases.json's quoteRouter pins no sha256 for ` +
+      `${QUOTE_ROUTER_ADDRESSES.tag}/addresses.json: a file nothing pins is not read.`,
+  );
+  process.exit(1);
+}
 
 // The kitchen — the Anchor loader that stages bytecode and owns Pots. Fetched rather than vendored:
 // a released binary is already pinned by tag + digest, so a second copy in the tree would be a
@@ -483,19 +499,20 @@ function fetchReleaseAsset({ tag, asset, digest, manifestKey, hash }) {
   return dest;
 }
 
-/** A release's `addresses.json`, cached beside its assets; held to the row's digest where the row
- *  pins it (every release the row names, not the quote Router's). */
+/** A release's `addresses.json`, cached beside its assets and held to its digest on EVERY read
+ *  (`fetchReleaseAsset` hashes the cached file each time): the row's own, or the quote Router's
+ *  (`QUOTE_ROUTER_ADDRESSES`). A file no digest pins is not read: there is no unverified branch. */
 function releaseAddresses(tag) {
-  const pinned = PINS.find((p) => p.tag === tag && p.asset === "addresses.json");
-  if (pinned !== undefined) return JSON.parse(readFileSync(fetchReleaseAsset(pinned), "utf8"));
-  const dir = resolve(CACHE_ROOT, tag);
-  const path = resolve(dir, "addresses.json");
-  if (!existsSync(path)) {
-    mkdirSync(dir, { recursive: true });
-    download(tag, "addresses.json", path);
+  const pinned = [...PINS, QUOTE_ROUTER_ADDRESSES].find(
+    (p) => p.tag === tag && p.asset === "addresses.json",
+  );
+  if (pinned === undefined) {
+    throw new Error(
+      `no digest in releases.json pins ${tag}/addresses.json: it is not read unverified`,
+    );
   }
 
-  return JSON.parse(readFileSync(path, "utf8"));
+  return JSON.parse(readFileSync(fetchReleaseAsset(pinned), "utf8"));
 }
 
 /** Each engine's own identity as its release records it: the EVM address, the SVM program id. */
@@ -1025,6 +1042,10 @@ function syncFromPublicPackage() {
       contracts.kitchenImplementation?.address &&
       deployments.svm?.programs?.kitchen?.programId,
     ),
+    // From the public tarball the quote Router's addresses.json cannot be held to its digest: it is a
+    // historical release's and the tarball carries no raw copy of it (the private path pins it, see
+    // QUOTE_ROUTER_ADDRESSES). Here the guarantee is the tarball's committed integrity, and these two
+    // derived files agreeing on one address and on generation 3.
     "quote Router":
       contracts.quoteRouter?.generation === 3 &&
       same(quote.address, contracts.quoteRouter?.address) &&
@@ -1327,14 +1348,17 @@ const addressesFor = (tag) => {
   }
   return parsed;
 };
-const quoteRouter = addressesFor(QUOTE_ROUTER_ABIS.tag).contracts.router;
-{
+let quoteRouter;
+try {
+  quoteRouter = addressesFor(QUOTE_ROUTER_ABIS.tag).contracts.router;
   const released = JSON.parse(readFileSync(fetchReleaseAsset(QUOTE_ROUTER_ABIS), "utf8"));
   const { abi, bytecode } = released.contracts.Router;
   if (routerGeneration(quoteRouter) !== 3 || !abi.some((item) => item.name === "quote")) {
     throw new Error("the quote service must be the generation-3 Router with quote(QuoteParams)");
   }
   write("V12QuoteRouter", { abi, bytecode, address: quoteRouter.address });
+} catch (e) {
+  stop("the quote Router", e);
 }
 try {
   const evm = addressesFor(V12_EVM.tag); // engine
