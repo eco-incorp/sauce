@@ -166,6 +166,21 @@ function isDeployment(value: unknown): boolean {
   );
 }
 
+/**
+ * Whether `value` is a record's `release`: an object of strings that names its compiler, then each
+ * component's version (`v12-evm` and `kitchen-evm` on an EVM chain, `v12-svm` and `kitchen-svm` on
+ * Solana). What reads a release takes it for that, and trips on `null` or a string.
+ */
+function isRelease(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const given: Record<string, unknown> = Object.fromEntries(Object.entries(value));
+
+  return (
+    typeof given.compiler === "string" &&
+    Object.values(given).every((one) => typeof one === "string")
+  );
+}
+
 /** `parsed`, read from `path`, as a record: refused unless it has every field a record has. */
 function asRecord(path: string, parsed: unknown): PotRecord {
   const record = parsed as Record<string, unknown> | null;
@@ -182,6 +197,11 @@ function asRecord(path: string, parsed: unknown): PotRecord {
     throw new Error(
       `${path} is not a Pot record: its deployment is not an object of the strings tx, block and ` +
         "from (and blockHash, where it has one)",
+    );
+  }
+  if (record.release !== undefined && !isRelease(record.release)) {
+    throw new Error(
+      `${path} is not a Pot record: its release is not an object of strings that names its compiler`,
     );
   }
 

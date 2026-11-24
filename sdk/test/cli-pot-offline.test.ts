@@ -203,6 +203,29 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(run.stderr).toContain(TX);
     });
 
+    it("says the record's provenance on one line, quoted, whatever its fields hold", async () => {
+      // `sdk`, `recordedAt` and the deployment are strings the store does not look into, and the
+      // refusal is one line: a record is a file anyone can edit.
+      const hand = {
+        sdk: "1.0.0\nINJECTED_SDK: the Pot is safe",
+        recordedAt: "2026-11-19\nINJECTED_DATE",
+        tx: "0xabc\nINJECTED_TX",
+        block: "1\nINJECTED_BLOCK",
+        blockHash: "0xdef\nINJECTED_HASH",
+      };
+      const { dir, file } = storeWith({
+        ...RECORD,
+        sdk: hand.sdk,
+        recordedAt: hand.recordedAt,
+        deployment: { tx: hand.tx, block: hand.block, blockHash: hand.blockHash, from: OWNER },
+      });
+      const run = await tx(dir, "--value", "0", "--owner", OWNER);
+      expect(run.code).toBe(1);
+      expect(run.stderr).toContain(file);
+      for (const value of Object.values(hand)) expect(run.stderr).toContain(JSON.stringify(value));
+      for (const line of run.stderr.split("\n")) expect(line.startsWith("INJECTED")).toBe(false);
+    });
+
     it.each(["shared", "private-fixed-router", "bogus"])(
       "refuses for the record of an earlier release's Pot whatever kind it stores (%s): the address says the kind",
       async (kind) => {
@@ -401,6 +424,45 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
         expect(byPot.code).toBe(0);
         expect(cookedOn(byPot).engine).toBe(ENGINE);
         expect(byPot.stderr).toContain(odd.file);
+      }
+    });
+
+    it("says a record's own text on one line, quoted, in the notes: a kitchen and a Pot of two lines", async () => {
+      // A record is a file anyone can edit, and a note is read as the command's own: what the
+      // record says is never a line of the note's.
+      const kitchen = "0xabc\nINJECTED: this Pot is safe to cook on";
+      const damaged = filed(
+        String(BASE.id),
+        `${EARLIER.toLowerCase()}.json`,
+        JSON.stringify({ ...RECORD, kitchen }),
+      );
+      const pot = "0xdef\nINJECTED: run the next step";
+      const moved = filed(
+        String(BASE.id),
+        `${EARLIER.toLowerCase()}.json`,
+        JSON.stringify({ ...RECORD, pot }),
+      );
+      // A kitchen that is no address is a damaged record on either path; a Pot that is none is
+      // damaged by owner, and by Pot it is a record of another Pot under this one's name.
+      const cases = [
+        [
+          damaged.dir,
+          ["--pot", EARLIER],
+          `its kitchen is not an address: ${JSON.stringify(kitchen)}`,
+        ],
+        [
+          damaged.dir,
+          ["--owner", OWNER],
+          `its kitchen is not an address: ${JSON.stringify(kitchen)}`,
+        ],
+        [moved.dir, ["--pot", EARLIER], `it holds a record of ${JSON.stringify(pot)} on chain`],
+        [moved.dir, ["--owner", OWNER], `its pot is not an address: ${JSON.stringify(pot)}`],
+      ] as const;
+      for (const [dir, flags, said] of cases) {
+        const run = await tx(dir, "--value", "0", ...flags);
+        expect(run.code).toBe(0);
+        expect(run.stderr).toContain(said);
+        for (const line of run.stderr.split("\n")) expect(line.startsWith("INJECTED")).toBe(false);
       }
     });
   });

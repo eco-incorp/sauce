@@ -17,6 +17,7 @@ import {
   importSvmPot,
   recordFacts,
   recordOn,
+  recordText,
   releaseText,
   unreadableNote,
   type RecordFacts,
@@ -26,18 +27,19 @@ import { genesisOf } from "./solana.js";
 /** The chain a record is on, and on Solana a cluster other than mainnet's: `solana (devnet)`. */
 const onChain = (record: PotRecord): string =>
   record.cluster === undefined || record.cluster === MAINNET_CLUSTER
-    ? record.chain
-    : `${record.chain} (${record.cluster})`;
+    ? recordText(record.chain)
+    : `${recordText(record.chain)} (${recordText(record.cluster)})`;
 
 /** One Pot, as `sauce pot list` prints it: its kind and release as `facts` tell them. */
 const potLines = (record: PotRecord, facts: RecordFacts): string[] => [
-  `${onChain(record)}  ${record.pot}  ${facts.kind}`,
-  `  owner ${record.owner}, salt ${record.salt}`,
-  `  ${releaseText(facts.release)}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
+  `${onChain(record)}  ${recordText(record.pot)}  ${recordText(facts.kind)}`,
+  `  owner ${recordText(record.owner)}, salt ${recordText(record.salt)}`,
+  `  ${releaseText(facts.release)}${record.engine === undefined ? "" : `, engine ${recordText(record.engine)}`}`,
   record.deployment === undefined
-    ? `  ${record.origin} ${record.recordedAt}`
-    : `  ${record.origin} in ${record.deployment.tx} (${record.chain === "solana" ? "slot" : "block"} ` +
-      `${record.deployment.block}) from ${record.deployment.from}`,
+    ? `  ${recordText(record.origin)} ${recordText(record.recordedAt)}`
+    : `  ${recordText(record.origin)} in ${recordText(record.deployment.tx)} ` +
+      `(${record.chain === "solana" ? "slot" : "block"} ${recordText(record.deployment.block)}) ` +
+      `from ${recordText(record.deployment.from)}`,
 ];
 
 /** The same address, as its chain compares them: an EVM one in any case, a base58 one exactly. */
@@ -76,7 +78,8 @@ export function potListCommand(
         : facts.kind === record.kind
           ? []
           : [
-              `${record.pot}: the record says ${record.kind}; its address makes it a ${facts.kind} Pot`,
+              `${recordText(record.pot)}: the record says ${recordText(record.kind)}; ` +
+                `its address makes it a ${facts.kind} Pot`,
             ],
     ),
   ];

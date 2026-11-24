@@ -51,7 +51,14 @@ import { NOTHING_SENT, potState, requireReleasePot } from "./chain.js";
 import type { PotInput } from "./commands.js"; // type-only: commands.ts imports this module
 import { keptPots } from "./keep.js";
 import type { PotStore, StoredPot } from "./pot-store.js";
-import { evmRelease, familyRelease, recordKind, recordPotRelease, releaseText } from "./pots.js";
+import {
+  evmRelease,
+  familyRelease,
+  recordKind,
+  recordPotRelease,
+  recordText,
+  releaseText,
+} from "./pots.js";
 
 /**
  * An earlier release's Pot that the Pot store records for an owner and salt, and nothing offline
@@ -119,7 +126,7 @@ function storedFiles(
 
 /** A record the store holds that decides nothing about `about`, and where it is. */
 const ignoredNote = (file: StoredPot, about: string): string =>
-  `The Pot store's ${file.path} is ignored: it holds a record of ${file.record.pot} on chain ` +
+  `The Pot store's ${file.path} is ignored: it holds a record of ${recordText(file.record.pot)} on chain ` +
   `${file.record.chainId}, but it is not filed under that Pot's name and chain, so it says ` +
   `nothing of ${about}.`;
 
@@ -153,12 +160,17 @@ function provenance(stored: StoredPotChoice): string {
   const landed =
     deployment === undefined
       ? "no transaction recorded"
-      : `tx ${deployment.tx}, block ${deployment.block}, ` +
+      : `tx ${recordText(deployment.tx)}, block ${recordText(deployment.block)}, ` +
         (deployment.blockHash === undefined
           ? "no block hash recorded"
-          : `block hash ${deployment.blockHash}`);
+          : `block hash ${recordText(deployment.blockHash)}`);
 
-  return `${stored.path} (${landed}; recorded by @eco-incorp/sauce ${stored.sdk} on ${stored.recordedAt})`;
+  // The file's path is said whole: quoted only where it holds a space or a character a terminal
+  // cannot be trusted with, and not cut at the length of a field.
+  return (
+    `${recordText(stored.path, 1000)} (${landed}; recorded by @eco-incorp/sauce ` +
+    `${recordText(stored.sdk)} on ${recordText(stored.recordedAt)})`
+  );
 }
 
 /**

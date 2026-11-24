@@ -206,6 +206,36 @@ describe("the Pot store", () => {
     ]);
   });
 
+  it("leaves out a record whose release is no object of strings, said, as it does one with a field missing", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    // Hand-edited: a release that is null, a string, a list, an object without the compiler, or one
+    // holding a number is no `release`, and what reads it would trip on it.
+    const bad: unknown[] = [
+      null,
+      "2.5.0",
+      ["2.5.0"],
+      { "v12-evm": "1.2.0" },
+      { compiler: "2.5.0", "v12-evm": 1 },
+    ];
+    bad.forEach((release, index) => {
+      const name = `0x${String(index + 1).repeat(40)}.json`;
+      writeFileSync(join(dir, "8453", name), JSON.stringify({ ...RECORD, release }));
+    });
+    // A record that names no release is a record (SDK 1.1.0 wrote some), and so is one that names one.
+    const { release: _release, ...bare } = RECORD;
+    writeFileSync(join(dir, "8453", `0x${"a".repeat(40)}.json`), JSON.stringify(bare));
+
+    const listing = store.list();
+    expect(listing.pots).toHaveLength(2);
+    expect(listing.warnings).toHaveLength(5);
+    for (const warning of listing.warnings) {
+      expect(warning).toMatch(
+        /\.json is not a Pot record: its release is not an object of strings that names its compiler; that Pot is left out$/,
+      );
+    }
+  });
+
   it("tells a record from the file it is read from: bound only to its chain's directory and its Pot's name", () => {
     const store = new PotStore(dir);
     store.save(RECORD);

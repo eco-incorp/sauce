@@ -38,6 +38,9 @@ import {
   ContractFunctionZeroDataError,
   getAddress,
   hexToBytes,
+  isAddress,
+  isHex,
+  size,
   toEventSelector,
   zeroAddress,
   type Address,
@@ -123,13 +126,31 @@ export function pairedSdkReleases(release: Readonly<Record<string, string>>): st
 export const pairWith = (paired: string): string =>
   `@eco-incorp/sauce ${paired} ${/[ ,]/.test(paired) ? "pair" : "pairs"} with`;
 
+/** What a record's fields hold when they are what they should be: a version, a hash, an address, a date, a kind. */
+const PLAIN_TEXT = /^[\w.:@/+-]{1,200}$/;
+
+/**
+ * A string a record supplies, as a note says it: as it is where it is a plain token (letters,
+ * digits and `.:@/+_-`), else quoted, on one line, at most `limit` characters, with what a terminal
+ * cannot be trusted to print replaced. A record is a file anyone can edit, and a note reaches a
+ * terminal and the MCP server's tool results, which read their notes as the server's own: what a
+ * record says is never a line of a note's own.
+ */
+export function recordText(value: unknown, limit = 80): string {
+  const text = String(value);
+
+  return PLAIN_TEXT.test(text)
+    ? text
+    : JSON.stringify(text.slice(0, limit)).replace(/[\p{C}\p{Zl}\p{Zp}]/gu, "?");
+}
+
 /** A record's release, as a reader reads it: `compiler 2.5.0 (v12-evm 1.2.0, kitchen-evm 1.2.0)`. */
 export const releaseText = (release: PotRecord["release"]): string => {
   if (release === undefined) return "release unknown";
   const { compiler, ...components } = release;
 
-  return `compiler ${compiler} (${Object.entries(components)
-    .map(([component, version]) => `${component} ${version}`)
+  return `compiler ${recordText(compiler)} (${Object.entries(components)
+    .map(([component, version]) => `${recordText(component)} ${recordText(version)}`)
     .join(", ")})`;
 };
 
@@ -201,17 +222,28 @@ export const familyRelease = (family: PotFamily): Record<string, string> =>
  * its `kind` field is not what decides: SDK 1.1.0 wrote a CREATE3 Pot with no release, and the kind
  * `private` for any owner but the zero address where the Kitchen's `gateSalt()` could not be read,
  * a fixed-Router Pot's included. `undefined` for a Pot no known release derives, of which a record
- * says only what it says itself.
+ * says only what it says itself. Throws, naming the field, for a record whose `kitchen`, `owner` or
+ * `pot` is no address or whose `salt` is not 32 bytes of hex: the store checks that a field is a
+ * string, not what it holds.
  */
-export const recordPotRelease = (record: PotRecord): PotRelease | undefined =>
-  record.pot.startsWith("0x")
-    ? v12PotRelease({
-        kitchen: getAddress(record.kitchen),
-        owner: getAddress(record.owner),
-        salt: record.salt as Hex,
-        pot: getAddress(record.pot),
-      })
-    : undefined;
+export function recordPotRelease(record: PotRecord): PotRelease | undefined {
+  if (!record.pot.startsWith("0x")) return undefined;
+  for (const field of ["kitchen", "owner", "pot"] as const) {
+    if (!isAddress(record[field], { strict: false })) {
+      throw new Error(`its ${field} is not an address: ${recordText(record[field])}`);
+    }
+  }
+  if (!isHex(record.salt, { strict: true }) || size(record.salt) !== 32) {
+    throw new Error(`its salt is not 32 bytes of hex: ${recordText(record.salt)}`);
+  }
+
+  return v12PotRelease({
+    kitchen: getAddress(record.kitchen),
+    owner: getAddress(record.owner),
+    salt: record.salt,
+    pot: getAddress(record.pot),
+  });
+}
 
 /**
  * A record's kind as its address says it ({@link recordPotRelease}), and the stored `kind` only
@@ -257,12 +289,7 @@ export function recordFacts(record: PotRecord): RecordFacts {
     return {
       kind: record.kind,
       release: record.release,
-      unreadable:
-        error instanceof BaseError
-          ? error.shortMessage
-          : error instanceof Error
-            ? (error.message.split("\n")[0] ?? error.message)
-            : String(error),
+      unreadable: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -692,7 +719,7 @@ export function keepPots(store: PotStore, landed: Landed): string[] {
         .flatMap((one) =>
           one.deployment === undefined || one.deployment.tx === pot.deployment?.tx
             ? []
-            : [one.deployment.tx],
+            : [recordText(one.deployment.tx)],
         );
 
       return (
@@ -724,8 +751,9 @@ export function ownerPotsText(
   except: Address,
 ): string {
   let files: StoredPot[];
+  let warnings: string[];
   try {
-    files = store.listFiles().files;
+    ({ files, warnings } = store.listFiles());
   } catch (error) {
     return (
       `The Pot store ${store.dir} could not be read: ` +
@@ -744,7 +772,10 @@ export function ownerPotsText(
     return true;
   });
   const whose = `of ${owner} on ${chain.slug}`;
-  if (pots.length === 0) return `The Pot store ${store.dir} holds no other Pot ${whose}.`;
+  // A file the store left out is said too: it may be the Pot.
+  const left = warnings.map((warning) => `  ${warning}`);
+  if (pots.length === 0)
+    return [`The Pot store ${store.dir} holds no other Pot ${whose}.`, ...left].join("\n");
 
   return [
     `The Pot store ${store.dir} holds ${pots.length} other Pot${pots.length === 1 ? "" : "s"} ${whose}:`,
@@ -753,11 +784,13 @@ export function ownerPotsText(
       const paired = facts.release === undefined ? undefined : pairedSdkReleases(facts.release);
 
       return [
-        `  ${record.pot}  ${facts.kind}, salt ${record.salt}: ${releaseText(facts.release)}` +
+        `  ${recordText(record.pot)}  ${recordText(facts.kind)}, salt ${recordText(record.salt)}: ` +
+          releaseText(facts.release) +
           (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`),
         ...(facts.unreadable === undefined ? [] : [`  ${unreadableNote(path, facts)}`]),
       ];
     }),
+    ...left,
   ].join("\n");
 }
 
