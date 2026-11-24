@@ -171,12 +171,14 @@ and engines as 1.2.0.
   last tick array before it swaps, a position at a time, up to 64 positions of about 3,200 to 3,500
   compute units each, so a plan near the compute cap can run out of compute, as on 1.2.0. Reserving
   that cost needs `sauce tx` to budget swaps in rank order, which this release does not do. Only
-  the budgeting is unchanged. On the sorted SOL/USDC pool `cremaAtLimit` costs 1,552 to 1,574 more
-  compute units a call than on 1.2.0, and `crema` and `cremaStopped` 1,434 to 1,535 fewer; a
-  program that mixes Crema with another concentrated-liquidity venue at a price is 632 bytes
-  larger, and one that calls only Crema, or Crema with Phoenix, 29 bytes. A program right at the
-  compute or size limit should re-run `sauce simulate` before it is sent. `sauce simulate` and
-  `sauce run` measure each cook's own units.
+  the budgeting is unchanged. Measured in a cook that mixes Crema and Orca swaps near the compute
+  cap, each `cremaAtLimit` call costs 4,124 more compute units than on 1.2.0, and each `crema` or
+  `cremaStopped` swap about 1,430 to 1,535 fewer; a program that mixes Crema with another
+  concentrated-liquidity venue at a price is 632 bytes larger, and one that calls only Crema, or
+  Crema with Phoenix, 29 bytes. A program whose room under the cook's 1,400,000 compute units is
+  less than that difference (4,124 for each `cremaAtLimit` call, less about 1,430 for each `crema`
+  swap) can land on 1.2.0 and fail on 1.2.1, so re-run `sauce simulate` before sending it.
+  `sauce simulate` and `sauce run` measure each cook's own units.
 
 ## SDK 1.2.0 — 2026-11-24
 
