@@ -158,13 +158,14 @@ reverts rather than skips: a slot naming another program, a pool of another venu
 carry (a sqrt price limit past its 128 bits, which cut to its field would be no limit at all; Phoenix's past 64 bits, OpenBook's past 63 or `orders` past 255). Only the System program
 itself as the pool is a missing slot, which is skipped.
 
-A pool that cannot trade for its own state is skipped before its pair is looked at, and returns `0` whatever pair it was given; among those cases are no input (before even the pool's owner), a paused pool or one whose swaps are off, and a Stopped form's start bound its price has passed. Crema's pair is checked
-before its price or its liquidity can skip the swap, and before its tick arrays are scanned, so a
-pool that is not the pair is refused even where it is idle or its window has no room.
-`cremaAtLimit` refuses a limit of `0`
-(`Crema takes no zero limit`) and a floor past 64 bits (`minOut past 64 bits`) whatever the window
-holds, as it refuses a limit past 128 bits; only what it skips first (no input, a paused pool)
-escapes them.
+A pool that cannot trade for its own state is skipped before its pair is looked at, and returns `0`
+whatever pair it was given; among those cases are no input (before even the pool's owner), a paused
+pool or one whose swaps are off, and a Stopped form's start bound its price has passed. Crema's pair
+is checked before its price or its liquidity can skip the swap, and before its tick arrays are
+scanned, so a pool that is not the pair is refused even where it is idle or its window has no room.
+`cremaAtLimit` refuses a limit of `0` (`Crema takes no zero limit`) and a floor past 64 bits
+(`minOut past 64 bits`) whatever the window holds, as it refuses a limit past 128 bits; only what it
+skips first (no input, a paused pool) escapes them.
 
 A failed call into another program fails the whole Solana transaction and cannot be caught, so a
 function that takes a slot checks before anything moves and returns `0`, having moved nothing, for a
@@ -433,9 +434,11 @@ Stabble CLMM runs Raydium's code and its forms cost what Raydium's do. The forms
 with the ticks a swap crosses; the venue's does, as [compute](../concepts/solana-model.md#compute)
 explains.
 
-Crema's forms at a price add one cost the others lack: they read the slot's last tick array, a position at a time from the array's far end toward the price, to place the window's
-last safe tick (`cremaStop`). Each read is about 3,200 to 3,500 units and there are at most 64, so a swap there costs up to about 220,000 units more than another venue's, wherever the price lies when the
-cook lands. A pool whose own state rules out a trade (no liquidity, its price already at or past the
+Crema's forms at a price add one cost the others lack: they read the slot's last tick array, a
+position at a time from the array's far end toward the price, to place the window's last safe tick
+(`cremaStop`). Each read is about 3,200 to 3,500 units and there are at most 64, so a swap there
+costs up to about 220,000 units more than another venue's, wherever the price lies when the cook
+lands. A pool whose own state rules out a trade (no liquidity, its price already at or past the
 limit, an input too small to buy a unit) is judged before that scan and costs about what another
 venue's does. `cremaAtLimit` reads no array. `sauce tx` charges a Crema swap what it charges every
 venue's swap, so it does not reserve the scan: a plan near the compute cap can run out of units.

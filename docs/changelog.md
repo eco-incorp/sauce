@@ -136,7 +136,11 @@ and engines as 1.2.0.
   marks no tick array is a slot of the System program in its three places, and its swap is skipped,
   returning `0` having moved nothing.
 - **Fixed (Solana): `cremaAtLimit` refuses a limit of `0` and a floor past 64 bits whatever its
-  window holds.** On 1.2.0 a limit of `0` reached Crema's program, which refuses it and fails the whole transaction without a reason. It reverts `Crema takes no zero limit` itself now, before it looks at the window, as it does a limit past 128 bits, and a floor past 64 bits reverts `minOut past 64 bits` there too, so both are refused even where the pool is idle or its window has no room. What it skips first, no input and a paused pool, is skipped as before.
+  window holds.** On 1.2.0 a limit of `0` reached Crema's program, which refuses it and fails the
+  whole transaction without a reason. It reverts `Crema takes no zero limit` itself now, before it
+  looks at the window, as it does a limit past 128 bits, and a floor past 64 bits reverts
+  `minOut past 64 bits` there too, so both are refused even where the pool is idle or its window has
+  no room. What it skips first, no input and a paused pool, is skipped as before.
 - **Fixed (Solana): `crema` and `cremaStopped` skip a pool whose slot the price has left.** Paying
   a pool's token A, a slot whose last tick array starts above the pool's price (liquidity opened
   below it, or a price that fell through the slot's arrays between building and landing) failed the
@@ -145,9 +149,9 @@ and engines as 1.2.0.
 - **Changed (Solana): `crema` and `cremaStopped` read a pool's price, liquidity and fee before its
   tick array.** A pool that cannot trade for what it alone shows (its price already at or past the
   limit, no liquidity, an input too small to buy a unit) returns `0` before the router reads the
-  slot's last tick array, up to 64 reads of about 3,200 to 3,500 compute units each, and a pool that is not
-  the pair is refused even where its window has no room. A Crema pool that cannot trade no longer meets the deep tick's
-  checks either.
+  slot's last tick array, up to 64 reads of about 3,200 to 3,500 compute units each, and a pool that
+  is not the pair is refused even where its window has no room. A Crema pool that cannot trade no
+  longer meets the deep tick's checks either.
 - **Fixed (Solana): paying a pool's token A, the last unit can cost a hair more than
   `priceLimit`; the documentation said it never did.** The router rounds the roots of the limit
   down, which keeps it inside the exact one paying token B and can move it past the exact one
@@ -165,15 +169,15 @@ and engines as 1.2.0.
   `sauce tx` charges a Crema swap what it charges every venue's. Crema's router reads the slot's
   last tick array before it swaps, a position at a time, up to 64 positions of about 3,200 to 3,500
   compute units each, so a plan near the compute cap can run out of compute, as on 1.2.0. Reserving
-  that cost needs `sauce tx` to budget swaps in rank order, which this release does not do. Only
-  the budgeting is unchanged. Measured in a cook that mixes Crema and Orca swaps near the compute
-  cap, each `cremaAtLimit` call costs 4,124 more compute units than on 1.2.0, and each `crema` or
-  `cremaStopped` swap about 1,430 to 1,535 fewer; a program that mixes Crema with another
-  concentrated-liquidity venue at a price is 632 bytes larger, and one that calls only Crema, or
-  Crema with Phoenix, 29 bytes. A program whose room under the cook's 1,400,000 compute units is
-  less than that difference (4,124 for each `cremaAtLimit` call, less about 1,430 for each `crema`
-  swap) can land on 1.2.0 and fail on 1.2.1, so re-run `sauce simulate` before sending it.
-  `sauce simulate` and `sauce run` measure each cook's own units.
+  that cost needs `sauce tx` to budget swaps in rank order, which this release does not do. Only the
+  budgeting is unchanged. In a test cook that mixes Crema and Orca swaps near the compute cap, each
+  `cremaAtLimit` call cost 4,124 more compute units than on 1.2.0 and each `crema` swap 1,432 fewer;
+  in a cook with one swap, `crema` and `cremaStopped` cost 1,434 to 1,535 fewer and `cremaAtLimit`
+  1,552 to 1,574 more. A program that mixes Crema with another concentrated-liquidity venue at a
+  price is 632 bytes larger, and one that calls only Crema, or Crema with Phoenix, 29 bytes. A
+  program close to the cook's 1,400,000 compute units can land on 1.2.0 and fail on 1.2.1, so re-run
+  `sauce simulate` before sending it. `sauce simulate` and `sauce run` measure each cook's own
+  units.
 
 ## SDK 1.2.0 — 2026-11-24
 
