@@ -14,7 +14,7 @@
  * engine that does not run the program's compiler ({@link engineRunsCompiler}).
  *
  * An engine can also run a later compiler's output where that compiler's row lists the engine's
- * version in `alsoRunsOn`, an evidenced fact: compiler 2.6.3's output runs on v12-evm 1.3.0 and
+ * version in `alsoRunsOn`, an evidenced fact: compiler 2.6.4's output runs on v12-evm 1.3.0 and
  * v12-svm 1.4.0, so Pots of those releases still cook (each on its own engine).
  *
  * An engine no row names (a local deployment, a fork's own) is not refused: the SDK cannot tell

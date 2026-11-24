@@ -310,7 +310,7 @@ compiler's own row, the release the SDK's defaults come from, the one
 and `v12OptInReleaseSet()` return the same row, kept for compatibility.
 
 A compiler's row can also list earlier engines its programs run on, as `alsoRunsOn`:
-compiler 2.6.3's output runs on v12-evm 1.3.0 and v12-svm 1.4.0 as well as on the
+compiler 2.6.4's output runs on v12-evm 1.3.0 and v12-svm 1.4.0 as well as on the
 engines of its own row. `engineRunsCompiler(target, engine, compiler?)` says whether
 an engine runs a compiler's output: `true` when the compiler's row names the engine
 or lists its version in `alsoRunsOn`, `false` for an engine another row names, and

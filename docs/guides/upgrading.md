@@ -149,19 +149,24 @@ The package pins one compiler and ships the engines that compiler pairs with
 
 ## Moving to SDK 1.2.0
 
-SDK 1.2.0 pins the same releases as 1.1.0: compiler **2.6.3**, EVM engine and Kitchen **1.4.0**,
-SVM engine **1.4.1** and SVM Kitchen **1.1.0**. What moved is that it uses them. SDK 1.1.0 kept
-every default on the releases before (engine 1.3.0, CREATE2 Pot addresses, Solana engine 1.4.0),
-and on 2026-11-20, before it was published, every observed EVM chain with the Kitchen switched to
-kitchen-evm 1.4.0. So with 1.1.0 or 1.0.0, a new owner's Pot address is one no Kitchen of that
-release deploys to.
+SDK 1.2.0 pins compiler **2.6.4** (1.1.0 pinned 2.6.3) and the same engines and Kitchens as 1.1.0:
+EVM engine and Kitchen **1.4.0**, SVM engine **1.4.1** and SVM Kitchen **1.1.0**. What moved is
+that it uses them. SDK 1.1.0 kept every default on the releases before (engine 1.3.0, CREATE2 Pot
+addresses, Solana engine 1.4.0), and on 2026-11-20, before it was published, every observed EVM
+chain with the Kitchen switched to kitchen-evm 1.4.0. So with 1.1.0 or 1.0.0, a new owner's Pot
+address is one no Kitchen of that release deploys to.
 
 - **New Pots are CREATE3, and new Solana Pots use engine 1.4.1.** `v12PredictPot(owner)`,
   `sauce pot` and `sauce tx` give the address the Kitchen places a new Pot at
   ([Fixed-Router, Shared and earlier releases' Pots](../api/routes.md#fixed-router-shared-and-earlier-releases-pots)).
-  The compiler is the same, so nothing needs recompiling between 1.1.0 and 1.2.0.
+- **Recompiled programs read a dirty `abi.decode` word instead of reverting (EVM).** The SDK pins
+  compiler **2.6.4**; 1.1.0 pinned 2.6.3. Both pair with the same engines, so a program compiled
+  with 1.1.0 runs as it did. Recompiled, an `abi.decode` field spelled `"Address"` is its word's
+  low 160 bits, and a `"bool"` field reads as true for any nonzero word, where 2.6.3 reverted; an
+  element of an `"Address[]"` is still checked. If a program relies on that revert, decode the
+  word as `"Uint256"` and check it ([`abi` in the reference](../reference/saucescript.md#9-abi-evm)).
 - **Pots you already have keep their address and keep working.** A kitchen-evm 1.3.0 Pot cooks on
-  engine 1.3.0, which runs compiler 2.6.3's programs, with engine 1.3.0's behaviour. Engine 1.4.0
+  engine 1.3.0, which runs compiler 2.6.4's programs, with engine 1.3.0's behaviour. Engine 1.4.0
   hardened two things: signature checks require a complete `ecrecover` reply and the exact ERC-1271
   return word, and newly allocated memory is cleared after reuse, so a fresh array does not expose
   values from an earlier caught call. A program that relies on either should run on a Pot of the
@@ -363,7 +368,8 @@ decided to accept (`sauce verify --pin <hash:bytes>` on the command line).
 historical pins.
 
 Compiler 2.6.0 and 2.6.1 produced the historical 410-byte program. Compiler 2.6.2 produces the
-current 426-byte program with a new hash; default verifiers accept only their own version's pin.
+current 426-byte program with a new hash, and 2.6.3 and 2.6.4 produce the same bytes; default
+verifiers accept only their own version's pin.
 Upgrade verifiers to accept both explicit `{ hash, bytes }` records before upgrading producers.
 Observers can otherwise return `null` silently, while validation fails with `TOKENS_OFFSET`.
 Keep the explicit 410-byte pin for old payloads, or the 435-byte pin for 2.4/2.5 payloads, while

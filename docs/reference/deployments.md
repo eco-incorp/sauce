@@ -30,7 +30,7 @@ say what each release changed and which engines run a compiler's programs.
 
 | Component | Version |
 | --- | --- |
-| Compiler, `@eco-incorp/sauce-compiler` | 2.6.3 |
+| Compiler, `@eco-incorp/sauce-compiler` | 2.6.4 |
 | EVM engine, `v12-evm` | 1.4.0 |
 | EVM Kitchen, `kitchen-evm` | 1.4.0 |
 | Solana engine, `v12-svm` | 1.4.1 |

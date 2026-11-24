@@ -28,6 +28,9 @@ const INSTALLED = JSON.parse(
 /** The row the installed row's `alsoRunsOn` engines come from (`readLegacyArtifacts`): the newest
  *  with a public package that pins them. */
 const EARLIER = "2.6.2";
+/** The folder the release's raw assets ship in: the first row naming the installed row's four
+ *  releases, which is where SDK 1.1.0 put them (`releases/2.6.3/`), whatever compiler is installed. */
+const RAW_ASSETS = "2.6.3";
 const LEGACY = join(repo, "sdk/src/artifacts/legacy", EARLIER);
 
 /** One component's pin in a row of `releases.json`: only what the fixture reads or changes. */
@@ -85,7 +88,7 @@ function privateCache(root: string, installed: Row, local: { quoteRouter: QuoteR
     const tag = `${component}-v${version}`;
     mkdirSync(join(cache, tag), { recursive: true });
     for (const asset of Object.keys(assets)) {
-      cpSync(join(dist, "releases", INSTALLED, tag, asset), join(cache, tag, asset));
+      cpSync(join(dist, "releases", RAW_ASSETS, tag, asset), join(cache, tag, asset));
     }
     const manifest =
       component === "v12-evm"
@@ -272,7 +275,7 @@ function fixture(scenario?: string, sourceKind: "npm" | "private" = "npm") {
     runtime.runtimeCreationCode = "0x00";
     writeFileSync(path, JSON.stringify(runtime));
   }
-  const rawAsset = `releases/${INSTALLED}/v12-evm-v${installed["v12-evm"].version}/runtime.creation.hex`;
+  const rawAsset = `releases/${RAW_ASSETS}/v12-evm-v${installed["v12-evm"].version}/runtime.creation.hex`;
   if (scenario === "raw asset changed") {
     writeFileSync(join(contents, "artifacts", rawAsset), "0x00\n");
   }
@@ -396,8 +399,9 @@ describe("the release's raw assets", () => {
       expect(defaults.evm.contracts.engine.address.toLowerCase()).toBe(
         f.installed["v12-evm"].engine!.toLowerCase(),
       );
-      // The raw assets ship byte for byte, under the compiler's folder, in dist only.
+      // The raw assets ship byte for byte, in the first row's folder (SDK 1.1.0's path), in dist only.
       expect(digestOf(f.rawOutput)).toBe(digestOf(join(repo, "sdk/dist/artifacts", f.rawAsset)));
+      expect(readdirSync(join(f.root, "sdk/dist/artifacts/releases"))).toEqual([RAW_ASSETS]);
       expect(existsSync(f.at("sdk/src/artifacts/releases"))).toBe(false);
       // The earlier release's artifacts are written for the suites, src only, and never shipped.
       expect(existsSync(f.at("sdk/dist/artifacts/legacy"))).toBe(false);

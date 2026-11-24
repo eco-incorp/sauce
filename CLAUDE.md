@@ -276,12 +276,13 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   shared commit is not a property to rely on even while all four happen to share one after a
   coordinated re-release. **`releases.json` has one row per COMPILER version**, naming the four
   releases that compiler's output pairs with: compiler output and engines are compatible by exact
-  package version (2.6.1 uses v12-evm 1.3.0 / v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
+  package version (2.6.4 uses v12-evm 1.4.0 / v12-svm 1.4.1, and its `alsoRunsOn` adds v12-evm 1.3.0 /
+  v12-svm 1.4.0; 2.5.0 uses EVM 1.2.0 / SVM 1.3.0).
   An ISA label is not a compatibility check. **The installed compiler's row is the SDK's defaults**
   (`v12ReleaseSet()`, `v12EngineAddress()`, the Pot a prediction gives): a row has no
   `deployedCompiler`, and the sync refuses one that sets it. A row's `alsoRunsOn` lists the earlier
   engines its compiler's output also runs on (`{ "v12-evm": ["1.3.0"], "v12-svm": ["1.4.0"] }` for
-  2.6.3), so the SDK cooks a Pot of that release on its own engine:
+  2.6.4), so the SDK cooks a Pot of that release on its own engine:
   `deployments/releases.ts#engineRunsCompiler` reads it, `assertEngineRunsCompiler` reads that, and
   the legacy arm (below) is the evidence for it. `sync-engine-artifacts.mjs` syncs the row of the
   INSTALLED compiler and records it as `V12Deployments.json`'s `compiler`; every SDK builder that
@@ -295,11 +296,14 @@ gen-schema`; `program.unit.test.ts` fails while `actions/action-program.schema.j
   release's addresses are written in docs and skills ONLY in the generated
   `docs/reference/deployments.md` and `skills/sauce-chains/references/deployments.json` (see "One
   place per release" under "Agent skills"), so those two files are the bump's whole docs/skills
-  diff.
+  diff. A compiler-only release gets a row of its own that copies the previous row's four releases
+  and `alsoRunsOn` exactly (2.6.4 copies 2.6.3's). The previous row stays, as the record of the SDK
+  release built from it.
   The installed row's raw release assets also ship, under
-  `sdk/dist/artifacts/releases/<compiler>/<tag>/<asset>` (dist only), where SDK 1.1.0 shipped them as
-  opt-in artifacts: they equal the release the top-level artifacts are derived from, and stay for
-  whoever reads them by path. The engines `alsoRunsOn` names are written to
+  `sdk/dist/artifacts/releases/<compiler>/<tag>/<asset>`, named for the first row of the release set
+  (`releases/2.6.3/`, where SDK 1.1.0 shipped them as opt-in artifacts; a compiler-only release
+  keeps the path), dist only: they equal the release the top-level artifacts are derived from, and
+  stay for whoever reads them by path. The engines `alsoRunsOn` names are written to
   `sdk/src/artifacts/legacy/<compiler>/` (src only, never dist), from the public `@eco-incorp/sauce`
   tarball of the newest row pinning each engine (`publicPackage(row)`, integrity-pinned in
   `releases.json`, no credential) and held to that row's digests, in both artifact-source modes. A
@@ -528,7 +532,7 @@ compile(options: CompileOptions): CompileResult
 `target` (`'evm' | 'svm'`) and `resolve` are required; `entry` (default `"main.js"`),
 `resolvePackage`, `contracts`, `inlineContracts`, `ambient`, `defines`, `optimize` (default
 `true`), `cache` (default `true`), `chain`, `chainProfiles`, `entryKind` and scalar `args` are optional.
-All four manifests pin the compiler exactly to **2.6.1**, matching the lockfile.
+All four manifests pin the compiler exactly to **2.6.4**, matching the lockfile.
 `CompileResult` contains `bytecode: Uint8Array`, `isaRevision: "stack-v3"`,
 `entryEncoding: "abi-v1"`, `entryParams`, `entrySignature`, nested `programs` reports, and optional
 `manifest: AccountManifest`. `manifest` is the SVM account contract, absent on EVM.
@@ -1161,7 +1165,7 @@ t.approve(...)`, zero import) and the **`<Sym>.transfer(...)` symbol syntax** ar
 token first: `USDC.transfer(to, amt)` → `__sauce_transfer(USDC, to, amt)`, with
 `import { transfer as __sauce_transfer } from "@sauce/token"` prepended (`tokenImportLines`). So a
 write has ONE implementation however it is spelled, and it is the library's SafeERC20 one. The import
-is ALIASED (the pinned compiler, 2.6.1, accepts `import { a as b }`), which keeps a program's own
+is ALIASED (the pinned compiler accepts `import { a as b }`), which keeps a program's own
 `transfer`/`approve` from colliding; the `__sauce_<method>` names are reserved
 and a program declaring one is refused by name. It is an explicit import, not the ambient module,
 because `compileSauceRoute` never merges `chainAmbient()` in. A READ (`balanceOf`, and any other

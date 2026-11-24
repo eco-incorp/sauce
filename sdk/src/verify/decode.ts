@@ -30,8 +30,8 @@
  * strings can produce identical behavior, so accepting them would make decoding non-injective and
  * disagree with re-encode-and-compare (§5). An accepted payload is the UNIQUE byte encoding of its
  * decoded values. The historical 410-byte program also accepted dirty token and recipient words;
- * compilers 2.6.2 and 2.6.3 check both addresses in the 426-byte program. The decoder rejects dirty words for
- * both pins, without depending on compiler or token validation.
+ * compilers 2.6.2 through 2.6.4 compile the same 426-byte program, which checks both addresses.
+ * The decoder rejects dirty words for both pins, without depending on compiler or token validation.
  *
  * DO NOT PORT A POSITIONAL DECODER ONTO THIS WIRE. Values here are fixed 32-byte words and the
  * tokens head word is a POINTER, not a value (see the layout at the top of this file) — so a reader

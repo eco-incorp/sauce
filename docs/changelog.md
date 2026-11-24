@@ -65,7 +65,7 @@ Each SDK release and the five releases it pins:
 
 | SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
 | ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.2.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| 1.2.0   | 2.6.4    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
 | 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
 | None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
 | 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
@@ -113,8 +113,9 @@ which the SDK exports as `@eco-incorp/sauce/compiler`.
 
 ## SDK 1.2.0 — <date of release>
 
-Compiler 2.6.3, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. Same
-compiler and pins as 1.1.0; what moved is that the SDK now uses them.
+Compiler 2.6.4, v12-evm 1.4.0, kitchen-evm 1.4.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
+1.1.0: compiler 2.6.4 (from 2.6.3). The engines and Kitchens are the ones 1.1.0 pinned; what moved
+is that the SDK now uses them.
 
 SDK 1.1.0 pinned these releases but kept every default on the ones before: engine 1.3.0, CREATE2
 Pot addresses and Solana engine 1.4.0. On 2026-11-20, before 1.1.0 was published, every observed
@@ -142,17 +143,38 @@ address that 1.0.0 or 1.1.0 predicted and no Pot was ever deployed there, see
 
 ### SauceScript
 
-No language change.
+- **Changed (EVM): `abi.decode` cuts a dirty `"Address"` to its low 160 bits and reads a dirty
+  `"bool"` as true, instead of reverting.** With SDK 1.1.0 a decode reverted where it ran on a
+  `"bool"` word other than `0` or `1`, or an `"Address"` word with a bit set above its low 160,
+  whether or not the program read it. Now an `"Address"` field (a single field, or a field of a
+  `{…}` record at any depth, a record that is an array's element included) is its word's low 160
+  bits, and reading a `"bool"` field or a `"bool[]"` element gives `1` for any nonzero word, as
+  before 1.1.0. An element of an `"Address[]"` (also `"Address[][]"` or `"{Address[]}"`) is still
+  checked as in 1.1.0: a dirty one reverts where the decode runs, and a `try` block that runs the
+  decode catches it. A decoded value passed on whole (`abi.encode(decoded)`, `return decoded;`, a
+  `bool[]` or record given whole to a contract call, a record a closure captures in its
+  `parcel.args`) carries each word as it arrived. To refuse a dirty word, decode it as `"Uint256"`
+  and check it (`require(word >> 160 == 0)`). Entry parameters and a contract call's `bool`,
+  `address` and fixed-bytes answers are checked as in 1.1.0.
 
 ### Compiler and engines
 
+- **Compiler 2.6.3 → 2.6.4:** pairs with the same engines and Kitchens as 2.6.3. Its programs run
+  on v12-evm 1.4.0 and v12-svm 1.4.1, and on v12-evm 1.3.0 and v12-svm 1.4.0 for Pots of those
+  releases. It changes how an EVM `abi.decode` reads `"bool"` and `"Address"` leaves (see
+  SauceScript above) and drops what checking them cost: about 13 to 17 bytes and about a thousand
+  gas a leaf, read or not. The compiler measured a WETH-to-USDC swap cook on Ethereum whose program
+  decodes 14 `"Address"` leaves: 2,802 bytes became 2,620, and 360,994 gas became 347,527. A
+  program whose `abi.decode` reads no `"bool"` or `"Address"` compiles to the bytes 2.6.3 gave it:
+  every example and recipe this package ships does, the 426-byte settlement program included (same
+  hash). The compiler's JavaScript API is unchanged.
 - **kitchen-evm 1.4.0 (now the default):** New private, fixed-Router and Shared Pots are CREATE3:
   their address comes from the Kitchen, the owner, the salt and the Pot proxy's init-code hash, not
   from a hash of the Pot's own code. Pots a kitchen-evm 1.3.0 Kitchen made keep their address and
   keep working. The 1.1.0 entry describes the release itself.
 - **v12-evm 1.4.0 (now the default):** The engine every new Pot cooks on. It refuses a
   kitchen-evm 1.3.0 Pot, and engine 1.3.0 refuses a 1.4.0 Pot, so the SDK names the engine of the
-  Pot it cooks on. Compiler 2.6.3's output also runs on v12-evm 1.3.0, which the compiler's row in
+  Pot it cooks on. Compiler 2.6.4's output also runs on v12-evm 1.3.0, which the compiler's row in
   `releases.json` records as `alsoRunsOn`: a kitchen-evm 1.3.0 Pot cooks on engine 1.3.0 with no
   recompile. That Pot keeps engine 1.3.0's behaviour, which is not engine 1.4.0's: signature checks
   now require a complete `ecrecover` reply and the exact ERC-1271 return word, and newly allocated
@@ -164,7 +186,7 @@ No language change.
   no engine to a Pot: a cook that names another release's engine runs, and the chain refuses
   neither, unlike on EVM, where an engine refuses another release's Pots. So the SDK chooses the
   engine from the Pot's owner program, where that engine runs this compiler's output, and takes
-  none from anywhere its release table does not hold, a plan's cursor included. Compiler 2.6.3's
+  none from anywhere its release table does not hold, a plan's cursor included. Compiler 2.6.4's
   output also runs on v12-svm 1.4.0 (`alsoRunsOn`), so a Pot made under 1.4.0 keeps cooking on
   1.4.0. Pots of v12-svm 1.2.0 and 1.3.0 do not run it: they cook on 1.4.1, and the command says
   so with each cook.
@@ -237,7 +259,7 @@ No language change.
   same row. A row's `deployedCompiler` is gone: a row's own releases are its defaults.
 - **Added: `engineRunsCompiler(target, engine, compiler?)`.** An engine runs a compiler's output
   when that compiler's row names it or lists its version in `alsoRunsOn`; `assertEngineRunsCompiler`
-  reads it, so `v12Pot.encodeCook` with engine 1.3.0 and compiler 2.6.3 passes.
+  reads it, so `v12Pot.encodeCook` with engine 1.3.0 and compiler 2.6.4 passes.
 - **Changed: `v12PotDerivation()` gains `scheme`, `potProxyInitCodeHash`, `potProfileHash` and
   `fixedRouter`.** Its `initCodeHash` is what the Kitchen's `potInitCodeHash()` reports, the hash of
   the Pot's creation code. From kitchen-evm 1.4.0 (`scheme: "create3"`) CREATE2 under it is not a
@@ -345,7 +367,8 @@ before. The installed compiler's own, opt-in row is `v12OptInReleaseSet()`, or
   an array or a struct parameter, an `interface` the module declares included. A `bool` entry
   parameter is checked on Solana too, where an `Address` is a public key and is not checked. On an
   EVM chain an `Address` field of an `interface` the module imports is not checked either: declare
-  the interface in the module, or spell the type inline.
+  the interface in the module, or spell the type inline. SDK 1.2.0 takes the `abi.decode` half
+  back, but for an `"Address"` that is an array's element.
 - **Now refused (EVM): a `.catch(() => { return n; })` on a `bool` call whose fallback `n` is not
   `0` or `1`.** It compiled and answered `n` when the call failed, a value a `bool` never holds. The
   error is

@@ -26,9 +26,9 @@
 // engine's own deploy uses, from the commit the published compiler's tag is cut from, so it is both
 // cheaper to obtain and the correct lineage.
 //
-// The installed row's raw assets also ship, under `dist/artifacts/releases/<compiler>/` (SDK
-// 1.1.0's opt-in path, kept): they are the same release as the top-level artifacts, which are
-// derived from them.
+// The installed row's raw assets also ship, under `dist/artifacts/releases/<first compiler naming
+// them>/` (SDK 1.1.0's opt-in path, `releases/2.6.3/`, kept): they are the same release as the
+// top-level artifacts, which are derived from them.
 //
 // The engines the installed compiler's output also runs on (`alsoRunsOn` in its row) mint Pots the
 // SDK still cooks, each on its own engine. Their artifacts do not ship: the suites that cook such a
@@ -786,7 +786,7 @@ const write = (name, artifact) => {
 //     it: both SVM engines, both wire files, the Kitchen and its IDL, the EVM creation code;
 //   - what it carries DERIVED rather than as the release asset — the ABIs out of the two abis.json
 //     and the addresses assembled from each addresses.json — is rebuilt from the raw abis.json and
-//     addresses.json the same tarball carries under releases/<compiler>/ (each held to the row's
+//     addresses.json the same tarball carries under releases/<folder>/ (each held to the row's
 //     digest by `readReleaseAssets`) and must be the files it carries; it is also corroborated as
 //     the private path corroborates it: the compiler, each component's version, both engine
 //     identities, the Kitchen, the Pot init-code hash and, for a CREATE3 row, the Router, the scheme
@@ -1136,13 +1136,21 @@ function syncFromPublicPackage() {
   }
 }
 
+// The release's raw assets ship in the folder of the FIRST row naming these four releases, so a
+// compiler-only release keeps the path: SDK 1.1.0 shipped the 1.4.0 set at releases/2.6.3/.
+const ASSETS_FOLDER = RELEASE_SETS.find((row) =>
+  ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].every(
+    (c) => row[c].version === CURRENT[c].version,
+  ),
+).compiler;
+
 // The release's raw assets, each held to the row's digest and kept under its original name and
-// bytes (`releases/<compiler>/<tag>/<asset>`), so callers can verify them against the
+// bytes (`releases/<folder>/<tag>/<asset>`), so callers can verify them against the
 // independently pinned row. `shipAvailable` ships them; the identities they carry are held where
 // the defaults are assembled.
 function readReleaseAssets() {
   const read = SOURCE === "npm" ? publicPackage(CURRENT) : undefined;
-  const root = `releases/${CURRENT.compiler}`;
+  const root = `releases/${ASSETS_FOLDER}`;
   const components = ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"];
   const fetched = components.flatMap((component) => {
     const { version, assets } = CURRENT[component];
@@ -1527,13 +1535,18 @@ shipAvailable();
 writeLegacyArtifacts(legacy);
 flush();
 
-// The release's raw assets, digest-pinned, ship under `dist/artifacts/releases/<compiler>/`: SDK
-// 1.1.0 shipped them there as opt-in artifacts, and they stay for whoever reads them by path. They
-// are the same release as the top-level artifacts, which are derived from them. Dist only: nothing
-// reads them from `src`.
+// The release's raw assets, digest-pinned, ship under `dist/artifacts/releases/<folder>/`, named for
+// the first row of the release set (`ASSETS_FOLDER`): SDK 1.1.0 shipped them there as opt-in
+// artifacts, and they stay for whoever reads them by path. They are the same release as the
+// top-level artifacts, which are derived from them. Dist only: nothing reads them from `src`.
 function shipAvailable() {
   const dist = resolve(SDK_DIR, "dist", "artifacts");
   for (const { path, bytes } of available) later(() => put(resolve(dist, path), bytes));
+  later(() =>
+    console.log(
+      `[sync-engine-artifacts] wrote the release's raw assets to dist/artifacts/releases/${ASSETS_FOLDER}`,
+    ),
+  );
 }
 
 // The engines the installed compiler's output also runs on mint Pots the SDK still cooks, each on

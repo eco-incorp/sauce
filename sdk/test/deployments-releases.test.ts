@@ -120,8 +120,8 @@ describe("the release table", () => {
     expect(own["kitchen-evm"].potProfileHash).toBe(evm.pot.potProfileHash);
   });
 
-  it("compiler 2.6.3 output runs on v12-evm 1.3.0 and v12-svm 1.4.0, as alsoRunsOn says", () => {
-    expect(sdkCompilerVersion()).toBe("2.6.3");
+  it("the installed compiler's output runs on v12-evm 1.3.0 and v12-svm 1.4.0, as alsoRunsOn says", () => {
+    expect(sdkCompilerVersion()).toBe(resolvedCompilerVersion());
     const earlier = v12ReleaseSet("2.6.2");
     expect(earlier["v12-evm"].version).toBe("1.3.0");
     expect(earlier["v12-svm"].version).toBe("1.4.0");
@@ -134,7 +134,7 @@ describe("the release table", () => {
     expect(() =>
       assertEngineRunsCompiler("svm", "53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW"),
     ).not.toThrow();
-    // v12-evm 1.2.0 (compiler 2.5.0's) runs no compiler 2.6.3 output.
+    // v12-evm 1.2.0 (compiler 2.5.0's) runs none of the installed compiler's output.
     const older = v12ReleaseSet("2.5.0");
     expect(older["v12-evm"].version).toBe("1.2.0");
     expect(engineRunsCompiler("evm", older["v12-evm"].engine!)).toBe(false);
@@ -147,7 +147,30 @@ describe("the release table", () => {
     const engine = v12EngineAddress();
     expect(engineRunsCompiler("evm", engine, "2.6.2")).toBe(false);
     expect(() => assertEngineRunsCompiler("evm", engine, "2.6.2")).toThrow(
-      /v12-evm 1\.4\.0, which runs compiler 2\.6\.3 output/,
+      /v12-evm 1\.4\.0, which runs compiler 2\.6\.3, 2\.6\.4 output/,
+    );
+  });
+
+  it("compiler 2.6.4 names compiler 2.6.3's releases, and both run on the earlier engines", () => {
+    const record = v12ReleaseSet("2.6.3");
+    const current = v12ReleaseSet("2.6.4");
+    for (const component of ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"] as const)
+      expect([component, current[component]]).toEqual([component, record[component]]);
+    expect(current.alsoRunsOn).toEqual({ "v12-evm": ["1.3.0"], "v12-svm": ["1.4.0"] });
+    expect(record.alsoRunsOn).toEqual(current.alsoRunsOn);
+    expect(record.npm?.version).toBe("1.1.0");
+    const earlier = v12ReleaseSet("2.6.2");
+    for (const compiler of ["2.6.3", "2.6.4"])
+      for (const set of [earlier, current]) {
+        expect(() =>
+          assertEngineRunsCompiler("evm", set["v12-evm"].engine!, compiler),
+        ).not.toThrow();
+        expect(() =>
+          assertEngineRunsCompiler("svm", set["v12-svm"].engine!, compiler),
+        ).not.toThrow();
+      }
+    expect(() => assertEngineRunsCompiler("evm", current["v12-evm"].engine!, "2.6.2")).toThrow(
+      /which runs compiler 2\.6\.3, 2\.6\.4 output/,
     );
   });
 

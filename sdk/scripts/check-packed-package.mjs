@@ -191,8 +191,14 @@ try {
   const available = pinned.releases.find((row) => row.compiler === compiler);
   assert.ok(available, `installed compiler ${compiler} needs a release row`);
   // The installed row is the package's defaults: it names no `deployedCompiler`, and every raw
-  // release asset it pins ships under `releases/<compiler>/<tag>/<asset>` (SDK 1.1.0's opt-in path,
-  // kept) and hashes to its digest. The earlier releases' test artifacts never ship.
+  // release asset it pins ships under `releases/<folder>/<tag>/<asset>`, the folder of the first
+  // row naming its four releases (SDK 1.1.0's opt-in path, kept), and hashes to its digest. The
+  // earlier releases' test artifacts never ship.
+  const folder = pinned.releases.find((row) =>
+    ["v12-evm", "kitchen-evm", "v12-svm", "kitchen-svm"].every(
+      (c) => row[c].version === available[c].version,
+    ),
+  ).compiler;
   assert.equal(
     available.deployedCompiler,
     undefined,
@@ -207,7 +213,7 @@ try {
     const tag = `${component}-v${version}`;
     for (const [asset, digest] of Object.entries(assets)) {
       const bytes = readFileSync(
-        join(installedRoot, "sdk/dist/artifacts/releases", compiler, tag, asset),
+        join(installedRoot, "sdk/dist/artifacts/releases", folder, tag, asset),
       );
       const actual =
         asset === "runtime.creation.hex"
@@ -216,6 +222,11 @@ try {
       assert.equal(actual, digest, `${tag}/${asset} ships unchanged in the package`);
     }
   }
+  assert.deepEqual(
+    readdirSync(join(installedRoot, "sdk/dist/artifacts/releases")),
+    ["2.6.3"],
+    "the release's raw assets ship where SDK 1.1.0 put them, and nowhere else",
+  );
   execFileSync(
     process.execPath,
     [join(root, "docs/scripts/check-docs.mjs"), "--package-root", installedRoot],

@@ -22,6 +22,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BaseError,
+  bytesToHex,
+  concatHex,
   createPublicClient,
   createTestClient,
   createWalletClient,
@@ -34,8 +36,9 @@ import {
 import type { Abi, Address, Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { v12PotAbi } from "../../src/evm/engine.js";
-import { compileSauceRoute } from "../../src/routes/sauce-route.js";
+import { v12Pot, v12PotAbi } from "../../src/evm/engine.js";
+import { encodeEntryArguments } from "../../src/routes/entry.js";
+import { compileSauceProgram, compileSauceRoute } from "../../src/routes/sauce-route.js";
 import { freePortSync, spawnAnvil } from "../anvil-process.js";
 import { hasLegacyArtifacts, startUpgradedChain } from "./gated-engine.js";
 import type { UpgradedChain } from "./gated-engine.js";
@@ -137,6 +140,27 @@ const potRouter = (pot: Address): Promise<Address> =>
 /** The cook of `source` on `pot` through `engine`: the call a program compiles to. */
 const cookOf = (source: string, engine: Address, pot: Address): Hex =>
   compileSauceRoute("base", source, { engine, pot }).calls[0]!.data;
+
+const BEEF = 0xbeefn;
+/** `0xbeef` with bit 160 set: an address word with a bit above its low 160. */
+const DIRTY = (1n << 160n) | BEEF;
+
+const words = (...values: bigint[]): Hex =>
+  encodeAbiParameters(
+    values.map(() => ({ type: "uint256" })),
+    values,
+  );
+
+/** The cook as an eth_call by the Pot's owner: the first word it returns, or "reverted". */
+const firstWord = async (pot: Address, data: Hex): Promise<bigint | "reverted"> => {
+  try {
+    const { data: out } = await publicClient.call({ account: OWNER.address, data, to: pot });
+    return hexToBigInt(out!.slice(0, 66) as Hex);
+  } catch (error) {
+    if (/revert/i.test(String((error as Error).message))) return "reverted";
+    throw error;
+  }
+};
 
 let anvil: ChildProcess;
 let chain: UpgradedChain;
@@ -256,4 +280,32 @@ describeEvm("an upgraded chain cooks each Pot on its own engine", () => {
       expect(await balance(tokenIn, chain.pot)).toBe(10_000n - AMOUNT_IN);
     });
   });
+
+  it("the installed compiler's abi.decode reads alike on both engines", async () => {
+    const length = `function main(data: bytes): Uint256 { const [xs] = abi.decode(data, ["Address[]"]); return xs.length; }`;
+    const cases: ReadonlyArray<readonly [string, Hex, bigint | "reverted"]> = [
+      [
+        `function main(data: bytes): Uint256 { const [a] = abi.decode(data, ["Address"]); return a; }`,
+        words(DIRTY),
+        BEEF,
+      ],
+      [
+        `function main(data: bytes): Uint256 { const [x, y] = abi.decode(data, ["bool", "bool"]); return x == y ? 1 : 0; }`,
+        words(1n, 2n),
+        1n,
+      ],
+      [length, words(32n, 1n, BEEF), 1n],
+      [length, words(32n, 1n, DIRTY), "reverted"],
+    ];
+    for (const [engine, pot] of [
+      [chain.legacy.engine, chain.legacy.pot],
+      [chain.engine, chain.pot],
+    ] as const)
+      for (const [source, data, expected] of cases) {
+        const program = compileSauceProgram("base", source, {});
+        const args = bytesToHex(encodeEntryArguments(program, [data]));
+        const cook = v12Pot.encodeCook(engine, concatHex([bytesToHex(program.bytecode), args]));
+        expect([engine, source, await firstWord(pot, cook)]).toEqual([engine, source, expected]);
+      }
+  }, 120_000);
 });

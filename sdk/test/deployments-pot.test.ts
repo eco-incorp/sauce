@@ -62,6 +62,8 @@ describe("v12PredictPot", () => {
     expect(v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: "2.6.2" })).toBe(
       "0xC23890F611D2Fb425E045BdE1A022d769640b1eC",
     );
+    // SDK 1.1.0's documented call: compiler 2.6.3's row stays as that release's record, and its Kitchen
+    // is the installed release's, so it predicts the default CREATE3 Pot.
     expect(v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: "2.6.3" })).toBe(
       LIVE.default.private,
     );
