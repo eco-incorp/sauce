@@ -31,8 +31,8 @@ compiled for it reads its chain id as 1399811150, as on devnet; 1399811151 is th
 the chain, which names it to the command and the Pot store and which no program reads. Its
 symbols are testnet's mints: the wrapped native alone, as Circle publishes no testnet USDC. The
 release's engine and Kitchen are deployed on testnet, with zero execution fees. Its endpoint
-must serve testnet: one of another cluster is refused. The Solana venues are mainnet's
-programs and pools, so a venue name is refused here.
+must serve testnet: one of another cluster is refused. No Solana venue has a program on
+testnet, so a venue name is refused here.
 
 ## In a program
 

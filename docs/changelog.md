@@ -65,31 +65,32 @@ The SDK's 0.99.x releases included breaking changes in patch versions. Read each
 
 Each SDK release and the five releases it pins:
 
-| SDK     | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
-| ------- | -------- | ------- | ----------- | ------- | ----------- |
-| 1.2.0   | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
-| 1.1.0   | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
-| None    | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 1.0.0   | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.18 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.17 | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.16 | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
-| 0.99.15 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.14 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.13 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.12 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.11 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.10 | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.9  | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
-| 0.99.8  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.7  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.6  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.5  | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
-| 0.99.4  | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
-| 0.99.3  | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
-| 0.99.2  | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
-| 0.99.1  | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
-| 0.99.0  | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
+| SDK        | Compiler | v12-evm | kitchen-evm | v12-svm | kitchen-svm |
+| ---------- | -------- | ------- | ----------- | ------- | ----------- |
+| Unreleased | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.2.0      | 2.6.4    | 1.5.0   | 1.5.0       | 1.4.1   | 1.1.0       |
+| 1.1.0      | 2.6.3    | 1.4.0   | 1.4.0       | 1.4.1   | 1.1.0       |
+| None       | 2.6.2    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 1.0.0      | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.18    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.17    | 2.6.1    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.16    | 2.6.0    | 1.3.0   | 1.3.0       | 1.4.0   | 1.1.0       |
+| 0.99.15    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.14    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.13    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.12    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.11    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.10    | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.9     | 2.5.0    | 1.2.0   | 1.2.0       | 1.3.0   | 1.0.0       |
+| 0.99.8     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.7     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.6     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.5     | 2.4.0    | 1.1.0   | 1.1.0       | 1.3.0   | 1.0.0       |
+| 0.99.4     | 2.3.0    | 1.0.1   | 1.0.0       | 1.2.0   | 1.0.0       |
+| 0.99.3     | 2.3.0    | 1.0.1   | 1.0.0       | 1.1.0   | 1.0.0       |
+| 0.99.2     | 2.3.0    | 1.0.1   | 1.0.0       | 1.0.1   | 1.0.0       |
+| 0.99.1     | 2.2.1    | 1.0.0   | 1.0.0       | 1.0.0   | 1.0.0       |
+| 0.99.0     | 2.2.0    | 0.8.0   | 0.5.0       | 0.8.0   | 0.4.0       |
 
 **None** marks compiler 2.6.2, which no SDK release installs. Its row is the set SDK 1.1.0's
 network defaults used by mistake (see 1.2.0); it is kept because its engines still run Pots made
@@ -112,6 +113,61 @@ close an entry, under **Also breaking**.
 Up to 0.99.6, a program compiled through the SDK could not carry type annotations (see 0.99.7).
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
+
+## Unreleased
+
+Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0, as 1.2.0:
+nothing moves.
+
+### SauceScript
+
+- **Added** (Solana): venue namespaces on `solana-devnet`. Seven venues are deployed on Solana's
+  devnet, and a program compiled for it swaps at each through its devnet program: `Raydium.CLMM`,
+  `Stabble.CLMM`, `Orca.Whirlpool`, `Defituna.Fusion`, `Crema.CLMM`, `Phoenix.Market` and
+  `Meteora.DLMM`. A pool by key, as in `Orca.Whirlpool.pool(USDC, WSOL, 4)`, is derived from
+  devnet's own configs, not mainnet's: Raydium CLMM's and Stabble CLMM's AmmConfigs, Orca's devnet
+  WhirlpoolsConfig and its fee tiers, and Crema's config. `sauce globals --chain solana-devnet`
+  lists the venues, and [Solana Devnet](reference/chains/solana-devnet.md) gives each one's
+  program.
+- **Changed** (Solana): on `solana-devnet` each of the three other venues is refused with its own
+  reason, naming the venue and the cluster, where every venue name was refused there with one
+  message before. Byreal and Cropper have no program on devnet:
+  `` `Byreal.CLMM` is not on solana-devnet: Byreal has no program on Solana's devnet. ``
+  PancakeSwap's program is on devnet, but none of its pools there has the tick arrays a swap at a
+  price walks:
+  `` `Pancakeswap.CLMM` is not supported on solana-devnet: its devnet pools lack the tick arrays a swap at a price needs. ``
+
+### Solana venues in TypeScript
+
+- **Added**: `@eco-incorp/sauce/svm` exports the venue table by cluster: `SVM_VENUE_TABLE`, each
+  venue's program and pool configs on each cluster it is deployed on; `svmVenueRow(venue, cluster)`,
+  its row on one cluster; `svmVenueWithheld(venue, cluster)`, why a venue whose program is on a
+  cluster has no row there; and `svmRouterDefines(cluster)`, the defines `@sauce/router`'s Solana
+  arm reads each venue's program from.
+
+**Also breaking:**
+
+- A raw `compile()` of `@sauce/router`'s Solana arm passes `svmRouterDefines(cluster)`, for
+  `"mainnet-beta"` or `"devnet"`, as its `defines`, each entry as the `[name, value]` text pair the
+  compiler takes:
+
+  ```ts
+  Object.entries(svmRouterDefines(cluster)).map(([name, value]): [string, string] => [
+    name,
+    value.toString(),
+  ]);
+  ```
+
+  The library no longer writes a venue's program, and a compile without them fails, naming the
+  define. The SDK's own compiles for a Solana chain supply them.
+
+- Caller defines and tokens may not use the reserved `__SAUCE_` names: every compile, the
+  `sauce` command's and the MCP server's included, refuses one, naming it.
+- The SDK's Solana pool helpers, which no package entry exports, change with it:
+  `svmPoolKeyProblem` and `svmPoolCandidates` take the cluster first, `svmPoolSlot` takes it last,
+  and `svmPhoenixSlot` and `svmDlmmSlot` take the venue's program first. `SVM_KEYED_VENUES`,
+  `SVM_PRICE_LIMIT_VENUES` and `SVM_SLOT_VENUES` are replaced by
+  `svmKeyedVenue(namespace, cluster)`, `svmPriceLimitVenues(cluster)` and `svmSlotVenues(cluster)`.
 
 ## SDK 1.2.0 — 2026-11-24
 

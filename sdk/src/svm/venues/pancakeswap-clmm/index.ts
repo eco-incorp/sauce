@@ -62,6 +62,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   AMM_CONFIG_DISCRIMINATOR as RAYDIUM_CLMM_AMM_CONFIG_DISCRIMINATOR,
   POOL_DISCRIMINATOR as RAYDIUM_CLMM_POOL_DISCRIMINATOR,
@@ -83,7 +84,7 @@ import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 const SLUG = "pancakeswap-clmm";
 
 /** PancakeSwap's Solana CLMM program (a Raydium-CLMM-shaped Anchor fork). */
-export const PANCAKESWAP_CLMM_PROGRAM_ID = address("HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq");
+export const PANCAKESWAP_CLMM_PROGRAM_ID = svmMainnetProgram("pancakeswap-clmm");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");

@@ -21,8 +21,11 @@ them. Solana Devnet is a test network: its coin and tokens have no value.
 
 Solana's devnet cluster, a chain of its own: a program compiled for it reads its chain id as
 1399811150, what the devnet engine reports, and its symbols are devnet's mints. The release's
-engine and Kitchen are deployed on devnet, with zero execution fees. The Solana venues are
-mainnet's programs and pools, so a venue name is refused here.
+engine and Kitchen are deployed on devnet, with zero execution fees. Seven venues run here,
+each at its devnet program (under Venues below), and a pool by key is derived from devnet's
+own configs, not mainnet's. Byreal and Cropper have no program on devnet, so their names are
+refused here. PancakeSwap's program is on devnet, but its devnet pools lack the tick arrays a
+swap at a price needs, so its name is refused too.
 
 ## In a program
 
@@ -43,6 +46,29 @@ function main(account: Account): Uint256 {
 | --- | --- | --- | --- | --- |
 | `USDC` | `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU` | `0x3b442cb3912157f13a933d0134282d032b5ffecd01a2dbf1b7790608df002ea7` | 6 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
 | `WSOL` | `So11111111111111111111111111111111111111112` | `0x069b8857feab8184fb687f634618c035dac439dc1aeb3b5598a0f00000000001` | 9 | SPL Token (`TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`) |
+
+## Venues
+
+Each venue, by the namespace a program swaps at one of its pools with, its protocol then its
+program: at a price, `Orca.Whirlpool.swap(pool, tokenIn, tokenOut, amountIn, priceLimit,
+minOut)`, which returns 0 having moved nothing where the pool cannot trade and reverts below
+`minOut`. Its pool is found by key, `Orca.Whirlpool.pool(USDC, WSOL, 4)`, where the venue finds
+pools by one: a key with no pool there is skipped. The pool's accounts, and the
+Pot's, are derived when the cook is built (`sauce-swaps`).
+
+| Namespace | Venue | Program | Pool by key |
+| --- | --- | --- | --- |
+| `Raydium.CLMM` | Raydium CLMM | `DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH` | fee |
+| `Stabble.CLMM` | Stabble CLMM | `6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6` | fee |
+| `Orca.Whirlpool` | Orca Whirlpools | `whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc` | tick spacing |
+| `Defituna.Fusion` | DefiTuna | `fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9` | tick spacing |
+| `Crema.CLMM` | Crema | `CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR` | tick spacing |
+| `Phoenix.Market` | Phoenix | `PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY` | by its address |
+| `Meteora.DLMM` | Meteora DLMM | `LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo` | by its address |
+
+`Meteora.DLMM`'s swap is an exact input, its venue's own with no price limit:
+`Meteora.DLMM.swap(pool, tokenIn, tokenOut, amountIn, minOut)` pays all of `amountIn` or
+fails the cook, and reverts below `minOut`.
 
 ## Accounts
 

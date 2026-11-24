@@ -1,40 +1,47 @@
-// Dumps the accounts a program finds a Solana pool by key through, from mainnet, into the test-only
-// fixture `test/fixtures/svm-pool-keys/amm-configs.json`, which `svm/pool-keys.test.ts` holds
-// `src/svm/pool-keys.ts`'s tables to:
+// Dumps the accounts a program finds a Solana pool by key through, from one cluster, into the
+// test-only fixture `test/fixtures/svm-pool-keys/amm-configs.json` (mainnet-beta) or
+// `amm-configs.<cluster>.json`, which `svm/pool-keys.test.ts` holds `src/svm/venue-table.ts`'s rows
+// for that cluster to:
 //
-//   - every AmmConfig of the four Raydium-code programs (Raydium CLMM, PancakeSwap CLMM, Byreal,
-//     Stabble CLMM), the program address of `["amm_config", index]` (u16 big-endian), its fee rate a
-//     u32 at 47 and its tick spacing a u16 at 51: a program finds such a pool by its fee;
-//   - every fee tier of Orca's and Cropper's WhirlpoolsConfig, the program address of
-//     `["fee_tier", config, index]` (u16 little-endian): a whirlpool is the address of
+//   - every AmmConfig of each Raydium-code program the cluster has (Raydium CLMM, PancakeSwap CLMM,
+//     Byreal, Stabble CLMM), the program address of `["amm_config", index]` (u16 big-endian), its fee
+//     rate a u32 at 47 and its tick spacing a u16 at 51: a program finds such a pool by its fee;
+//   - every fee tier of each WhirlpoolsConfig the cluster has (Orca's, Cropper's), the program address
+//     of `["fee_tier", config, index]` (u16 little-endian): a whirlpool is the address of
 //     `["whirlpool", config, mintA, mintB, index]`, and a program finds it by its tick spacing,
 //     which a static tier's index is and an adaptive-fee tier's (at 1024 and up) is not. A static
 //     tier is 44 bytes, its tick spacing a u16 at 40; an adaptive one 256, its index a u16 at 40 and
 //     its tick spacing at 42.
 //
-//   node scripts/dump-amm-configs.mjs --redump --rpc-config rpc.config.json
-//   node scripts/dump-amm-configs.mjs --check --rpc-config rpc.config.json
+//   node scripts/dump-amm-configs.mjs --redump --rpc-config rpc.config.json [--cluster devnet]
+//   node scripts/dump-amm-configs.mjs --check --rpc-config rpc.config.json [--cluster devnet]
 //
 // `--redump` reads AmmConfig indexes 0 to 199 and fee tier indexes 0 to 4095, and the static tier at
-// each tick spacing past those an adaptive tier names (Orca's full-range 32896), and rewrites the
-// fixture with every account there: its index, address, owner, lamports and data. `--check` reads
-// the same and reports each one added, gone or changed since the fixture, writing nothing. A config
-// or a tier a program adds is a key the tables may take: redump, then add its row to
-// `pool-keys.ts`.
+// the full-range tick spacing, 32896, and at each spacing past those an adaptive tier names, and
+// rewrites the fixture with every account there: its index, address, owner, lamports and data.
+// `--check` reads the same and reports each one added, gone or changed since the fixture, writing
+// nothing. A config or a tier a program adds is a key the tables may take: redump, then add its row
+// to `venue-table.ts`.
 //
-// The endpoint comes only from the `--rpc-config` file (chain id -> URL), under Solana's chain id
-// 1399811149, as in `dump-svm-venues.mjs`: no default, no fallback, nothing read from the
-// environment, and no URL ever written to the fixture.
-import { readFileSync, writeFileSync } from "node:fs";
+// The programs and configs are the cluster's rows of `src/svm/venue-table.ts`, read from source. The
+// endpoint comes only from the `--rpc-config` file (chain id -> URL), under the cluster's chain id
+// (Solana's 1399811149, its devnet's 1399811150), as in `dump-svm-venues.mjs`: no default, no
+// fallback, nothing read from the environment, and no URL ever written to the fixture.
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/kit";
+import { createTsLoader } from "./lib/load-ts.mjs";
 
-const USAGE = "usage: node scripts/dump-amm-configs.mjs (--redump | --check) --rpc-config <path>";
-const SOLANA = "1399811149";
+const USAGE =
+  "usage: node scripts/dump-amm-configs.mjs (--redump | --check) --rpc-config <path> " +
+  "[--cluster mainnet-beta|devnet]";
+const CHAIN_IDS = { "mainnet-beta": "1399811149", devnet: "1399811150" };
 const INDEXES = 200;
 const FEE_TIERS = 4096;
+/** A whirlpool's full-range tick spacing, past the indexes read. */
+const FULL_RANGE = 32896;
 
 function fail(message) {
   console.error(`dump-amm-configs: ${message}`);
@@ -48,12 +55,16 @@ try {
       redump: { type: "boolean", default: false },
       check: { type: "boolean", default: false },
       "rpc-config": { type: "string" },
+      cluster: { type: "string", default: "mainnet-beta" },
     },
   });
 } catch (error) {
   fail(`${error.message}\n${USAGE}`);
 }
 if (cli.values.redump === cli.values.check) fail(`give one of --redump and --check\n${USAGE}`);
+const CLUSTER = cli.values.cluster;
+const SOLANA = CHAIN_IDS[CLUSTER];
+if (SOLANA === undefined) fail(`--cluster is mainnet-beta or devnet, not ${CLUSTER}\n${USAGE}`);
 if (cli.values["rpc-config"] === undefined) fail(`pass --rpc-config <path>\n${USAGE}`);
 let config;
 try {
@@ -65,44 +76,62 @@ try {
 const URL_OF = config?.rpcUrls ?? config;
 const RPC = URL_OF?.[SOLANA];
 if (typeof RPC !== "string" || !/^https?:\/\//.test(RPC)) {
-  fail(`--rpc-config gives no URL for Solana (chain id ${SOLANA})`);
+  fail(`--rpc-config gives no URL for ${CLUSTER} (chain id ${SOLANA})`);
 }
 
 const SDK = join(dirname(fileURLToPath(import.meta.url)), "..");
-const FIXTURE = join(SDK, "test", "fixtures", "svm-pool-keys", "amm-configs.json");
+const FIXTURE = join(
+  SDK,
+  "test",
+  "fixtures",
+  "svm-pool-keys",
+  CLUSTER === "mainnet-beta" ? "amm-configs.json" : `amm-configs.${CLUSTER}.json`,
+);
 
-/** The whirlpool programs and their WhirlpoolsConfig, by the namespace a program writes. */
-const WHIRLPOOLS = {
-  "Orca.Whirlpool": {
-    program: "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
-    config: "2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ",
-  },
-  "Cropper.Whirlpool": {
-    program: "H8W3ctz92svYg6mkn1UtGfu2aQr2fnUFHM1RhScEtQDt",
-    config: "2CmCWqXhw7f3jCnvJg74t4vsm62DTUbKQPWL7NX8oCpL",
-  },
-};
+const { SVM_VENUE_TABLE } = createTsLoader(SDK)("src/svm/venue-table.ts");
+const row = (venue) => SVM_VENUE_TABLE[venue][CLUSTER];
 
-/** The four programs, by the namespace a program writes. */
-const PROGRAMS = {
-  "Raydium.CLMM": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
-  "Pancakeswap.CLMM": "HpNfyc2Saw7RKkQd8nEL4khUcuPhQ7WwY1B2qjx8jxFq",
-  "Byreal.CLMM": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
-  "Stabble.CLMM": "6dMXqGZ3ga2dikrYS9ovDXgHGh5RUsb2RTUj6hrQXhk6",
-};
+/** The cluster's whirlpool programs and their WhirlpoolsConfig, by the namespace a program writes. */
+const WHIRLPOOLS = Object.fromEntries(
+  [
+    ["Orca.Whirlpool", row("orca-whirlpool")],
+    ["Cropper.Whirlpool", row("cropper")],
+  ]
+    .filter(([, at]) => at !== undefined)
+    .map(([namespace, { program, config }]) => [namespace, { program, config }]),
+);
+
+/** The cluster's Raydium-code programs, by the namespace a program writes. */
+const PROGRAMS = Object.fromEntries(
+  [
+    ["Raydium.CLMM", row("raydium-clmm")],
+    ["Pancakeswap.CLMM", row("pancakeswap-clmm")],
+    ["Byreal.CLMM", row("byreal")],
+    ["Stabble.CLMM", row("stabble-clmm")],
+  ]
+    .filter(([, at]) => at !== undefined)
+    .map(([namespace, { program }]) => [namespace, program]),
+);
 
 async function rpc(method, params) {
-  const response = await fetch(RPC, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-  }).catch(() => undefined);
-  // Never the request's own error: it names the URL, which may carry a key.
-  if (response === undefined || !response.ok) fail(`the endpoint did not answer ${method}`);
-  const body = await response.json();
-  if (body.error !== undefined) fail(`${method}: ${body.error.message ?? "an error"}`);
+  // A public endpoint limits its rate: a 429 is waited out, up to eight times.
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(RPC, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    }).catch(() => undefined);
+    if (response?.status === 429 && attempt < 8) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** Math.min(attempt, 4)));
+      continue;
+    }
+    // Never the request's own error: it names the URL, which may carry a key.
+    if (response === undefined || !response.ok) fail(`the endpoint did not answer ${method}`);
+    const body = await response.json();
+    if (body.error !== undefined) fail(`${method}: ${body.error.message ?? "an error"}`);
 
-  return body.result;
+    return body.result;
+  }
 }
 
 const text = (value) => new TextEncoder().encode(value);
@@ -128,16 +157,17 @@ async function accountsAt(program, indexes, seedsOf) {
         )[0],
     ),
   );
-  // Every chunk of 100 read at once; the accounts kept in index order.
+  // Each chunk of 100 read in turn; the accounts kept in index order.
   const starts = Array.from({ length: Math.ceil(indexes.length / 100) }, (_, k) => k * 100);
-  const reads = await Promise.all(
-    starts.map((start) =>
-      rpc("getMultipleAccounts", [
+  const reads = [];
+  for (const start of starts) {
+    reads.push(
+      await rpc("getMultipleAccounts", [
         keys.slice(start, start + 100),
         { encoding: "base64", commitment: "finalized" },
       ]),
-    ),
-  );
+    );
+  }
   const found = [];
   reads.forEach(({ value }, k) =>
     value.forEach((account, i) => {
@@ -173,11 +203,13 @@ for (const [venue, { program, config }] of Object.entries(WHIRLPOOLS)) {
       index16(index, true),
     ]);
   const feeTiers = await tiersAt(upTo(FEE_TIERS));
-  // An adaptive tier's spacing past them, where a static tier would be at that index.
+  // Past them: the full-range tier's spacing, 32896, and each spacing an adaptive tier names, where a
+  // static tier would be at that index.
   const past = feeTiers
     .map(({ base64Data }) => Buffer.from(base64Data, "base64"))
     .filter((data) => data.length !== 44)
     .map((data) => data.readUInt16LE(42))
+    .concat(FULL_RANGE)
     .filter((spacing, i, all) => spacing >= FEE_TIERS && all.indexOf(spacing) === i)
     .sort((a, b) => a - b);
   read.whirlpools[venue] = {
@@ -188,10 +220,20 @@ for (const [venue, { program, config }] of Object.entries(WHIRLPOOLS)) {
 }
 
 if (cli.values.redump) {
-  const previous = JSON.parse(readFileSync(FIXTURE, "utf8"));
+  const $comment = existsSync(FIXTURE)
+    ? JSON.parse(readFileSync(FIXTURE, "utf8")).$comment
+    : `As ${CLUSTER} held them when read, each account's owner, lamports and data: under venues, ` +
+      "every AmmConfig of the cluster's Raydium-code programs, index 0 to 199 (the program address " +
+      'of ["amm_config", index] as a big-endian u16), its trade fee rate (millionths) a u32 at 47 ' +
+      "and its tick spacing a u16 at 51; under whirlpools, every fee tier of the cluster's " +
+      'WhirlpoolsConfigs, index 0 to 4095 (the program address of ["fee_tier", config, index] as a ' +
+      "little-endian u16), a static tier's tick spacing a u16 at 40, an adaptive-fee tier's index a " +
+      "u16 at 40 and its tick spacing a u16 at 42. Written by scripts/dump-amm-configs.mjs --redump " +
+      `--rpc-config <file> --cluster ${CLUSTER}; svm/pool-keys.test.ts holds svm/venue-table.ts's ` +
+      `${CLUSTER} rows to it.`;
   writeFileSync(
     FIXTURE,
-    `${JSON.stringify({ $comment: previous.$comment, read: new Date().toISOString(), ...read }, null, 2)}\n`,
+    `${JSON.stringify({ $comment, read: new Date().toISOString(), ...read }, null, 2)}\n`,
   );
   for (const [venue, { configs }] of Object.entries(read.venues))
     console.log(`${venue}: ${configs.length} configs`);
@@ -221,6 +263,6 @@ if (cli.values.redump) {
     compare(`${venue} config`, fixture.venues[venue]?.configs, configs);
   for (const [venue, { feeTiers }] of Object.entries(read.whirlpools))
     compare(`${venue} fee tier`, fixture.whirlpools?.[venue]?.feeTiers, feeTiers);
-  console.log(moved === 0 ? "the fixture is mainnet's" : `${moved} accounts moved`);
+  console.log(moved === 0 ? `the fixture is ${CLUSTER}'s` : `${moved} accounts moved`);
   if (moved > 0) process.exit(1);
 }

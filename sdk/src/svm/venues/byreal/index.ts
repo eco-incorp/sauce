@@ -63,6 +63,7 @@
  */
 import { address, getAddressCodec } from "@solana/kit";
 import type { Address } from "@solana/kit";
+import { svmMainnetProgram } from "../../venue-table.js";
 import {
   AMM_CONFIG_DISCRIMINATOR,
   RAYDIUM_CLMM_MAX_BOUNDARIES,
@@ -86,7 +87,7 @@ import { memoizedGetProgramDerivedAddress } from "../pda-memo.js";
 const SLUG = "byreal" as const;
 
 /** Byreal's deployed program — a different program id than raydium-clmm's CAMMC... deployment. */
-export const BYREAL_PROGRAM_ID = address("REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2");
+export const BYREAL_PROGRAM_ID = svmMainnetProgram("byreal");
 const TOKEN_PROGRAM = address("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const TOKEN_2022_PROGRAM = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const MEMO_PROGRAM = address("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
