@@ -552,13 +552,16 @@ describe("offline, a CREATE3 Pot's record decides its engine only where its Rout
   const CAUTIOUS = "names no engine of its release family";
 
   describe("a record's kind is what its address says, not what its `kind` field says", () => {
-    it("cooks a dynamic Pot on the installed engine though its record says shared", async () => {
-      const run = await txOf({ ...DYNAMIC, kind: "shared" });
-      expect(run.code).toBe(0);
-      expect(cookedOn(run)).toEqual({ pot: CURRENT, engine: ENGINE });
-      expect(run.stderr).toContain(`a Pot whose Router can move cooks on ${ENGINE}`);
-      expect(run.stderr).not.toContain("The engine is the one the Pot store records");
-    });
+    it.each(["private-fixed-router", "shared", "bogus"])(
+      "cooks a dynamic Pot on the installed engine though its record says %s",
+      async (kind) => {
+        const run = await txOf({ ...DYNAMIC, kind } as unknown as PotRecord);
+        expect(run.code).toBe(0);
+        expect(cookedOn(run)).toEqual({ pot: CURRENT, engine: ENGINE });
+        expect(run.stderr).toContain(`a Pot whose Router can move cooks on ${ENGINE}`);
+        expect(run.stderr).not.toContain("The engine is the one the Pot store records");
+      },
+    );
 
     it("cooks a fixed-Router Pot on the engine its record names though the record says private", async () => {
       const run = await txOf({ ...DYNAMIC, kind: "private", pot: FIXED });
