@@ -28,7 +28,9 @@ export interface Pool {
   vaultA: Address;
   vaultB: Address;
   extra: Address;
-  /** The tick arrays a swap paying the lower-key token walks (the price falls), and the other way. */
+  /** The tick arrays a swap paying the lower-key token walks (the price falls), and the other way.
+   *  Crema's are its pool's own aToB and bToA: it keeps its pair in creation order, so its token A
+   *  may be the higher key. */
   payA: Address[];
   payB: Address[];
   /** The slot's accounts past its nine, where the venue takes more (`dump-svm-venues`'s `moreOf`):

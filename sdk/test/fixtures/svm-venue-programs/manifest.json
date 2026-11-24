@@ -564,6 +564,28 @@
       ],
       "slot": 457671418,
       "unixTimestamp": 1792161024
+    },
+    {
+      "name": "crema-usdt-usdc",
+      "venue": "crema",
+      "program": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "pool": "7MPnn7k6uYSMcW7VvB8GUcEedLApmsAG1Fesfufv7rBk",
+      "config": "2rUWTKPfLnWDsEajZymGmZAEz8XcsTdo9gzKJfhsmpox",
+      "vaultA": "4LYHEdGow5hFh18QK449VSLVCR9LDGYFUGaabcqmndMe",
+      "vaultB": "B3eoVeVydTQRd62rce5XBoxrZYQJZzxA6fo1ctUU5Dm7",
+      "extra": "DMvMNYGbHKEbwCEPiF6wRWtnstSRkaHZds17E4Ay75G8",
+      "payA": [
+        "8vj7ixV54hLg4mnA5BWtLh1hUoKWYJrprFvoceRr47EB",
+        "71rbACPxFtpgFqd3SAPLKCzJjtCxQWAvihWwAhupXLe7",
+        "CQ478jWbxMuY3ooqwPFwn1JWZiJU36apuWvA59jbtMFL"
+      ],
+      "payB": [
+        "8vj7ixV54hLg4mnA5BWtLh1hUoKWYJrprFvoceRr47EB",
+        "BuP2toUiSKnEjKNXmNJCcMwsuCmqcwU7nxjTqDXzkrrX",
+        "3aduCZnuyrsb2P4eNjL6FFGztZDRBxZJdswyUtn6WHLf"
+      ],
+      "slot": 473410070,
+      "unixTimestamp": 1795537427
     }
   ],
   "accounts": [
@@ -696,6 +718,14 @@
       "file": "raydium-clmm/3Y695CuQ8AP4anbwAqiEBeQF9KxqHFr8piEwvw3UePnQ.json"
     },
     {
+      "address": "3aduCZnuyrsb2P4eNjL6FFGztZDRBxZJdswyUtn6WHLf",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "9638800a4d12e8c206c039a57a617598911e2af131c746c0ba66b4425cac4edf",
+      "file": "crema/3aduCZnuyrsb2P4eNjL6FFGztZDRBxZJdswyUtn6WHLf.json"
+    },
+    {
       "address": "3h2e43PunVA5K34vwKCLHWhZF4aZpyaC9RmxvshGAQpL",
       "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
       "lamports": "2155204",
@@ -790,6 +820,14 @@
       "size": 10240,
       "sha256": "aa4beebd2d5af89b5bfe78994e97c43f9aa68c9dd7a83c84f131523ffb58bc98",
       "file": "raydium-clmm/4LEQXULRTK4U3ifXqaN1NwcHfnh6VR4jgmjnaR1BTzkW.json"
+    },
+    {
+      "address": "4LYHEdGow5hFh18QK449VSLVCR9LDGYFUGaabcqmndMe",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "1a58f91acb4e55b41f09f3ffe0e7ee2436dedfd351fe9cc5f0b2a6b17e673010",
+      "file": "crema/4LYHEdGow5hFh18QK449VSLVCR9LDGYFUGaabcqmndMe.json"
     },
     {
       "address": "4NFvUKqknMpoe6CWTzK758B8ojVLzURL5pC6MtiaJ8TQ",
@@ -1006,6 +1044,14 @@
       "file": "orca-whirlpool/6t6KEtuQdyAEAYz1ieUEB7f2DxPVgikE3AUK5wGYgSUk.json"
     },
     {
+      "address": "71rbACPxFtpgFqd3SAPLKCzJjtCxQWAvihWwAhupXLe7",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "479390d76a39b113ab4514986979f4227abdf56faea392e110947628a3a99725",
+      "file": "crema/71rbACPxFtpgFqd3SAPLKCzJjtCxQWAvihWwAhupXLe7.json"
+    },
+    {
       "address": "76x9964TvFSUVdHAEezmT6JWi2Nn9sGnRof1JXgTJtcx",
       "owner": "REALQqNEomY6cQGZJUGwywTBD2UmDT32rZcNnfxQ5N2",
       "lamports": "32092560",
@@ -1036,6 +1082,14 @@
       "size": 10240,
       "sha256": "daa2aef011b135eda6501c9517ed62540d28b2acf3c61d47fd2d874c5532e7c8",
       "file": "pancakeswap-clmm/7Jou7hzmE2pbyYXX1x8wP583eBgK5rzJJNUXLxNUrAuZ.json"
+    },
+    {
+      "address": "7MPnn7k6uYSMcW7VvB8GUcEedLApmsAG1Fesfufv7rBk",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "6096960",
+      "size": 748,
+      "sha256": "d4bef5d70ec065082cc2151575cd5180d771d210c528594dba2ea555f411da77",
+      "file": "crema/7MPnn7k6uYSMcW7VvB8GUcEedLApmsAG1Fesfufv7rBk.json"
     },
     {
       "address": "7SYkZbyjjYYW41WEmheCFSbx2jihVAMfdFssXxKvgSsh",
@@ -1150,6 +1204,14 @@
       "file": "phoenix/8g4Z9d6PqGkgH31tMW6FwxGhwYJrXpxZHQrkikpLJKrG.json"
     },
     {
+      "address": "8vj7ixV54hLg4mnA5BWtLh1hUoKWYJrprFvoceRr47EB",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "10d4320a20bf0b9219e21c08614e561bd024e0a213fadbed88d7b26d57525c7c",
+      "file": "crema/8vj7ixV54hLg4mnA5BWtLh1hUoKWYJrprFvoceRr47EB.json"
+    },
+    {
       "address": "8wcZ9dHL81TiDzgCA5T5smHL2S2CHUXqSx8AX2sVdSoE",
       "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
       "lamports": "72161280",
@@ -1261,6 +1323,14 @@
       "file": "raydium-clmm/ANCBQhZbk4xjByBe5kGAiBTfh4kzZnSndGbRU9dvsfnC.json"
     },
     {
+      "address": "B3eoVeVydTQRd62rce5XBoxrZYQJZzxA6fo1ctUU5Dm7",
+      "owner": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "lamports": "2039280",
+      "size": 165,
+      "sha256": "6ca7008dfd9502e0d21251ebfc69db7c78156791a1d9bc96f0cdca6e614847bb",
+      "file": "crema/B3eoVeVydTQRd62rce5XBoxrZYQJZzxA6fo1ctUU5Dm7.json"
+    },
+    {
       "address": "BMThUfz3xUqFNHS2wVFNTYs7hpu4G4skg1aeSQaF7nkt",
       "owner": "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
       "lamports": "72161280",
@@ -1301,12 +1371,28 @@
       "file": "orca-whirlpool/BdtM2hrLtCBJ9DbewrokVccSTeaFmWQp4xC4eynxozvW.json"
     },
     {
+      "address": "BuP2toUiSKnEjKNXmNJCcMwsuCmqcwU7nxjTqDXzkrrX",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "ed5437e0e192c6cf8bc0b8c5c17ff8cae151e9617be7a4d75413ef88bb744885",
+      "file": "crema/BuP2toUiSKnEjKNXmNJCcMwsuCmqcwU7nxjTqDXzkrrX.json"
+    },
+    {
       "address": "BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3",
       "owner": "fUSioN9YKKSa3CUC2YUc4tPkHJ5Y6XW1yz8y6F7qWz9",
       "lamports": "7258736",
       "size": 580,
       "sha256": "4bfcf0db5e904775d0b3775b00c060054d1b1b6023c495c54a1d7041ad139143",
       "file": "defituna/BvGq78MYvQPM23YYWkJgijoeJET4WzPpjtdtqZJEY8p3.json"
+    },
+    {
+      "address": "CQ478jWbxMuY3ooqwPFwn1JWZiJU36apuWvA59jbtMFL",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "60440640",
+      "size": 8556,
+      "sha256": "7e8cdeee35f1b1f8c67760066c688af10c2b096ef89b7bc8b8ff449e84ec359f",
+      "file": "crema/CQ478jWbxMuY3ooqwPFwn1JWZiJU36apuWvA59jbtMFL.json"
     },
     {
       "address": "CRKZr6Y9t2hzVNWY4gJk5eig8uznyykB4RTuGSqJDw7n",
@@ -1443,6 +1529,14 @@
       "size": 484,
       "sha256": "ee763c343a6aac67ed65f2aa2f1d5de85bae3f0fb5e697f2379033cff32a86ee",
       "file": "orca-whirlpool/DLHT8eMw7zuuw1j8AvyQsySk31FRELGdUmbjZQHQczZR.json"
+    },
+    {
+      "address": "DMvMNYGbHKEbwCEPiF6wRWtnstSRkaHZds17E4Ay75G8",
+      "owner": "CLMM9tUoggJu2wagPkkqs9eFG4BWhVBZWkP1qv3Sp7tR",
+      "lamports": "6987840",
+      "size": 876,
+      "sha256": "f034f44912ba0c7e6533dd5fe3201deef4a409829e070f79e5ddb265d9ab55a6",
+      "file": "crema/DMvMNYGbHKEbwCEPiF6wRWtnstSRkaHZds17E4Ay75G8.json"
     },
     {
       "address": "DPH9w3DvTGEWbpV3p7bbrDvfx7Gp5M5ahueUE9dUwjoG",
