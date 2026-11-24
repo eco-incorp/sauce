@@ -142,13 +142,14 @@ every compile the package makes resolves with no option. Save it as
 
 ```ts
 // SpaceX for USDC over Solana's pools, as a limit order: up to `budget` USDC, never more than
-// `priceLimit` for any SPCX_US, fees included, and at least `minTokens` SPCX_US or nothing. SPCX_US
-// is Backpack's SpaceX share, a Token-2022 mint. The pools are found by key, as an EVM program finds
-// a Uniswap pool by its fee: Raydium's CLMM pools of the pair at fee 0.25% and 0.18%, Byreal's at
-// 0.1% and PancakeSwap's at 0.08%, the pair's pools on mainnet that trade at a price, the deepest
-// first; a key with no pool is skipped. Each pool is offered what is left of the budget and trades
-// until its price, fee paid, reaches priceLimit. Compiling adds each pool's accounts to main, read
-// from the pool when the cook is built, so the command is given no account.
+// `priceLimit` for any SPCX_US, fees included, to the rounding of each pool's sqrt price, and at
+// least `minTokens` SPCX_US or nothing. SPCX_US is Backpack's SpaceX share, a Token-2022 mint. The
+// pools are found by key, as an EVM program finds a Uniswap pool by its fee: Raydium's CLMM pools
+// of the pair at fee 0.25% and 0.18%, Byreal's at 0.1% and PancakeSwap's at 0.08%, the pair's
+// pools on mainnet that trade at a price, the deepest first; a key with no pool is skipped. Each
+// pool is offered what is left of the budget and trades until its price, fee paid, reaches
+// priceLimit. Compiling adds each pool's accounts to main, read from the pool when the cook is
+// built, so the command is given no account.
 //
 //   sauce run solana-distributed-swap.sauce.ts --chain <chain> --keypair <keypair> \
 //     --args <budget> <priceLimit> <minTokens> <maxAvgPrice> <recipient>
@@ -243,10 +244,13 @@ function main(
   after its fee, and swaps everything offered up to it. Its price is the square root of the
   higher-key token per lower-key token, times 2^64 (the pair in the order of their 32-byte keys), so
   `priceLimit` as that price is `√(priceLimit × 2^128 ÷ 1e18)` paying the higher-key token and,
-  upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it; the
-  root is rounded down, so the pool stops a little sooner, never later. Crema's pair is in the pool's
-  own order, not the keys': its price is token B per token A, so the first root is for paying token
-  B and the second for paying token A.
+  upside down, `√(2^128 × 1e18 ÷ priceLimit)` paying the lower-key one, before the fee moves it. The
+  roots are rounded down: paying the higher-key token (the price rises) that keeps the pool's limit
+  inside the exact one, so the pool stops a little sooner; paying the lower-key token (the price
+  falls) it moves the limit past the exact one by a few steps of the Q64.64 root, so there the last
+  unit can cost a hair more than `priceLimit`. Crema's pair is in the pool's own order, not the
+  keys': its price is token B per token A, so the first root is for paying token B and the second
+  for paying token A, and the rounding falls the same way.
 - **Settle.** A `require` reverts the whole cook, every swap included. What was bought goes from
   the Pot to the recipient's SPCX_US account, and what is left of the budget to the recipient's USDC
   account; given the Pot's own address (`sauce pot --chain solana --owner <owner>` prints it), both
