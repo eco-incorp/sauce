@@ -518,6 +518,25 @@ describe("the Pots a landed Solana transaction created", () => {
     );
   });
 
+  it("refuses an account a program this SDK does not know owns without calling it no Pot: a later release's engine may own it", async () => {
+    const { pot } = await createOf();
+    const stranger = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    const reader = {
+      ownerOf: async (at: SvmAddress) => (at === pot ? stranger : undefined),
+      genesis: DEVNET,
+    };
+    const hex = `0x${"07".repeat(32)}` as Hex;
+    const refusal = await importSvmPot(reader, SOLANA, PAYER, hex).then(
+      () => undefined,
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    expect(refusal).toContain(
+      `is owned by ${stranger}, which is not an engine this SDK knows: it is not recorded. ` +
+        "Where a later release's engine owns it, a newer SDK imports it.",
+    );
+    expect(refusal).not.toContain("not a Pot");
+  });
+
   it("imports a devnet Pot as Solana's record of devnet, whichever chain names it, holding solana-devnet to devnet", async () => {
     const { pot } = await createOf();
     const asked: string[] = [];

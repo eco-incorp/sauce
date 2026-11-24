@@ -865,13 +865,17 @@ export interface SvmAccountReader {
   readonly genesis: () => Promise<string>;
 }
 
+/** The System Program: the owner of an address that holds only lamports. */
+const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+
 /**
  * `owner`'s Pot at `salt` on Solana: the Kitchen's PDA, which must exist and be an engine's —
  * `create_pot` hands the account to the engine it names, so a Pot is owned by one a release
- * records. An account there owned by anything else (lamports sent to the address before any Pot,
- * held by the System Program) is no Pot, and is refused: a record is never rewritten, so it would
- * stand for the Pot for good. On a chain held to a cluster (`solana-devnet`), the endpoint is held
- * to it first.
+ * records. An account there held by the System Program (lamports sent to the address before any
+ * Pot) is no Pot, and one owned by a program this SDK does not know may be the Pot of a later
+ * release's engine, which a newer SDK imports. Both are refused: a record is never rewritten, so it
+ * would stand for the Pot for good. On a chain held to a cluster (`solana-devnet`), the endpoint is
+ * held to it first.
  */
 export async function importSvmPot(
   reader: SvmAccountReader,
@@ -891,10 +895,13 @@ export async function importSvmPot(
     throw new Error(`${owner} has no Pot at salt ${salt} on ${chain.slug}: ${pot} does not exist`);
   }
   if (svmSetOf(engine) === undefined) {
+    const where = `${pot}, ${owner}'s Pot address at salt ${salt} on ${chain.slug}, is owned by ${engine}`;
     throw new Error(
-      `${pot}, ${owner}'s Pot address at salt ${salt} on ${chain.slug}, is owned by ${engine}, ` +
-        "which no release this sauce knows names as its engine: it is not a Pot, and is not " +
-        "recorded",
+      engine === SYSTEM_PROGRAM
+        ? `${where}, which no release this sauce knows names as its engine: it is not a Pot, and ` +
+            "is not recorded"
+        : `${where}, which is not an engine this SDK knows: it is not recorded. Where a later ` +
+            "release's engine owns it, a newer SDK imports it.",
     );
   }
 
