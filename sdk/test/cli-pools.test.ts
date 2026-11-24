@@ -516,7 +516,8 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
       const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
       expect(out.checked).toHaveLength(9);
       expect(out.checked.filter((one) => one.error !== undefined)).toEqual([]);
-      expect(stub.methods.get("getProgramAccounts")).toBe(12); // 10 scans, 2 of them twice
+      // 11 scans (Phoenix's and Crema's each asked both ways round), 2 of them twice.
+      expect(stub.methods.get("getProgramAccounts")).toBe(13);
     } finally {
       await stub.close();
     }
@@ -533,7 +534,8 @@ describe("sauce pools on Solana, through an endpoint with no pools", () => {
       expect(run.code).toBe(1);
       expect(run.stderr).toMatch(/1 of 9 venues could not be read \(Orca Whirlpools\)/);
       expect(run.stderr).toMatch(/with --rpc-url <url> or --config <file>/);
-      expect(stub.methods.get("getProgramAccounts")).toBe(13); // Orca's, asked 4 times
+      // Orca's, asked 4 times, and the other 10 scans (Phoenix's and Crema's each both ways round).
+      expect(stub.methods.get("getProgramAccounts")).toBe(14);
       const out = JSON.parse(run.stdout) as { checked: { venue: string; error?: string }[] };
       expect(out.checked.filter((one) => one.error !== undefined).map((one) => one.venue)).toEqual([
         "Orca Whirlpools",

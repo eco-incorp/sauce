@@ -61,6 +61,7 @@ import {
   ownLimit,
   pool,
   restoreVenues,
+  SYSTEM,
   TOKEN,
   TOKEN_2022,
   USDC,
@@ -511,6 +512,71 @@ describeSvm(
       expect(picked.poolArgs.slice(0, picked.chosen.length)).toEqual(
         picked.chosen.map((one) => one.pool),
       );
+    }, 300_000);
+
+    // Crema keeps its pair in the order its pool was created in, so USDT, the higher key, is the
+    // token A of mainnet's USDT/USDC pool, 7MPnn7…, and paying USDT its price falls. The listing
+    // finds the pool whichever order the pair is given in, prices each side by the pool's own
+    // order, and names the slot's tick arrays from its map: the two it marks paying USDC and the
+    // one paying USDT, never the arrays beside them that exist and that Crema refuses.
+    it("lists a Crema pool that keeps its higher key first, each side priced by the pool's own order and its slot the arrays its map marks", async () => {
+      restoreVenues(harness.svm);
+      const p = pool("crema-usdt-usdc");
+      for (const [first, second] of [
+        ["USDC", "USDT"],
+        ["USDT", "USDC"],
+      ] as const) {
+        const listed = ok(
+          await sauce(
+            ...["pools", "--chain", "solana", first, second, "--rpc-url", SOLANA_URL, "--json"],
+          ),
+        ) as {
+          pools: {
+            venue: string;
+            pool: Address;
+            byKey?: string;
+            sides: { pay: string; priceLimit: string }[];
+            slots: Record<
+              string,
+              {
+                program: Address;
+                pool: Address;
+                config: Address;
+                vaultA: Address;
+                vaultB: Address;
+                extra: Address;
+                ticks: Address[];
+              }
+            >;
+          }[];
+        };
+        const found = listed.pools.find((one) => one.pool === p.pool);
+        if (found === undefined) throw new Error(`sauce pools ${first} ${second} does not list it`);
+        expect(found.venue).toBe("Crema");
+        expect(found.byKey).toBe(`Crema.CLMM.pool(${first}, ${second}, 2)`);
+        // Each side's price, fee included, as a swap's priceLimit: paying USDC, the pool's token B,
+        // the price rises; paying USDT, its token A, it falls.
+        expect(
+          Object.fromEntries(found.sides.map((side) => [side.pay, BigInt(side.priceLimit)])),
+        ).toEqual({ USDC: allIn(p, false), USDT: allIn(p, true) });
+        const slot = { program: p.program, pool: p.pool, config: p.config };
+        expect(found.slots).toEqual({
+          USDC: {
+            ...slot,
+            vaultA: p.vaultA,
+            vaultB: p.vaultB,
+            extra: p.extra,
+            ticks: [p.payB[0], p.payB[1], SYSTEM],
+          },
+          USDT: {
+            ...slot,
+            vaultA: p.vaultA,
+            vaultB: p.vaultB,
+            extra: p.extra,
+            ticks: [p.payA[0], SYSTEM, SYSTEM],
+          },
+        });
+      }
     }, 300_000);
 
     it("simulates for an owner with no Pot, no lamports and no USDC, given --assume-balance", async () => {

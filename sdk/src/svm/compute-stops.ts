@@ -125,7 +125,10 @@ export interface SvmStopPool {
   readonly fee: bigint;
   /** The slot's three tick arrays, in walk order; undefined for the System program in a place. */
   readonly arrays: readonly (Uint8Array | undefined)[];
-  /** Paying the lower-key token, the price falls. */
+  /**
+   * Paying the pool's token A (the lower key for every venue but Crema, which keeps its pair's own
+   * order), the price falls.
+   */
   readonly paysA: boolean;
   /** The swap's `priceLimit`, where the cook knows it: none is walked to the window's edge. */
   readonly priceLimit?: bigint;

@@ -12,9 +12,10 @@
  *
  * A pool is found by `getProgramAccounts` on its venue's program, filtered by its size and the
  * pair at its mints' offsets (the concentrated-liquidity venues keep the pair in key order, the
- * lower first; a Phoenix market its base and quote, either way). What a pool is skipped for is what
- * the skill's program skips it for: no liquidity at its price, swaps switched off, a fee that is not
- * one rate, a paused pool, a market not open for taking.
+ * lower first, but Crema keeps it in the order its pool was created in, and a Phoenix market its
+ * base and quote: both are asked either way round). What a pool is skipped for is what the skill's
+ * program skips it for: no liquidity at its price, swaps switched off, a fee that is not one rate, a
+ * paused pool, a market not open for taking.
  */
 import {
   address,
@@ -204,7 +205,7 @@ export async function svmPoolsCommand(input: SvmPoolsInput): Promise<CommandOutp
       const read =
         venue.layout === "phoenix"
           ? await phoenixPool(venue, pubkey, data, first, second, load)
-          : await clmmPool(rpc, ask, venue, pubkey, data, lower, higher, first, second, load);
+          : await clmmPool(rpc, ask, venue, pubkey, data, first, second, load);
       if ("why" in read) skipped.push({ venue: venue.name, pool: pubkey, why: read.why });
       else listed.push(read);
     }
@@ -466,7 +467,7 @@ async function programAccounts(
     return [...(await query(pair(first, second))), ...(await query(pair(second, first)))];
   }
   const layout = CLMM[venue.layout as Exclude<Layout, "phoenix" | "dlmm">];
-  return query([
+  const clmmPair = (a: Address, b: Address) => [
     { dataSize: BigInt(layout.size) },
     {
       memcmp: {
@@ -475,9 +476,13 @@ async function programAccounts(
         encoding: "base58",
       },
     },
-    { memcmp: { offset: BigInt(layout.mintA), bytes: lower, encoding: "base58" } },
-    { memcmp: { offset: BigInt(layout.mintB), bytes: higher, encoding: "base58" } },
-  ]);
+    { memcmp: { offset: BigInt(layout.mintA), bytes: a, encoding: "base58" } },
+    { memcmp: { offset: BigInt(layout.mintB), bytes: b, encoding: "base58" } },
+  ];
+  // Crema keeps its pair in the order its pool was created in, so its token A may be the higher key.
+  if (venue.layout === "crema")
+    return [...(await query(clmmPair(lower, higher))), ...(await query(clmmPair(higher, lower)))];
+  return query(clmmPair(lower, higher));
 }
 
 /** A price in priceLimit's units (pay base units per buy base unit, × 1e18) in whole tokens. */
@@ -493,11 +498,11 @@ const sideOf = (pay: Mint, buy: Mint, mid: bigint, taker: bigint): Side => ({
   priceLimit: taker.toString(),
 });
 
-/** Both sides of a pool whose price is a Q64.64 sqrt price of the higher-key token per the lower. */
-function clmmSides(sqrt: bigint, fee: bigint, lower: Mint, first: Mint, second: Mint): Side[] {
+/** Both sides of a pool whose price is a Q64.64 sqrt price of its token B per its token A. */
+function clmmSides(sqrt: bigint, fee: bigint, tokenA: Mint, first: Mint, second: Mint): Side[] {
   const kept = 1_000_000n - fee;
   const side = (pay: Mint, buy: Mint): Side =>
-    pay === lower
+    pay === tokenA
       ? sideOf(
           pay,
           buy,
@@ -520,8 +525,6 @@ async function clmmPool(
   venue: SvmVenue,
   pool: Address,
   data: Uint8Array,
-  lower: Mint,
-  higher: Mint,
   first: Mint,
   second: Mint,
   load: OwnedAccountLoader,
@@ -553,9 +556,12 @@ async function clmmPool(
   const key = keyOf(venue, pool, data, first, second);
   const slots: Record<string, SvmSlot> = {};
   const unfilled: Record<string, string> = {};
+  // The pool's own token A: the lower key on every venue but Crema, which keeps its pair in the
+  // order its pool was created in.
+  const tokenA = keyAt(data, layout.mintA);
   for (const pay of [first, second]) {
     try {
-      slots[pay.symbol] = await svmClmmSlot(venue, pool, data, pay === lower, load);
+      slots[pay.symbol] = await svmClmmSlot(venue, pool, data, pay.mint === tokenA, load);
     } catch (error) {
       unfilled[pay.symbol] = (error as Error).message;
     }
@@ -569,7 +575,7 @@ async function clmmPool(
     fee: Number(fee),
     liquidity: liquidity.toString(),
     sqrtPriceX64: sqrt.toString(),
-    sides: clmmSides(sqrt, fee, lower, first, second),
+    sides: clmmSides(sqrt, fee, tokenA === first.mint ? first : second, first, second),
     slots,
     ...(Object.keys(unfilled).length === 0 ? {} : { unfilled }),
   };
