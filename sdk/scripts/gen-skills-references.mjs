@@ -1548,7 +1548,7 @@ function renderDeploymentsJson(data) {
         fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3, and a fixed-Router or Shared Pot, keep the engine of their release (earlierEngines); every other Pot of this Kitchen, a dynamic Pot of any age included, cooks on the engine above.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 keeps its release's engine, and so does a fixed-Router or Shared Pot minted while the Kitchen handed out an earlier Router (earlierEngines); a fixed-Router or Shared Pot minted on the Router above, and every dynamic Pot of any age, cooks on the engine above.",
       },
       earlierEngines: data.deployments.earlier
         .filter((one) => one.component === "v12-evm")
@@ -1655,9 +1655,12 @@ function renderDeploymentsPage(data) {
           "Every Pot keeps its address when a release changes the Router or the engine. The engine a",
           "cook on it names depends on the Pot:",
           "",
-          "- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3, and a fixed-Router or",
-          "  Shared Pot minted with an earlier Router, keep the engine of their release. The SDK cooks",
-          "  each on the engine this table names.",
+          "- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 (kitchen-evm 1.3.0's), and",
+          "  a fixed-Router or Shared Pot minted with an earlier Router, keep the engine of their release.",
+          "  The SDK cooks each on the engine this table names.",
+          "- A Pot of a Kitchen release before that one (kitchen-evm 1.0.0 to 1.2.0), placed by CREATE2",
+          "  too, is not in the table: its engine does not run this SDK's programs, and the SDK refuses",
+          "  to cook it.",
           "- Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,",
           "  cooks on the installed engine, whichever Router it runs.",
           "",

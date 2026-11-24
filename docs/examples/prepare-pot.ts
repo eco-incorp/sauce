@@ -1,8 +1,9 @@
 // Your Pot on an EVM chain, before your first cook: checks that the released Kitchen and engine are
 // there, predicts your Pot from your address and a salt, and either hands back its deployment for
-// your wallet to send or checks that the Pot is yours and runs its Kitchen's current Router. Also
-// reads the Kitchen's fee, the value every cook carries. `sauce pot --chain <chain> --owner
-// <address>` reads the same.
+// your wallet to send or checks that the Pot is yours. Also reads the Kitchen's fee, the value every
+// cook carries, and returns `routerUpdate`: a Pot keeps the Router it was minted with, and that is
+// the owner's `setRouter` call where this release's Router could replace it. Nothing here sends it.
+// `sauce pot --chain <chain> --owner <address>` reads the same.
 //
 // Call it with a client for the Pot's chain; importing this example performs no RPC.
 import { DEFAULT_POT_SALT, routes, v12PredictPot } from "@eco-incorp/sauce";
@@ -52,7 +53,8 @@ export async function preparePot(
   if (getAddress(potOwner) !== getAddress(owner) || getAddress(potKitchen) !== kitchen) {
     throw new Error("This Pot belongs to another owner or Kitchen");
   }
-  // After a Router rollout: the owner's setRouter call, or undefined when the Pot is current.
+  // A Pot keeps the Router it was minted with. routerUpdate is the owner's setRouter call where this
+  // release's Router could replace it, and undefined where there is none; nothing sends it.
   const routerUpdate = await potRouterUpdate(client, pot);
   return { ...context, ready: true as const, routerUpdate };
 }
