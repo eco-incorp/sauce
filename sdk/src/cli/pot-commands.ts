@@ -16,6 +16,7 @@ import {
   importEvmPot,
   importSvmPot,
   recordOn,
+  recordKind,
   recordRelease,
   releaseText,
 } from "./pots.js";
@@ -29,7 +30,7 @@ const onChain = (record: PotRecord): string =>
 
 /** One Pot, as `sauce pot list` prints it. */
 const potLines = (record: PotRecord): string[] => [
-  `${onChain(record)}  ${record.pot}  ${record.kind}`,
+  `${onChain(record)}  ${record.pot}  ${recordKind(record)}`,
   `  owner ${record.owner}, salt ${record.salt}`,
   `  ${releaseText(recordRelease(record))}${record.engine === undefined ? "" : `, engine ${record.engine}`}`,
   record.deployment === undefined

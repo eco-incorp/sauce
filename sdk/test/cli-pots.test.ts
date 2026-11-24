@@ -53,6 +53,7 @@ import {
   evmPotsDeployed,
   importSvmPot,
   keepPots,
+  ownerPotsText,
   pairedSdkReleases,
   svmPotsCreated,
 } from "../src/cli/pots.js";
@@ -329,6 +330,41 @@ describe("a record written before its release was known", () => {
         `kitchen-evm ${own["kitchen-evm"].version})`,
     );
     expect(listed.text).not.toContain("release unknown");
+  });
+
+  it("lists the kind the address says, not the one a hand-edited or earlier-written record stores", () => {
+    // SDK 1.1.0 filed a fixed-Router Pot as `private` where it could not read the Kitchen's kind, and
+    // a record is a file anyone can edit: both listings print what the address says.
+    const FIXED = getAddress(v12PredictPot(OWNER, SALT, { routerFixed: true }));
+    const filed = (pot: Address, kind: PotRecord["kind"], tx: Hex): PotRecord => ({
+      schema: "sauce.pot/1",
+      chain: "base",
+      chainId: BASE.id,
+      origin: "deployed",
+      pot,
+      owner: OWNER,
+      salt: SALT,
+      kind,
+      kitchen: KITCHEN,
+      potInitCodeHash: v12PotDerivation().initCodeHash,
+      sdk: "1.1.0",
+      deployment: { tx, block: "12", from: SENDER },
+      recordedAt: "2026-11-20T21:00:00.000Z",
+    });
+    const store = new PotStore(join(dir, "pots"));
+    // A fixed-Router Pot stored as private, and a dynamic one stored as shared.
+    store.save(filed(FIXED, "private", `0x${"01".repeat(32)}`));
+    store.save(filed(OWN_POT, "shared", `0x${"02".repeat(32)}`));
+
+    const listed = potListCommand(store, { chain: BASE }).text;
+    expect(listed).toContain(`base  ${FIXED}  private-fixed-router`);
+    expect(listed).toContain(`base  ${OWN_POT}  private\n`);
+    expect(listed).not.toContain(`${OWN_POT}  shared`);
+
+    const others = ownerPotsText(store, BASE, OWNER, SENDER);
+    expect(others).toContain(`${FIXED}  private-fixed-router, salt ${SALT}`);
+    expect(others).toContain(`${OWN_POT}  private, salt ${SALT}`);
+    expect(others).not.toContain(`${OWN_POT}  shared`);
   });
 });
 

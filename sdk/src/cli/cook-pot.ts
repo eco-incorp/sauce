@@ -51,7 +51,7 @@ import { NOTHING_SENT, potState, requireReleasePot } from "./chain.js";
 import type { PotInput } from "./commands.js"; // type-only: commands.ts imports this module
 import { keptPots } from "./keep.js";
 import type { PotStore, StoredPot } from "./pot-store.js";
-import { evmRelease, familyRelease, recordPotRelease, releaseText } from "./pots.js";
+import { evmRelease, familyRelease, recordKind, recordPotRelease, releaseText } from "./pots.js";
 
 /**
  * An earlier release's Pot that the Pot store records for an owner and salt, and nothing offline
@@ -448,11 +448,12 @@ export async function cookPotOf(
       if (
         record.chainId !== chain.id ||
         record.owner.toLowerCase() !== owner.toLowerCase() ||
-        record.salt.toLowerCase() !== salt.toLowerCase() ||
-        record.kind !== "private"
+        record.salt.toLowerCase() !== salt.toLowerCase()
       ) {
         continue;
       }
+      // The Pot's own kind, as its address says it: the record's `kind` is not what decides.
+      if (recordKind(record) !== "private") continue;
       if (!file.bound) {
         notes.push(ignoredNote(file, "this owner's Pot at this salt"));
         continue;

@@ -207,6 +207,15 @@ export const recordPotRelease = (record: PotRecord): PotRelease | undefined =>
       })
     : undefined;
 
+/**
+ * A record's kind as its address says it ({@link recordPotRelease}), and the stored `kind` only
+ * where no release this SDK knows derives the Pot (a Pot of a release it does not know, or a Solana
+ * Pot). The stored field is not what decides: an earlier SDK wrote it wrongly where it could not read
+ * the Kitchen, and a record is a file anyone can edit.
+ */
+export const recordKind = (record: PotRecord): PotKind =>
+  recordPotRelease(record)?.kind ?? record.kind;
+
 /** A record's release as a reader reads it: the one it names, else the one its address tells. */
 export function recordRelease(record: PotRecord): PotRecord["release"] {
   if (record.release !== undefined) return record.release;
@@ -699,7 +708,7 @@ export function ownerPotsText(
       const paired = release === undefined ? undefined : pairedSdkReleases(release);
 
       return (
-        `  ${record.pot}  ${record.kind}, salt ${record.salt}: ${releaseText(release)}` +
+        `  ${record.pot}  ${recordKind(record)}, salt ${record.salt}: ${releaseText(release)}` +
         (paired === undefined ? "" : `, @eco-incorp/sauce ${paired}`)
       );
     }),

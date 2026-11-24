@@ -203,9 +203,23 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
       expect(run.stderr).toContain(TX);
     });
 
+    it.each(["shared", "private-fixed-router", "bogus"])(
+      "refuses for the record of an earlier release's Pot whatever kind it stores (%s): the address says the kind",
+      async (kind) => {
+        // A record is a file anyone can edit, and SDK 1.1.0 filed a Pot's kind wrongly where it could
+        // not read it. This address is the owner's dynamic Pot of the earlier release.
+        const { dir, file } = storeWith({ ...RECORD, kind } as unknown as PotRecord);
+        refused(await tx(dir, "--value", "0", "--owner", OWNER), file);
+      },
+    );
+
     it("builds the CREATE3 Pot when the store records none for this chain, owner and salt", async () => {
       const otherPot = getAddress(
         v12PredictPot(STRANGER, DEFAULT_POT_SALT, { compiler: LEGACY.compiler }),
+      );
+      // The owner's fixed-Router Pot of the same release: another kind of Pot, at its own address.
+      const fixedPot = getAddress(
+        v12PredictPot(OWNER, DEFAULT_POT_SALT, { compiler: LEGACY.compiler, routerFixed: true }),
       );
       const stores = [
         undefined,
@@ -215,7 +229,7 @@ describe("offline, with an earlier release's Pot recorded for the owner", () => 
         storeWith({ ...RECORD, pot: otherPot, owner: STRANGER }).dir,
         storeWith({ ...RECORD, salt: `0x${"01".padStart(64, "0")}` }).dir,
         storeWith({ ...RECORD, chain: "ethereum", chainId: ETHEREUM.id }).dir,
-        storeWith({ ...RECORD, kind: "shared" }).dir,
+        storeWith({ ...RECORD, kind: "private-fixed-router", pot: fixedPot }).dir,
         storeWith({
           ...RECORD,
           pot: CURRENT,
