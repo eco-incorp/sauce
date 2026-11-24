@@ -63,6 +63,7 @@ import {
   v12PotRelease,
   type PotFamily,
   type PotKind,
+  type PotRelease,
 } from "../deployments/pot.js";
 import { SDK_RELEASES } from "../embedded/sdk-releases.generated.js";
 import { v12KitchenAbi, v12PotAbi } from "../evm/engine.js";
@@ -189,28 +190,32 @@ export const familyRelease = (family: PotFamily): Record<string, string> =>
   releaseOf(family.sets[0]!);
 
 /**
- * The family an EVM record's Pot belongs to, told again from its address: a record written before
- * its release was known (SDK 1.1.0 wrote CREATE3 Pots with none) is identified now.
+ * What an EVM record's Pot is, told again from its address (`v12PotRelease`): the family its Kitchen
+ * belongs to, and its kind. A record written before its release was known is identified now, and
+ * its `kind` field is not what decides: SDK 1.1.0 wrote a CREATE3 Pot with no release, and the kind
+ * `private` for any owner but the zero address where the Kitchen's `gateSalt()` could not be read,
+ * a fixed-Router Pot's included. `undefined` for a Pot no known release derives, of which a record
+ * says only what it says itself.
  */
-export const recordFamily = (record: PotRecord): PotFamily | undefined =>
+export const recordPotRelease = (record: PotRecord): PotRelease | undefined =>
   record.pot.startsWith("0x")
     ? v12PotRelease({
         kitchen: getAddress(record.kitchen),
         owner: getAddress(record.owner),
         salt: record.salt as Hex,
         pot: getAddress(record.pot),
-      })?.family
+      })
     : undefined;
 
 /** A record's release as a reader reads it: the one it names, else the one its address tells. */
 export function recordRelease(record: PotRecord): PotRecord["release"] {
   if (record.release !== undefined) return record.release;
-  const family = recordFamily(record);
-  if (family === undefined) return undefined;
+  const found = recordPotRelease(record);
+  if (found === undefined) return undefined;
   // An unread Router names no release for a fixed-Router or Shared Pot of a CREATE3 family.
-  if (family.scheme === "create3" && record.kind !== "private") return undefined;
+  if (found.family.scheme === "create3" && found.kind !== "private") return undefined;
 
-  return familyRelease(family);
+  return familyRelease(found.family);
 }
 
 /** Every EVM engine a release set names, each once, newest first. */

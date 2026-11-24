@@ -22,7 +22,7 @@
  * Pot's name gives. Any other record is ignored, with a note naming its file, and a record that
  * cannot be read is a note, never an error.
  */
-import { BaseError, getAddress, type Address, type Hex, type PublicClient } from "viem";
+import { BaseError, getAddress, isAddress, type Address, type Hex, type PublicClient } from "viem";
 
 import type { CanonicalChain } from "../chains/canonical.js";
 import {
@@ -43,6 +43,7 @@ import {
   v12PredictPot,
   type PotFamily,
   type PotKind,
+  type PotRelease,
 } from "../deployments/pot.js";
 import { v12PotAbi } from "../evm/engine.js";
 import { CliError } from "./args.js";
@@ -50,7 +51,7 @@ import { NOTHING_SENT, potState, requireReleasePot } from "./chain.js";
 import type { PotInput } from "./commands.js"; // type-only: commands.ts imports this module
 import { keptPots } from "./keep.js";
 import type { PotStore, StoredPot } from "./pot-store.js";
-import { evmRelease, familyRelease, recordFamily, releaseText } from "./pots.js";
+import { evmRelease, familyRelease, recordPotRelease, releaseText } from "./pots.js";
 
 /**
  * An earlier release's Pot that the Pot store records for an owner and salt, and nothing offline
@@ -126,6 +127,25 @@ const ignoredNote = (file: StoredPot, about: string): string =>
 const damagedNote = (file: StoredPot, error: unknown): string =>
   `The Pot store's ${file.path} is ignored: it cannot be read as a record of a Pot: ` +
   (error instanceof Error ? error.message : String(error));
+
+/**
+ * The engine a record names, where it names one that is an address. A field that is none is as
+ * damaged as any other the store cannot use: a note says so and the engine is taken as unnamed,
+ * never an error that stops the command.
+ */
+function namedEngine(file: StoredPot, notes: string[]): Address | undefined {
+  const engine: unknown = file.record.engine;
+  if (engine === undefined) return undefined;
+  if (typeof engine === "string" && isAddress(engine, { strict: false })) {
+    return getAddress(engine);
+  }
+  notes.push(
+    `The Pot store's ${file.path} names an engine that is not an address ` +
+      `(${JSON.stringify(engine)}): that field is ignored.`,
+  );
+
+  return undefined;
+}
 
 /** Where a stored Pot's record came from, as the user reads it. */
 function provenance(stored: StoredPotChoice): string {
@@ -317,7 +337,7 @@ export async function cookPotOf(
   if ("pot" in target) {
     const pot = getAddress(target.pot);
     const { files, notes } = storedFiles(keptPots(), (store) => store.filesOf(chain.id, pot));
-    let found: { readonly file: StoredPot; readonly family: PotFamily | undefined } | undefined;
+    let found: { readonly file: StoredPot; readonly release: PotRelease | undefined } | undefined;
     for (const file of files) {
       try {
         const { record } = file;
@@ -329,13 +349,13 @@ export async function cookPotOf(
           notes.push(ignoredNote(file, `the Pot ${pot} on ${chain.slug}`));
           continue;
         }
-        found ??= { file, family: recordFamily(record) };
+        found ??= { file, release: recordPotRelease(record) };
       } catch (error) {
         notes.push(damagedNote(file, error));
       }
     }
-    const family = found?.family;
-    if (family === undefined) {
+    const release = found?.release;
+    if (release === undefined) {
       return {
         pot,
         engine: defaultEngine,
@@ -349,6 +369,7 @@ export async function cookPotOf(
         ],
       };
     }
+    const { family, kind } = release;
     if (!potFamilyRunsCompiler(family)) {
       throw new CliError(
         `${pot} on ${chain.slug} is a Pot of ${releaseText(familyRelease(family))}, as the Pot ` +
@@ -360,10 +381,10 @@ export async function cookPotOf(
     // A record's engine decides only for a fixed-Router or Shared Pot of a CREATE3 family, whose
     // engine is the one built for its Router, and only where it is one of the family's: a Pot whose
     // Router can move cooks on its family's engine, offline as online, whatever an earlier SDK's
-    // record names.
-    const { record } = found!.file;
-    const recorded = record.engine === undefined ? undefined : getAddress(record.engine);
-    if (family.scheme === "create3" && record.kind !== "private") {
+    // record names. Which of the two a Pot is, is what its address says (`recordPotRelease`), never
+    // the record's `kind`, which an earlier SDK wrote wrong for a fixed-Router Pot it could not read.
+    const recorded = namedEngine(found!.file, notes);
+    if (family.scheme === "create3" && kind !== "private") {
       const set = family.sets.find(
         (one) =>
           recorded !== undefined &&
@@ -397,17 +418,21 @@ export async function cookPotOf(
       };
     }
     const engine = potFamilyEngine(family);
+    const where = `for ${pot} in ${found!.file.path}`;
 
     return {
       pot,
       engine,
       family,
       notes: [
-        recorded !== undefined && recorded !== engine
-          ? `The Pot store's record of ${pot} names the engine ${recorded}; a Pot whose Router ` +
-            `can move cooks on ${engine}, offline as online.`
-          : `The engine is the one the Pot store records for ${pot} in ${found!.file.path} ` +
-            `(${releaseText(familyRelease(family))}).`,
+        recorded === undefined
+          ? `The Pot store's record ${where} names no engine: the engine is ${engine}, its ` +
+            `release's (${releaseText(familyRelease(family))}).`
+          : recorded !== engine
+            ? `The Pot store's record of ${pot} names the engine ${recorded}; a Pot whose Router ` +
+              `can move cooks on ${engine}, offline as online.`
+            : `The engine is the one the Pot store records ${where} ` +
+              `(${releaseText(familyRelease(family))}).`,
         ...notes,
       ],
     };
@@ -432,7 +457,7 @@ export async function cookPotOf(
         notes.push(ignoredNote(file, "this owner's Pot at this salt"));
         continue;
       }
-      const family = recordFamily(record);
+      const family = recordPotRelease(record)?.family;
       const rank = family === undefined ? -1 : earlier.indexOf(family);
       if (rank < 0) continue;
       if (oldest === undefined || rank < earlier.indexOf(oldest.family)) {

@@ -250,6 +250,12 @@ export const potFamilyRunsCompiler = (
   compiler: string = sdkCompilerVersion(),
 ): boolean => engineRunsCompiler("evm", potFamilyEngine(family), compiler) === true;
 
+/** What a Pot's address says of it: the release family its Kitchen belongs to, and its kind. */
+export interface PotRelease {
+  readonly family: PotFamily;
+  readonly kind: PotKind;
+}
+
 /**
  * The family and kind whose Kitchen `kitchen` places `pot` for (`owner`, `salt`); `undefined` when
  * no release the SDK knows does. Reads no chain.
@@ -259,7 +265,7 @@ export function v12PotRelease(input: {
   readonly owner: Address;
   readonly salt: Hex;
   readonly pot: Address;
-}): { readonly family: PotFamily; readonly kind: PotKind } | undefined {
+}): PotRelease | undefined {
   const owner = getAddress(input.owner);
   const pot = getAddress(input.pot);
   const shared = owner === zeroAddress;

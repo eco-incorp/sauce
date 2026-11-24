@@ -26,7 +26,12 @@ import { requireChain } from "../src/chains/canonical.js";
 import { PotStore, type PotRecord } from "../src/cli/pot-store.js";
 import { evmRelease } from "../src/cli/pots.js";
 import { nodeIo, runCli, type CliIo } from "../src/cli/run.js";
-import { v12EngineAddress, v12KitchenAddress, v12ReleaseSet } from "../src/deployments/index.js";
+import {
+  v12EngineAddress,
+  v12KitchenAddress,
+  v12PotDerivation,
+  v12ReleaseSet,
+} from "../src/deployments/index.js";
 import { DEFAULT_POT_SALT, v12PredictPot } from "../src/deployments/pot.js";
 import { v12PotAbi } from "../src/evm/engine.js";
 import { legacyRow } from "./release-arm.js";
@@ -523,5 +528,99 @@ describe("offline, a CREATE3 Pot's record decides its engine only where its Rout
     expect(run.code).toBe(0);
     expect(cookedOn(run)).toEqual({ pot: SHARED, engine: E1 });
     expect(run.stderr).toContain("The engine is the one the Pot store records");
+  });
+
+  // What an earlier SDK wrote of a CREATE3 Pot, as it really wrote it: SDK 1.1.0 knew no CREATE3
+  // release, so its record names the Kitchen's reported hash and no engine, no release and no
+  // profile; and where it could not read the Pot's kind it filed it as `private`, a fixed-Router Pot
+  // included.
+  const FROM_110 = (pot: Address, kind: PotRecord["kind"]): PotRecord => ({
+    schema: "sauce.pot/1",
+    chain: "base",
+    chainId: BASE.id,
+    pot,
+    owner: OWNER,
+    salt: DEFAULT_POT_SALT,
+    kind,
+    kitchen: getAddress(v12KitchenAddress()),
+    potInitCodeHash: v12PotDerivation().initCodeHash,
+    sdk: "1.1.0",
+    origin: "deployed",
+    deployment: { tx: TX, block: "39000000", blockHash: BLOCK_HASH, from: OWNER },
+    recordedAt: "2026-11-19T10:00:00.000Z",
+  });
+  const CAUTIOUS = "names no engine of its release family";
+
+  describe("a record's kind is what its address says, not what its `kind` field says", () => {
+    it("cooks a dynamic Pot on the installed engine though its record says shared", async () => {
+      const run = await txOf({ ...DYNAMIC, kind: "shared" });
+      expect(run.code).toBe(0);
+      expect(cookedOn(run)).toEqual({ pot: CURRENT, engine: ENGINE });
+      expect(run.stderr).toContain(`a Pot whose Router can move cooks on ${ENGINE}`);
+      expect(run.stderr).not.toContain("The engine is the one the Pot store records");
+    });
+
+    it("cooks a fixed-Router Pot on the engine its record names though the record says private", async () => {
+      const run = await txOf({ ...DYNAMIC, kind: "private", pot: FIXED });
+      expect(run.code).toBe(0);
+      expect(cookedOn(run)).toEqual({ pot: FIXED, engine: E1 });
+      expect(run.stderr).toContain("The engine is the one the Pot store records");
+    });
+
+    it("cooks a Shared Pot on the engine its record names though the record says private", async () => {
+      const run = await txOf({ ...DYNAMIC, kind: "private", owner: zeroAddress, pot: SHARED });
+      expect(run.code).toBe(0);
+      expect(cookedOn(run)).toEqual({ pot: SHARED, engine: E1 });
+    });
+
+    it.each(["private", "private-fixed-router"] as const)(
+      "takes the record SDK 1.1.0 wrote of a fixed-Router Pot, kind %s, for what it cannot tell: the installed engine, with the cautious note",
+      async (kind) => {
+        const run = await txOf(FROM_110(FIXED, kind));
+        expect(run.code).toBe(0);
+        expect(cookedOn(run)).toEqual({ pot: FIXED, engine: ENGINE });
+        expect(run.stderr).toContain(CAUTIOUS);
+        expect(run.stderr).toContain("runs only on the engine built for its Router");
+        expect(run.stderr).not.toContain("The engine is the one the Pot store records");
+      },
+    );
+
+    it("does not say a record names the engine of a dynamic Pot it names none of", async () => {
+      const run = await txOf(FROM_110(CURRENT, "private"));
+      expect(run.code).toBe(0);
+      expect(cookedOn(run)).toEqual({ pot: CURRENT, engine: ENGINE });
+      // The engine is its release's, and the note says whose it is.
+      expect(run.stderr).toContain(`names no engine: the engine is ${ENGINE}, its release's`);
+      expect(run.stderr).not.toContain("The engine is the one the Pot store records");
+    });
+  });
+
+  describe("an engine a record names that is no address is a note, never an error", () => {
+    it.each([
+      ["a string that is no address", "not an address"],
+      ["null", null],
+      ["a number", 5],
+    ] as const)(
+      "%s: the record's engine is ignored, and the Pot's own decides",
+      async (_what, engine) => {
+        const damaged = { ...DYNAMIC, engine } as unknown as PotRecord;
+        const note = `names an engine that is not an address (${JSON.stringify(engine)}): that field is ignored.`;
+
+        // A dynamic Pot cooks on its family's engine, as it does for any record.
+        const dynamic = await txOf(damaged);
+        expect(dynamic.code).toBe(0);
+        expect(cookedOn(dynamic)).toEqual({ pot: CURRENT, engine: ENGINE });
+        expect(dynamic.stderr).toContain(note);
+        expect(dynamic.stderr).toContain("names no engine");
+
+        // A fixed-Router Pot has no engine to take from such a record: the cautious note, as for a
+        // record that names none.
+        const fixed = await txOf({ ...damaged, kind: "private-fixed-router", pot: FIXED });
+        expect(fixed.code).toBe(0);
+        expect(cookedOn(fixed)).toEqual({ pot: FIXED, engine: ENGINE });
+        expect(fixed.stderr).toContain(note);
+        expect(fixed.stderr).toContain(CAUTIOUS);
+      },
+    );
   });
 });
