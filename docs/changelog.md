@@ -113,7 +113,7 @@ Up to 0.99.6, a program compiled through the SDK could not carry type annotation
 The examples for those releases that use annotations compile with the compiler the release ships,
 which the SDK exports as `@eco-incorp/sauce/compiler`.
 
-## SDK 1.2.0 — <date of release>
+## SDK 1.2.0 — 2026-11-24
 
 Compiler 2.6.4, v12-evm 1.5.0, kitchen-evm 1.5.0, v12-svm 1.4.1 and kitchen-svm 1.1.0. New since
 1.1.0: compiler 2.6.4 (from 2.6.3), and kitchen-evm 1.5.0 and v12-evm 1.5.0 (both from 1.4.0): a
