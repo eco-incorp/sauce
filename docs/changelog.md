@@ -155,8 +155,8 @@ and engines as 1.2.0.
   checks either.
 - **Fixed (Solana): paying a pool's token A, the last unit can cost a hair more than
   `priceLimit`; the documentation said it never did.** The router rounds the roots of the limit
-  down, which keeps it inside the exact one paying token B and moves it past the exact one paying
-  token A, by a few steps of the pool's Q64.64 square-root price. It is the same on every
+  down, which keeps it inside the exact one paying token B and can move it past the exact one
+  paying token A, by a few steps of the pool's Q64.64 square-root price. It is the same on every
   concentrated-liquidity venue. The reference, the guides and the skills now say where the limit can
   be passed. No code changed.
 
@@ -166,15 +166,17 @@ and engines as 1.2.0.
   higher key first.** They asked Crema's program for the pair in key order alone, so USDT/USDC was
   missing from the listing. They ask both orders now, price each side by the pool's own order, and
   give the pool's slot the tick arrays its map marks.
-- **Changed (Solana): `sauce tx`'s compute estimate reserves a Crema swap the router's scan of its
-  slot's last tick array.** Crema's router reads that array a position at a time, up to 64 reads
-  where the price lies when the cook lands, and the estimate reserved nothing for it, so a plan
-  with a Crema pool could be given more units than it had. It reserves 372,000 units for a Crema
-  swap that trades and 306,000 for one that does not (`SVM_CREMA_SWAP_FIXED` and
-  `SVM_CREMA_SWAP_IDLE`), in place of the 255,000 and 120,000 every other venue's swap is, which are
-  as they were. `sauce simulate` and `sauce run` measure each cook's own units.
-  In a program with three Crema swaps the reservations leave less than one Crema pool needs to
-  trade, so `sauce tx` gives none of them units.
+- **Not changed (Solana): `sauce tx` budgets compute as on 1.2.0, and the router fix costs more.**
+  `sauce tx` charges a Crema swap what it charges every venue's. Crema's router reads the slot's
+  last tick array before it swaps, a position at a time, up to 64 positions of about 3,200 to 3,500
+  compute units each, so a plan near the compute cap can run out of compute, as on 1.2.0. Reserving
+  that cost needs `sauce tx` to budget swaps in rank order, which this release does not do. Only
+  the budgeting is unchanged. On the sorted SOL/USDC pool `cremaAtLimit` costs 1,552 to 1,574 more
+  compute units a call than on 1.2.0, and `crema` and `cremaStopped` 1,434 to 1,535 fewer; a
+  program that mixes Crema with another concentrated-liquidity venue at a price is 632 bytes
+  larger, and one that calls only Crema, or Crema with Phoenix, 29 bytes. A program right at the
+  compute or size limit should re-run `sauce simulate` before it is sent. `sauce simulate` and
+  `sauce run` measure each cook's own units.
 
 ## SDK 1.2.0 — 2026-11-24
 

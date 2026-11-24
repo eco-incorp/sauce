@@ -77,10 +77,10 @@
 // square root toward the trade by `√(1 − fee)`: the pool's last unit, fee paid, then costs
 // `priceLimit` to the rounding of the roots, and every earlier unit less. The roots are rounded
 // down: paying the pool's token B that keeps the limit inside the exact one, so the pool stops a
-// little sooner; paying its token A (the price falls) it moves the limit past the exact one, by a
-// few steps of the Q64.64 root, and the last unit can cost a hair more. A Phoenix market charges its
-// taker fee on top, so its limit price is `priceLimit ÷ (1 + fee)`, in the market's ticks. A pool
-// whose fee is more than one rate, which no such limit can hold, is skipped. And no
+// little sooner; paying its token A (the price falls) it can move the limit past the exact one, by
+// a few steps of the Q64.64 root, and the last unit can then cost a hair more. A Phoenix market
+// charges its taker fee on top, so its limit price is `priceLimit ÷ (1 + fee)`, in the market's
+// ticks. A pool whose fee is more than one rate, which no such limit can hold, is skipped. And no
 // concentrated-liquidity swap at a price walks past the tick arrays its slot gives it, where its
 // program would fail the whole transaction: its limit is held a tick inside them (below, "The
 // window a swap at a price walks").
@@ -201,12 +201,13 @@ function clmmOrder(
   // Moved by √(1 − fee), so that the pool's last unit, fee paid, costs priceLimit, to the rounding of
   // the roots. Paying the lower-key token pushes the price down, the other up. Both roots are
   // rounded down. Paying the higher-key token that keeps the limit inside the exact one: the pool
-  // stops a little sooner. Paying the lower-key token it moves the limit past the exact one, since a
-  // falling price stops at a floor: with X the number under the first root and r = 1 / √(1 − fee),
-  // the exact limit is √X · r, and the limit falls short of it by less than (1 + δ) · r + 1 steps of
-  // the Q64.64 root, δ = 1 / (2 · √(X − 1)): about 2 steps at the fees pools charge (a sweep of
-  // 5,000 limits at each of seven fees saw at most 2), so the last unit can cost a hair more than
-  // priceLimit.
+  // stops a little sooner. Paying the lower-key token it can move the limit past the exact one: the
+  // first root's floor lowers the limit, the wrong way for a falling price, and the second root's
+  // floor, a divisor, raises it again, so whether it ends up past depends on the fee and the price.
+  // With X the number under the first root and r = 1 / √(1 − fee), the exact limit is √X · r, and
+  // the limit falls short of it by less than (1 + δ) · r + 1 steps of the Q64.64 root, δ = 1 / (2 ·
+  // √(X − 1)): about 2 steps at the fees pools charge (a sweep of 5,000 limits at each of seven fees
+  // saw at most 2), so the last unit can then cost a hair more than priceLimit.
   const root = Math.sqrt((1000000 - fee) * 10 ** 30); // √(1 − fee), times 1e18
   let own = paysA ? Math.mulDiv(limit, 10 ** 18, root) : Math.mulDiv(limit, root, 10 ** 18);
   // No further than the window: a tick inside its last safe tick, measured from the price's own tick
@@ -2748,9 +2749,10 @@ export function cremaAtLimit(
   if (svm.sload(pool, 747, 1).toLe() != 0) {
     return 0; // paused
   }
-  // A caller's mistake is refused whatever the pool holds and its window, never skipped, as
-  // `cremaCan`'s are: a limit of 0, which Crema's program refuses itself, failing the whole
-  // transaction with no reason, and a floor its 8-byte field cannot carry.
+  // A caller's mistake is refused whatever the pool holds and its window, as `cremaCan`'s are, with
+  // only the two skips above it (no input, a paused pool) before it: a limit of 0, which Crema's
+  // program refuses itself, failing the whole transaction with no reason, and a floor its 8-byte
+  // field cannot carry.
   require(limit != 0, "Crema takes no zero limit");
   require(minOut <= 0xffffffffffffffff, "minOut past 64 bits");
   const pay = trader[2].address;

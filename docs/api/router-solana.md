@@ -98,8 +98,8 @@ orcaWhirlpool(slot: Account[], trader: Account[], amountIn, priceLimit, minOut, 
   price: a concentrated-liquidity pool's sqrt price limit moved by `√(1 − fee)`, a Phoenix order's
   price `priceLimit ÷ (1 + fee)` in ticks. The roots are rounded down, which keeps the pool's limit
   inside the exact one paying its token B (the price rises), so the pool stops a little sooner, and
-  moves it past the exact one paying its token A (the price falls) by a few steps of its Q64.64 sqrt
-  price: there the last unit can cost a hair more than `priceLimit`.
+  can move it past the exact one paying its token A (the price falls) by a few steps of its Q64.64
+  sqrt price: there the last unit can cost a hair more than `priceLimit`.
 - **`limit`** is the pool's own: the sqrt price its swap takes as the pool keeps it (a Q64.64 root;
   on Invariant a root times 10^24), Phoenix's order price in its market's ticks, OpenBook's in its
   lots (`priceLots`, then `orders`, the most resting orders it may match). No fee is read for it, so
@@ -440,8 +440,8 @@ last safe tick (`cremaStop`). Each read is about 3,200 units and there are at mo
 there costs up to about 210,000 units more than another venue's, wherever the price lies when the
 cook lands. A pool whose own state rules out a trade (no liquidity, its price already at or past the
 limit, an input too small to buy a unit) is judged before that scan and costs about what another
-venue's does. `cremaAtLimit` reads no array. `sauce tx` reserves the scan for every Crema swap whose
-slot has a tick array.
+venue's does. `cremaAtLimit` reads no array. `sauce tx` charges a Crema swap what it charges every
+venue's swap, so it does not reserve the scan: a plan near the compute cap can run out of units.
 
 ## Exact input
 
