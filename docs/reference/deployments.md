@@ -70,9 +70,9 @@ and the hashes, and `sauce pot --owner <address>` prints an owner's Pot.
 Every Pot keeps its address when a release changes the Router or the engine. The engine a
 cook on it names depends on the Pot:
 
-- A Pot an earlier Kitchen release placed by CREATE2, and a fixed-Router or Shared Pot minted
-  with an earlier Router, keep the engine of their release. The SDK cooks each on the engine
-  this table names.
+- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3, and a fixed-Router or
+  Shared Pot minted with an earlier Router, keep the engine of their release. The SDK cooks
+  each on the engine this table names.
 - Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,
   cooks on the installed engine, whichever Router it runs.
 

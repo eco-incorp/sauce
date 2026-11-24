@@ -597,7 +597,7 @@ export async function skillsReferences(api, documented) {
             component === "v12-svm"
               ? "Solana Pots whose owner program is this engine"
               : kitchen.potProxyInitCodeHash === undefined
-                ? "Pots an earlier Kitchen release placed by CREATE2, which only this engine runs"
+                ? "Pots the Kitchen placed by CREATE2 just before it moved to CREATE3, which only this engine runs"
                 : `Fixed-Router and Shared Pots minted while the Kitchen handed out the Router ${kitchen.fixedRouter}, which only this engine runs`,
         };
       }),
@@ -1548,7 +1548,7 @@ function renderDeploymentsJson(data) {
         fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot an earlier Kitchen release placed by CREATE2, and a fixed-Router or Shared Pot, keep the engine of their release (earlierEngines); every other Pot of this Kitchen, a dynamic Pot of any age included, cooks on the engine above.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3, and a fixed-Router or Shared Pot, keep the engine of their release (earlierEngines); every other Pot of this Kitchen, a dynamic Pot of any age included, cooks on the engine above.",
       },
       earlierEngines: data.deployments.earlier
         .filter((one) => one.component === "v12-evm")
@@ -1655,9 +1655,9 @@ function renderDeploymentsPage(data) {
           "Every Pot keeps its address when a release changes the Router or the engine. The engine a",
           "cook on it names depends on the Pot:",
           "",
-          "- A Pot an earlier Kitchen release placed by CREATE2, and a fixed-Router or Shared Pot minted",
-          "  with an earlier Router, keep the engine of their release. The SDK cooks each on the engine",
-          "  this table names.",
+          "- A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3, and a fixed-Router or",
+          "  Shared Pot minted with an earlier Router, keep the engine of their release. The SDK cooks",
+          "  each on the engine this table names.",
           "- Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,",
           "  cooks on the installed engine, whichever Router it runs.",
           "",
