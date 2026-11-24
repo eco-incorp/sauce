@@ -58,6 +58,8 @@ import {
   type SvmComputeStop,
   type SvmStopPool,
 } from "../../../src/svm/compute-stops.js";
+import { svmPoolSlot } from "../../../src/svm/pool-slot.js";
+import type { OwnedAccountLoader } from "../../../src/svm/venues/types.js";
 import {
   describeSvm,
   fabricateAlt,
@@ -1677,6 +1679,36 @@ describeSvm("@sauce/router's Solana arm, on the venues' own programs and pools",
         ]);
       }, 300_000);
     });
+
+    // The slot the SDK reads from the pool (`svm/pool-slot.ts`) names only the tick arrays its map
+    // marks, the arrays the fixture holds beside them left out: Crema refuses an array its map does
+    // not mark (`InvalidTickArrayAccount`, 6015). `cremaCpi` sends the swap on the accounts given,
+    // so it shows what Crema's program makes of the slot.
+    it.each(DIRECTIONS)(
+      "$name: the slot the SDK reads is one Crema's program takes",
+      async (d) => {
+        const loader: OwnedAccountLoader = async (at) => {
+          const data = BYTES.get(at);
+          return data === undefined
+            ? null
+            : { data: new Uint8Array(data), owner: SNAPSHOT.get(at)!.owner as Address };
+        };
+        const slot = await svmPoolSlot(loader, usdtUsdc.pool, d.pay);
+        const order = orderOf(d);
+        const used = slot.ticks.filter((at) => at !== SYSTEM);
+        const sent = succeeded(
+          await cook(compiledCpi(11 + used.length), {
+            ...order,
+            limit: sqrtAtCost(order.priceLimit, frame.fee, d.paysA),
+            aToB: d.paysA,
+            accounts: cpiAccounts(d, slot.ticks),
+          }),
+        );
+        expect(sent.paid).toBeGreaterThan(0n);
+        expect(sent.received).toBeGreaterThan(0n);
+      },
+      120_000,
+    );
 
     // The sorted SOL/USDC pool keeps its lower key, WSOL, as its token A, so the pair's keys and the
     // pool's own order agree: what it trades is what it did before Crema followed the pool's order,

@@ -209,6 +209,12 @@ export interface CremaWindow {
   edge: { tick: number; sqrtPrice: bigint } | null;
   /** Contiguous PREFIX of tickArrays that existed as real, valid TickArray accounts at prepare. */
   readable: number;
+  /**
+   * How many of the leading `tickArrays` the pool's map marks: the arrays Crema's swap takes. The
+   * rest pad the window with arrays that may exist but that its map does not mark, which the swap
+   * refuses (`InvalidTickArrayAccount`), so a swap's accounts are the first `min(readable, marked)`.
+   */
+  marked: number;
 }
 
 export interface CremaPoolConfig extends PoolConfig {
@@ -313,6 +319,9 @@ async function resolveWindow(
     if (bitmapBitSet(tickArrayMapData, cursor)) arrayIndices.push(cursor);
     cursor += step;
   }
+  // The arrays the map marks, which come first, in walk order: Crema's swap refuses any other (see
+  // `CremaWindow.marked`). What follows is padding.
+  const marked = arrayIndices.length;
   cursor =
     arrayIndices.length > 0
       ? arrayIndices[arrayIndices.length - 1]! + step
@@ -412,6 +421,7 @@ async function resolveWindow(
     boundaries,
     edge,
     readable,
+    marked,
   };
 }
 
