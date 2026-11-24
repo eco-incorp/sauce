@@ -130,7 +130,7 @@ import {
   associatedTokenAccountLength,
 } from "../svm/index.js";
 import { createSauceSvmClient } from "../svm/client.js";
-import { CliError, UsageError, withNotes, type SaltChoice } from "./args.js";
+import { CliError, potNotesOf, UsageError, withNotes, type SaltChoice } from "./args.js";
 import {
   type Approver,
   argumentValues,
@@ -2467,7 +2467,7 @@ export async function svmSimulateCommand(
 }
 
 /** `output` with what the Pot's state means for the cook (`Prepared.notes`) first among its notes. */
-const withPotNotes = (output: CommandOutput, prepared: Prepared): CommandOutput =>
+const withPotOutputNotes = (output: CommandOutput, prepared: Prepared): CommandOutput =>
   prepared.notes.length === 0
     ? output
     : { ...output, notes: [...prepared.notes, ...(output.notes ?? [])] };
@@ -2476,7 +2476,7 @@ async function simulateSvm(input: SvmCookInput, files: CliFiles): Promise<Comman
   const prepared = await prepare(input, files, unsignedSigner(input.owner));
   const { output } = await withStops(prepared, (again) => simulatePrepared(again, input));
 
-  return withPotNotes(output, prepared);
+  return withPotOutputNotes(output, prepared);
 }
 
 /** The share of their units the venues are given, round by round, in a cook that runs out. */
@@ -3200,9 +3200,12 @@ export async function svmTxCommand(input: SvmCookInput, files: CliFiles): Promis
           : plan.pot === "inline" && step.potMissing === true
             ? "It isn't created yet: the cook's own transaction creates it (the Kitchen's " +
               "create_pot, the owner paying its rent) ahead of the cook."
-            : step.lamportsOnly === true
-              ? "Fund its accounts with what the program spends."
-              : "It is created. Fund its accounts with what the program spends.");
+            : step.potMissing === true
+              ? "The Pot the plan saw is gone: nothing in this step creates it, and the cook runs " +
+                "on the address as it is."
+              : step.lamportsOnly === true
+                ? "Fund its accounts with what the program spends."
+                : "It is created. Fund its accounts with what the program spends.");
 
   return {
     text: JSON.stringify(json, null, 2),
@@ -3525,8 +3528,8 @@ export async function svmRunCommand(input: SvmRunInput, files: CliFiles): Promis
         return next;
       } catch (error) {
         // A failure that carries the Pot as its step read it replaces what the run knew of the Pot
-        // from an earlier read: that read's notes may no longer be so (`CliError#potNotes`).
-        if (error instanceof CliError && error.potNotes !== undefined) notes = error.potNotes;
+        // from an earlier read, whatever its class: that read's notes may no longer be so.
+        notes = potNotesOf(error) ?? notes;
         throw stopped(`${(error as Error).message}${await closedAgain()}`, error);
       }
     };

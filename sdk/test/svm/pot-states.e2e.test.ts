@@ -71,6 +71,8 @@ const KITCHEN = address(v12SvmKitchenProgramId());
 /** v12-svm 1.3.0's engine: no release of this SDK's compiler runs on it, and the only created Pots
  *  on mainnet-beta are its. The program itself need not be on the bank for a Pot it owns. */
 const OLD = address("2HH8xZ7ZN8SSDD8B3ALYANTVKBbMKGxTzjX7LTzvtSzT");
+/** v12-svm 1.4.0's engine: it runs this compiler's output, so a Pot it owns is cooked on it. */
+const EARLIER = address("53eS7GGeU9QPaGCUmHgDSToPf61sLwGZqBGLG9JT2nSW");
 
 /** The docs' payout: `pay.sauce.ts <recipient> <amount>`, USDC from the Pot; past one transaction. */
 const PAY = fileURLToPath(new URL("../../../docs/examples/pay.sauce.ts", import.meta.url));
@@ -225,15 +227,22 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
     (await derivePotPda(KITCHEN, owner, hexToBytes(potSalt(salt)))).address;
   const ataOf = async (holder: Address, mint: Address): Promise<Address> =>
     (await findAssociatedTokenPda({ owner: holder, mint, tokenProgram: TOKEN_PROGRAM_ADDRESS }))[0];
-  /** The Pot as that release's create_pot left it: 10,240 bytes, the engine its owner program. */
-  const plantOld = async (owner: Address, salt: string): Promise<Address> => {
+  /**
+   * The Pot as an earlier release's create_pot left it: 10,240 bytes, the engine its owner program
+   * (v12-svm 1.3.0's unless `engine` says another).
+   */
+  const plantOld = async (
+    owner: Address,
+    salt: string,
+    engine: Address = OLD,
+  ): Promise<Address> => {
     const pot = await potOf(owner, salt);
     harness.svm.setAccount({
       address: pot,
       data: new Uint8Array(MAX_POT_LEN),
       executable: false,
       lamports: lamports(harness.svm.minimumBalanceForRentExemption(BigInt(MAX_POT_LEN))),
-      programAddress: OLD,
+      programAddress: engine,
       space: BigInt(MAX_POT_LEN),
     });
 
@@ -324,6 +333,19 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
 
       return undefined;
     };
+  };
+  /** A hook that answers the command's `nth` read of `pot` as a node without the account would. */
+  const absentAtRead = (pot: Address, nth: number) => {
+    let reads = 0;
+
+    return (request: RpcRequest): Response | undefined =>
+      request.method === "getAccountInfo" && request.params?.[0] === pot && ++reads === nth
+        ? Response.json({
+            id: request.id,
+            jsonrpc: "2.0",
+            result: { context: { slot: 1 }, value: null },
+          })
+        : undefined;
   };
   /** The Kitchen's execution fee, set by the authority that initialized it. */
   const setFee = async (fee: bigint): Promise<void> => {
@@ -742,6 +764,59 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         expect(account(pot)).toMatchObject({ programAddress: OLD });
         expect(ran.stderr).toContain(`the Pot ${pot} is owned by v12-svm 1.3.0 (${OLD})`);
         expect(ran.stderr).not.toContain("no engine owns it yet");
+      }, 180_000);
+    });
+
+    describe("when the step refuses the Pot it reads, and when it no longer finds the Pot the plan saw", () => {
+      it("refuses a Pot of an engine the plan was not made for, and says nothing of what the first read showed", async () => {
+        const label = "refused-at-step";
+        const owner = await keypair(label);
+        const pot = await potOf(owner.signer.address, label);
+        // The first read: the address holds only lamports, so the plan is made for the installed
+        // engine. At the second it is a Pot of v12-svm 1.4.0, whose engine runs this compiler: the
+        // step refuses it, and no note of the first read describes the account that refused.
+        harness.svm.airdrop(pot, lamports(1_000_000n));
+        const sent = shim.sent.length;
+        let reads = 0;
+
+        const ran = await through(
+          async (request) => {
+            if (
+              request.method === "getAccountInfo" &&
+              request.params?.[0] === pot &&
+              ++reads === 2
+            ) {
+              await plantOld(owner.signer.address, label, EARLIER);
+            }
+
+            return undefined;
+          },
+          () => sauce("run", seven, ...signedAs(owner.path, label), "--yes"),
+        );
+        expect(ran.code).toBe(1);
+        expect(ran.stderr).toContain(
+          `is owned by ${EARLIER}, and this plan was made for engine ${INSTALLED}`,
+        );
+        expect(ran.stderr).not.toContain("no engine owns it yet");
+        expect(shim.sent.length).toBe(sent);
+      }, 180_000);
+
+      it("says a Pot the plan saw is gone, not that it is created, when the step finds no account", async () => {
+        const label = "there-then-gone";
+        const owner = await keypair(label);
+        // The Pot is there when the plan is made. The step's read comes from a node that does not
+        // have the account: nothing in the step creates it, and it is not "created".
+        const pot = await createUnder(owner.signer, label, INSTALLED);
+
+        const planned = await through(absentAtRead(pot, 3), () =>
+          sauce("tx", seven, ...named(owner.signer.address, label)),
+        );
+        expect(planned.code).toBe(0);
+        expect(read<Planned>(planned)).toMatchObject({ createsPot: false });
+        expect(planned.stderr).toContain(
+          "The Pot the plan saw is gone: nothing in this step creates it, and the cook runs on the address as it is.",
+        );
+        expect(planned.stderr).not.toContain("It is created.");
       }, 180_000);
     });
   });

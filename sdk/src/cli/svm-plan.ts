@@ -923,7 +923,7 @@ async function potNow(plan: SvmPlan, ctx: StepContext, cooking = true): Promise<
   const state = potAccountState(potAccountOf(value));
   if (cooking && plan.via === "kitchen" && potCookEngine(state, engine()) !== planEngine(plan)) {
     // The Pot was read and is not what this plan was made for: the refusal is all there is to say of
-    // it, so no note of an earlier read sits beside it (`CliError#potNotes`).
+    // it, so no note of an earlier read sits beside it (`withPotNotes`).
     throw withPotNotes(
       new CliError(
         state.kind === "unallocated"
@@ -1045,8 +1045,8 @@ export async function nextStep(
     current.via === "kitchen" && current.pot !== "setup" ? await potNow(current, ctx) : undefined;
   // A failure past the Pot's read is told the Pot as that read showed it, as the step it would have
   // been is: the error carries the notes worked out so far (`CliError#notes`), which the command
-  // prints and the tools return, and the Pot's own as a snapshot (`CliError#potNotes`), which a run
-  // says in place of what its earlier reads showed. So every front end of a plan says them from here.
+  // prints and the tools return, and the Pot's own are kept beside it for a run to say in place of
+  // what its earlier reads showed (`potNotesOf`), whatever the error's class.
   const setup = await setupTransactions(current, ctx, state, finalized).catch((error: unknown) => {
     throw read === undefined ? error : withPotNotes(error, read.notes);
   });
@@ -1133,29 +1133,32 @@ async function setupTransactions(
 ): Promise<{ transactions: PlanTx[]; plan: SvmPlan; notes: string[]; pot: PotNow }> {
   const transactions: PlanTx[] = [];
   const notes: string[] = [];
-  // The Pot, where the setup creates it, and the token accounts the cook names that the cluster
-  // does not hold, found and made as `sauce run` makes them (`svmTokenAccountsToCreate`).
-  const [pot, made] = await Promise.all([
+  // The Pot, where the setup creates it, is read first: a failure of the read after it still says
+  // what this read showed, which a read made in the same breath would have lost.
+  const pot: PotNow =
     plan.pot === "setup"
-      ? potNow(plan, ctx, plan.cooked === undefined && plan.closing !== true)
-      : { missing: false, lamportsOnly: false, notes: [] },
-    svmTokenAccountsToCreate(
-      ctx.rpc,
-      ctx.url,
-      new Map(
-        plan.tokenAccounts.map((account) => [
-          account.address,
-          {
-            address: account.address,
-            label: account.label,
-            kind: "account" as const,
-            account: { mint: account.mint, holder: account.holder, program: account.program },
-          },
-        ]),
-      ),
-      ctx.signer,
+      ? await potNow(plan, ctx, plan.cooked === undefined && plan.closing !== true)
+      : { missing: false, lamportsOnly: false, notes: [] };
+  // The token accounts the cook names that the cluster does not hold, found and made as `sauce run`
+  // makes them (`svmTokenAccountsToCreate`).
+  const made = await svmTokenAccountsToCreate(
+    ctx.rpc,
+    ctx.url,
+    new Map(
+      plan.tokenAccounts.map((account) => [
+        account.address,
+        {
+          address: account.address,
+          label: account.label,
+          kind: "account" as const,
+          account: { mint: account.mint, holder: account.holder, program: account.program },
+        },
+      ]),
     ),
-  ]);
+    ctx.signer,
+  ).catch((error: unknown) => {
+    throw plan.pot === "setup" ? withPotNotes(error, pot.notes) : error;
+  });
   notes.push(...pot.notes);
   let next = plan;
   try {
@@ -1264,7 +1267,7 @@ async function setupTransactions(
     }
   } catch (error) {
     // The Pot's state, as the setup read it, is told with a failure past that read; and where the
-    // setup is what read it, that read is the snapshot a run says (`CliError#potNotes`).
+    // setup is what read it, that read is the snapshot a run says (`potNotesOf`).
     throw withNotes(plan.pot === "setup" ? withPotNotes(error, pot.notes) : error, notes);
   }
 

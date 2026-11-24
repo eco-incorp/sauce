@@ -29,7 +29,7 @@ import { getAddressLookupTableEncoder } from "@solana-program/address-lookup-tab
 
 import { requireChain } from "../src/chains/canonical.js";
 import { v12SvmEngineProgramId, v12SvmKitchenProgramId } from "../src/deployments/index.js";
-import { UsageError } from "../src/cli/args.js";
+import { CliError, potNotesOf, UsageError } from "../src/cli/args.js";
 import {
   decodeCursor,
   encodeCursor,
@@ -1076,5 +1076,53 @@ describe("what a step of a plan says of the Pot's state", () => {
     const step = await nextStep(cooked, context(rpc));
     expect(step.name).toBe("done");
     expect(step.notes).toEqual([]);
+  });
+
+  describe("a failure after the step's read of the Pot carries what that read showed", () => {
+    const tokens = [key(30)].map((at) => ({
+      address: at as Address,
+      holder: OWNER,
+      mint: MINT,
+      program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" as Address,
+      label: "the Pot's account",
+    }));
+    const LAMPORTS = "holds 1000000 lamports and no engine owns it yet";
+    /** What `nextStep` throws for `made` on `rpc`; a step that is built is a failure of the test. */
+    const thrownBy = (made: SvmPlan, rpc: StepContext["rpc"]): Promise<unknown> =>
+      nextStep(made, context(rpc)).then(
+        () => {
+          throw new Error("the step was built");
+        },
+        (error: unknown) => error,
+      );
+
+    it("an error of any class carries it, and keeps its class and message", async () => {
+      // A blockhash read with no value breaks the build of the cook with a TypeError, no CliError.
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: heldBy(SYSTEM),
+        getLatestBlockhash: () => ({ context: { slot: 2_000n }, value: undefined }),
+      });
+      const error = await thrownBy(plan({ pot: "there" }), rpc);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(CliError);
+      expect(potNotesOf(error)).toEqual([expect.stringContaining(LAMPORTS)]);
+    });
+
+    it("a setup that creates the Pot keeps its read of it when the read of the token accounts fails after", async () => {
+      const rpc = endpoint({
+        ...reads,
+        getAccountInfo: heldBy(SYSTEM),
+        getMultipleAccounts: () => {
+          throw new Error("the endpoint dropped the request");
+        },
+      });
+      const error = await thrownBy(plan({ pot: "setup", tokenAccounts: tokens }), rpc);
+      expect(error).toBeInstanceOf(CliError);
+      expect(error).toMatchObject({
+        message: expect.stringContaining("reading the token accounts failed"),
+      });
+      expect(potNotesOf(error)).toEqual([expect.stringContaining(LAMPORTS)]);
+    });
   });
 });

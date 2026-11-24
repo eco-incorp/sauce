@@ -26,13 +26,6 @@ export class UsageError extends Error {}
  */
 export class CliError extends Error {
   notes: readonly string[] = [];
-  /**
-   * The Pot as the last read of it showed it, for a failure that came after that read: the notes it
-   * calls for, and none where it calls for none ({@link withPotNotes}). A run that stops on the
-   * failure says these where it would say what an earlier read of the Pot showed, which may no
-   * longer be so. Unset where the failure came before the Pot was read.
-   */
-  potNotes?: readonly string[];
 }
 
 /**
@@ -49,14 +42,30 @@ export function withNotes(error: unknown, notes: readonly string[]): unknown {
 }
 
 /**
+ * The Pot as the step that failed read it, kept beside the error that failed it rather than on it:
+ * an error of any class carries it, a plain `Error` as a {@link CliError} does, its class and
+ * message unchanged. An error that is no object has nowhere to be keyed and carries none.
+ */
+const potNotesByError = new WeakMap<object, readonly string[]>();
+
+/**
  * `error` told the Pot as the step that failed read it: `potNotes` are said beside its message
- * ({@link withNotes}) and kept as {@link CliError.potNotes}, which stands in place of the notes of
- * any earlier read, an empty list included. Returns `error` itself.
+ * ({@link withNotes}, which annotates a {@link CliError} alone) and kept for {@link potNotesOf},
+ * whatever the error's class. Returns `error` itself.
  */
 export function withPotNotes(error: unknown, potNotes: readonly string[]): unknown {
-  if (error instanceof CliError) error.potNotes = potNotes;
+  if (typeof error === "object" && error !== null) potNotesByError.set(error, potNotes);
 
   return withNotes(error, potNotes);
+}
+
+/**
+ * The Pot's notes as the step that failed read it ({@link withPotNotes}): none where it needs none,
+ * and `undefined` where the failure came before the Pot was read. A run that stops says these in
+ * place of what its earlier reads showed, which may no longer be so.
+ */
+export function potNotesOf(error: unknown): readonly string[] | undefined {
+  return typeof error === "object" && error !== null ? potNotesByError.get(error) : undefined;
 }
 
 /** A flag, as `parseArgs` takes it, plus the placeholder and sentence `--help` prints for it. */
