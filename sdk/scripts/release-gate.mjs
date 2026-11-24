@@ -83,6 +83,7 @@ import {
   GATE_ENVIRONMENT,
   kitchenCoverage,
   requireSigningEndpoint,
+  revertOutcome,
   routerProbeProblem,
   runtimeProblem,
   solanaCookProblem,
@@ -721,11 +722,7 @@ async function routerChain({ slug, id }, dep, abis, root) {
         });
         outcome = { succeeded: true };
       } catch (error) {
-        const reverted = error.walk?.(
-          (cause) => cause.name === "ExecutionRevertedError" || typeof cause.data === "string",
-        );
-        if (reverted === null || reverted === undefined) throw error;
-        outcome = { revertData: typeof reverted.data === "string" ? reverted.data : "0x" };
+        outcome = revertOutcome(error);
       }
       const problem = routerProbeProblem({ ...probe, outcome });
       if (problem !== undefined) problems.push(`${slug}: ${problem}`);

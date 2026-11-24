@@ -128,3 +128,9 @@ export declare function kitchenCoverage(input: {
   readonly hasCode: (id: number) => Promise<boolean>;
   readonly reasonOf: (error: unknown) => string;
 }): Promise<{ problems: string[]; skipped: number[] }>;
+
+/**
+ * What an `eth_call` that threw says of the contract: the revert data its RPC error carries, `"0x"`
+ * for a revert with none; anything that is no revert is thrown.
+ */
+export declare function revertOutcome(error: unknown): { readonly revertData: string };

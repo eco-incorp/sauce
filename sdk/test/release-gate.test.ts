@@ -6,12 +6,21 @@
  * (`scripts/lib/release-gate-checks.mjs`), tested here against the outcomes they must refuse: each
  * negative control is a cook that ran and succeeded and is still not the cook the gate is for.
  */
-import { encodeAbiParameters, pad, toHex, type Hex } from "viem";
+import {
+  createPublicClient,
+  custom,
+  encodeAbiParameters,
+  pad,
+  RpcRequestError,
+  toHex,
+  type Hex,
+} from "viem";
 
 import {
   configKeyProblem,
   evmCookProblem,
   kitchenCoverage,
+  revertOutcome,
   routerProbeProblem,
   runtimeProblem,
   solanaCookProblem,
@@ -273,6 +282,37 @@ describe("the release gate's probe of the Router's callbacks", () => {
     expect(
       routerProbeProblem({ ...control, expect: "missing", outcome: { succeeded: true } }),
     ).toMatch(/answered with success/);
+  });
+
+  it("reads a revert's data from the RPC error under viem's wrappers, as a live endpoint sends it", async () => {
+    /** An `eth_call` whose node answers with `error`, through viem as the gate sends it. */
+    const callThatFails = (error: unknown) =>
+      createPublicClient({
+        transport: custom({
+          request: async () => {
+            throw error;
+          },
+        }),
+      })
+        .call({ to: "0x000000000000000000000000000000000000dEaD", data: "0xfa85398b" })
+        .then(
+          () => ({ succeeded: true as const }),
+          (thrown: unknown) => revertOutcome(thrown),
+        );
+    const rpcError = (data?: string) =>
+      new RpcRequestError({
+        body: { method: "eth_call" },
+        url: "https://rpc.example.invalid",
+        error: { code: 3, message: "execution reverted", ...(data === undefined ? {} : { data }) },
+      });
+
+    // The Router's own error, which a node puts on the RPC error, under two wrappers.
+    expect(await callThatFails(rpcError(UNAUTHORIZED))).toEqual({ revertData: UNAUTHORIZED });
+    // A revert with no data, as a Router with no fallback answers a name it lacks.
+    expect(await callThatFails(rpcError())).toEqual({ revertData: "0x" });
+    expect(await callThatFails(rpcError("0x"))).toEqual({ revertData: "0x" });
+    // A failure that is no revert says nothing of the Router: thrown, never read as an answer.
+    await expect(callThatFails(new Error("fetch failed"))).rejects.toThrow();
   });
 });
 
