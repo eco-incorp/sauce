@@ -640,7 +640,10 @@ export const v12Kitchen = {
     encodeFunctionData({ abi: v12KitchenAbi, functionName: "predictPot", args: [owner, salt] }),
 } as const;
 
-/** The one read {@link potRouterUpdate} needs from a client — viem's `PublicClient` has it. */
+/**
+ * The one method {@link potRouterUpdate} and {@link potEngine} need of a client: `readContract`,
+ * which viem's `PublicClient` has.
+ */
 export type PotRouterClient = Pick<PublicClient, "readContract">;
 
 /** The call that points a Pot at its Kitchen's current Router — for the Pot's OWNER to sign. */
@@ -707,8 +710,10 @@ export async function potRouterUpdate(
 /**
  * The engine a cook on `pot` must name: its release's, and for a fixed-Router or Shared Pot the one
  * built for the Router it was minted with (the engine compiles in one fixed Router). Reads the Pot's
- * `kitchen`, `owner`, `userSalt` and `router` through `client`. Throws for an address no release this
- * SDK knows derives, and for a fixed Router no known release built an engine for.
+ * `kitchen`, `owner`, `userSalt` and `router` through `client`: four `readContract` calls, and no
+ * code. Throws for an address no release this SDK knows derives, and for a fixed-Router or Shared
+ * Pot whose Router no known release built an engine for. A dynamic Pot is never refused for its
+ * Router: it cooks on its release's engine whichever Router it runs.
  */
 export async function potEngine(client: PotRouterClient, pot: Address): Promise<Address> {
   const [kitchen, owner, salt, router] = await Promise.all([

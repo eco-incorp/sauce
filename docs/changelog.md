@@ -51,9 +51,11 @@ derived from a version.
 
 Pot addresses can change even within a 1.x release: kitchen-evm 1.1.0, 1.2.0 and 1.3.0 each changed
 the Pot address family. kitchen-evm 1.4.0 made new Pots CREATE3. Derive addresses with the SDK
-rather than from a version number. Existing Pots keep their address and their engine, and the SDK
-cooks each on its own engine where that engine runs its compiler's programs; an upgrade does not
-move their funds or migrate them. [Deployments](reference/deployments.md) lists the SDK's current
+rather than from a version number. Existing Pots keep their address. A kitchen-evm 1.3.0 Pot, and a
+fixed-Router or Shared Pot, cook on the engine of their release where that engine runs the
+compiler's programs; a dynamic Pot of the current Kitchen, whichever release minted it, cooks on
+the installed engine. An upgrade does not move their funds or migrate them.
+[Deployments](reference/deployments.md) lists the SDK's current
 release addresses.
 
 The SDK's 0.99.x releases included breaking changes in patch versions. Read each release's

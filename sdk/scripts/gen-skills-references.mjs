@@ -1548,7 +1548,7 @@ function renderDeploymentsJson(data) {
         fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot an earlier Kitchen release placed by CREATE2, and a fixed-Router or Shared Pot, keep the engine of their release (earlierEngines); every other Pot of this Kitchen, a dynamic Pot of any age included, cooks on the engine above.",
       },
       earlierEngines: data.deployments.earlier
         .filter((one) => one.component === "v12-evm")
@@ -1652,8 +1652,14 @@ function renderDeploymentsPage(data) {
       : [
           "### Pots of earlier releases",
           "",
-          "Pots an earlier release made keep their address and their engine, and so do fixed-Router and",
-          "Shared Pots minted with an earlier Router. The SDK cooks each on the engine this table names:",
+          "Every Pot keeps its address when a release changes the Router or the engine. The engine a",
+          "cook on it names depends on the Pot:",
+          "",
+          "- A Pot an earlier Kitchen release placed by CREATE2, and a fixed-Router or Shared Pot minted",
+          "  with an earlier Router, keep the engine of their release. The SDK cooks each on the engine",
+          "  this table names.",
+          "- Every other Pot of the current Kitchen, a dynamic Pot an earlier release minted included,",
+          "  cooks on the installed engine, whichever Router it runs.",
           "",
           "| Engine | Version | Address | Its Pots |",
           "| --- | --- | --- | --- |",

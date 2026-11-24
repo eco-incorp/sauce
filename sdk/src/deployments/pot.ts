@@ -223,7 +223,11 @@ export function potReleaseSet(
   });
 }
 
-/** The engine of `potReleaseSet`'s set; throws naming the Router when there is none. */
+/**
+ * The engine of `potReleaseSet`'s set. Throws, naming the Router, for a fixed-Router or Shared Pot
+ * of a CREATE3 family whose Router no set fixes (or that was not read): a dynamic Pot and a CREATE2
+ * Pot have no Router to refuse.
+ */
 export function potEngineOf(family: PotFamily, kind: PotKind, router?: Address): Address {
   const set = potReleaseSet(family, kind, router);
   if (set === undefined) {

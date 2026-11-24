@@ -164,8 +164,11 @@ new one. `potEngine(client, pot)` from `@eco-incorp/sauce/evm/engine` returns th
 a Pot must name: an engine runs a fixed-Router or Shared Pot only if it was built for that Pot's
 Router, so such a Pot minted on the 1.4.0 Router cooks on engine 1.4.0 and one minted since on the
 installed engine, and every other Pot of the current Kitchen cooks on the installed engine. It
-reads the Pot's code and `router()` through your client, and throws for a Router no release this
-SDK knows built an engine for.
+needs only `readContract` of your client, for four reads of the Pot: its `kitchen`, `owner`,
+`userSalt` and `router`. It throws for an address no release this SDK knows derives, and, for a
+fixed-Router or Shared Pot only, for a Router no release this SDK knows built an engine for. A
+dynamic Pot is never refused for its Router: it cooks on the installed engine whichever Router it
+runs.
 
 After a Router rollout, `potRouterUpdate(client, pot)` from `@eco-incorp/sauce/evm/engine` reads the
 Pot's Router and the Kitchen's through your client. It returns the `setRouter` call for the Pot's
