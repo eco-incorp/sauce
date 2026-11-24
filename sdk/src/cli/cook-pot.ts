@@ -407,7 +407,7 @@ export async function cookPotOf(
           engine: recorded,
           family,
           notes: [
-            `The engine is the one the Pot store records for ${pot} in ${found!.file.path} ` +
+            `The engine is the one the Pot store records for ${pot} in ${pathText(found!.file.path)} ` +
               `(${releaseText(evmRelease(set))}).`,
             ...notes,
           ],
@@ -428,7 +428,7 @@ export async function cookPotOf(
       };
     }
     const engine = potFamilyEngine(family);
-    const where = `for ${pot} in ${found!.file.path}`;
+    const where = `for ${pot} in ${pathText(found!.file.path)}`;
 
     return {
       pot,

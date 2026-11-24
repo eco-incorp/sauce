@@ -284,6 +284,26 @@ describe("the Pot store", () => {
     );
   });
 
+  it("says a record's malformed schema on one line, quoted and cut, and lists the rest", () => {
+    const store = new PotStore(dir);
+    store.save(RECORD);
+    // A schema is whatever the file says: long, with a line separator and a line break in it, which
+    // JSON.stringify leaves raw and escapes.
+    const schema = `${"x".repeat(10)}\u2028\n${"y".repeat(200)}`;
+    writeFileSync(
+      join(dir, "8453", `0x${"9".repeat(40)}.json`),
+      JSON.stringify({ ...RECORD, schema }),
+    );
+
+    const said = `"${"x".repeat(10)}?\\n${"y".repeat(68)}"`;
+    for (const { warnings } of [store.list(), store.listFiles()]) {
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).not.toMatch(/[\r\n\u2028\u2029]/);
+      expect(warnings[0]).toContain(`: schema ${said} is not sauce.pot/1; that Pot is left out`);
+    }
+    expect(store.list().pots).toEqual([RECORD]);
+  });
+
   it("tells a record from the file it is read from: bound only to its chain's directory and its Pot's name", () => {
     const store = new PotStore(dir);
     store.save(RECORD);

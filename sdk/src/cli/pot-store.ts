@@ -146,7 +146,7 @@ const besideOf = (stem: string, tx: string): string => {
 const FIELD_TEXT = /^[\w.:+-]{1,200}$/;
 
 /** What the name of a file of the store is made of when it holds nothing a terminal needs protecting from. */
-const PATH_TEXT = /^[\w.:@/+-]{1,1000}$/;
+const PATH_TEXT = /^[\w.:@/\\+-]{1,1000}$/;
 
 /** `value` as `plain` says a token, and otherwise quoted, cut at `limit` characters. */
 function said(value: unknown, plain: RegExp, limit: number): string {
@@ -175,7 +175,7 @@ export const recordText = (value: unknown, limit = 80): string => said(value, FI
 
 /**
  * The path of a file of the store, as a note says it: as it is where it is made of letters, digits
- * and `.:@/+_-`, otherwise quoted, at most 1000 characters, on one line.
+ * and `.:@/\+_-` (a Windows path too), otherwise quoted, at most 1000 characters, on one line.
  */
 export const pathText = (path: string): string => said(path, PATH_TEXT, 1000);
 
@@ -229,7 +229,7 @@ function isRelease(value: unknown): boolean {
 function asRecord(where: string, parsed: unknown): PotRecord {
   const record = parsed as Record<string, unknown> | null;
   if (record === null || typeof record !== "object" || record.schema !== POT_SCHEMA) {
-    throw new Error(`${where}: schema ${JSON.stringify(record?.schema)} is not ${POT_SCHEMA}`);
+    throw new Error(`${where}: schema ${recordText(record?.schema)} is not ${POT_SCHEMA}`);
   }
   const missing = Object.entries(FIELDS)
     .filter(([field, type]) => typeof record[field] !== type)

@@ -596,6 +596,29 @@ describe("a record written before its release was known", () => {
       `The Pot store ${join(dir, "pots")} could not be read: ${JSON.stringify(message)}`,
     );
   });
+
+  it("says a record's malformed schema on one line, quoted and cut, in both listings", () => {
+    const store = new PotStore(join(dir, "pots"));
+    const good = filed(OWN_POT, "private", `0x${"01".repeat(32)}`);
+    store.save(good);
+    const schema = `${"x".repeat(10)}\u2028\n${"y".repeat(200)}`;
+    writeFileSync(
+      join(dir, "pots", String(BASE.id), `0x${"9".repeat(40)}.json`),
+      JSON.stringify({ ...good, schema }),
+    );
+
+    const said = `: schema "${"x".repeat(10)}?\\n${"y".repeat(68)}" is not sauce.pot/1`;
+    const listing = potListCommand(store, { chain: BASE });
+    expect(listing.text).toContain(OWN_POT);
+    expect(listing.notes).toEqual([expect.stringContaining(said)]);
+    expect(listing.notes![0]).not.toMatch(/[\r\n\u2028\u2029]/);
+    const others = ownerPotsText(store, BASE, OWNER, SENDER);
+    expect(others).toContain(said);
+    expect(others).not.toMatch(/[\u2028\u2029]/);
+    for (const line of others.split("\n")) {
+      expect(line.startsWith("The Pot store") || line.startsWith("  ")).toBe(true);
+    }
+  });
 });
 
 const BLOCKHASH = {
