@@ -1068,7 +1068,7 @@ export async function nextStep(
   }
   // The cook's step says what the Pot's state means for it as the setup's would: a cursor resumed
   // later, or a send that builds the next step, tells it as the command that made the plan did.
-  const cook = await cookStep(setup.plan, ctx).catch((error: unknown) => {
+  const cook = await cookStep(setup.plan, ctx, pot.missing).catch((error: unknown) => {
     throw withNotes(withPotNotes(error, pot.notes), setup.notes);
   });
 
@@ -1335,9 +1335,11 @@ async function tableTransactions(
  * The cook, rehearsed for its compute: built at the most where its rehearsal fails. Through a
  * lookup table extended so recently that the cluster is not past that slot yet, nothing is built:
  * the step says from which slot it is (`readyAt`), at once, and the caller asks again — a signer's
- * call is never held up waiting for a slot.
+ * call is never held up waiting for a slot. `potMissing` is the step's one read of the Pot: a plan
+ * that creates the Pot in the cook does so only where that read found no account, so the cook and
+ * what the step says of the Pot are one story.
  */
-async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
+async function cookStep(plan: SvmPlan, ctx: StepContext, potMissing: boolean): Promise<PlanStep> {
   const tables: AddressesByLookupTableAddress = {};
   const through = [
     ...plan.lookupTables,
@@ -1390,7 +1392,7 @@ async function cookStep(plan: SvmPlan, ctx: StepContext): Promise<PlanStep> {
         "nothing was built",
     );
   }
-  const withPot = plan.pot === "inline" && !(await exists(ctx, await potOf(plan), "the Pot"));
+  const withPot = plan.pot === "inline" && potMissing;
   const lookupTables = Object.keys(tables).length === 0 ? undefined : tables;
   const build = async (unitLimit: number, latestBlockhash: typeof PLACEHOLDER_BLOCKHASH) =>
     prepareExecuteTransaction({

@@ -611,8 +611,8 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
 
     describe("when it comes to hold lamports after the plan chose how the Pot is created", () => {
       // The plan reads the Pot (its second read) and chooses: to create it in the cook's own
-      // transaction, or in the setup. The step reads it again before it builds (its third), and what
-      // the step does and says of the Pot is that read's, whatever the plan chose.
+      // transaction, or in the setup. The step then reads it (its third read), once, and builds from
+      // that read: what the step does and says of the Pot is that read's, whatever the plan chose.
       const dropped = (pot: Address): string =>
         `Pot ${pot} holds 1000000 lamports and no engine owns it yet, so the step of this plan ` +
         "that creates it is dropped";
@@ -652,6 +652,35 @@ describeSvm("a Solana Pot in each state the Kitchen cooks", () => {
         expect(planned.stderr).toContain("Fund its accounts with what the program spends.");
         expect(planned.stderr).not.toContain("the setup creates it first");
         expect(account(pot)).toMatchObject({ programAddress: SYSTEM, lamports: 1_000_000n });
+      }, 180_000);
+
+      it("builds the cook, and says what it does, from the one read of the Pot: nothing reads it again before the cook is built", async () => {
+        const owner = await keypair("fourth-read");
+        const pot = await potOf(owner.signer.address, "fourth-read");
+        // A fourth read would find the address funded. The step reads the Pot once, so the cook it
+        // builds and what is said of it are one story, whatever the address holds later.
+        let reads = 0;
+
+        const planned = await through(
+          (request) => {
+            if (
+              request.method === "getAccountInfo" &&
+              request.params?.[0] === pot &&
+              ++reads === 4
+            ) {
+              harness.svm.airdrop(pot, lamports(1_000_000n));
+            }
+
+            return undefined;
+          },
+          () => sauce("tx", seven, ...named(owner.signer.address, "fourth-read")),
+        );
+        expect(planned.code).toBe(0);
+        expect(reads).toBe(3);
+        expect(read<Planned>(planned)).toMatchObject({ createsPot: true });
+        expect(planned.stderr).toContain("transaction creates it");
+        expect(planned.stderr).not.toContain("no engine owns it yet");
+        expect(account(pot).exists).toBe(false);
       }, 180_000);
     });
 
