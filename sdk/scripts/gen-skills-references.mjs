@@ -1548,7 +1548,7 @@ function renderDeploymentsJson(data) {
         fixedRouter: evm.fixedRouter,
         initCodeHash: evm.potInitCodeHash,
         about:
-          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 keeps its release's engine, and so does a fixed-Router or Shared Pot minted while the Kitchen handed out an earlier Router (earlierEngines); a fixed-Router or Shared Pot minted on the Router above, and every dynamic Pot of any age, cooks on the engine above.",
+          "Where the Kitchen deploys the Pot of an owner under a 32-byte salt, zero unless another is chosen. initCodeHash is what the Kitchen's potInitCodeHash() reports: keccak256 of the Pot's creation code. No Pot's address is CREATE2 under it: address says how a Pot is placed. A Pot keeps its address when a release changes the Router or the engine. A Pot the Kitchen placed by CREATE2 just before it moved to CREATE3 keeps its release's engine, and so does a fixed-Router or Shared Pot minted while the Kitchen handed out an earlier Router (earlierEngines). A fixed-Router or Shared Pot minted on the Router above cooks on the engine above, and so does every dynamic Pot placed by CREATE3, of any age.",
       },
       earlierEngines: data.deployments.earlier
         .filter((one) => one.component === "v12-evm")
