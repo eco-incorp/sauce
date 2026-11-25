@@ -1,5 +1,6 @@
 {
   "name": "@eco-incorp/sauce",
+  "mcpName": "io.github.eco-incorp/sauce",
   "version": "1.0.0",
   "description": "Sauce protocol tooling: the SDK, action primitives, the sauce command and the Sauce MCP server.",
   "type": "module",

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.eco-incorp/sauce",
+  "title": "Sauce by Eco",
+  "description": "Compile and simulate SauceScript, build transactions, and use local wallets on EVM and Solana.",
+  "version": "1.0.0",
+  "websiteUrl": "https://docs.eco.com/sauce-sdk/mcp/overview",
+  "repository": {
+    "url": "https://github.com/eco-incorp/sauce",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@eco-incorp/sauce",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

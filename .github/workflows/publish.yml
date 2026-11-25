@@ -269,6 +269,18 @@ jobs:
           fi
           pnpm publish --access public --no-git-checks
 
+  # Registry discovery follows the completed npm release. It uses GitHub OIDC, no npm token.
+  mcp-registry:
+    name: Publish MCP listing
+    needs: [plan, release]
+    if: needs.plan.outputs.released == 'true' && !inputs.dry_run
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-mcp.yml
+    with:
+      version: ${{ needs.plan.outputs.version }}
+
   # Tag and GitHub release, AFTER the publish and in their own job so the one with `contents:
   # write` never holds NPM_TOKEN, and the one with NPM_TOKEN cannot write to the repository. The
   # tag is created by `gh release create` on the commit the run built, so no branch is pushed to,
