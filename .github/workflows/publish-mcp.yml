@@ -1,0 +1,88 @@
+name: Publish to MCP Registry
+
+# Called after the npm release; manual dispatch retries registry publication without
+# rebuilding or republishing npm. server.json's versions are templates, replaced below.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Exact version already published to npm"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact version already published to npm (must contain mcpName)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-mcp
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.16
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify the published package and prepare registry metadata
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo "::error::version must be an exact stable X.Y.Z"
+            exit 1
+          }
+          npm view "@eco-incorp/sauce@$VERSION" --json --registry https://registry.npmjs.org > "$RUNNER_TEMP/sauce-package.json"
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync, writeFileSync } from "node:fs";
+          const server = JSON.parse(readFileSync("server.json", "utf8"));
+          const published = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/sauce-package.json`, "utf8"));
+          assert.equal(published.name, "@eco-incorp/sauce");
+          assert.equal(published.version, process.env.VERSION);
+          assert.equal(published.mcpName, server.name, "Publish an npm release containing the matching mcpName first");
+          server.version = published.version;
+          server.packages[0].version = published.version;
+          writeFileSync("server.json", JSON.stringify(server, null, 2) + "\n");
+          NODE
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+
+      - name: Validate registry metadata
+        run: ./mcp-publisher validate server.json
+
+      - name: Authenticate with GitHub Actions identity
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish registry metadata
+        run: ./mcp-publisher publish

@@ -2267,6 +2267,14 @@ tarball with this commit's `pnpm pack`, then tag by hand. If the run can no long
 tags the commit the run built (shown on its page) `vX.Y.Z` and creates the release by hand; the next
 dispatch then continues from that tag.
 
+**Official MCP Registry.** After npm publication and the GitHub release, `publish.yml` calls
+`publish-mcp.yml` to publish `io.github.eco-incorp/sauce` using GitHub Actions OIDC. No extra secret
+is needed. The root package's `mcpName` proves npm package ownership. `server.json` is the listing
+template: the workflow replaces both versions with the exact published npm version, after checking
+that package's name, version and `mcpName`. It lists the stdio command with the `mcp` argument.
+To retry only the registry step, dispatch **Publish to MCP Registry** on `main` with the exact npm
+version. An older npm release without `mcpName` is refused; release the metadata change first.
+
 **A misstated number.** A merged commit message cannot be edited, and a revert of a `feat!` still
 counts as breaking, so the computed number can be wrong. Dispatch with `release_as` (`X.Y.Z`, above
 the newest release) to publish that number instead; it replaces only the number, never the decision
